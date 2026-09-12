@@ -7,7 +7,7 @@ contains no implemented Monergy business Feature.
 
 ## Current state
 
-- Status: MWP-03-D02 CTO-approved candidate — Pending closure authorization
+- Status: MWP-03-D02 Accepted / Complete
 - Architecture basis: Monergy Architecture Baseline v1.0
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Backend: .NET SDK 10.0.401, .NET runtime 10.0.12, C# 14, ASP.NET Core and

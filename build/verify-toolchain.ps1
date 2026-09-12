@@ -221,7 +221,7 @@ $truthfulGateState = @($gateCatalog.gates | Where-Object result -ceq 'PASS').Cou
     $notRunGates.Count -eq 2 -and
     (Test-ExactSet $notRunGates.id @('CG-07', 'CG-11')) -and
     @($notRunGates | Where-Object { -not $_.scope }).Count -eq 0
-Add-Check 'Truthful D02 candidate state' ($repositoryManifest.status -ceq 'CTO_APPROVED_CANDIDATE_PENDING_CLOSURE' -and $repositoryManifest.vs02FeatureState -ceq 'NOT_STARTED_8_OF_8' -and $repositoryManifest.vs02ContractState -ceq 'NOT_OPERATIONAL_14_OF_14' -and $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED' -and $truthfulGateState) '9 PASS, 0 BLOCKED, exact NOT_RUN gates CG-07/CG-11; Features/contracts/deployment remain absent'
+Add-Check 'Truthful D02 accepted state' ($repositoryManifest.status -ceq 'ACCEPTED_COMPLETE' -and $repositoryManifest.vs02FeatureState -ceq 'NOT_STARTED_8_OF_8' -and $repositoryManifest.vs02ContractState -ceq 'NOT_OPERATIONAL_14_OF_14' -and $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED' -and $truthfulGateState) 'Accepted toolchain; 9 PASS, 0 BLOCKED, exact NOT_RUN gates CG-07/CG-11; Features/contracts/deployment remain absent'
 
 $failures = @($checks | Where-Object { -not $_.Passed })
 foreach ($check in $checks) {

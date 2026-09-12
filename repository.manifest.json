@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "repository": "monergy-application",
-  "status": "CTO_APPROVED_CANDIDATE_PENDING_CLOSURE",
+  "status": "ACCEPTED_COMPLETE",
   "implementationPackage": "MWP-03-D02",
   "architectureRepository": "https://github.com/atlas-core-platform/monergy-architecture",
   "architectureBaseline": "monergy-architecture-v1.0",
