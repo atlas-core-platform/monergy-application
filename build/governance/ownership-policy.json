@@ -2,7 +2,8 @@
   "schemaVersion": "1.0.0",
   "reviewModel": "SERVICE_OWNER_REQUIRED",
   "codeOwners": ["@Magkhan060"],
-  "protectedMain": "GITHUB_BRANCH_PROTECTION_ENFORCED",
+  "protectedMain": "BLOCKED_CURRENT_GITHUB_PLAN",
+  "protectionBlocker": "GitHub rejected protection for this private organization repository; a plan supporting private protected branches is required",
   "bootstrapException": {
     "scope": "INITIAL_REVIEWED_BASELINE_ONLY",
     "commit": "852bebbe62eccd54be214ba2168d19dfdda467d6"

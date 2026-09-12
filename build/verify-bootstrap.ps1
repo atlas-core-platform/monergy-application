@@ -114,6 +114,12 @@ $codeOwnersPath = Join-Path $RepositoryRoot '.github/CODEOWNERS'
 $codeOwners = if (Test-Path -LiteralPath $codeOwnersPath) { (Get-Content -LiteralPath $codeOwnersPath -Raw).Trim() } else { '' }
 Add-Check 'CODEOWNERS governance' ($codeOwners -ceq '* @Magkhan060') 'Repository-wide owner is explicit'
 
+$ownershipPolicy = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/ownership-policy.json') -Raw | ConvertFrom-Json
+$protectionStateValid = $ownershipPolicy.protectedMain -ceq 'BLOCKED_CURRENT_GITHUB_PLAN' -and
+    @($ownershipPolicy.codeOwners).Count -eq 1 -and $ownershipPolicy.codeOwners[0] -ceq '@Magkhan060' -and
+    $ownershipPolicy.bootstrapException.commit -ceq '852bebbe62eccd54be214ba2168d19dfdda467d6'
+Add-Check 'Branch-protection evidence' $protectionStateValid 'CODEOWNERS and bootstrap exception are governed; current-plan blocker remains explicit'
+
 $localConfig = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/config/local.example.json') -Raw | ConvertFrom-Json
 $ciConfig = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/config/ci.example.json') -Raw | ConvertFrom-Json
 $configValid = $localConfig.executionZone -ceq 'LOCAL' -and $ciConfig.executionZone -ceq 'CI_EPHEMERAL' -and
@@ -132,13 +138,14 @@ Add-Check 'Governed baseline lock' $lockValid 'MWP-02 closed; stage gates and R1
 $repositoryManifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
 $manifestValid = $repositoryManifest.repository -ceq 'monergy-application' -and
     $repositoryManifest.productTechnologyDecision -ceq 'UNRESOLVED' -and
-    $repositoryManifest.status -ceq 'ACCEPTED_COMPLETE' -and
-    $repositoryManifest.hostedRepositoryDecision -ceq 'PRIVATE_GITHUB_REPOSITORY' -and
+    $repositoryManifest.status -ceq 'CANDIDATE_CLOSURE_BLOCKED' -and
+    $repositoryManifest.hostedRepositoryDecision -ceq 'PARTIALLY_RESOLVED' -and
     $repositoryManifest.remote -ceq 'https://github.com/atlas-core-platform/monergy-application.git' -and
     $repositoryManifest.hostedCi -ceq 'GITHUB_ACTIONS' -and
+    $repositoryManifest.branchProtection -ceq 'BLOCKED_CURRENT_GITHUB_PLAN' -and
     $repositoryManifest.businessFeatureImplementation -ceq 'NONE' -and
     $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED'
-Add-Check 'Truthful repository state' $manifestValid 'Hosted repository resolved; stack, Feature, and deployment remain unclaimed'
+Add-Check 'Truthful repository state' $manifestValid 'Hosted CI resolved; branch protection, stack, Feature, and deployment are accurately bounded'
 
 $observability = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'shared/platform/observability.contract.json') -Raw | ConvertFrom-Json
 Add-Check 'Observability bootstrap' (@($observability.requiredEvidence).Count -eq 8 -and @($observability.prohibitedTelemetry).Count -eq 6) 'D05 telemetry and exclusion categories represented'

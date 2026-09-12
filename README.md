@@ -7,18 +7,23 @@ business Feature.
 
 ## Current state
 
-- Status: Accepted / Complete
+- Status: Candidate — Closure blocked by private-repository branch protection
 - Architecture basis: Monergy Architecture Baseline v1.0
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Product runtime/language/framework: unresolved; no prototype choice is inferred
 - Hosted repository: private GitHub repository at
   `https://github.com/atlas-core-platform/monergy-application`
 - Hosted CI: GitHub Actions running the technology-neutral bootstrap gates
-- Governance: protected `main` with `CODEOWNERS`; the reviewed initial baseline
-  is the documented repository-bootstrap exception to normal pull-request flow
+- Governance: `CODEOWNERS` is published; GitHub rejected branch-protection
+  enforcement for this private organization repository under the current plan
+- Bootstrap exception: the reviewed initial baseline was published directly to
+  establish `main`; normal pull-request flow remains mandatory once protection
+  is available
 - Deployment: none
 
-D01-TD-02 is resolved by the hosted repository, GitHub Actions, and CODEOWNERS.
+D01-TD-02 is partially resolved by the hosted repository, successful GitHub
+Actions execution, and CODEOWNERS. It remains a closure blocker until the
+private repository can enforce protected `main`.
 D01-TD-01 and D01-TD-03 remain unresolved and continue to block product Feature
 implementation, product-specific SAST, deployable artifact production, and
 artifact vulnerability scanning.
