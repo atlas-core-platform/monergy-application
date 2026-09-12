@@ -169,7 +169,7 @@ Add-Check 'Governed baseline lock' $lockValid 'MWP-02 closed; stage gates and R1
 $repositoryManifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
 $manifestValid = $repositoryManifest.repository -ceq 'monergy-application' -and
     $repositoryManifest.productTechnologyDecision -in @('UNRESOLVED', 'RESOLVED_BY_D02_PT_01_THROUGH_PT_11') -and
-    $repositoryManifest.status -in @('ACCEPTED_COMPLETE', 'CANDIDATE_PENDING_CTO_REVIEW') -and
+    $repositoryManifest.status -in @('ACCEPTED_COMPLETE', 'CANDIDATE_PENDING_CTO_REVIEW', 'CTO_APPROVED_CANDIDATE_PENDING_CLOSURE') -and
     $repositoryManifest.hostedRepositoryDecision -ceq 'GITHUB_FREE_EXCEPTION_ACCEPTED' -and
     $repositoryManifest.remote -ceq 'https://github.com/atlas-core-platform/monergy-application.git' -and
     $repositoryManifest.hostedCi -ceq 'GITHUB_ACTIONS' -and
