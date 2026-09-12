@@ -12,6 +12,13 @@
     "artifactIntegrity"
   ],
   "exceptionPolicy": "EXPLICIT_OWNED_APPROVED_TIME_BOUNDED_AUDITABLE",
-  "publication": "NOT_CONFIGURED"
+  "tools": {
+    "syft": "1.51.1",
+    "grype": "0.118.0",
+    "gitleaks": "8.30.1"
+  },
+  "sbomFormat": "cyclonedx-json",
+  "scannerFailureSemantics": "FAIL_NEVER_PASS",
+  "unavailableToolSemantics": "NOT_RUN_OR_BLOCKED_NEVER_PASS",
+  "publication": "CANDIDATE_PUBLICATION_NOT_AUTHORIZED"
 }
-

@@ -1,0 +1,8 @@
+packages:
+  - apps/customer-web
+  - shared/platform/frontend-ui
+
+catalogMode: strict
+
+onlyBuiltDependencies:
+  - esbuild

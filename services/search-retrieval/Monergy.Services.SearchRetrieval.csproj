@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>Monergy.Services.SearchRetrieval</AssemblyName>
+    <RootNamespace>Monergy.Services.SearchRetrieval</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+  </ItemGroup>
+</Project>

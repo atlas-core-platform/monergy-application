@@ -1,9 +1,10 @@
-name: Bootstrap
+name: Product technology toolchain
 
 on:
   push:
     branches:
       - main
+      - delivery/mwp03-d02-product-technology-toolchain
   pull_request:
   workflow_dispatch:
 
@@ -12,24 +13,136 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: bootstrap-${{ github.workflow }}-${{ github.ref }}
+  group: toolchain-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  bootstrap:
-    name: Verify technology-neutral baseline
-    runs-on: windows-latest
-    timeout-minutes: 15
+  toolchain:
+    name: Verify D01 and D02 foundations
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - name: Check out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      - name: Run bootstrap quality gates
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.401
+
+      - name: Set up Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+
+      - name: Enable pinned pnpm
+        shell: bash
+        run: |
+          corepack enable
+          corepack install --global pnpm@12.4.1
+          pnpm --version
+
+      - name: Restore locked dependencies
         shell: pwsh
-        run: ./build/Invoke-Bootstrap.ps1 -Task All
+        run: ./build/Invoke-Toolchain.ps1 -Task Restore
+
+      - name: Verify formatting
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task FormatCheck
+
+      - name: Lint and source security analysis
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Lint
+
+      - name: Compile and bundle
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Build
+
+      - name: Run unit and component tests
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Test
+
+      - name: Run architecture-boundary tests
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task ArchitectureTest
+
+      - name: Install Chromium for browser evidence
+        shell: bash
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run browser smoke test
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task BrowserTest
+
+      - name: Install pinned supply-chain tools
+        shell: bash
+        run: |
+          mkdir -p .toolcache/security
+          curl --fail --location --silent --show-error \
+            --output .toolcache/security/syft.tar.gz \
+            https://github.com/anchore/syft/releases/download/v1.51.1/syft_1.51.1_linux_amd64.tar.gz
+          echo '8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3  .toolcache/security/syft.tar.gz' | sha256sum --check
+          tar -xzf .toolcache/security/syft.tar.gz -C .toolcache/security syft
+          curl --fail --location --silent --show-error \
+            --output .toolcache/security/grype.tar.gz \
+            https://github.com/anchore/grype/releases/download/v0.118.0/grype_0.118.0_linux_amd64.tar.gz
+          echo '1d444c5e7360471815f7158f71935fcecc68a3c417d85c7344f770854300bba2  .toolcache/security/grype.tar.gz' | sha256sum --check
+          tar -xzf .toolcache/security/grype.tar.gz -C .toolcache/security grype
+          curl --fail --location --silent --show-error \
+            --output .toolcache/security/gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  .toolcache/security/gitleaks.tar.gz' | sha256sum --check
+          tar -xzf .toolcache/security/gitleaks.tar.gz -C .toolcache/security gitleaks
+          chmod +x .toolcache/security/syft .toolcache/security/grype .toolcache/security/gitleaks
+          echo "$GITHUB_WORKSPACE/.toolcache/security" >> "$GITHUB_PATH"
+
+      - name: Build, identify, SBOM and scan twelve OCI images
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task HostedOciEvidence
+
+      - name: Generate CycloneDX SBOM
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Sbom
+
+      - name: Run dependency and artifact vulnerability checks
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task VulnerabilityScan
+
+      - name: Scan repository history and candidate content for secrets
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task SecretScan
+
+      - name: Generate and verify candidate release manifest
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task ReleaseManifest
+
+      - name: Verify D01 regression
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task D01Verification
+
+      - name: Verify D02 realization and negative self-tests
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task D02Verification
+
+      - name: Preserve raw machine-readable evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: d02-toolchain-evidence-${{ github.run_id }}
+          path: |
+            .artifacts/components/
+            .artifacts/provenance/
+            .artifacts/release/
+            .artifacts/security/
+            .artifacts/oci/images.json
+            .artifacts/oci/evidence-matrix.json
+            .artifacts/oci/sboms/
+            .artifacts/oci/scans/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Detect direct push to main
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -60,5 +173,6 @@ jobs:
           }
 
       - name: Verify whitespace
+        if: always()
         shell: pwsh
         run: git diff --check

@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/Services/">
+    <Project Path="services/ai-intelligence/Monergy.Services.AiIntelligence.csproj" />
+    <Project Path="services/audit/Monergy.Services.Audit.csproj" />
+    <Project Path="services/consent/Monergy.Services.Consent.csproj" />
+    <Project Path="services/customer-identity/Monergy.Services.CustomerIdentity.csproj" />
+    <Project Path="services/document-intelligence/Monergy.Services.DocumentIntelligence.csproj" />
+    <Project Path="services/evidence/Monergy.Services.Evidence.csproj" />
+    <Project Path="services/financial-profile/Monergy.Services.FinancialProfile.csproj" />
+    <Project Path="services/financial-rules/Monergy.Services.FinancialRules.csproj" />
+    <Project Path="services/integration-gateway/Monergy.Services.IntegrationGateway.csproj" />
+    <Project Path="services/job-management/Monergy.Services.JobManagement.csproj" />
+    <Project Path="services/reporting/Monergy.Services.Reporting.csproj" />
+    <Project Path="services/search-retrieval/Monergy.Services.SearchRetrieval.csproj" />
+  </Folder>
+  <Folder Name="/Shared/">
+    <Project Path="shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,106 @@
+[CmdletBinding()]
+param(
+    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'Verify')]
+    [string]$Task = 'Verify',
+    [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot)
+)
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+$localDotnet = Join-Path $RepositoryRoot '.toolcache/dotnet/dotnet.exe'
+$dotnet = if (Test-Path -LiteralPath $localDotnet) { $localDotnet } else { (Get-Command dotnet -ErrorAction Stop).Source }
+if (Test-Path -LiteralPath $localDotnet) { $env:PATH = "$(Split-Path -Parent $localDotnet);$env:PATH" }
+$localNodeRoot = Join-Path $RepositoryRoot '.toolcache/node-v24.21.0-win-x64'
+if (Test-Path -LiteralPath (Join-Path $localNodeRoot 'node.exe')) { $env:PATH = "$localNodeRoot;$env:PATH" }
+$node = (Get-Command node -ErrorAction Stop).Source
+$pnpm = (Get-Command pnpm -ErrorAction Stop).Source
+
+function Assert-Version {
+    param([string]$Name, [string]$Actual, [string]$Expected)
+    if ($Actual.TrimStart('v') -cne $Expected) { throw "$Name $Expected is required; found $Actual." }
+}
+
+Assert-Version '.NET SDK' (& $dotnet --version) '10.0.401'
+Assert-Version 'Node.js' (& $node --version) '24.21.0'
+Assert-Version 'pnpm' (& $pnpm --version) '12.4.1'
+$env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
+$env:DOTNET_NOLOGO = '1'
+
+function Invoke-Checked {
+    param([scriptblock]$Operation, [string]$Failure)
+    & $Operation
+    if ($LASTEXITCODE -ne 0) { throw $Failure }
+}
+
+function Invoke-Task {
+    param([string]$Name)
+    Write-Output "=== D02 $Name ==="
+    switch ($Name) {
+        'Restore' {
+            Invoke-Checked { & $dotnet restore (Join-Path $RepositoryRoot 'Monergy.Application.slnx') --locked-mode } 'Locked NuGet restore failed.'
+            Invoke-Checked { & $pnpm install --dir $RepositoryRoot --frozen-lockfile } 'Frozen pnpm install failed.'
+        }
+        'FormatCheck' {
+            Invoke-Checked { & $dotnet format (Join-Path $RepositoryRoot 'Monergy.Application.slnx') --verify-no-changes --no-restore } '.NET format verification failed.'
+            Invoke-Checked { & $pnpm --dir $RepositoryRoot run format:check } 'Prettier verification failed.'
+            Invoke-Checked { & git -C $RepositoryRoot diff --check } 'Git whitespace verification failed.'
+        }
+        'Lint' {
+            Invoke-Checked { & $pnpm --dir $RepositoryRoot run lint } 'ESLint security/static analysis failed.'
+            Invoke-Checked { & $pnpm --dir $RepositoryRoot run typecheck } 'TypeScript strict no-emit check failed.'
+        }
+        'Build' {
+            Invoke-Checked { & $dotnet build (Join-Path $RepositoryRoot 'Monergy.Application.slnx') --configuration Release --no-restore } '.NET build failed.'
+            Invoke-Checked { & $pnpm --dir $RepositoryRoot run build } 'Frontend production build failed.'
+        }
+        'Test' {
+            Invoke-Checked { & $dotnet test (Join-Path $RepositoryRoot 'Monergy.Application.slnx') --configuration Release --no-build } '.NET test suite failed.'
+            Invoke-Checked { & $pnpm --dir $RepositoryRoot run test } 'Frontend component/accessibility tests failed.'
+        }
+        'ArchitectureTest' {
+            Invoke-Checked { & $dotnet test (Join-Path $RepositoryRoot 'tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj') --configuration Release --no-build } 'Architecture-boundary tests failed.'
+        }
+        'BrowserTest' {
+            Invoke-Checked { & $pnpm --dir $RepositoryRoot run test:browser } 'Playwright smoke test failed.'
+        }
+        'Package' {
+            & (Join-Path $RepositoryRoot 'build/package-services.ps1') -RepositoryRoot $RepositoryRoot
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        'HostedOciEvidence' {
+            & (Join-Path $RepositoryRoot 'build/hosted-oci-evidence.ps1') -RepositoryRoot $RepositoryRoot
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        'Sbom' {
+            & (Join-Path $RepositoryRoot 'build/supply-chain/Invoke-SupplyChain.ps1') -Task Sbom -RepositoryRoot $RepositoryRoot
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        'VulnerabilityScan' {
+            & (Join-Path $RepositoryRoot 'build/supply-chain/Invoke-SupplyChain.ps1') -Task VulnerabilityScan -RepositoryRoot $RepositoryRoot
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        'SecretScan' {
+            & (Join-Path $RepositoryRoot 'build/supply-chain/Invoke-SupplyChain.ps1') -Task SecretScan -RepositoryRoot $RepositoryRoot
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
+        'ReleaseManifest' {
+            & (Join-Path $RepositoryRoot 'build/release/New-CandidateManifest.ps1') -RepositoryRoot $RepositoryRoot
+            & (Join-Path $RepositoryRoot 'build/release/verify-candidate-manifest.ps1') -RepositoryRoot $RepositoryRoot
+        }
+        'D01Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-bootstrap.ps1') -RepositoryRoot $RepositoryRoot
+        }
+        'D02Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-toolchain.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+            & (Join-Path $RepositoryRoot 'build/verify-toolchain.ps1') -RepositoryRoot $RepositoryRoot
+        }
+    }
+}
+
+$taskOrder = if ($Task -ceq 'Verify') {
+    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification')
+} else { @($Task) }
+
+foreach ($current in $taskOrder) { Invoke-Task $current }
+Write-Output "D02 toolchain task '$Task' completed."

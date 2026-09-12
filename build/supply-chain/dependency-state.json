@@ -1,9 +1,11 @@
 {
   "schemaVersion": "1.0.0",
-  "productDependencyCount": 0,
-  "state": "NO_PRODUCT_DEPENDENCIES_YET",
-  "lockRequirement": "EVERY_FUTURE_DEPENDENCY_MANIFEST_REQUIRES_A_COMMITTED_LOCK",
-  "advisoryDatabaseScan": "NOT_APPLICABLE_UNTIL_DEPENDENCIES_EXIST",
-  "licenseEvaluation": "NOT_APPLICABLE_UNTIL_DEPENDENCIES_EXIST"
+  "state": "PINNED_AND_LOCKED_TOOLCHAIN_DEPENDENCIES",
+  "nugetCentralPackageManagement": true,
+  "nugetLockedRestore": true,
+  "pnpmPackageManager": "12.4.1",
+  "pnpmFrozenLockfile": true,
+  "sbomFormat": "CYCLONEDX_JSON",
+  "nativeAdvisoryScans": ["dotnet package list --vulnerable", "pnpm audit"],
+  "licenseEvaluation": "DEPENDENCY_INVENTORY_RECORDED_NO_POLICY_EXCEPTION"
 }
-
