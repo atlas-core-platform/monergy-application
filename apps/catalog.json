@@ -1,0 +1,8 @@
+{
+  "schemaVersion": "1.0.0",
+  "applications": [
+    { "name": "Customer Web", "folder": "customer-web", "status": "RESERVED" },
+    { "name": "Administration Web", "folder": "administration-web", "status": "RESERVED" }
+  ]
+}
+

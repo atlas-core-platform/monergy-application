@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "1.0.0",
+  "productDependencyCount": 0,
+  "state": "NO_PRODUCT_DEPENDENCIES_YET",
+  "lockRequirement": "EVERY_FUTURE_DEPENDENCY_MANIFEST_REQUIRES_A_COMMITTED_LOCK",
+  "advisoryDatabaseScan": "NOT_APPLICABLE_UNTIL_DEPENDENCIES_EXIST",
+  "licenseEvaluation": "NOT_APPLICABLE_UNTIL_DEPENDENCIES_EXIST"
+}
+

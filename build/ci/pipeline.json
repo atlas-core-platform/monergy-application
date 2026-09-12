@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0.0",
+  "product": "VENDOR_NEUTRAL",
+  "persistentEnvironmentDeployment": "NOT_CONFIGURED",
+  "stages": [
+    { "name": "Change Validation", "gateIds": ["CG-01", "CG-02", "CG-03"] },
+    { "name": "Security Validation", "gateIds": ["CG-04", "CG-05", "CG-06"] },
+    { "name": "Contract & Persistence Validation", "gateIds": ["CG-07", "CG-08"] },
+    { "name": "Artifact Creation", "gateIds": ["CG-09", "CG-10"] },
+    { "name": "Integration Verification", "gateIds": ["CG-11"] }
+  ]
+}
+

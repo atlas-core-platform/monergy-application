@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0.0",
+  "status": "BOOTSTRAP_CONTRACT",
+  "requiredEvidence": [
+    "structuredLogs",
+    "metrics",
+    "tracesOrCausationContext",
+    "health.liveness",
+    "health.readiness",
+    "releaseIdentity",
+    "deploymentMarkers",
+    "classifiedErrors"
+  ],
+  "correlationFields": [
+    "requestId",
+    "correlationId",
+    "causationId",
+    "serviceIdentity",
+    "releaseVersion",
+    "environment",
+    "operation",
+    "outcome",
+    "duration"
+  ],
+  "prohibitedTelemetry": [
+    "credentials",
+    "tokens",
+    "keys",
+    "secrets",
+    "unnecessaryFinancialPayloads",
+    "completeDocumentPayloads"
+  ],
+  "auditSeparation": "AUDIT_EVIDENCE_IS_NOT_OPERATIONAL_TELEMETRY"
+}
+

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "status": "TEMPLATE_NOT_A_RELEASE",
+  "releaseIdentity": null,
+  "version": null,
+  "createdAt": null,
+  "componentArtifacts": [],
+  "sourceRevisions": [],
+  "contractBaseline": null,
+  "infrastructureRevision": null,
+  "configurationBaseline": null,
+  "migrationVersions": [],
+  "sbomReferences": [],
+  "attestationReferences": [],
+  "approvalReferences": []
+}
+

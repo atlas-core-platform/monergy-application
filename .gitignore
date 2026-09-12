@@ -1,0 +1,8 @@
+.artifacts/
+.env
+.env.*
+!.env.example
+*.local.json
+*.user
+*.log
+

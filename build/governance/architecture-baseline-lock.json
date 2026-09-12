@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.0.0",
+  "repository": "https://github.com/atlas-core-platform/monergy-architecture",
+  "baseline": "Monergy Architecture Baseline v1.0",
+  "tag": "monergy-architecture-v1.0",
+  "requiredPublicationCommit": "193667fc7ad4d7f919f213f9a96260afa0f09fb9",
+  "observedStartCommit": "f48220b710f1df015fffedfd1115ae26e8db0c6c",
+  "frozenModels": ["R1", "R2", "R3", "R4", "R5", "R6", "R7"],
+  "r8ArtifactCount": 0,
+  "mwp02Status": "CLOSED",
+  "sg01": "READY",
+  "sg02": "CONDITIONALLY_READY",
+  "sg03": "BLOCKED",
+  "sg04": "BLOCKED"
+}
+

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0.0",
+  "reviewModel": "SERVICE_OWNER_REQUIRED",
+  "namedRepositoryTeams": "UNRESOLVED",
+  "protectedMain": "CONFIGURED_REQUIRES_EXTERNAL_INFRASTRUCTURE",
+  "forbiddenEnvironmentBranches": ["dev", "qa", "uat", "production"],
+  "sharedDomainAuthority": "PROHIBITED",
+  "crossServiceSql": "PROHIBITED",
+  "crossServiceForeignKeys": "PROHIBITED",
+  "crossOwnerWrites": "PROHIBITED",
+  "sharedMigrationAuthority": "PROHIBITED"
+}
+

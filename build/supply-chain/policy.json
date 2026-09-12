@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "requiredControls": [
+    "dependencyLocking",
+    "secretScan",
+    "sourceSecurityAnalysis",
+    "dependencyCompositionAnalysis",
+    "licensePolicyEvaluation",
+    "artifactVulnerabilityValidation",
+    "sbomOrDependencyInventory",
+    "sourceAndBuildProvenance",
+    "artifactIntegrity"
+  ],
+  "exceptionPolicy": "EXPLICIT_OWNED_APPROVED_TIME_BOUNDED_AUDITABLE",
+  "publication": "NOT_CONFIGURED"
+}
+

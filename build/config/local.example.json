@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0.0",
+  "executionZone": "LOCAL",
+  "persistentEnvironment": false,
+  "dataClass": "SYNTHETIC_ONLY",
+  "secretReferences": [],
+  "externalEndpoints": [],
+  "telemetryMode": "LOCAL_STRUCTURED"
+}
+

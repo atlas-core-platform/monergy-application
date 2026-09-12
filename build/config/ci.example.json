@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0.0",
+  "executionZone": "CI_EPHEMERAL",
+  "persistentEnvironment": false,
+  "dataClass": "SYNTHETIC_ONLY",
+  "secretReferences": [],
+  "externalEndpoints": [],
+  "telemetryMode": "EPHEMERAL_STRUCTURED"
+}
+

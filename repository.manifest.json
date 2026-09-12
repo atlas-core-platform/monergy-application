@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0.0",
+  "repository": "monergy-application",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "implementationPackage": "MWP-03-D01",
+  "architectureRepository": "https://github.com/atlas-core-platform/monergy-architecture",
+  "architectureBaseline": "monergy-architecture-v1.0",
+  "requiredArchitecturePublication": "193667fc7ad4d7f919f213f9a96260afa0f09fb9",
+  "observedArchitectureStart": "f48220b710f1df015fffedfd1115ae26e8db0c6c",
+  "productTechnologyDecision": "UNRESOLVED",
+  "hostedRepositoryDecision": "UNRESOLVED",
+  "businessFeatureImplementation": "NONE",
+  "deploymentState": "NOT_DEPLOYED"
+}
+
