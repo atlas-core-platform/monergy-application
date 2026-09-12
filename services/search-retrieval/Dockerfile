@@ -12,10 +12,10 @@ RUN dotnet restore "services/search-retrieval/Monergy.Services.SearchRetrieval.c
 
 COPY ["shared/platform/Monergy.Platform/", "shared/platform/Monergy.Platform/"]
 COPY ["services/search-retrieval/", "services/search-retrieval/"]
-RUN dotnet publish "services/search-retrieval/Monergy.Services.SearchRetrieval.csproj" \\
-    --configuration Release \\
-    --no-restore \\
-    --output /app/publish \\
+RUN dotnet publish "services/search-retrieval/Monergy.Services.SearchRetrieval.csproj" \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish \
     /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS final

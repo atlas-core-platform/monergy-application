@@ -12,10 +12,10 @@ RUN dotnet restore "services/job-management/Monergy.Services.JobManagement.cspro
 
 COPY ["shared/platform/Monergy.Platform/", "shared/platform/Monergy.Platform/"]
 COPY ["services/job-management/", "services/job-management/"]
-RUN dotnet publish "services/job-management/Monergy.Services.JobManagement.csproj" \\
-    --configuration Release \\
-    --no-restore \\
-    --output /app/publish \\
+RUN dotnet publish "services/job-management/Monergy.Services.JobManagement.csproj" \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish \
     /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/runtime:10.0.12-noble-chiseled@sha256:f828e6ef5140bb1b2f5b681535f197a243d91ce0ab3651399879a0c567dd1de7 AS final

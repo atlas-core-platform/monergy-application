@@ -12,10 +12,10 @@ RUN dotnet restore "services/integration-gateway/Monergy.Services.IntegrationGat
 
 COPY ["shared/platform/Monergy.Platform/", "shared/platform/Monergy.Platform/"]
 COPY ["services/integration-gateway/", "services/integration-gateway/"]
-RUN dotnet publish "services/integration-gateway/Monergy.Services.IntegrationGateway.csproj" \\
-    --configuration Release \\
-    --no-restore \\
-    --output /app/publish \\
+RUN dotnet publish "services/integration-gateway/Monergy.Services.IntegrationGateway.csproj" \
+    --configuration Release \
+    --no-restore \
+    --output /app/publish \
     /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS final
