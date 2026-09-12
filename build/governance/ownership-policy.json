@@ -1,8 +1,12 @@
 {
   "schemaVersion": "1.0.0",
   "reviewModel": "SERVICE_OWNER_REQUIRED",
-  "namedRepositoryTeams": "UNRESOLVED",
-  "protectedMain": "CONFIGURED_REQUIRES_EXTERNAL_INFRASTRUCTURE",
+  "codeOwners": ["@Magkhan060"],
+  "protectedMain": "GITHUB_BRANCH_PROTECTION_ENFORCED",
+  "bootstrapException": {
+    "scope": "INITIAL_REVIEWED_BASELINE_ONLY",
+    "commit": "852bebbe62eccd54be214ba2168d19dfdda467d6"
+  },
   "forbiddenEnvironmentBranches": ["dev", "qa", "uat", "production"],
   "sharedDomainAuthority": "PROHIBITED",
   "crossServiceSql": "PROHIBITED",
@@ -10,4 +14,3 @@
   "crossOwnerWrites": "PROHIBITED",
   "sharedMigrationAuthority": "PROHIBITED"
 }
-

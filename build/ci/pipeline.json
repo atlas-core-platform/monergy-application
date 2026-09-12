@@ -1,6 +1,7 @@
 {
   "schemaVersion": "1.0.0",
   "product": "VENDOR_NEUTRAL",
+  "hostedExecution": "GITHUB_ACTIONS",
   "persistentEnvironmentDeployment": "NOT_CONFIGURED",
   "stages": [
     { "name": "Change Validation", "gateIds": ["CG-01", "CG-02", "CG-03"] },
@@ -10,4 +11,3 @@
     { "name": "Integration Verification", "gateIds": ["CG-11"] }
   ]
 }
-

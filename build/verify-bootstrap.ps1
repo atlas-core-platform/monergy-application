@@ -98,8 +98,21 @@ Add-Check 'D07 result vocabulary' (@($gateCatalog.gates | Where-Object { $_.resu
 
 $pipeline = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/ci/pipeline.json') -Raw | ConvertFrom-Json
 Add-Check 'Five D05 pipeline stages' (Test-ExactSet @($pipeline.stages.name) @('Change Validation', 'Security Validation', 'Contract & Persistence Validation', 'Artifact Creation', 'Integration Verification')) 'Five logical stages'
+$hostedPipelineValid = $pipeline.hostedExecution -ceq 'GITHUB_ACTIONS'
+Add-Check 'Hosted CI realization' $hostedPipelineValid 'GitHub Actions executes portable D05 gate semantics'
 $pipelineGateIds = @($pipeline.stages | ForEach-Object { $_.gateIds })
 Add-Check 'CI gate stage coverage' (Test-ExactSet $pipelineGateIds $expectedGateIds) 'Each gate appears exactly once'
+
+$workflowPath = Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml'
+$workflowText = if (Test-Path -LiteralPath $workflowPath) { Get-Content -LiteralPath $workflowPath -Raw } else { '' }
+$workflowValid = $workflowText -match 'Invoke-Bootstrap\.ps1 -Task All' -and
+    $workflowText -match 'actions/checkout@[0-9a-f]{40}' -and
+    $workflowText -match '(?m)^\s*contents:\s*read\s*$'
+Add-Check 'Hosted bootstrap workflow' $workflowValid 'Commit-pinned checkout, read-only permissions, and complete bootstrap command'
+
+$codeOwnersPath = Join-Path $RepositoryRoot '.github/CODEOWNERS'
+$codeOwners = if (Test-Path -LiteralPath $codeOwnersPath) { (Get-Content -LiteralPath $codeOwnersPath -Raw).Trim() } else { '' }
+Add-Check 'CODEOWNERS governance' ($codeOwners -ceq '* @Magkhan060') 'Repository-wide owner is explicit'
 
 $localConfig = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/config/local.example.json') -Raw | ConvertFrom-Json
 $ciConfig = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/config/ci.example.json') -Raw | ConvertFrom-Json
@@ -119,10 +132,13 @@ Add-Check 'Governed baseline lock' $lockValid 'MWP-02 closed; stage gates and R1
 $repositoryManifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
 $manifestValid = $repositoryManifest.repository -ceq 'monergy-application' -and
     $repositoryManifest.productTechnologyDecision -ceq 'UNRESOLVED' -and
-    $repositoryManifest.hostedRepositoryDecision -ceq 'UNRESOLVED' -and
+    $repositoryManifest.status -ceq 'ACCEPTED_COMPLETE' -and
+    $repositoryManifest.hostedRepositoryDecision -ceq 'PRIVATE_GITHUB_REPOSITORY' -and
+    $repositoryManifest.remote -ceq 'https://github.com/atlas-core-platform/monergy-application.git' -and
+    $repositoryManifest.hostedCi -ceq 'GITHUB_ACTIONS' -and
     $repositoryManifest.businessFeatureImplementation -ceq 'NONE' -and
     $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED'
-Add-Check 'Truthful repository state' $manifestValid 'No stack, Feature, hosted CI, or deployment claim invented'
+Add-Check 'Truthful repository state' $manifestValid 'Hosted repository resolved; stack, Feature, and deployment remain unclaimed'
 
 $observability = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'shared/platform/observability.contract.json') -Raw | ConvertFrom-Json
 Add-Check 'Observability bootstrap' (@($observability.requiredEvidence).Count -eq 8 -and @($observability.prohibitedTelemetry).Count -eq 6) 'D05 telemetry and exclusion categories represented'

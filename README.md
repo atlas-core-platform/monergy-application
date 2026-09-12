@@ -1,18 +1,27 @@
 # Monergy Application
 
 `monergy-application` is the bounded product monorepo defined by the accepted
-MWP-02-D05 engineering-platform baseline. This MWP-03-D01 candidate contains an
-executable, technology-neutral repository bootstrap; it contains no implemented
-Monergy business Feature.
+MWP-02-D05 engineering-platform baseline. MWP-03-D01 establishes an executable,
+technology-neutral repository bootstrap; it contains no implemented Monergy
+business Feature.
 
 ## Current state
 
-- Status: Candidate — Pending CTO Review
+- Status: Accepted / Complete
 - Architecture basis: Monergy Architecture Baseline v1.0
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Product runtime/language/framework: unresolved; no prototype choice is inferred
-- Hosted repository and CI product: unresolved; this repository is local only
+- Hosted repository: private GitHub repository at
+  `https://github.com/atlas-core-platform/monergy-application`
+- Hosted CI: GitHub Actions running the technology-neutral bootstrap gates
+- Governance: protected `main` with `CODEOWNERS`; the reviewed initial baseline
+  is the documented repository-bootstrap exception to normal pull-request flow
 - Deployment: none
+
+D01-TD-02 is resolved by the hosted repository, GitHub Actions, and CODEOWNERS.
+D01-TD-01 and D01-TD-03 remain unresolved and continue to block product Feature
+implementation, product-specific SAST, deployable artifact production, and
+artifact vulnerability scanning.
 
 The pre-existing `Monergy/Application/monergy-poc` and `Prototype` folders are
 outside this repository and are intentionally untouched. They are not treated as
@@ -37,4 +46,3 @@ Run from the repository root:
 `Build` emits local bootstrap descriptors, dependency inventory, and provenance
 under ignored `.artifacts/`. These are not deployable application artifacts and
 must not be represented as Feature, Integration, UAT, or Production evidence.
-
