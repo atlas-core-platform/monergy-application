@@ -2,10 +2,25 @@
   "schemaVersion": "1.0.0",
   "reviewModel": "SERVICE_OWNER_REQUIRED",
   "codeOwners": ["@Magkhan060"],
-  "protectedMain": "BLOCKED_CURRENT_GITHUB_PLAN",
-  "protectionBlocker": "GitHub rejected protection for this private organization repository; a plan supporting private protected branches is required",
+  "codeOwnersMode": "ADVISORY_GITHUB_FREE",
+  "protectedMain": "NOT_IMPLEMENTED_GITHUB_FREE_PLAN_LIMITATION",
+  "pullRequestPolicy": "REQUIRED_NOT_ENFORCED",
+  "directPushDetection": "GITHUB_ACTIONS_WARNING",
+  "forcePushPolicy": "PROHIBITED_NOT_ENFORCED",
+  "branchDeletionPolicy": "PROHIBITED_NOT_ENFORCED",
+  "repositoryBasePermission": "READ",
+  "directRepositoryCollaborators": 0,
+  "directRepositoryTeams": 0,
+  "exceptionExpiryTriggers": [
+    "SECOND_WRITE_CAPABLE_CONTRIBUTOR",
+    "EXTERNAL_WRITE_ACCESS",
+    "SG_02_INTEGRATION_READY",
+    "UAT_OR_PRODUCTION_PREPARATION",
+    "PRODUCTION_ARTIFACT_OR_DEPLOYMENT_CREDENTIAL",
+    "ENFORCED_REVIEW_REQUIREMENT"
+  ],
   "bootstrapException": {
-    "scope": "INITIAL_REVIEWED_BASELINE_ONLY",
+    "scope": "INITIAL_BASELINE_AND_GITHUB_FREE_CONTROL_REALIZATION",
     "commit": "852bebbe62eccd54be214ba2168d19dfdda467d6"
   },
   "forbiddenEnvironmentBranches": ["dev", "qa", "uat", "production"],

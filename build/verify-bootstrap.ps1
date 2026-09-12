@@ -107,18 +107,43 @@ $workflowPath = Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml'
 $workflowText = if (Test-Path -LiteralPath $workflowPath) { Get-Content -LiteralPath $workflowPath -Raw } else { '' }
 $workflowValid = $workflowText -match 'Invoke-Bootstrap\.ps1 -Task All' -and
     $workflowText -match 'actions/checkout@[0-9a-f]{40}' -and
-    $workflowText -match '(?m)^\s*contents:\s*read\s*$'
-Add-Check 'Hosted bootstrap workflow' $workflowValid 'Commit-pinned checkout, read-only permissions, and complete bootstrap command'
+    $workflowText -match '(?m)^\s*contents:\s*read\s*$' -and
+    $workflowText -match '(?m)^\s*pull-requests:\s*read\s*$' -and
+    $workflowText.Contains('Direct push to main detected') -and
+    $workflowText.Contains('/commits/$env:MONERGY_COMMIT_SHA/pulls')
+Add-Check 'Hosted bootstrap workflow' $workflowValid 'Commit-pinned checkout, least privilege, complete bootstrap, and direct-push detection'
 
 $codeOwnersPath = Join-Path $RepositoryRoot '.github/CODEOWNERS'
 $codeOwners = if (Test-Path -LiteralPath $codeOwnersPath) { (Get-Content -LiteralPath $codeOwnersPath -Raw).Trim() } else { '' }
 Add-Check 'CODEOWNERS governance' ($codeOwners -ceq '* @Magkhan060') 'Repository-wide owner is explicit'
 
 $ownershipPolicy = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/ownership-policy.json') -Raw | ConvertFrom-Json
-$protectionStateValid = $ownershipPolicy.protectedMain -ceq 'BLOCKED_CURRENT_GITHUB_PLAN' -and
+$expectedExpiryTriggers = @(
+    'SECOND_WRITE_CAPABLE_CONTRIBUTOR', 'EXTERNAL_WRITE_ACCESS',
+    'SG_02_INTEGRATION_READY', 'UAT_OR_PRODUCTION_PREPARATION',
+    'PRODUCTION_ARTIFACT_OR_DEPLOYMENT_CREDENTIAL', 'ENFORCED_REVIEW_REQUIREMENT'
+)
+$protectionStateValid = $ownershipPolicy.protectedMain -ceq 'NOT_IMPLEMENTED_GITHUB_FREE_PLAN_LIMITATION' -and
     @($ownershipPolicy.codeOwners).Count -eq 1 -and $ownershipPolicy.codeOwners[0] -ceq '@Magkhan060' -and
+    $ownershipPolicy.codeOwnersMode -ceq 'ADVISORY_GITHUB_FREE' -and
+    $ownershipPolicy.pullRequestPolicy -ceq 'REQUIRED_NOT_ENFORCED' -and
+    $ownershipPolicy.directPushDetection -ceq 'GITHUB_ACTIONS_WARNING' -and
+    $ownershipPolicy.forcePushPolicy -ceq 'PROHIBITED_NOT_ENFORCED' -and
+    $ownershipPolicy.branchDeletionPolicy -ceq 'PROHIBITED_NOT_ENFORCED' -and
+    $ownershipPolicy.repositoryBasePermission -ceq 'READ' -and
+    $ownershipPolicy.directRepositoryCollaborators -eq 0 -and
+    $ownershipPolicy.directRepositoryTeams -eq 0 -and
+    (Test-ExactSet @($ownershipPolicy.exceptionExpiryTriggers) $expectedExpiryTriggers) -and
     $ownershipPolicy.bootstrapException.commit -ceq '852bebbe62eccd54be214ba2168d19dfdda467d6'
-Add-Check 'Branch-protection evidence' $protectionStateValid 'CODEOWNERS and bootstrap exception are governed; current-plan blocker remains explicit'
+Add-Check 'GitHub Free control model' $protectionStateValid 'Advisory ownership, minimum access, policy controls, detection, and six expiry triggers'
+
+$exceptionPath = Join-Path $RepositoryRoot 'build/governance/github-free-governance-exception.md'
+$exceptionText = if (Test-Path -LiteralPath $exceptionPath) { Get-Content -LiteralPath $exceptionPath -Raw } else { '' }
+$exceptionValid = $exceptionText.Contains('NOT_IMPLEMENTED — GITHUB FREE PLAN LIMITATION') -and
+    $exceptionText.Contains('cannot technically prevent') -and
+    $exceptionText.Contains('expires immediately') -and
+    $exceptionText.Contains('GitHub Team')
+Add-Check 'GitHub Free exception record' $exceptionValid 'Residual risk, non-enforcement, compensating controls, and expiry are explicit'
 
 $localConfig = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/config/local.example.json') -Raw | ConvertFrom-Json
 $ciConfig = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/config/ci.example.json') -Raw | ConvertFrom-Json
@@ -138,14 +163,14 @@ Add-Check 'Governed baseline lock' $lockValid 'MWP-02 closed; stage gates and R1
 $repositoryManifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
 $manifestValid = $repositoryManifest.repository -ceq 'monergy-application' -and
     $repositoryManifest.productTechnologyDecision -ceq 'UNRESOLVED' -and
-    $repositoryManifest.status -ceq 'CANDIDATE_CLOSURE_BLOCKED' -and
-    $repositoryManifest.hostedRepositoryDecision -ceq 'PARTIALLY_RESOLVED' -and
+    $repositoryManifest.status -ceq 'ACCEPTED_COMPLETE' -and
+    $repositoryManifest.hostedRepositoryDecision -ceq 'GITHUB_FREE_EXCEPTION_ACCEPTED' -and
     $repositoryManifest.remote -ceq 'https://github.com/atlas-core-platform/monergy-application.git' -and
     $repositoryManifest.hostedCi -ceq 'GITHUB_ACTIONS' -and
-    $repositoryManifest.branchProtection -ceq 'BLOCKED_CURRENT_GITHUB_PLAN' -and
+    $repositoryManifest.branchProtection -ceq 'NOT_IMPLEMENTED_GITHUB_FREE_PLAN_LIMITATION' -and
     $repositoryManifest.businessFeatureImplementation -ceq 'NONE' -and
     $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED'
-Add-Check 'Truthful repository state' $manifestValid 'Hosted CI resolved; branch protection, stack, Feature, and deployment are accurately bounded'
+Add-Check 'Truthful repository state' $manifestValid 'D01 accepted under exception; non-enforcement, stack, Feature, and deployment are accurately bounded'
 
 $observability = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'shared/platform/observability.contract.json') -Raw | ConvertFrom-Json
 Add-Check 'Observability bootstrap' (@($observability.requiredEvidence).Count -eq 8 -and @($observability.prohibitedTelemetry).Count -eq 6) 'D05 telemetry and exclusion categories represented'

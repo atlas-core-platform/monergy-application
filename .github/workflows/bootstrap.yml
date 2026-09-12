@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: bootstrap-${{ github.workflow }}-${{ github.ref }}
@@ -26,6 +27,37 @@ jobs:
       - name: Run bootstrap quality gates
         shell: pwsh
         run: ./build/Invoke-Bootstrap.ps1 -Task All
+
+      - name: Detect direct push to main
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONERGY_REPOSITORY: ${{ github.repository }}
+          MONERGY_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $uri = "https://api.github.com/repos/$env:MONERGY_REPOSITORY/commits/$env:MONERGY_COMMIT_SHA/pulls"
+          $pullRequests = @(Invoke-RestMethod -Method Get -Uri $uri -Headers $headers)
+          $mergedToMain = @($pullRequests | Where-Object {
+            $_.merged_at -and $_.base.ref -eq 'main'
+          })
+          if ($mergedToMain.Count -eq 0) {
+            Write-Output '::warning title=Direct push to main detected::GitHub Free cannot prevent this push. Review it under the MWP-03-D01 governance exception.'
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Direct push detection: FLAGGED'
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value ''
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Commit ``$env:MONERGY_COMMIT_SHA`` was pushed directly to ``main`` without an associated merged pull request. Detection does not imply prevention."
+          }
+          else {
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Direct push detection: PR-associated'
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value ''
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Commit ``$env:MONERGY_COMMIT_SHA`` is associated with merged pull request #$($mergedToMain[0].number)."
+          }
 
       - name: Verify whitespace
         shell: pwsh

@@ -22,3 +22,7 @@ introduced by D01.
 
 See the catalogs and README files in each responsibility area for the maintained
 boundary inventory.
+
+`build/governance/github-free-governance-exception.md` records the accepted D01
+compensating controls and expiry conditions for the private GitHub Free
+repository.
