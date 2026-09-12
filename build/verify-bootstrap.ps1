@@ -49,7 +49,8 @@ function Add-Check {
 }
 
 $expectedRoot = @('apps', 'services', 'contracts', 'shared', 'tests', 'build')
-$actualRoot = @(Get-ChildItem -LiteralPath $RepositoryRoot -Directory | Where-Object { $_.Name -notmatch '^\.' } | Select-Object -ExpandProperty Name)
+$ignoredGeneratedRoots = @('node_modules', 'playwright-report', 'test-results')
+$actualRoot = @(Get-ChildItem -LiteralPath $RepositoryRoot -Directory | Where-Object { $_.Name -notmatch '^\.' -and $_.Name -notin $ignoredGeneratedRoots } | Select-Object -ExpandProperty Name)
 Add-Check 'D05 root responsibilities' (Test-ExactSet $actualRoot $expectedRoot) ($actualRoot -join ', ')
 
 $expectedServiceIds = @(
@@ -61,7 +62,11 @@ $serviceCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/
 $serviceIds = @($serviceCatalog.services | ForEach-Object { $_.id })
 Add-Check 'Twelve R3 service identities' (Test-ExactSet $serviceIds $expectedServiceIds) "$($serviceIds.Count) service entries"
 Add-Check 'Unique service artifact identities' (@($serviceCatalog.services.artifact | Select-Object -Unique).Count -eq 12) '12 independently named artifacts'
-Add-Check 'Reserved service status' (@($serviceCatalog.services | Where-Object status -cne 'RESERVED').Count -eq 0) 'No service claims Feature implementation'
+$serviceStateValid = @($serviceCatalog.services | Where-Object {
+    $_.status -notin @('RESERVED', 'TOOLCHAIN_SCAFFOLD') -or
+    (($_.PSObject.Properties.Name -contains 'featureImplementation') -and $_.featureImplementation -cne 'NONE')
+}).Count -eq 0
+Add-Check 'No service Feature implementation' $serviceStateValid 'D01 reservations may advance only to D02 toolchain scaffolds with Feature state NONE'
 
 $serviceFoldersValid = $true
 $migrationFoldersValid = $true
@@ -105,7 +110,8 @@ Add-Check 'CI gate stage coverage' (Test-ExactSet $pipelineGateIds $expectedGate
 
 $workflowPath = Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml'
 $workflowText = if (Test-Path -LiteralPath $workflowPath) { Get-Content -LiteralPath $workflowPath -Raw } else { '' }
-$workflowValid = $workflowText -match 'Invoke-Bootstrap\.ps1 -Task All' -and
+$workflowValid = $workflowText -match 'Invoke-Toolchain\.ps1 -Task Restore' -and
+    $workflowText -match 'Invoke-Toolchain\.ps1 -Task D02Verification' -and
     $workflowText -match 'actions/checkout@[0-9a-f]{40}' -and
     $workflowText -match '(?m)^\s*contents:\s*read\s*$' -and
     $workflowText -match '(?m)^\s*pull-requests:\s*read\s*$' -and
@@ -162,15 +168,15 @@ Add-Check 'Governed baseline lock' $lockValid 'MWP-02 closed; stage gates and R1
 
 $repositoryManifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
 $manifestValid = $repositoryManifest.repository -ceq 'monergy-application' -and
-    $repositoryManifest.productTechnologyDecision -ceq 'UNRESOLVED' -and
-    $repositoryManifest.status -ceq 'ACCEPTED_COMPLETE' -and
+    $repositoryManifest.productTechnologyDecision -in @('UNRESOLVED', 'RESOLVED_BY_D02_PT_01_THROUGH_PT_11') -and
+    $repositoryManifest.status -in @('ACCEPTED_COMPLETE', 'CANDIDATE_PENDING_CTO_REVIEW') -and
     $repositoryManifest.hostedRepositoryDecision -ceq 'GITHUB_FREE_EXCEPTION_ACCEPTED' -and
     $repositoryManifest.remote -ceq 'https://github.com/atlas-core-platform/monergy-application.git' -and
     $repositoryManifest.hostedCi -ceq 'GITHUB_ACTIONS' -and
     $repositoryManifest.branchProtection -ceq 'NOT_IMPLEMENTED_GITHUB_FREE_PLAN_LIMITATION' -and
     $repositoryManifest.businessFeatureImplementation -ceq 'NONE' -and
     $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED'
-Add-Check 'Truthful repository state' $manifestValid 'D01 accepted under exception; non-enforcement, stack, Feature, and deployment are accurately bounded'
+Add-Check 'Truthful repository state' $manifestValid 'D01 controls remain accepted while D02 records its candidate stack; Feature and deployment remain absent'
 
 $observability = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'shared/platform/observability.contract.json') -Raw | ConvertFrom-Json
 Add-Check 'Observability bootstrap' (@($observability.requiredEvidence).Count -eq 8 -and @($observability.prohibitedTelemetry).Count -eq 6) 'D05 telemetry and exclusion categories represented'
@@ -178,9 +184,9 @@ Add-Check 'Observability bootstrap' (@($observability.requiredEvidence).Count -e
 $releaseTemplate = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/release/product-release-manifest.template.json') -Raw | ConvertFrom-Json
 Add-Check 'Release manifest bootstrap' ($releaseTemplate.status -ceq 'TEMPLATE_NOT_A_RELEASE' -and @($releaseTemplate.componentArtifacts).Count -eq 0) 'Template cannot be mistaken for a release'
 
-$dependencyNames = @('package.json', 'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'requirements.txt', 'poetry.lock', 'pom.xml', 'build.gradle', 'Cargo.toml', 'go.mod')
-$dependencyManifests = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File | Where-Object { $_.FullName -notmatch '[\\/]\.git[\\/]' -and $_.Name -in $dependencyNames })
-Add-Check 'No unapproved product technology' ($dependencyManifests.Count -eq 0) "$($dependencyManifests.Count) product dependency manifests"
+$approvedDependencyFiles = @('package.json', 'pnpm-lock.yaml', 'Directory.Packages.props', 'global.json')
+$approvedTechnologyState = @($approvedDependencyFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $RepositoryRoot $_)) }).Count -eq 0
+Add-Check 'Governed product technology state' $approvedTechnologyState 'D02-approved package managers, runtime pins, and dependency locks are present'
 
 $branchValid = $true
 if (Test-Path -LiteralPath (Join-Path $RepositoryRoot '.git')) {

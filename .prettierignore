@@ -1,0 +1,10 @@
+.artifacts
+.toolcache
+**/bin
+**/obj
+node_modules
+apps/customer-web/dist
+playwright-report
+test-results
+pnpm-lock.yaml
+shared/platform/frontend-ui/src/semantic-tokens.generated.css

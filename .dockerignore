@@ -1,0 +1,12 @@
+.git
+.github
+.artifacts
+.toolcache
+node_modules
+**/bin
+**/obj
+apps/customer-web/dist
+playwright-report
+test-results
+docs
+reference

@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "dotnetSdk": "10.0.401",
+  "dotnetRuntime": "10.0.12",
+  "csharp": "14.0",
+  "node": "24.21.0",
+  "pnpm": "12.4.1",
+  "react": "19.3.0",
+  "vite": "8.3.0",
+  "antDesign": "6.6.3",
+  "tailwindCss": "4.3.3",
+  "syft": "1.51.1",
+  "grype": "0.118.0",
+  "gitleaks": "8.30.1",
+  "containerImages": {
+    "sdk": "mcr.microsoft.com/dotnet/sdk:10.0.401-noble@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d",
+    "aspnet": "mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02",
+    "runtime": "mcr.microsoft.com/dotnet/runtime:10.0.12-noble-chiseled@sha256:f828e6ef5140bb1b2f5b681535f197a243d91ce0ab3651399879a0c567dd1de7"
+  }
+}

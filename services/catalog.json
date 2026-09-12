@@ -1,18 +1,101 @@
 {
   "schemaVersion": "1.0.0",
   "services": [
-    { "id": "customer-identity", "name": "Customer & Identity Service", "artifact": "monergy-customer-identity", "status": "RESERVED" },
-    { "id": "consent", "name": "Consent Service", "artifact": "monergy-consent", "status": "RESERVED" },
-    { "id": "integration-gateway", "name": "Integration Gateway Service", "artifact": "monergy-integration-gateway", "status": "RESERVED" },
-    { "id": "evidence", "name": "Evidence Service", "artifact": "monergy-evidence", "status": "RESERVED" },
-    { "id": "document-intelligence", "name": "Document Intelligence Service", "artifact": "monergy-document-intelligence", "status": "RESERVED" },
-    { "id": "financial-profile", "name": "Financial Profile Service", "artifact": "monergy-financial-profile", "status": "RESERVED" },
-    { "id": "financial-rules", "name": "Financial Rules Service", "artifact": "monergy-financial-rules", "status": "RESERVED" },
-    { "id": "search-retrieval", "name": "Search & Retrieval Service", "artifact": "monergy-search-retrieval", "status": "RESERVED" },
-    { "id": "ai-intelligence", "name": "AI Intelligence Service", "artifact": "monergy-ai-intelligence", "status": "RESERVED" },
-    { "id": "reporting", "name": "Reporting Service", "artifact": "monergy-reporting", "status": "RESERVED" },
-    { "id": "job-management", "name": "Job Management Service", "artifact": "monergy-job-management", "status": "RESERVED" },
-    { "id": "audit", "name": "Audit Service", "artifact": "monergy-audit", "status": "RESERVED" }
+    {
+      "id": "customer-identity",
+      "name": "Customer & Identity Service",
+      "artifact": "monergy-customer-identity",
+      "primaryHost": "HTTP",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "consent",
+      "name": "Consent Service",
+      "artifact": "monergy-consent",
+      "primaryHost": "HTTP",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "integration-gateway",
+      "name": "Integration Gateway Service",
+      "artifact": "monergy-integration-gateway",
+      "primaryHost": "HTTP",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "evidence",
+      "name": "Evidence Service",
+      "artifact": "monergy-evidence",
+      "primaryHost": "HTTP",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "document-intelligence",
+      "name": "Document Intelligence Service",
+      "artifact": "monergy-document-intelligence",
+      "primaryHost": "WORKER",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "financial-profile",
+      "name": "Financial Profile Service",
+      "artifact": "monergy-financial-profile",
+      "primaryHost": "HTTP",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "financial-rules",
+      "name": "Financial Rules Service",
+      "artifact": "monergy-financial-rules",
+      "primaryHost": "HTTP",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "search-retrieval",
+      "name": "Search & Retrieval Service",
+      "artifact": "monergy-search-retrieval",
+      "primaryHost": "HTTP",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "ai-intelligence",
+      "name": "AI Intelligence Service",
+      "artifact": "monergy-ai-intelligence",
+      "primaryHost": "HTTP",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "reporting",
+      "name": "Reporting Service",
+      "artifact": "monergy-reporting",
+      "primaryHost": "WORKER",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "job-management",
+      "name": "Job Management Service",
+      "artifact": "monergy-job-management",
+      "primaryHost": "WORKER",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    },
+    {
+      "id": "audit",
+      "name": "Audit Service",
+      "artifact": "monergy-audit",
+      "primaryHost": "WORKER",
+      "status": "TOOLCHAIN_SCAFFOLD",
+      "featureImplementation": "NONE"
+    }
   ]
 }
-

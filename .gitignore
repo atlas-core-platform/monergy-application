@@ -1,8 +1,15 @@
 .artifacts/
+.toolcache/
+TestResults/
+**/bin/
+**/obj/
+node_modules/
+apps/customer-web/dist/
+playwright-report/
+test-results/
 .env
 .env.*
 !.env.example
 *.local.json
 *.user
 *.log
-

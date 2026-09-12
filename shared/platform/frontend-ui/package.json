@@ -1,0 +1,32 @@
+{
+  "name": "@monergy/ui-foundation",
+  "version": "0.0.0-d02-candidate",
+  "private": true,
+  "type": "module",
+  "sideEffects": [
+    "./src/semantic-tokens.generated.css"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./semantic-tokens.css": "./src/semantic-tokens.generated.css"
+  },
+  "scripts": {
+    "build": "pnpm run check:tokens && tsc -p tsconfig.json",
+    "check:tokens": "node scripts/generate-css.mjs --check",
+    "generate:tokens": "node scripts/generate-css.mjs",
+    "lint": "eslint src scripts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "antd": "6.6.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "antd": "6.6.3",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  }
+}

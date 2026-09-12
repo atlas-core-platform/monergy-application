@@ -6,17 +6,93 @@
     "DEFERRED_OPEN_DECISION"
   ],
   "gates": [
-    { "id": "CG-01", "category": "Source/static validation", "realization": "IMPLEMENTED_EXECUTABLE", "result": "PASS", "command": "./build/Invoke-Bootstrap.ps1 -Task FormatCheck; Lint; StaticAnalysis", "scope": "Bootstrap source and structure only" },
-    { "id": "CG-02", "category": "Compile/build", "realization": "IMPLEMENTED_EXECUTABLE", "result": "PASS", "command": "./build/Invoke-Bootstrap.ps1 -Task Build", "scope": "Reserved-component descriptors only; no product compilation" },
-    { "id": "CG-03", "category": "Unit verification", "realization": "IMPLEMENTED_EXECUTABLE", "result": "PASS", "command": "./build/Invoke-Bootstrap.ps1 -Task Test", "scope": "Bootstrap verifier tests only" },
-    { "id": "CG-04", "category": "Secret scanning", "realization": "IMPLEMENTED_EXECUTABLE", "result": "PASS", "command": "./build/Invoke-Bootstrap.ps1 -Task SecretScan", "scope": "Local deterministic patterns; hosted scanner pending" },
-    { "id": "CG-05", "category": "Source security analysis", "realization": "DEFERRED_OPEN_DECISION", "result": "NOT_RUN", "command": null, "scope": "Requires approved product language and SAST implementation" },
-    { "id": "CG-06", "category": "Dependency/composition/license analysis", "realization": "IMPLEMENTED_EXECUTABLE", "result": "PASS", "command": "./build/Invoke-Bootstrap.ps1 -Task DependencyScan", "scope": "Zero product dependencies; external advisory/license service pending" },
-    { "id": "CG-07", "category": "Contract compatibility", "realization": "IMPLEMENTED_EXECUTABLE", "result": "PASS", "command": "./build/Invoke-Bootstrap.ps1 -Task StaticAnalysis", "scope": "D03 taxonomy and boundary homes only; contract schemas remain NOT_RUN" },
-    { "id": "CG-08", "category": "Migration validation", "realization": "IMPLEMENTED_EXECUTABLE", "result": "PASS", "command": "./build/Invoke-Bootstrap.ps1 -Task StaticAnalysis", "scope": "Twelve owner-scoped empty histories; migration execution remains NOT_RUN" },
-    { "id": "CG-09", "category": "Artifact creation", "realization": "IMPLEMENTED_EXECUTABLE", "result": "PASS", "command": "./build/Invoke-Bootstrap.ps1 -Task Build", "scope": "Local non-deployable descriptors; trusted publication requires external infrastructure" },
-    { "id": "CG-10", "category": "Artifact vulnerability validation", "realization": "DEFERRED_OPEN_DECISION", "result": "NOT_RUN", "command": null, "scope": "Requires approved packaging and artifact-scanning implementation" },
-    { "id": "CG-11", "category": "Integration verification", "realization": "CONFIGURED_REQUIRES_EXTERNAL_INFRASTRUCTURE", "result": "NOT_RUN", "command": null, "scope": "D07 contract-mediated integration evidence begins with future Feature implementation" }
+    {
+      "id": "CG-01",
+      "category": "Source/static validation",
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task FormatCheck; Lint",
+      "scope": ".NET format/analyzers, TypeScript no-emit, ESLint security rules and Prettier"
+    },
+    {
+      "id": "CG-02",
+      "category": "Compile/build",
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task Build",
+      "scope": "Twelve .NET hosts and the frontend production bundle"
+    },
+    {
+      "id": "CG-03",
+      "category": "Unit verification",
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task Test; ArchitectureTest; BrowserTest",
+      "scope": "xUnit architecture tests, Vitest component/accessibility tests and Playwright smoke"
+    },
+    {
+      "id": "CG-04",
+      "category": "Secret scanning",
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task SecretScan",
+      "scope": "Pinned Gitleaks history and candidate scans"
+    },
+    {
+      "id": "CG-05",
+      "category": "Source security analysis",
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task Lint",
+      "scope": "Microsoft analyzers and pinned ESLint security plugin; no GitHub Advanced Security claim"
+    },
+    {
+      "id": "CG-06",
+      "category": "Dependency/composition/license analysis",
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task Sbom; VulnerabilityScan",
+      "scope": "Pinned Syft CycloneDX, Grype, NuGet and pnpm advisory checks with dependency inventory"
+    },
+    {
+      "id": "CG-07",
+      "category": "Contract compatibility",
+      "realization": "DEFERRED_OPEN_DECISION",
+      "result": "NOT_RUN",
+      "command": null,
+      "scope": "D03 taxonomy homes exist; all fourteen VS-02 contracts remain non-operational"
+    },
+    {
+      "id": "CG-08",
+      "category": "Migration validation",
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task ArchitectureTest",
+      "scope": "Twelve independent service-owned migration homes remain empty; no database selected"
+    },
+    {
+      "id": "CG-09",
+      "category": "Artifact creation",
+      "realization": "CONFIGURED_REQUIRES_EXTERNAL_INFRASTRUCTURE",
+      "result": "BLOCKED",
+      "command": "./build/Invoke-Toolchain.ps1 -Task Package",
+      "scope": "Twelve independent digest-pinned OCI definitions; local Linux Docker engine unavailable"
+    },
+    {
+      "id": "CG-10",
+      "category": "Artifact vulnerability validation",
+      "realization": "CONFIGURED_REQUIRES_EXTERNAL_INFRASTRUCTURE",
+      "result": "BLOCKED",
+      "command": "./build/Invoke-Toolchain.ps1 -Task VulnerabilityScan",
+      "scope": "Repository SBOM scan passed; OCI scan awaits built images from a Linux Docker engine"
+    },
+    {
+      "id": "CG-11",
+      "category": "Integration verification",
+      "realization": "DEFERRED_OPEN_DECISION",
+      "result": "NOT_RUN",
+      "command": null,
+      "scope": "D07 contract-mediated integration evidence begins with future Feature implementation"
+    }
   ]
 }
-

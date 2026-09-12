@@ -1,0 +1,13 @@
+title = "Monergy D02 source and history secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated dependencies, tool binaries, and machine-readable evidence"
+paths = [
+  '''(^|/|\\)node_modules(/|\\)''',
+  '''(^|/|\\)\.toolcache(/|\\)''',
+  '''(^|/|\\)\.artifacts(/|\\)''',
+  '''(^|/|\\)(bin|obj|dist|playwright-report|test-results)(/|\\)'''
+]

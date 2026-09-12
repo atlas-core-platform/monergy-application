@@ -1,0 +1,54 @@
+/* Generated from tokens.json. Run pnpm generate:tokens; do not edit directly. */
+:root {
+  --monergy-color-brand-primary: #2457a7;
+  --monergy-color-brand-primary-hover: #1d478a;
+  --monergy-color-brand-on-primary: #ffffff;
+  --monergy-color-neutral-0: #ffffff;
+  --monergy-color-neutral-50: #f6f8fb;
+  --monergy-color-neutral-100: #edf1f6;
+  --monergy-color-neutral-300: #cbd4df;
+  --monergy-color-neutral-600: #526173;
+  --monergy-color-neutral-800: #263241;
+  --monergy-color-neutral-950: #111820;
+  --monergy-color-success: #1b7f4b;
+  --monergy-color-warning: #9a5b08;
+  --monergy-color-error: #b42318;
+  --monergy-color-info: #2457a7;
+  --monergy-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
+  --monergy-font-mono: Cascadia Code, SFMono-Regular, Consolas, monospace;
+  --monergy-space-unit: 0.25rem;
+  --monergy-radius-control: 6px;
+  --monergy-radius-panel: 12px;
+  --monergy-shadow-panel: 0 12px 32px rgba(17, 24, 32, 0.10);
+  --monergy-shadow-dialog: 0 20px 48px rgba(17, 24, 32, 0.18);
+  --monergy-focus-color: #2457a7;
+  --monergy-focus-width: 3px;
+  --monergy-focus-offset: 2px;
+}
+
+@theme inline {
+  --color-brand-primary: var(--monergy-color-brand-primary);
+  --color-brand-on-primary: var(--monergy-color-brand-on-primary);
+  --color-surface: var(--monergy-color-neutral-0);
+  --color-canvas: var(--monergy-color-neutral-50);
+  --color-subtle: var(--monergy-color-neutral-100);
+  --color-border: var(--monergy-color-neutral-300);
+  --color-muted: var(--monergy-color-neutral-600);
+  --color-strong: var(--monergy-color-neutral-800);
+  --color-ink: var(--monergy-color-neutral-950);
+  --color-success: var(--monergy-color-success);
+  --color-warning: var(--monergy-color-warning);
+  --color-error: var(--monergy-color-error);
+  --color-info: var(--monergy-color-info);
+  --font-sans: var(--monergy-font-sans);
+  --font-mono: var(--monergy-font-mono);
+  --spacing: 0.25rem;
+  --radius-control: var(--monergy-radius-control);
+  --radius-panel: var(--monergy-radius-panel);
+  --shadow-panel: var(--monergy-shadow-panel);
+  --shadow-dialog: var(--monergy-shadow-dialog);
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+}

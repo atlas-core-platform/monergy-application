@@ -6,4 +6,3 @@ endpoint, credential, secret, identity, or deployment configuration.
 
 Future secret values must be supplied through a governed secret/key capability;
 ordinary configuration may hold a reference but never the value.
-

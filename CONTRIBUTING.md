@@ -18,5 +18,8 @@ code may contain technical capabilities only; it must not become shared domain
 authority. Do not add secrets, Production data, or cross-service persistence
 access.
 
-Product code must not be added until its runtime, language, dependency manager,
-and verification toolchain have an approved engineering decision.
+Use the exact runtime and dependency pins in `build/toolchain/versions.json`,
+`global.json`, `Directory.Packages.props`, `package.json`, and the committed
+lock files. Run `./build/Invoke-Toolchain.ps1 -Task Verify` before review. D02
+does not authorize business Feature implementation or physical provider
+selection.

@@ -1,0 +1,17 @@
+@import '@monergy/ui-foundation/semantic-tokens.css';
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+html {
+  background: var(--monergy-color-neutral-50);
+}
+
+body {
+  margin: 0;
+  min-width: 20rem;
+}
+
+:focus-visible {
+  outline: var(--monergy-focus-width) solid var(--monergy-focus-color);
+  outline-offset: var(--monergy-focus-offset);
+}
