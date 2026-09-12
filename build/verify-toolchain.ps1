@@ -215,10 +215,13 @@ $requiredTasks = @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'Architect
 Add-Check 'Reproducible root task surface' (@($requiredTasks | Where-Object { -not $invokeToolchain.Contains("'$_'") }).Count -eq 0) 'All D02 root command responsibilities exposed'
 $repositoryManifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
 $gateCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/ci/gates.json') -Raw | ConvertFrom-Json
-$truthfulGateState = @($gateCatalog.gates | Where-Object result -ceq 'PASS').Count -eq 7 -and
-    @($gateCatalog.gates | Where-Object result -ceq 'BLOCKED').Count -eq 2 -and
-    @($gateCatalog.gates | Where-Object result -ceq 'NOT_RUN').Count -eq 2
-Add-Check 'Truthful D02 candidate state' ($repositoryManifest.status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and $repositoryManifest.vs02FeatureState -ceq 'NOT_STARTED_8_OF_8' -and $repositoryManifest.vs02ContractState -ceq 'NOT_OPERATIONAL_14_OF_14' -and $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED' -and $truthfulGateState) '7 PASS, 2 BLOCKED, 2 NOT_RUN; Features/contracts/deployment remain absent'
+$notRunGates = @($gateCatalog.gates | Where-Object result -ceq 'NOT_RUN')
+$truthfulGateState = @($gateCatalog.gates | Where-Object result -ceq 'PASS').Count -eq 9 -and
+    @($gateCatalog.gates | Where-Object result -ceq 'BLOCKED').Count -eq 0 -and
+    $notRunGates.Count -eq 2 -and
+    (Test-ExactSet $notRunGates.id @('CG-07', 'CG-11')) -and
+    @($notRunGates | Where-Object { -not $_.scope }).Count -eq 0
+Add-Check 'Truthful D02 candidate state' ($repositoryManifest.status -ceq 'CTO_APPROVED_CANDIDATE_PENDING_CLOSURE' -and $repositoryManifest.vs02FeatureState -ceq 'NOT_STARTED_8_OF_8' -and $repositoryManifest.vs02ContractState -ceq 'NOT_OPERATIONAL_14_OF_14' -and $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED' -and $truthfulGateState) '9 PASS, 0 BLOCKED, exact NOT_RUN gates CG-07/CG-11; Features/contracts/deployment remain absent'
 
 $failures = @($checks | Where-Object { -not $_.Passed })
 foreach ($check in $checks) {

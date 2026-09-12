@@ -73,18 +73,18 @@
     {
       "id": "CG-09",
       "category": "Artifact creation",
-      "realization": "CONFIGURED_REQUIRES_EXTERNAL_INFRASTRUCTURE",
-      "result": "BLOCKED",
-      "command": "./build/Invoke-Toolchain.ps1 -Task Package",
-      "scope": "Twelve independent digest-pinned OCI definitions; local Linux Docker engine unavailable"
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task HostedOciEvidence",
+      "scope": "Hosted Linux evidence builds twelve independent digest-pinned OCI archives without publication"
     },
     {
       "id": "CG-10",
       "category": "Artifact vulnerability validation",
-      "realization": "CONFIGURED_REQUIRES_EXTERNAL_INFRASTRUCTURE",
-      "result": "BLOCKED",
-      "command": "./build/Invoke-Toolchain.ps1 -Task VulnerabilityScan",
-      "scope": "Repository SBOM scan passed; OCI scan awaits built images from a Linux Docker engine"
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task HostedOciEvidence",
+      "scope": "Pinned Syft image SBOM and fail-closed Grype scan pass for all twelve hosted OCI archives"
     },
     {
       "id": "CG-11",
