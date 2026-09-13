@@ -29,6 +29,8 @@ D02 provides the accepted toolchain foundation. D03 adds:
 - `apps/customer-web/src/vs02/` as a separately loaded, clearly labeled
   reference experience;
 - `tests/vs02/` and frontend component/accessibility/Playwright evidence;
+- `build/measure-frontend-bundle.mjs` for reproducible production-bundle size
+  and lazy-route isolation evidence;
 - `build/verify-vs02.ps1` with deterministic checks and negative self-tests.
 
 D02 assets retained include:

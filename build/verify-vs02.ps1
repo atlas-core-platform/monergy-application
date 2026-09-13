@@ -23,6 +23,51 @@ function Test-SensitiveTelemetry {
     $Content -match '(?i)(content|payload|token|secret|candidateValue)\s*='
 }
 
+function Test-ApproximatelyEqual {
+    param([double]$Actual, [double]$Expected, [double]$Tolerance = 0.011)
+    [math]::Abs($Actual - $Expected) -lt $Tolerance
+}
+
+function Test-BundleEvidence {
+    param([object]$Evidence)
+    $initial = $Evidence.d03.initialApplicationShell
+    $runtime = $Evidence.d03.runtimeChunk
+    $lazy = $Evidence.d03.vs02LazyRouteChunk
+    $javascript = $Evidence.d03.totalJavaScript
+    $css = $Evidence.d03.totalCss
+    $combined = $Evidence.d03.totalJavaScriptAndCss
+    $expectedJavaScriptMinified = [math]::Round($initial.minifiedKb + $runtime.minifiedKb + $lazy.minifiedKb, 2)
+    $expectedJavaScriptGzip = [math]::Round($initial.gzipKb + $runtime.gzipKb + $lazy.gzipKb, 2)
+    $expectedDeltaMinified = [math]::Round($initial.minifiedKb - 628.65, 2)
+    $expectedDeltaGzip = [math]::Round($initial.gzipKb - 202.69, 2)
+    $expectedPercentageMinified = [math]::Round(($expectedDeltaMinified / 628.65) * 100, 2)
+    $expectedPercentageGzip = [math]::Round(($expectedDeltaGzip / 202.69) * 100, 2)
+
+    $Evidence.schemaVersion -ceq '1.0.0' -and
+        $Evidence.measurementMethod -ceq 'Vite 8.3 production reporter; minified and gzip sizes; decimal kB' -and
+        $Evidence.d02BaselineInitialApplicationShell.minifiedKb -eq 628.65 -and
+        $Evidence.d02BaselineInitialApplicationShell.gzipKb -eq 202.69 -and
+        $initial.minifiedKb -gt 0 -and $initial.gzipKb -gt 0 -and
+        $runtime.minifiedKb -gt 0 -and $runtime.gzipKb -gt 0 -and
+        $lazy.minifiedKb -gt 0 -and $lazy.gzipKb -gt 0 -and
+        $css.minifiedKb -gt 0 -and $css.gzipKb -gt 0 -and
+        (Test-ApproximatelyEqual $javascript.minifiedKb $expectedJavaScriptMinified) -and
+        (Test-ApproximatelyEqual $javascript.gzipKb $expectedJavaScriptGzip) -and
+        (Test-ApproximatelyEqual $combined.minifiedKb ($javascript.minifiedKb + $css.minifiedKb)) -and
+        (Test-ApproximatelyEqual $combined.gzipKb ($javascript.gzipKb + $css.gzipKb)) -and
+        (Test-ApproximatelyEqual $Evidence.d02ToD03InitialShellDelta.absolute.minifiedKb $expectedDeltaMinified) -and
+        (Test-ApproximatelyEqual $Evidence.d02ToD03InitialShellDelta.absolute.gzipKb $expectedDeltaGzip) -and
+        (Test-ApproximatelyEqual $Evidence.d02ToD03InitialShellDelta.percentage.minifiedPercent $expectedPercentageMinified) -and
+        (Test-ApproximatelyEqual $Evidence.d02ToD03InitialShellDelta.percentage.gzipPercent $expectedPercentageGzip) -and
+        $Evidence.routeIsolation.initialHtmlReferencesShellChunk -and
+        $Evidence.routeIsolation.initialShellReferencesLazyChunk -and
+        $Evidence.routeIsolation.vs02SentinelExcludedFromInitialShell -and
+        $Evidence.routeIsolation.vs02SentinelPresentInLazyChunk -and
+        $Evidence.routeIsolation.passed -and
+        $Evidence.performanceThreshold -ceq 'NOT_DEFINED' -and
+        $Evidence.clientCommitment -ceq 'NONE_INFERRED'
+}
+
 if ($SelfTest) {
     $tests = [ordered]@{
         'exact set accepts reordered values' = (Test-ExactSet @('b', 'a') @('a', 'b'))
@@ -32,6 +77,32 @@ if ($SelfTest) {
         'UAT reference zone rejected' = (-not (Test-ReferenceZone 'UAT'))
         'sensitive telemetry rejected' = (Test-SensitiveTelemetry 'payload = value')
         'identifier-only telemetry accepted' = (-not (Test-SensitiveTelemetry 'correlationId = value'))
+        'eager VS-02 bundle evidence rejected' = (-not (Test-BundleEvidence ([pscustomobject]@{
+            schemaVersion = '1.0.0'
+            measurementMethod = 'Vite 8.3 production reporter; minified and gzip sizes; decimal kB'
+            d02BaselineInitialApplicationShell = [pscustomobject]@{ minifiedKb = 628.65; gzipKb = 202.69 }
+            d03 = [pscustomobject]@{
+                initialApplicationShell = [pscustomobject]@{ minifiedKb = 641.86; gzipKb = 207.44 }
+                runtimeChunk = [pscustomobject]@{ minifiedKb = 0.58; gzipKb = 0.36 }
+                vs02LazyRouteChunk = [pscustomobject]@{ minifiedKb = 352.48; gzipKb = 111.57 }
+                totalJavaScript = [pscustomobject]@{ minifiedKb = 994.92; gzipKb = 319.37 }
+                totalCss = [pscustomobject]@{ minifiedKb = 8.31; gzipKb = 2.61 }
+                totalJavaScriptAndCss = [pscustomobject]@{ minifiedKb = 1003.23; gzipKb = 321.98 }
+            }
+            d02ToD03InitialShellDelta = [pscustomobject]@{
+                absolute = [pscustomobject]@{ minifiedKb = 13.21; gzipKb = 4.75 }
+                percentage = [pscustomobject]@{ minifiedPercent = 2.1; gzipPercent = 2.34 }
+            }
+            routeIsolation = [pscustomobject]@{
+                initialHtmlReferencesShellChunk = $true
+                initialShellReferencesLazyChunk = $true
+                vs02SentinelExcludedFromInitialShell = $false
+                vs02SentinelPresentInLazyChunk = $true
+                passed = $false
+            }
+            performanceThreshold = 'NOT_DEFINED'
+            clientCommitment = 'NONE_INFERRED'
+        })))
     }
     $failed = @($tests.GetEnumerator() | Where-Object { -not $_.Value })
     foreach ($test in $tests.GetEnumerator()) {
@@ -120,7 +191,9 @@ $testText = @($testFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName
 Add-Check 'VS-02 permanent test suite' ($testFiles.Count -ge 6 -and $testText.Contains('FiveBoundary')) 'Unit, contract, security, persistence, lineage, audit, failure, and five-boundary tests'
 Add-Check 'Executed contract compatibility surface' (@($expectedContracts | Where-Object { -not $testText.Contains($_) }).Count -eq 0) 'Every scoped CID appears in permanent tests'
 $frontendText = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'apps/customer-web/src') -Recurse -File | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
-Add-Check 'Code-split VS-02 route' ($frontendText.Contains("lazy(() => import('./vs02/Vs02Experience'))") -and $frontendText.Contains("window.location.pathname === '/vs02'")) 'Separate VS-02 chunk'
+$bundleEvidencePath = Join-Path $RepositoryRoot '.artifacts/components/frontend-bundle.json'
+$bundleEvidence = if (Test-Path -LiteralPath $bundleEvidencePath) { Get-Content -LiteralPath $bundleEvidencePath -Raw | ConvertFrom-Json } else { $null }
+Add-Check 'Code-split VS-02 route and bundle evidence' ($frontendText.Contains("lazy(() => import('./vs02/Vs02Experience'))") -and $frontendText.Contains("window.location.pathname === '/vs02'") -and $null -ne $bundleEvidence -and (Test-BundleEvidence $bundleEvidence)) 'Exact totals/deltas and lazy-route isolation'
 Add-Check 'Truthful frontend evidence' ($frontendText.Contains('REFERENCE · LOCAL / CI ONLY') -and $frontendText.Contains('NOT AUTHORITATIVE FINANCIAL TRUTH') -and $frontendText.Contains('AUTHORITATIVE')) 'Reference/provenance authority states are explicit'
 Add-Check 'Frontend async accessibility' ($frontendText.Contains('aria-live="polite"') -and $frontendText.Contains('aria-busy')) 'Accessible names and announcements'
 $frontendTests = (Get-Content -LiteralPath (Join-Path $RepositoryRoot 'apps/customer-web/tests/Vs02Experience.test.tsx') -Raw) + (Get-Content -LiteralPath (Join-Path $RepositoryRoot 'apps/customer-web/e2e/toolchain.spec.ts') -Raw)

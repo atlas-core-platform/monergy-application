@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json && vite build",
+    "build": "tsc -p tsconfig.json && node ../../build/measure-frontend-bundle.mjs ../..",
     "dev": "vite",
     "lint": "eslint src tests vite.config.ts",
     "preview": "vite preview",
