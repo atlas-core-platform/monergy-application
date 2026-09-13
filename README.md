@@ -52,9 +52,9 @@ The task surface performs locked restore, formatting, lint, strict type checks,
 build, tests, security evidence, packaging, candidate-manifest checks, and D01/
 D02/D03 verification. Generated evidence stays under ignored `.artifacts/`. OCI
 packaging is `BLOCKED`, not `PASS`, when a Linux Docker engine is unavailable.
-The D02 branch workflow supplies the approved hosted Linux path: it builds all
+The D03 branch workflow supplies the approved hosted Linux path: it builds all
 twelve images without pushing, records image digests, generates image CycloneDX
-SBOMs, runs fail-closed Grype scans, and uploads only evidence. Nothing in D02
+SBOMs, runs fail-closed Grype scans, and uploads only evidence. Nothing in D03
 represents UAT, Production, provider-compatibility, publication, or deployment
 evidence. The VS-02 browser route is `/vs02`; its labels deliberately distinguish
 extracted observations from Financial Profile-owned authoritative facts.

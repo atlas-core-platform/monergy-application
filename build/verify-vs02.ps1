@@ -95,7 +95,10 @@ $contractReadyDockerfiles = @($expectedServiceIds | Where-Object {
         $dockerfile.Contains('contracts/Monergy.Contracts/packages.lock.json') -and
         $dockerfile.Contains('COPY ["contracts/Monergy.Contracts/", "contracts/Monergy.Contracts/"]')
 })
-Add-Check 'Five reference adapter and OCI implementations' ($referenceAdapterRoots.Count -eq 5 -and $contractReadyDockerfiles.Count -eq 5) 'Five adapters and five contract-aware OCI build contexts'
+$hostedOci = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/hosted-oci-evidence.ps1') -Raw
+$localPackaging = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/package-services.ps1') -Raw
+$d03ImageIdentity = $hostedOci.Contains(':d03-$sourceIdentity') -and $localPackaging.Contains(':d03-candidate-local')
+Add-Check 'Five reference adapter and OCI implementations' ($referenceAdapterRoots.Count -eq 5 -and $contractReadyDockerfiles.Count -eq 5 -and $d03ImageIdentity) 'Five adapters, contract-aware OCI contexts, and D03 candidate image identities'
 $projectText = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj)[\\/]' } | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 Add-Check 'No physical provider dependency' ($projectText -notmatch 'EntityFrameworkCore|Npgsql|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Amazon\.|Google\.Cloud|OpenAI') 'No provider, database, broker, OCR, AI, or cloud SDK selected'
 $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')

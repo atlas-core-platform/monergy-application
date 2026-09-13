@@ -20,7 +20,7 @@ New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
 $services = (Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json).services
 $results = [System.Collections.Generic.List[object]]::new()
 foreach ($service in $services) {
-    $tag = "ghcr.io/atlas-core-platform/$($service.artifact):d02-candidate-local"
+    $tag = "ghcr.io/atlas-core-platform/$($service.artifact):d03-candidate-local"
     & docker build --file (Join-Path $RepositoryRoot "services/$($service.id)/Dockerfile") --tag $tag $RepositoryRoot
     if ($LASTEXITCODE -ne 0) { throw "OCI build failed for $($service.id)." }
     $digest = (& docker image inspect $tag --format '{{.Id}}').Trim()

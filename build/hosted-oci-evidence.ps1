@@ -36,7 +36,7 @@ foreach ($path in @($root, $archiveRoot, $sbomRoot, $scanRoot)) {
 $sourceIdentity = if ($env:GITHUB_SHA) { $env:GITHUB_SHA.Substring(0, 12) } else { 'local' }
 $rows = [System.Collections.Generic.List[object]]::new()
 foreach ($service in $services) {
-    $image = "ghcr.io/atlas-core-platform/$($service.artifact):d02-$sourceIdentity"
+    $image = "ghcr.io/atlas-core-platform/$($service.artifact):d03-$sourceIdentity"
     $dockerFile = Join-Path $RepositoryRoot "services/$($service.id)/Dockerfile"
     $archivePath = Join-Path $archiveRoot "$($service.id).docker.tar"
     $sbomPath = Join-Path $sbomRoot "$($service.id).cyclonedx.json"
