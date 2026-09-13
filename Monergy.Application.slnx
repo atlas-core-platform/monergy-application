@@ -14,9 +14,11 @@
     <Project Path="services/search-retrieval/Monergy.Services.SearchRetrieval.csproj" />
   </Folder>
   <Folder Name="/Shared/">
+    <Project Path="contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
     <Project Path="shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj" />
+    <Project Path="tests/vs02/Monergy.Vs02.Tests/Monergy.Vs02.Tests.csproj" />
   </Folder>
 </Solution>

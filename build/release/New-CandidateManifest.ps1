@@ -62,8 +62,8 @@ $components += [pscustomobject]@{
 
 $manifest = [ordered]@{
     schemaVersion = '1.0.0'
-    status = 'D02_CANDIDATE_EVIDENCE_NOT_A_RELEASE'
-    releaseIdentity = 'MWP-03-D02-candidate'
+    status = 'D03_CANDIDATE_EVIDENCE_NOT_A_RELEASE'
+    releaseIdentity = 'MWP-03-D03-vs02-candidate'
     repositoryCommit = $sourceRevision
     sourceTree = $sourceTree
     runtimeVersions = $versions

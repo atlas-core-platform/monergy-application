@@ -117,7 +117,16 @@ $expectedServices = [ordered]@{
 $catalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 Add-Check 'Twelve canonical services' (Test-ExactSet @($catalog.services.id) @($expectedServices.Keys)) '12/12 R3 service identities'
 Add-Check 'Independent artifact identities' (@($catalog.services.artifact | Select-Object -Unique).Count -eq 12) '12 unique service artifact names'
-Add-Check 'No service Feature claims' (@($catalog.services | Where-Object { $_.status -cne 'TOOLCHAIN_SCAFFOLD' -or $_.featureImplementation -cne 'NONE' }).Count -eq 0) 'All service scaffolds declare NONE'
+$d03Services = @('evidence', 'document-intelligence', 'financial-profile', 'job-management', 'audit')
+$catalogStateValid = @($catalog.services | Where-Object {
+    if ($_.id -in $d03Services) {
+        $_.status -cne 'VS02_IMPLEMENTATION_CANDIDATE' -or
+        $_.featureImplementation -notin @('IMPLEMENTATION_CANDIDATE', 'SUPPORTING_BOUNDARY')
+    } else {
+        $_.status -cne 'TOOLCHAIN_SCAFFOLD' -or $_.featureImplementation -cne 'NONE'
+    }
+}).Count -eq 0
+Add-Check 'Controlled post-D02 service state' $catalogStateValid 'Five VS-02 candidates; seven unchanged toolchain scaffolds'
 
 $hostSplitValid = $true
 $serviceReferenceValid = $true
@@ -130,23 +139,29 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
     $project = [xml](Get-Content -LiteralPath $projectPath[0].FullName -Raw)
     $hostSplitValid = $hostSplitValid -and $project.Project.Sdk -ceq $entry.Value
     $references = @($project.Project.ItemGroup.ProjectReference | Where-Object { $_ })
-    $serviceReferenceValid = $serviceReferenceValid -and $references.Count -eq 1 -and ([string]$references[0].Include) -match 'shared[\\/]platform[\\/]Monergy\.Platform'
+    $referenceText = @($references | ForEach-Object { [string]$_.Include })
+    $expectedReferenceCount = if ($entry.Key -in $d03Services) { 2 } else { 1 }
+    $serviceReferenceValid = $serviceReferenceValid -and $references.Count -eq $expectedReferenceCount -and
+        @($referenceText | Where-Object { $_ -match 'shared[\\/]platform[\\/]Monergy\.Platform' }).Count -eq 1 -and
+        @($referenceText | Where-Object { $_ -match 'services[\\/]' }).Count -eq 0 -and
+        (($entry.Key -notin $d03Services) -or @($referenceText | Where-Object { $_ -match 'contracts[\\/]Monergy\.Contracts' }).Count -eq 1)
     $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $serviceRoot 'migrations') -File | Where-Object Name -cne '.gitkeep')
     $migrationOwnershipValid = $migrationOwnershipValid -and $migrationFiles.Count -eq 0
     $program = Get-Content -LiteralPath (Join-Path $serviceRoot 'Program.cs') -Raw
     if ($entry.Value -ceq 'Microsoft.NET.Sdk.Web') {
-        $healthOnlyValid = $healthOnlyValid -and $program.Contains('MapHealthChecks') -and $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\('
+        $healthOnlyValid = $healthOnlyValid -and $program.Contains('MapHealthChecks') -and
+            (($entry.Key -in $d03Services) -or $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\(')
     } else {
         $healthOnlyValid = $healthOnlyValid -and $program.Contains('AddHostedService<StartupWorker>') -and $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\('
     }
 }
 Add-Check 'Evidence-based host split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 8 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 4) 'Eight HTTP hosts and four primary workers'
-Add-Check 'No service-to-service project references' $serviceReferenceValid 'Each service references only Monergy.Platform'
+Add-Check 'No service-to-service project references' $serviceReferenceValid 'Services reference only Monergy.Platform and, for exact VS-02 participants, Monergy.Contracts'
 Add-Check 'Empty service-owned migrations' $migrationOwnershipValid '12 independent empty migration histories'
-Add-Check 'Health and startup scope only' $healthOnlyValid 'No business routes, commands, events, or workflows'
+Add-Check 'Controlled host scope' $healthOnlyValid 'Seven non-participants remain health/startup-only; VS-02 participants may expose governed contracts'
 
 $lockFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter 'packages.lock.json' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
-Add-Check 'NuGet lock coverage' ($lockFiles.Count -eq 14) '12 services, one shared platform, one test project'
+Add-Check 'NuGet lock coverage' ($lockFiles.Count -eq 16) '12 services, shared platform, contracts, architecture tests, and VS-02 tests'
 $projectText = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 $forbiddenProviders = 'EntityFrameworkCore|Npgsql|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Amazon\.|Google\.Cloud|OpenAI'
 Add-Check 'Provider-neutral dependency graph' ($projectText -notmatch $forbiddenProviders) 'No database, cloud, broker, storage, search, OCR, AI, identity, secret, or orchestrator SDK'
@@ -216,12 +231,10 @@ Add-Check 'Reproducible root task surface' (@($requiredTasks | Where-Object { -n
 $repositoryManifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
 $gateCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/ci/gates.json') -Raw | ConvertFrom-Json
 $notRunGates = @($gateCatalog.gates | Where-Object result -ceq 'NOT_RUN')
-$truthfulGateState = @($gateCatalog.gates | Where-Object result -ceq 'PASS').Count -eq 9 -and
+$truthfulGateState = @($gateCatalog.gates | Where-Object result -ceq 'PASS').Count -eq 11 -and
     @($gateCatalog.gates | Where-Object result -ceq 'BLOCKED').Count -eq 0 -and
-    $notRunGates.Count -eq 2 -and
-    (Test-ExactSet $notRunGates.id @('CG-07', 'CG-11')) -and
-    @($notRunGates | Where-Object { -not $_.scope }).Count -eq 0
-Add-Check 'Truthful D02 accepted state' ($repositoryManifest.status -ceq 'ACCEPTED_COMPLETE' -and $repositoryManifest.vs02FeatureState -ceq 'NOT_STARTED_8_OF_8' -and $repositoryManifest.vs02ContractState -ceq 'NOT_OPERATIONAL_14_OF_14' -and $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED' -and $truthfulGateState) 'Accepted toolchain; 9 PASS, 0 BLOCKED, exact NOT_RUN gates CG-07/CG-11; Features/contracts/deployment remain absent'
+    $notRunGates.Count -eq 0
+Add-Check 'Truthful D02 foundation retained' ($repositoryManifest.status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and $repositoryManifest.vs02FeatureState -ceq 'IMPLEMENTATION_CANDIDATE_8_OF_8' -and $repositoryManifest.vs02ContractState -ceq 'IMPLEMENTED_EXECUTED_14_OF_14' -and $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED' -and $truthfulGateState) 'Accepted D02 toolchain supports a truthful D03 candidate; 11 PASS and no deployment claim'
 
 $failures = @($checks | Where-Object { -not $_.Passed })
 foreach ($check in $checks) {

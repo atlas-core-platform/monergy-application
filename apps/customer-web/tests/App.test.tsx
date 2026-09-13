@@ -9,7 +9,7 @@ import { App } from '../src/App';
 afterEach(cleanup);
 
 describe('D02 toolchain shell', () => {
-  it('is explicit that no product Feature is implemented', () => {
+  it('preserves toolchain evidence and advertises the bounded VS-02 candidate', () => {
     render(
       <FoundationProvider>
         <App />
@@ -17,7 +17,11 @@ describe('D02 toolchain shell', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Monergy frontend foundation' })).toBeVisible();
-    expect(screen.getByText('NOT STARTED')).toBeVisible();
+    expect(screen.getByText('IMPLEMENTATION CANDIDATE')).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Open VS-02 reference flow' })).toHaveAttribute(
+      'href',
+      '/vs02',
+    );
   });
 
   it('provides keyboard-operable Ant Design interaction and restores focus', async () => {

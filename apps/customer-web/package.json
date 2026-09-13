@@ -1,6 +1,6 @@
 {
   "name": "@monergy/customer-web",
-  "version": "0.0.0-d02-candidate",
+  "version": "0.0.0-d03-candidate",
   "private": true,
   "type": "module",
   "scripts": {

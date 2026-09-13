@@ -57,10 +57,10 @@
     {
       "id": "CG-07",
       "category": "Contract compatibility",
-      "realization": "DEFERRED_OPEN_DECISION",
-      "result": "NOT_RUN",
-      "command": null,
-      "scope": "D03 taxonomy homes exist; all fourteen VS-02 contracts remain non-operational"
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task Test; D03Verification",
+      "scope": "Executed producer/consumer and serialization compatibility for the exact fourteen VS-02 contracts"
     },
     {
       "id": "CG-08",
@@ -89,10 +89,10 @@
     {
       "id": "CG-11",
       "category": "Integration verification",
-      "realization": "DEFERRED_OPEN_DECISION",
-      "result": "NOT_RUN",
-      "command": null,
-      "scope": "D07 contract-mediated integration evidence begins with future Feature implementation"
+      "realization": "IMPLEMENTED_EXECUTABLE",
+      "result": "PASS",
+      "command": "./build/Invoke-Toolchain.ps1 -Task Test; BrowserTest; D03Verification",
+      "scope": "Five-boundary VS-02 integration passes at D07 SIMULATOR level using LOCAL/CI reference adapters; this is not SG-02 readiness"
     }
   ]
 }

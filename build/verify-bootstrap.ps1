@@ -62,11 +62,16 @@ $serviceCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/
 $serviceIds = @($serviceCatalog.services | ForEach-Object { $_.id })
 Add-Check 'Twelve R3 service identities' (Test-ExactSet $serviceIds $expectedServiceIds) "$($serviceIds.Count) service entries"
 Add-Check 'Unique service artifact identities' (@($serviceCatalog.services.artifact | Select-Object -Unique).Count -eq 12) '12 independently named artifacts'
+$d03Services = @('evidence', 'document-intelligence', 'financial-profile', 'job-management', 'audit')
 $serviceStateValid = @($serviceCatalog.services | Where-Object {
-    $_.status -notin @('RESERVED', 'TOOLCHAIN_SCAFFOLD') -or
-    (($_.PSObject.Properties.Name -contains 'featureImplementation') -and $_.featureImplementation -cne 'NONE')
+    if ($_.id -in $d03Services) {
+        $_.status -cne 'VS02_IMPLEMENTATION_CANDIDATE' -or
+        $_.featureImplementation -notin @('IMPLEMENTATION_CANDIDATE', 'SUPPORTING_BOUNDARY')
+    } else {
+        $_.status -notin @('RESERVED', 'TOOLCHAIN_SCAFFOLD') -or $_.featureImplementation -cne 'NONE'
+    }
 }).Count -eq 0
-Add-Check 'No service Feature implementation' $serviceStateValid 'D01 reservations may advance only to D02 toolchain scaffolds with Feature state NONE'
+Add-Check 'Controlled service realization state' $serviceStateValid 'Exactly five VS-02 boundaries may advance; seven services remain toolchain scaffolds'
 
 $serviceFoldersValid = $true
 $migrationFoldersValid = $true
@@ -84,7 +89,7 @@ $appCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'apps/catalog.
 Add-Check 'D05 application boundaries' (Test-ExactSet @($appCatalog.applications.folder) @('customer-web', 'administration-web')) 'Two reserved applications'
 
 $contractFolders = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'contracts') -Directory | Select-Object -ExpandProperty Name)
-Add-Check 'D03 contract taxonomy homes' (Test-ExactSet $contractFolders @('queries', 'commands', 'events', 'integration', 'security-context')) ($contractFolders -join ', ')
+Add-Check 'D03 contract taxonomy and implementation homes' (Test-ExactSet $contractFolders @('queries', 'commands', 'events', 'integration', 'security-context', 'Monergy.Contracts', 'schemas')) ($contractFolders -join ', ')
 
 $gateCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/ci/gates.json') -Raw | ConvertFrom-Json
 $expectedGateIds = 1..11 | ForEach-Object { 'CG-{0:D2}' -f $_ }
@@ -174,9 +179,9 @@ $manifestValid = $repositoryManifest.repository -ceq 'monergy-application' -and
     $repositoryManifest.remote -ceq 'https://github.com/atlas-core-platform/monergy-application.git' -and
     $repositoryManifest.hostedCi -ceq 'GITHUB_ACTIONS' -and
     $repositoryManifest.branchProtection -ceq 'NOT_IMPLEMENTED_GITHUB_FREE_PLAN_LIMITATION' -and
-    $repositoryManifest.businessFeatureImplementation -ceq 'NONE' -and
+    $repositoryManifest.businessFeatureImplementation -in @('NONE', 'VS02_IMPLEMENTATION_CANDIDATE') -and
     $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED'
-Add-Check 'Truthful repository state' $manifestValid 'D01 controls remain accepted while D02 records its candidate stack; Feature and deployment remain absent'
+Add-Check 'Truthful repository state' $manifestValid 'D01 controls remain accepted while later packages may truthfully advance bounded candidate implementation; deployment remains absent'
 
 $observability = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'shared/platform/observability.contract.json') -Raw | ConvertFrom-Json
 Add-Check 'Observability bootstrap' (@($observability.requiredEvidence).Count -eq 8 -and @($observability.prohibitedTelemetry).Count -eq 6) 'D05 telemetry and exclusion categories represented'

@@ -6,7 +6,7 @@ public sealed partial class StartupWorker(ILogger<StartupWorker> logger) : Backg
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        LogStarted(logger, "Document Intelligence Service", ComponentMetadata.ToolchainOnlyState);
+        LogStarted(logger, "Document Intelligence Service", ComponentMetadata.Vs02CandidateState);
         await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
     }
 

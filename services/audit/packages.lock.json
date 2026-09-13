@@ -312,6 +312,9 @@
         "resolved": "10.0.12",
         "contentHash": "sOZM+VyRj1pg/ItlHsvrSbjws6oGqZveTzTNBGZ9ziwRDyKsOF3ub6vhvOdxotCIqtlnyHAIwP5sLNvgiZC+pQ=="
       },
+      "monergy.contracts": {
+        "type": "Project"
+      },
       "monergy.platform": {
         "type": "Project",
         "dependencies": {

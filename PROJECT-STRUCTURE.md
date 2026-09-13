@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D02 Candidate
+# Monergy Application Repository Structure — D03 Candidate
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -18,7 +18,20 @@ does not add a seventh application responsibility. Root policy/toolchain files d
 not add application responsibilities. `.artifacts/` and `.toolcache/` are ignored
 local evidence/tool homes.
 
-D02 adds:
+D02 provides the accepted toolchain foundation. D03 adds:
+
+- a transport-neutral `Monergy.Contracts` assembly and closed VS-02 JSON schema;
+- executable application/domain ports in Evidence, Document Intelligence,
+  Financial Profile, Job Management, and Audit;
+- LOCAL/CI-only in-memory, fixture and append-only reference adapters;
+- `build/governance/vs02-scope-lock.json` with exact 8-Feature, 14-contract,
+  and 5-service scope;
+- `apps/customer-web/src/vs02/` as a separately loaded, clearly labeled
+  reference experience;
+- `tests/vs02/` and frontend component/accessibility/Playwright evidence;
+- `build/verify-vs02.ps1` with deterministic checks and negative self-tests.
+
+D02 assets retained include:
 
 - `.dockerignore` for the controlled OCI build context;
 - exact .NET/Node/pnpm/package pins and dependency locks at the root;
@@ -26,14 +39,16 @@ D02 adds:
 - `shared/platform/Monergy.Platform/` for vendor-neutral technical bootstrap;
 - `shared/platform/frontend-ui/` for shared semantic tokens and Ant/Tailwind
   integration;
-- a minimal `apps/customer-web/` toolchain-verification shell;
+- the `apps/customer-web/` toolchain-verification shell;
 - architecture, component/accessibility and browser smoke tests;
 - build, supply-chain, release-manifest and deterministic verification scripts.
   The hosted OCI script emits twelve archive/digest/SBOM/scan rows without
   publishing images.
 
-No product Feature, persistence schema, migration, provider integration,
-credential, environment deployment or artifact publication is introduced.
+No physical persistence schema, migration, provider SDK/integration,
+credential, persistent-environment deployment or artifact publication is
+introduced. In-memory/fixture behavior is reference evidence, never a
+Production adapter.
 
 See the catalogs and README files in each responsibility area for the maintained
 boundary inventory.

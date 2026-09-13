@@ -1,9 +1,10 @@
-import { Button, Card, Descriptions, Modal, Tag, Typography } from 'antd';
-import { useState } from 'react';
+import { Button, Card, Descriptions, Modal, Space, Tag, Typography } from 'antd';
+import { lazy, Suspense, useState } from 'react';
 
+const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const { Paragraph, Text, Title } = Typography;
 
-export function App() {
+function ToolchainFoundation() {
   const [detailsOpen, setDetailsOpen] = useState(false);
 
   return (
@@ -18,11 +19,11 @@ export function App() {
             Monergy frontend foundation
           </Title>
           <Paragraph className="max-w-2xl text-base text-muted">
-            This minimal shell verifies React, Vite, Ant Design, Tailwind CSS, semantic tokens,
-            keyboard interaction, and production bundling. It is not a Monergy product Feature.
+            This shell verifies the accepted frontend toolchain. The first bounded business
+            implementation is available separately as provider-neutral VS-02 evidence.
           </Paragraph>
 
-          <div className="mt-8 flex flex-wrap items-center gap-3">
+          <Space className="mt-8" wrap>
             <Button
               type="primary"
               size="large"
@@ -32,8 +33,11 @@ export function App() {
             >
               View toolchain evidence
             </Button>
+            <Button size="large" href="/vs02">
+              Open VS-02 reference flow
+            </Button>
             <Text keyboard>Build {__BUILD_REVISION__.slice(0, 12)}</Text>
-          </div>
+          </Space>
         </section>
 
         <aside aria-labelledby="status-title">
@@ -45,8 +49,8 @@ export function App() {
               <Descriptions.Item label="State">
                 <Tag color="success">TOOLCHAIN READY</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Feature delivery">
-                <Tag>NOT STARTED</Tag>
+              <Descriptions.Item label="VS-02">
+                <Tag color="processing">IMPLEMENTATION CANDIDATE</Tag>
               </Descriptions.Item>
             </Descriptions>
           </Card>
@@ -78,4 +82,22 @@ export function App() {
       </Modal>
     </main>
   );
+}
+
+export function App() {
+  if (window.location.pathname === '/vs02') {
+    return (
+      <Suspense
+        fallback={
+          <main className="grid min-h-screen place-items-center bg-canvas p-6" aria-busy="true">
+            <Text>Loading VS-02…</Text>
+          </main>
+        }
+      >
+        <Vs02Experience />
+      </Suspense>
+    );
+  }
+
+  return <ToolchainFoundation />;
 }

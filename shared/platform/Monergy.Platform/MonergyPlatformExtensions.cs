@@ -18,6 +18,7 @@ public static class MonergyPlatformExtensions
         builder.Logging.AddJsonConsole(options => options.IncludeScopes = true);
 
         builder.Services
+            .AddSingleton<ILifecycleTelemetry, OpenTelemetryLifecycleTelemetry>()
             .AddOpenTelemetry()
             .ConfigureResource(resource => resource.AddService(serviceName))
             .WithTracing(tracing =>

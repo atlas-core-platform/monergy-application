@@ -1,8 +1,8 @@
 {
   "name": "monergy-application",
-  "version": "0.0.0-d02-candidate",
+  "version": "0.0.0-d03-candidate",
   "private": true,
-  "description": "Monergy controlled-implementation toolchain foundation; not a product Feature.",
+  "description": "Monergy VS-02 evidence-to-financial-truth implementation candidate.",
   "packageManager": "pnpm@12.4.1",
   "engines": {
     "node": "24.21.0",
