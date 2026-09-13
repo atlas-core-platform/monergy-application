@@ -4,12 +4,15 @@ WORKDIR /src
 COPY ["Directory.Build.props", "."]
 COPY ["Directory.Packages.props", "."]
 COPY ["NuGet.Config", "."]
+COPY ["contracts/Monergy.Contracts/Monergy.Contracts.csproj", "contracts/Monergy.Contracts/"]
+COPY ["contracts/Monergy.Contracts/packages.lock.json", "contracts/Monergy.Contracts/"]
 COPY ["shared/platform/Monergy.Platform/Monergy.Platform.csproj", "shared/platform/Monergy.Platform/"]
 COPY ["shared/platform/Monergy.Platform/packages.lock.json", "shared/platform/Monergy.Platform/"]
 COPY ["services/document-intelligence/Monergy.Services.DocumentIntelligence.csproj", "services/document-intelligence/"]
 COPY ["services/document-intelligence/packages.lock.json", "services/document-intelligence/"]
 RUN dotnet restore "services/document-intelligence/Monergy.Services.DocumentIntelligence.csproj" --locked-mode
 
+COPY ["contracts/Monergy.Contracts/", "contracts/Monergy.Contracts/"]
 COPY ["shared/platform/Monergy.Platform/", "shared/platform/Monergy.Platform/"]
 COPY ["services/document-intelligence/", "services/document-intelligence/"]
 RUN dotnet publish "services/document-intelligence/Monergy.Services.DocumentIntelligence.csproj" \

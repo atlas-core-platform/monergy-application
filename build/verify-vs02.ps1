@@ -89,7 +89,13 @@ Add-Check 'Reference adapter execution guard' ($referenceGuard.Contains('LOCAL')
 $referenceAdapterRoots = @($expectedServiceIds | Where-Object {
     @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot "services/$_/Infrastructure") -File -Filter '*.cs').Count -gt 0
 })
-Add-Check 'Five reference adapter implementations' ($referenceAdapterRoots.Count -eq 5) 'Evidence, document processing, financial profile, job, and audit adapters'
+$contractReadyDockerfiles = @($expectedServiceIds | Where-Object {
+    $dockerfile = Get-Content -LiteralPath (Join-Path $RepositoryRoot "services/$_/Dockerfile") -Raw
+    $dockerfile.Contains('contracts/Monergy.Contracts/Monergy.Contracts.csproj') -and
+        $dockerfile.Contains('contracts/Monergy.Contracts/packages.lock.json') -and
+        $dockerfile.Contains('COPY ["contracts/Monergy.Contracts/", "contracts/Monergy.Contracts/"]')
+})
+Add-Check 'Five reference adapter and OCI implementations' ($referenceAdapterRoots.Count -eq 5 -and $contractReadyDockerfiles.Count -eq 5) 'Five adapters and five contract-aware OCI build contexts'
 $projectText = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj)[\\/]' } | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 Add-Check 'No physical provider dependency' ($projectText -notmatch 'EntityFrameworkCore|Npgsql|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Amazon\.|Google\.Cloud|OpenAI') 'No provider, database, broker, OCR, AI, or cloud SDK selected'
 $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
