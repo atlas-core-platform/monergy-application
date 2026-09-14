@@ -2,7 +2,7 @@
   "name": "monergy-application",
   "version": "0.0.0-d03-candidate",
   "private": true,
-  "description": "Monergy VS-02 evidence-to-financial-truth implementation candidate.",
+  "description": "Monergy VS-02 evidence-to-financial-truth implementation accepted at simulator evidence level.",
   "packageManager": "pnpm@12.4.1",
   "engines": {
     "node": "24.21.0",

@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D03 Candidate
+# Monergy Application Repository Structure — D03 Accepted
 
 The D05 application root has exactly six governed responsibility areas:
 

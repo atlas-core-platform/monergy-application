@@ -179,9 +179,9 @@ $manifestValid = $repositoryManifest.repository -ceq 'monergy-application' -and
     $repositoryManifest.remote -ceq 'https://github.com/atlas-core-platform/monergy-application.git' -and
     $repositoryManifest.hostedCi -ceq 'GITHUB_ACTIONS' -and
     $repositoryManifest.branchProtection -ceq 'NOT_IMPLEMENTED_GITHUB_FREE_PLAN_LIMITATION' -and
-    $repositoryManifest.businessFeatureImplementation -in @('NONE', 'VS02_IMPLEMENTATION_CANDIDATE') -and
+    $repositoryManifest.businessFeatureImplementation -in @('NONE', 'VS02_IMPLEMENTATION_CANDIDATE', 'VS02_IMPLEMENTATION_ACCEPTED_SIMULATOR') -and
     $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED'
-Add-Check 'Truthful repository state' $manifestValid 'D01 controls remain accepted while later packages may truthfully advance bounded candidate implementation; deployment remains absent'
+Add-Check 'Truthful repository state' $manifestValid 'D01 controls remain accepted while D03 may truthfully record bounded SIMULATOR acceptance; deployment remains absent'
 
 $observability = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'shared/platform/observability.contract.json') -Raw | ConvertFrom-Json
 Add-Check 'Observability bootstrap' (@($observability.requiredEvidence).Count -eq 8 -and @($observability.prohibitedTelemetry).Count -eq 6) 'D05 telemetry and exclusion categories represented'

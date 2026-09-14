@@ -131,7 +131,7 @@ function Add-Check {
 }
 
 $scope = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/vs02-scope-lock.json') -Raw | ConvertFrom-Json
-Add-Check 'D03 candidate scope identity' ($scope.deliverable -ceq 'MWP-03-D03' -and $scope.slice.id -ceq 'VS-02' -and $scope.slice.status -ceq 'IMPLEMENTATION_CANDIDATE') 'MWP-03-D03 / VS-02 candidate'
+Add-Check 'D03 accepted reviewed scope identity' ($scope.deliverable -ceq 'MWP-03-D03' -and $scope.slice.id -ceq 'VS-02' -and $scope.slice.status -ceq 'IMPLEMENTATION_CANDIDATE') 'Reviewed MWP-03-D03 / VS-02 candidate artifact accepted at SIMULATOR'
 Add-Check 'Exact eight Feature IDs' (Test-ExactSet @($scope.features.id) $expectedFeatures) '8/8 derived machine-readable identities'
 Add-Check 'Unique Feature IDs' (@($scope.features.id | Select-Object -Unique).Count -eq 8) 'No duplicate Feature identity'
 Add-Check 'Exact fourteen contract IDs' (Test-ExactSet @($scope.contracts.id) $expectedContracts) '14/14 derived machine-readable identities'
@@ -150,7 +150,7 @@ Add-Check 'Contract security context' ($contractTypesText.Contains('TrustedSecur
 
 $catalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 $candidateServices = @($catalog.services | Where-Object status -ceq 'VS02_IMPLEMENTATION_CANDIDATE')
-Add-Check 'Service catalog candidate set' (Test-ExactSet @($candidateServices.id) $expectedServiceIds) 'Exactly five D03 candidates'
+Add-Check 'Service catalog reviewed set' (Test-ExactSet @($candidateServices.id) $expectedServiceIds) 'Exactly five reviewed D03 candidate boundaries'
 Add-Check 'Seven services remain scaffolds' (@($catalog.services | Where-Object status -ceq 'TOOLCHAIN_SCAFFOLD').Count -eq 7) 'No unrelated Feature implementation'
 $catalogFeatures = @($catalog.services.featureIds | Where-Object { $_ })
 Add-Check 'Service catalog Feature coverage' (Test-ExactSet $catalogFeatures $expectedFeatures) '8/8 Features assigned once'
@@ -200,7 +200,7 @@ $frontendTests = (Get-Content -LiteralPath (Join-Path $RepositoryRoot 'apps/cust
 Add-Check 'Frontend component and browser coverage' ($frontendTests.Contains('axe.run') -and $frontendTests.Contains('preserves the authority boundary end to end')) 'Validation, error, accessibility, keyboard, and E2E'
 
 $manifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
-Add-Check 'Truthful candidate lifecycle' ($manifest.status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and $manifest.businessFeatureImplementation -ceq 'VS02_IMPLEMENTATION_CANDIDATE' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED') 'Not accepted, complete, deployed, UAT, or Production'
+Add-Check 'Truthful accepted lifecycle' ($manifest.status -ceq 'ACCEPTED_COMPLETE' -and $manifest.vs02FeatureState -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR_8_OF_8' -and $manifest.vs02ContractState -ceq 'COMPATIBILITY_EVIDENCE_ACCEPTED_14_OF_14' -and $manifest.businessFeatureImplementation -ceq 'VS02_IMPLEMENTATION_ACCEPTED_SIMULATOR' -and $manifest.integrationEvidenceLevel -ceq 'SIMULATOR_REFERENCE_ADAPTER' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED') 'Accepted at SIMULATOR; not operational, Integration-ready, UAT-ready, Production-ready, published, or deployed'
 Add-Check 'Stage gates preserved' ($manifest.stageGates.'SG-01' -ceq 'READY' -and $manifest.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and $manifest.stageGates.'SG-03' -ceq 'BLOCKED' -and $manifest.stageGates.'SG-04' -ceq 'BLOCKED') 'SG-01 ready; later gates unchanged'
 $gates = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/ci/gates.json') -Raw | ConvertFrom-Json
 Add-Check 'Contract gate exact evidence' (($gates.gates | Where-Object id -ceq 'CG-07').result -ceq 'PASS' -and ($gates.gates | Where-Object id -ceq 'CG-07').scope.Contains('exact fourteen')) 'CG-07 PASS for 14/14 only'

@@ -8,7 +8,7 @@ CI / EPHEMERAL execution.
 
 ## Current state
 
-- Status: MWP-03-D03 Candidate — Pending CTO Review
+- Status: MWP-03-D03 Accepted / Complete
 - Architecture basis: Monergy Architecture Baseline v1.0
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Backend: .NET SDK 10.0.401, .NET runtime 10.0.12, C# 14, ASP.NET Core and
@@ -25,8 +25,8 @@ CI / EPHEMERAL execution.
   establish `main`; normal pull-request flow remains mandatory once protection
   is available
 - Deployment: none
-- VS-02: Implementation Candidate — 8/8 Features, 14/14 contracts, 5/5 service
-  boundaries
+- VS-02: implementation accepted at `SIMULATOR` — 8/8 Features, 14/14
+  compatibility-evidenced contracts, 5/5 service boundaries
 - Achieved integration-evidence level: `SIMULATOR` through non-production
   reference adapters; no provider sandbox or Production compatibility claim
 

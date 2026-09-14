@@ -6,7 +6,7 @@ and an independent Linux OCI definition. Eight boundaries use ASP.NET Core HTTP
 hosts; Document Intelligence, Reporting, Job Management and Audit use Worker
 Service hosts because their accepted primary responsibilities are asynchronous.
 Seven non-participating boundaries retain health/startup behavior only. D03
-adds bounded implementation-candidate behavior to Evidence, Document
+adds bounded implementation accepted at `SIMULATOR` to Evidence, Document
 Intelligence, Financial Profile, Job Management and Audit. Those services share
 only the governed contract assembly and technical platform; no service imports
 another service implementation.

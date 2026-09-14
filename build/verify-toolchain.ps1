@@ -126,7 +126,7 @@ $catalogStateValid = @($catalog.services | Where-Object {
         $_.status -cne 'TOOLCHAIN_SCAFFOLD' -or $_.featureImplementation -cne 'NONE'
     }
 }).Count -eq 0
-Add-Check 'Controlled post-D02 service state' $catalogStateValid 'Five VS-02 candidates; seven unchanged toolchain scaffolds'
+Add-Check 'Controlled post-D02 service state' $catalogStateValid 'Five reviewed VS-02 candidate boundaries; seven unchanged toolchain scaffolds'
 
 $hostSplitValid = $true
 $serviceReferenceValid = $true
@@ -234,7 +234,7 @@ $notRunGates = @($gateCatalog.gates | Where-Object result -ceq 'NOT_RUN')
 $truthfulGateState = @($gateCatalog.gates | Where-Object result -ceq 'PASS').Count -eq 11 -and
     @($gateCatalog.gates | Where-Object result -ceq 'BLOCKED').Count -eq 0 -and
     $notRunGates.Count -eq 0
-Add-Check 'Truthful D02 foundation retained' ($repositoryManifest.status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and $repositoryManifest.vs02FeatureState -ceq 'IMPLEMENTATION_CANDIDATE_8_OF_8' -and $repositoryManifest.vs02ContractState -ceq 'IMPLEMENTED_EXECUTED_14_OF_14' -and $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED' -and $truthfulGateState) 'Accepted D02 toolchain supports a truthful D03 candidate; 11 PASS and no deployment claim'
+Add-Check 'Truthful D02 foundation retained' ($repositoryManifest.status -ceq 'ACCEPTED_COMPLETE' -and $repositoryManifest.vs02FeatureState -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR_8_OF_8' -and $repositoryManifest.vs02ContractState -ceq 'COMPATIBILITY_EVIDENCE_ACCEPTED_14_OF_14' -and $repositoryManifest.deploymentState -ceq 'NOT_DEPLOYED' -and $truthfulGateState) 'Accepted D02 toolchain supports accepted D03 SIMULATOR implementation evidence; 11 PASS and no deployment claim'
 
 $failures = @($checks | Where-Object { -not $_.Passed })
 foreach ($check in $checks) {
