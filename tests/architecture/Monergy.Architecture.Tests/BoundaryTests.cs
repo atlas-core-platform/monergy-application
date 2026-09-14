@@ -6,6 +6,15 @@ namespace Monergy.Architecture.Tests;
 
 public sealed class BoundaryTests
 {
+    private static readonly string[] Vs02ServiceIds =
+    [
+        "evidence",
+        "document-intelligence",
+        "financial-profile",
+        "job-management",
+        "audit",
+    ];
+
     private static readonly string[] ServiceIds =
     [
         "customer-identity",
@@ -59,7 +68,7 @@ public sealed class BoundaryTests
     }
 
     [Fact]
-    public void ServicesReferenceOnlyTheSharedTechnicalPlatform()
+    public void ServicesReferenceOnlySharedPlatformAndGovernedContracts()
     {
         foreach (var serviceId in ServiceIds)
         {
@@ -68,8 +77,13 @@ public sealed class BoundaryTests
                 .Select(element => element.Attribute("Include")?.Value.Replace('\\', '/'))
                 .ToArray();
 
-            Assert.Single(references);
-            Assert.EndsWith("shared/platform/Monergy.Platform/Monergy.Platform.csproj", references[0], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(references, reference =>
+                reference?.EndsWith("shared/platform/Monergy.Platform/Monergy.Platform.csproj", StringComparison.OrdinalIgnoreCase) == true);
+            Assert.Equal(Vs02ServiceIds.Contains(serviceId, StringComparer.Ordinal) ? 2 : 1, references.Length);
+            Assert.Equal(
+                Vs02ServiceIds.Contains(serviceId, StringComparer.Ordinal),
+                references.Any(reference =>
+                    reference?.EndsWith("contracts/Monergy.Contracts/Monergy.Contracts.csproj", StringComparison.OrdinalIgnoreCase) == true));
             Assert.DoesNotContain(references, reference => reference?.Contains("services/", StringComparison.OrdinalIgnoreCase) == true);
         }
     }

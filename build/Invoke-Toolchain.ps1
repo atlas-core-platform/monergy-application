@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'Verify')]
+    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'Verify')]
     [string]$Task = 'Verify',
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot)
 )
@@ -95,12 +95,16 @@ function Invoke-Task {
             & (Join-Path $RepositoryRoot 'build/verify-toolchain.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
             & (Join-Path $RepositoryRoot 'build/verify-toolchain.ps1') -RepositoryRoot $RepositoryRoot
         }
+        'D03Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-vs02.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+            & (Join-Path $RepositoryRoot 'build/verify-vs02.ps1') -RepositoryRoot $RepositoryRoot
+        }
     }
 }
 
 $taskOrder = if ($Task -ceq 'Verify') {
-    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification')
+    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification')
 } else { @($Task) }
 
 foreach ($current in $taskOrder) { Invoke-Task $current }
-Write-Output "D02 toolchain task '$Task' completed."
+Write-Output "Monergy controlled-implementation task '$Task' completed."

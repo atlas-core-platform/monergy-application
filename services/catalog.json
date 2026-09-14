@@ -7,7 +7,8 @@
       "artifact": "monergy-customer-identity",
       "primaryHost": "HTTP",
       "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "featureImplementation": "NONE",
+      "featureIds": []
     },
     {
       "id": "consent",
@@ -15,7 +16,8 @@
       "artifact": "monergy-consent",
       "primaryHost": "HTTP",
       "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "featureImplementation": "NONE",
+      "featureIds": []
     },
     {
       "id": "integration-gateway",
@@ -23,31 +25,41 @@
       "artifact": "monergy-integration-gateway",
       "primaryHost": "HTTP",
       "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "featureImplementation": "NONE",
+      "featureIds": []
     },
     {
       "id": "evidence",
       "name": "Evidence Service",
       "artifact": "monergy-evidence",
       "primaryHost": "HTTP",
-      "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "status": "VS02_IMPLEMENTATION_CANDIDATE",
+      "featureImplementation": "IMPLEMENTATION_CANDIDATE",
+      "featureIds": ["M2-WS03-E01-F02"]
     },
     {
       "id": "document-intelligence",
       "name": "Document Intelligence Service",
       "artifact": "monergy-document-intelligence",
       "primaryHost": "WORKER",
-      "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "status": "VS02_IMPLEMENTATION_CANDIDATE",
+      "featureImplementation": "IMPLEMENTATION_CANDIDATE",
+      "featureIds": ["M2-WS03-E02-F01", "M2-WS03-E02-F02"]
     },
     {
       "id": "financial-profile",
       "name": "Financial Profile Service",
       "artifact": "monergy-financial-profile",
       "primaryHost": "HTTP",
-      "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "status": "VS02_IMPLEMENTATION_CANDIDATE",
+      "featureImplementation": "IMPLEMENTATION_CANDIDATE",
+      "featureIds": [
+        "M2-WS03-E03-F01",
+        "M2-WS03-E03-F02",
+        "M2-WS03-E03-F03",
+        "M2-WS04-E03-F01",
+        "M2-WS04-E03-F02"
+      ]
     },
     {
       "id": "financial-rules",
@@ -55,7 +67,8 @@
       "artifact": "monergy-financial-rules",
       "primaryHost": "HTTP",
       "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "featureImplementation": "NONE",
+      "featureIds": []
     },
     {
       "id": "search-retrieval",
@@ -63,7 +76,8 @@
       "artifact": "monergy-search-retrieval",
       "primaryHost": "HTTP",
       "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "featureImplementation": "NONE",
+      "featureIds": []
     },
     {
       "id": "ai-intelligence",
@@ -71,7 +85,8 @@
       "artifact": "monergy-ai-intelligence",
       "primaryHost": "HTTP",
       "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "featureImplementation": "NONE",
+      "featureIds": []
     },
     {
       "id": "reporting",
@@ -79,23 +94,26 @@
       "artifact": "monergy-reporting",
       "primaryHost": "WORKER",
       "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "featureImplementation": "NONE",
+      "featureIds": []
     },
     {
       "id": "job-management",
       "name": "Job Management Service",
       "artifact": "monergy-job-management",
       "primaryHost": "WORKER",
-      "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "status": "VS02_IMPLEMENTATION_CANDIDATE",
+      "featureImplementation": "SUPPORTING_BOUNDARY",
+      "featureIds": []
     },
     {
       "id": "audit",
       "name": "Audit Service",
       "artifact": "monergy-audit",
       "primaryHost": "WORKER",
-      "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE"
+      "status": "VS02_IMPLEMENTATION_CANDIDATE",
+      "featureImplementation": "SUPPORTING_BOUNDARY",
+      "featureIds": []
     }
   ]
 }

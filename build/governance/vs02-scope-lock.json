@@ -1,0 +1,439 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D03",
+  "slice": {
+    "id": "VS-02",
+    "title": "Evidence to Financial Truth",
+    "status": "IMPLEMENTATION_CANDIDATE"
+  },
+  "features": [
+    {
+      "id": "M2-WS03-E01-F02",
+      "name": "Evidence metadata & versioning",
+      "owner": "Evidence Service",
+      "participatingServices": ["Evidence Service"],
+      "acceptanceBoundary": "Document identity, version and source metadata remain stable and traceable."
+    },
+    {
+      "id": "M2-WS03-E02-F01",
+      "name": "Document-processing pipeline",
+      "owner": "Document Intelligence Service",
+      "participatingServices": [
+        "Evidence Service",
+        "Document Intelligence Service",
+        "Job Management Service"
+      ],
+      "acceptanceBoundary": "Authorized evidence can be scheduled, processed and tracked independently of user requests."
+    },
+    {
+      "id": "M2-WS03-E02-F02",
+      "name": "Structured extraction & confidence",
+      "owner": "Document Intelligence Service",
+      "participatingServices": ["Document Intelligence Service"],
+      "acceptanceBoundary": "Extracted candidate facts retain source location and confidence and are not authoritative truth."
+    },
+    {
+      "id": "M2-WS03-E03-F01",
+      "name": "Canonical source-fact contract",
+      "owner": "Document Intelligence Service",
+      "participatingServices": ["Document Intelligence Service", "Financial Profile Service"],
+      "acceptanceBoundary": "Document output is expressed without external or extraction-provider schema leakage."
+    },
+    {
+      "id": "M2-WS03-E03-F02",
+      "name": "Evidence/provenance reference handoff",
+      "owner": "Document Intelligence Service",
+      "participatingServices": [
+        "Evidence Service",
+        "Document Intelligence Service",
+        "Financial Profile Service"
+      ],
+      "acceptanceBoundary": "Every candidate normalized fact retains a stable authorized source-evidence reference."
+    },
+    {
+      "id": "M2-WS03-E03-F03",
+      "name": "Financial Profile normalization handoff",
+      "owner": "Financial Profile Service",
+      "participatingServices": ["Document Intelligence Service", "Financial Profile Service"],
+      "acceptanceBoundary": "Validated facts enter Financial Profile through its contract rather than a direct persistence write."
+    },
+    {
+      "id": "M2-WS04-E03-F01",
+      "name": "Provider-neutral normalization",
+      "owner": "Financial Profile Service",
+      "participatingServices": ["Financial Profile Service"],
+      "acceptanceBoundary": "Canonical financial information is created without provider-specific schema leakage."
+    },
+    {
+      "id": "M2-WS04-E03-F02",
+      "name": "Financial provenance",
+      "owner": "Financial Profile Service",
+      "participatingServices": [
+        "Evidence Service",
+        "Document Intelligence Service",
+        "Financial Profile Service"
+      ],
+      "acceptanceBoundary": "Important authoritative facts retain immutable evidence and source provenance."
+    }
+  ],
+  "contracts": [
+    {
+      "id": "CID-020",
+      "name": "CreateDocumentVersion",
+      "type": "COMMAND",
+      "owner": "Evidence Service",
+      "producer": "Evidence Service",
+      "consumers": ["Document Intelligence Service"],
+      "direction": "Document Intelligence Service -> Evidence Service"
+    },
+    {
+      "id": "CID-021",
+      "name": "GetEvidenceMetadata",
+      "type": "QUERY",
+      "owner": "Evidence Service",
+      "producer": "Evidence Service",
+      "consumers": [
+        "Document Intelligence Service",
+        "Search & Retrieval Service",
+        "Reporting Service"
+      ],
+      "direction": "Authorized consumer -> Evidence Service"
+    },
+    {
+      "id": "CID-022",
+      "name": "GetEvidenceReference",
+      "type": "QUERY",
+      "owner": "Evidence Service",
+      "producer": "Evidence Service",
+      "consumers": [
+        "Document Intelligence Service",
+        "Financial Profile Service",
+        "Reporting Service"
+      ],
+      "direction": "Authorized consumer -> Evidence Service"
+    },
+    {
+      "id": "CID-023",
+      "name": "EvidenceRegistered",
+      "type": "EVENT",
+      "owner": "Evidence Service",
+      "producer": "Evidence Service",
+      "consumers": ["Document Intelligence Service", "Audit Service"],
+      "direction": "Evidence Service -> consumers"
+    },
+    {
+      "id": "CID-024",
+      "name": "EvidenceVersionCreated",
+      "type": "EVENT",
+      "owner": "Evidence Service",
+      "producer": "Evidence Service",
+      "consumers": ["Document Intelligence Service", "Search & Retrieval Service", "Audit Service"],
+      "direction": "Evidence Service -> consumers"
+    },
+    {
+      "id": "CID-025",
+      "name": "ProcessDocument",
+      "type": "JOB",
+      "owner": "Document Intelligence Service",
+      "producer": "Document Intelligence Service",
+      "consumers": ["Evidence Service", "Job Management Service"],
+      "direction": "Evidence Service or Job Management Service -> Document Intelligence Service"
+    },
+    {
+      "id": "CID-027",
+      "name": "GetProcessingStatus",
+      "type": "QUERY",
+      "owner": "Document Intelligence Service",
+      "producer": "Document Intelligence Service",
+      "consumers": ["Evidence Service", "Job Management Service"],
+      "direction": "Authorized consumer -> Document Intelligence Service"
+    },
+    {
+      "id": "CID-028",
+      "name": "ValidatedSourceFactsProduced",
+      "type": "EVENT",
+      "owner": "Document Intelligence Service",
+      "producer": "Document Intelligence Service",
+      "consumers": ["Financial Profile Service", "Audit Service"],
+      "direction": "Document Intelligence Service -> consumers"
+    },
+    {
+      "id": "CID-031",
+      "name": "NormalizeSourceFacts",
+      "type": "COMMAND",
+      "owner": "Financial Profile Service",
+      "producer": "Financial Profile Service",
+      "consumers": ["Document Intelligence Service", "Integration Gateway Service"],
+      "direction": "Document Intelligence Service -> Financial Profile Service"
+    },
+    {
+      "id": "CID-033",
+      "name": "GetFinancialProvenance",
+      "type": "QUERY",
+      "owner": "Financial Profile Service",
+      "producer": "Financial Profile Service",
+      "consumers": ["Financial Rules Service", "Search & Retrieval Service", "Reporting Service"],
+      "direction": "Authorized consumer -> Financial Profile Service"
+    },
+    {
+      "id": "CID-034",
+      "name": "FinancialFactCreated",
+      "type": "EVENT",
+      "owner": "Financial Profile Service",
+      "producer": "Financial Profile Service",
+      "consumers": ["Financial Rules Service", "Search & Retrieval Service", "Audit Service"],
+      "direction": "Financial Profile Service -> consumers"
+    },
+    {
+      "id": "CID-035",
+      "name": "FinancialFactUpdated",
+      "type": "EVENT",
+      "owner": "Financial Profile Service",
+      "producer": "Financial Profile Service",
+      "consumers": ["Financial Rules Service", "Search & Retrieval Service", "Audit Service"],
+      "direction": "Financial Profile Service -> consumers"
+    },
+    {
+      "id": "CID-055",
+      "name": "ScheduleJob",
+      "type": "JOB",
+      "owner": "Job Management Service",
+      "producer": "Job Management Service",
+      "consumers": [
+        "Document Intelligence Service",
+        "Search & Retrieval Service",
+        "Reporting Service",
+        "Integration Gateway Service"
+      ],
+      "direction": "Workload requester -> Job Management Service"
+    },
+    {
+      "id": "CID-057",
+      "name": "GetJobStatus",
+      "type": "QUERY",
+      "owner": "Job Management Service",
+      "producer": "Job Management Service",
+      "consumers": [
+        "Document Intelligence Service",
+        "Search & Retrieval Service",
+        "Reporting Service",
+        "Integration Gateway Service"
+      ],
+      "direction": "Authorized consumer -> Job Management Service"
+    }
+  ],
+  "participatingServices": [
+    "Evidence Service",
+    "Document Intelligence Service",
+    "Financial Profile Service",
+    "Job Management Service",
+    "Audit Service"
+  ],
+  "businessObjects": [
+    { "name": "Document", "owner": "Evidence Service" },
+    { "name": "Document Version", "owner": "Evidence Service" },
+    { "name": "Financial Profile", "owner": "Financial Profile Service" },
+    { "name": "Income", "owner": "Financial Profile Service" },
+    { "name": "Expense", "owner": "Financial Profile Service" },
+    { "name": "Processing Job", "owner": "Job Management Service" },
+    { "name": "Audit Event", "owner": "Audit Service" }
+  ],
+  "applicableControls": {
+    "dp": [
+      "DP-01",
+      "DP-02",
+      "DP-03",
+      "DP-04",
+      "DP-05",
+      "DP-06",
+      "DP-07",
+      "DP-08",
+      "DP-09",
+      "DP-10",
+      "DP-11",
+      "DP-12",
+      "DP-13",
+      "DP-14",
+      "DP-15",
+      "DP-16",
+      "DP-17",
+      "DP-18",
+      "DP-19",
+      "DP-24",
+      "DP-25",
+      "DP-26",
+      "DP-27",
+      "DP-28",
+      "DP-29",
+      "DP-30",
+      "DP-31",
+      "DP-32",
+      "DP-33",
+      "DP-34",
+      "DP-35",
+      "DP-36",
+      "DP-37",
+      "DP-38",
+      "DP-39",
+      "DP-40",
+      "DP-41",
+      "DP-42",
+      "DP-43",
+      "DP-44",
+      "DP-45"
+    ],
+    "ep": [
+      "EP-01",
+      "EP-02",
+      "EP-03",
+      "EP-04",
+      "EP-05",
+      "EP-06",
+      "EP-07",
+      "EP-08",
+      "EP-09",
+      "EP-10",
+      "EP-11",
+      "EP-12",
+      "EP-13",
+      "EP-14",
+      "EP-15",
+      "EP-16",
+      "EP-17",
+      "EP-18",
+      "EP-19",
+      "EP-20",
+      "EP-21",
+      "EP-22",
+      "EP-27",
+      "EP-28",
+      "EP-29",
+      "EP-30",
+      "EP-31",
+      "EP-32",
+      "EP-33",
+      "EP-34",
+      "EP-35",
+      "EP-36",
+      "EP-37",
+      "EP-38",
+      "EP-39",
+      "EP-40",
+      "EP-41",
+      "EP-42",
+      "EP-43",
+      "EP-44",
+      "EP-45",
+      "EP-46",
+      "EP-47",
+      "EP-48"
+    ],
+    "nfr": [
+      "NFR-01",
+      "NFR-02",
+      "NFR-03",
+      "NFR-04",
+      "NFR-05",
+      "NFR-06",
+      "NFR-07",
+      "NFR-08",
+      "NFR-09",
+      "NFR-10",
+      "NFR-11",
+      "NFR-12",
+      "NFR-18",
+      "NFR-19",
+      "NFR-24",
+      "NFR-27",
+      "NFR-29",
+      "NFR-30",
+      "NFR-31",
+      "NFR-34",
+      "NFR-35",
+      "NFR-36",
+      "NFR-37",
+      "NFR-38",
+      "NFR-39",
+      "NFR-40",
+      "NFR-41",
+      "NFR-42",
+      "NFR-43",
+      "NFR-44",
+      "NFR-45",
+      "NFR-46",
+      "NFR-47",
+      "NFR-48",
+      "NFR-49",
+      "NFR-50"
+    ],
+    "tq": [
+      "TQ-01",
+      "TQ-02",
+      "TQ-03",
+      "TQ-04",
+      "TQ-05",
+      "TQ-06",
+      "TQ-07",
+      "TQ-08",
+      "TQ-09",
+      "TQ-10",
+      "TQ-11",
+      "TQ-12",
+      "TQ-13",
+      "TQ-14",
+      "TQ-15",
+      "TQ-16",
+      "TQ-19",
+      "TQ-20",
+      "TQ-21",
+      "TQ-22",
+      "TQ-23",
+      "TQ-24",
+      "TQ-25",
+      "TQ-26",
+      "TQ-30",
+      "TQ-31",
+      "TQ-32",
+      "TQ-33",
+      "TQ-34",
+      "TQ-35",
+      "TQ-36",
+      "TQ-37",
+      "TQ-38",
+      "TQ-39",
+      "TQ-40",
+      "TQ-45",
+      "TQ-46",
+      "TQ-47",
+      "TQ-48"
+    ],
+    "integrationEvidenceLevels": [
+      "SIMULATOR",
+      "STUB_OR_MOCK",
+      "PROVIDER_SANDBOX",
+      "PRODUCTION_COMPATIBILITY"
+    ]
+  },
+  "guardrails": {
+    "sg01": "READY",
+    "sg02": "CONDITIONALLY_READY",
+    "sg03": "BLOCKED",
+    "sg04": "BLOCKED",
+    "openDecisions": ["OD-06", "OD-07", "OD-09", "OD-13", "OD-14", "C-06", "C-07", "C-22"],
+    "providerPathIncluded": false,
+    "productionAdaptersPermitted": false,
+    "databaseMigrationsPermitted": false
+  },
+  "requiredRules": [
+    "Evidence Service owns evidence identity, metadata, immutable versions and content references.",
+    "Document Intelligence output remains a source-traceable non-authoritative intermediate.",
+    "Financial Profile Service alone promotes validated facts into provider-neutral authoritative financial state.",
+    "Job Management Service owns execution mechanics and never business truth.",
+    "Audit Service appends immutable governed evidence without becoming transactional authority.",
+    "Protected receivers enforce authorization and applicable current consent server-side.",
+    "Retries and event replay cannot create duplicate authoritative effects.",
+    "Financial facts retain source evidence, observation, transformation version, security actor, time and correlation context.",
+    "Reference adapters are restricted to LOCAL and CI_EPHEMERAL execution zones.",
+    "Logs and telemetry exclude evidence bytes, extracted sensitive values, credentials, tokens and secrets."
+  ]
+}

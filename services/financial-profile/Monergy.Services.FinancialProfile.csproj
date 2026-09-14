@@ -4,6 +4,7 @@
     <RootNamespace>Monergy.Services.FinancialProfile</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
     <ProjectReference Include="../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
   </ItemGroup>
 </Project>

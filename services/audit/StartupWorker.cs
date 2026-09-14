@@ -6,7 +6,7 @@ public sealed partial class StartupWorker(ILogger<StartupWorker> logger) : Backg
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        LogStarted(logger, "Audit Service", ComponentMetadata.ToolchainOnlyState);
+        LogStarted(logger, "Audit Service", ComponentMetadata.Vs02CandidateState);
         await Task.Delay(Timeout.InfiniteTimeSpan, stoppingToken);
     }
 
