@@ -133,6 +133,28 @@ public sealed class BoundaryTests
         Assert.Equal("test-component", metadata.Component);
     }
 
+    [Fact]
+    public void FinancialProfileApplicationOwnsFinancialProfileChangedSemantics()
+    {
+        var application = File.ReadAllText(Path.Combine(
+            ServicesRoot,
+            "financial-profile",
+            "Application",
+            "FinancialProfileApplication.cs"));
+        var infrastructure = File.ReadAllText(Path.Combine(
+            ServicesRoot,
+            "financial-profile",
+            "Infrastructure",
+            "InMemoryFinancialProfileRepository.cs"));
+
+        Assert.Contains("FinancialProfileChangeTransition", application, StringComparison.Ordinal);
+        Assert.Contains("CID-036", application, StringComparison.Ordinal);
+        Assert.Contains("FinancialProfileChangedPayload", application, StringComparison.Ordinal);
+        Assert.Contains("profileChange.CreateEvent", infrastructure, StringComparison.Ordinal);
+        Assert.DoesNotContain("CID-036", infrastructure, StringComparison.Ordinal);
+        Assert.DoesNotContain("FinancialProfileChangedPayload", infrastructure, StringComparison.Ordinal);
+    }
+
     private static XDocument LoadServiceProject(string serviceId) =>
         XDocument.Load(Directory.GetFiles(Path.Combine(ServicesRoot, serviceId), "*.csproj").Single());
 

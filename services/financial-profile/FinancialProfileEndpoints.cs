@@ -7,11 +7,21 @@ public static class FinancialProfileEndpoints
 {
     public static IEndpointRouteBuilder MapFinancialProfileContracts(this IEndpointRouteBuilder endpoints)
     {
+        endpoints.MapPost("/contracts/cid-030/v1", async (
+            ContractRequest<GetFinancialProfile> request,
+            FinancialProfileApplication application,
+            CancellationToken cancellationToken) =>
+            ToResult(await application.GetFinancialProfileAsync(request, cancellationToken)));
         endpoints.MapPost("/contracts/cid-031/v1", async (
             ContractRequest<NormalizeSourceFacts> request,
             FinancialProfileApplication application,
             CancellationToken cancellationToken) =>
             ToResult(await application.NormalizeSourceFactsAsync(request, cancellationToken)));
+        endpoints.MapPost("/contracts/cid-032/v1", async (
+            ContractRequest<GetFinancialFact> request,
+            FinancialProfileApplication application,
+            CancellationToken cancellationToken) =>
+            ToResult(await application.GetFinancialFactAsync(request, cancellationToken)));
         endpoints.MapPost("/contracts/cid-033/v1", async (
             ContractRequest<GetFinancialProvenance> request,
             FinancialProfileApplication application,

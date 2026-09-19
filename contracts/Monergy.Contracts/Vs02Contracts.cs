@@ -10,10 +10,13 @@ public static class Vs02ContractNames
     public const string ProcessDocument = "ProcessDocument";
     public const string GetProcessingStatus = "GetProcessingStatus";
     public const string ValidatedSourceFactsProduced = "ValidatedSourceFactsProduced";
+    public const string GetFinancialProfile = "GetFinancialProfile";
     public const string NormalizeSourceFacts = "NormalizeSourceFacts";
+    public const string GetFinancialFact = "GetFinancialFact";
     public const string GetFinancialProvenance = "GetFinancialProvenance";
     public const string FinancialFactCreated = "FinancialFactCreated";
     public const string FinancialFactUpdated = "FinancialFactUpdated";
+    public const string FinancialProfileChanged = "FinancialProfileChanged";
     public const string ScheduleJob = "ScheduleJob";
     public const string GetJobStatus = "GetJobStatus";
 }
@@ -146,6 +149,29 @@ public sealed record NormalizedFinancialFact(
 
 public sealed record NormalizationResult(IReadOnlyList<NormalizedFinancialFact> Facts);
 
+public sealed record GetFinancialProfile(string FinancialProfileId, string CustomerId);
+
+public sealed record GetFinancialFact(string FinancialFactId, string CustomerId);
+
+public sealed record AuthoritativeFinancialFact(
+    string FinancialFactId,
+    string FinancialProfileId,
+    string CustomerId,
+    string FactType,
+    string Label,
+    decimal Value,
+    string Currency,
+    DateOnly EffectiveDate,
+    int Revision,
+    string FinancialProvenanceId);
+
+public sealed record FinancialProfileDetails(
+    string FinancialProfileId,
+    string CustomerId,
+    int Revision,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<AuthoritativeFinancialFact> Facts);
+
 public sealed record GetFinancialProvenance(string FinancialProvenanceId, string CustomerId);
 
 public sealed record FinancialProvenance(
@@ -171,6 +197,13 @@ public sealed record FinancialFactChangedPayload(
     DateTimeOffset ChangedAt,
     string FinancialProvenanceId,
     int Revision);
+
+public sealed record FinancialProfileChangedPayload(
+    string FinancialProfileId,
+    string CustomerId,
+    DateTimeOffset ChangedAt,
+    int Revision,
+    IReadOnlyList<string> FinancialFactIds);
 
 public sealed record ScheduleJob(
     string JobId,

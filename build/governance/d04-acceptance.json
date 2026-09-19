@@ -1,0 +1,136 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D04",
+  "title": "Financial Profile Authority Expansion",
+  "applicationLifecycle": "ACCEPTED_COMPLETE",
+  "crossRepositoryLifecycle": "PENDING_ARCHITECTURE_CLOSURE",
+  "evidenceLevel": "SIMULATOR",
+  "approvalBasis": {
+    "decision": "CTO_APPROVED_GOVERNED_ACCEPTANCE_AND_CLOSURE",
+    "source": "Supplied CTO evidence report",
+    "independentCtoGithubConnectorInspection": "HTTP_404",
+    "independentInspectionNote": "CTO approval relied on the supplied evidence report because independent PR inspection through the CTO GitHub connector returned 404."
+  },
+  "approvedCandidates": {
+    "application": "3b253887dd18dc780848b56bbda4d5fd1744c407",
+    "architecture": "7fba22efbbd526a7ca031bca9af8471b92e47c42",
+    "sourceTree": "0507fd75c3b8512f39a47a8b6722d9478c39635e",
+    "branch": "delivery/mwp03-d04-financial-profile-authority-expansion",
+    "applicationPullRequest": 2,
+    "architecturePullRequest": 6
+  },
+  "workflows": [
+    {
+      "id": 35455698197,
+      "event": "pull_request",
+      "reportedHeadSha": "3b253887dd18dc780848b56bbda4d5fd1744c407",
+      "checkedOutCommit": "15200cc1b8958d46215bf9b3f065464de3714523",
+      "checkedOutSourceTree": "0507fd75c3b8512f39a47a8b6722d9478c39635e",
+      "conclusion": "success",
+      "artifact": {
+        "id": 10587893353,
+        "name": "d04-financial-profile-authority-evidence-35455698197",
+        "sha256": "f84068fc9ed143af107ae702c56897940e32a818beb28f1d019367787610d7c2",
+        "manifestSha256": "5a0b2b7f569fdaa5aa6e2aeb6691e7438fe114576581cd1b80ad35324161c38f",
+        "repositorySbomSha256": "1d12fe61d5ab58002a8ae83a16acf6f5b0494482f89f508cd86c5736177285cd",
+        "ociEvidenceMatrixSha256": "a7e75c2e3386ab4e13f4dad8e37576dd98abaf74059b536ac3d20f1e4fc90f98"
+      }
+    },
+    {
+      "id": 35455695670,
+      "event": "push",
+      "reportedHeadSha": "3b253887dd18dc780848b56bbda4d5fd1744c407",
+      "checkedOutCommit": "3b253887dd18dc780848b56bbda4d5fd1744c407",
+      "checkedOutSourceTree": "0507fd75c3b8512f39a47a8b6722d9478c39635e",
+      "conclusion": "success",
+      "artifact": {
+        "id": 10588457405,
+        "name": "d04-financial-profile-authority-evidence-35455695670",
+        "sha256": "f41407b7caa5f0f2c4b725abe1295cdfef4584af8bdb826c4a0bdef955e47aa3",
+        "manifestSha256": "d9aad4168296aede29f560edd2921a12603420a74c20986d50713761e800766e",
+        "repositorySbomSha256": "c2e248c98745b5be533f30b74ac2affc0123ff8602c424e8766ef6f27ca8dc33",
+        "ociEvidenceMatrixSha256": "fa7178c2524af1b3f9665d172438a8b5e3f44e28da2dbd7f47bf4105999b2821",
+        "vulnerabilityEvidenceSha256": "1d40cedcda14480815622a9b0323cd9deaca0b7823e5f5b814146beff2bb959a",
+        "gitleaksEvidenceSha256": "8d1d98ebaca695a2bb37398f8d5292e26acc31f0c283854f7041bcd5a2201aa1"
+      }
+    }
+  ],
+  "remediationOutcomes": [
+    "APPLICATION_OWNS_CID_036_SEMANTICS",
+    "IDEMPOTENCY_USES_CONTRACT_VERSION_CUSTOMER_AND_CALLER_KEY",
+    "D04_TESTS_HAVE_INDEPENDENT_FINANCIAL_PROFILE_OWNERSHIP",
+    "EXACT_SEVEN_CONTRACT_EVIDENCE_AND_JSDOM_RATIONALE_ACCEPTED"
+  ],
+  "features": [
+    "M2-WS04-E01-F01",
+    "M2-WS04-E01-F02",
+    "M2-WS04-E01-F03",
+    "M2-WS04-E02-F01",
+    "M2-WS04-E02-F02",
+    "M2-WS04-E02-F03",
+    "M2-WS04-E03-F03"
+  ],
+  "contracts": {
+    "d04Applicable": ["CID-030", "CID-031", "CID-032", "CID-033", "CID-034", "CID-035", "CID-036"],
+    "acceptedD03": [
+      "CID-020",
+      "CID-021",
+      "CID-022",
+      "CID-023",
+      "CID-024",
+      "CID-025",
+      "CID-027",
+      "CID-028",
+      "CID-031",
+      "CID-033",
+      "CID-034",
+      "CID-035",
+      "CID-055",
+      "CID-057"
+    ],
+    "overlap": ["CID-031", "CID-033", "CID-034", "CID-035"],
+    "d04OnlyRelativeToD03": ["CID-030", "CID-032", "CID-036"],
+    "programWideUnionCount": 17,
+    "interpretation": "The D04 applicable set is not seven entirely new program-wide contracts. Compatibility evidence is scoped to exact applicable identifiers."
+  },
+  "verification": {
+    "local": {
+      "dotnet": { "d03": 27, "d04": 38, "architecture": 7, "total": 72 },
+      "frontend": 7,
+      "chromium": 2,
+      "d01": "27/27",
+      "d02": "43/43",
+      "d03": "34/34",
+      "d04Candidate": "34/34",
+      "localOci": "BLOCKED_DOCKER_LINUX_ENGINE_UNAVAILABLE",
+      "localPnpmAudit": "BLOCKED_EXTERNAL_REGISTRY_HTTP_503_MAINTENANCE"
+    },
+    "hosted": {
+      "ociImages": 12,
+      "ociBuildIdentitySbomAndScan": "PASS_12_OF_12",
+      "nugetVulnerabilities": 0,
+      "pnpmVulnerabilities": { "info": 0, "low": 0, "moderate": 0, "high": 0, "critical": 0 },
+      "repositoryGrypeMatches": 0,
+      "ociGrypeMatches": {
+        "total": 120,
+        "perImage": 10,
+        "mediumPerImage": 9,
+        "negligiblePerImage": 1
+      },
+      "vulnerabilityPolicyResult": "PASS_WITH_RECORDED_NON_BLOCKING_OCI_FINDINGS",
+      "secretScan": "PASS"
+    }
+  },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  },
+  "publication": {
+    "packages": false,
+    "images": false,
+    "deployment": false,
+    "tag": false
+  }
+}

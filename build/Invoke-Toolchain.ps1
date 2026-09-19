@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'Verify')]
+    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'Verify')]
     [string]$Task = 'Verify',
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot)
 )
@@ -12,9 +12,22 @@ $localDotnet = Join-Path $RepositoryRoot '.toolcache/dotnet/dotnet.exe'
 $dotnet = if (Test-Path -LiteralPath $localDotnet) { $localDotnet } else { (Get-Command dotnet -ErrorAction Stop).Source }
 if (Test-Path -LiteralPath $localDotnet) { $env:PATH = "$(Split-Path -Parent $localDotnet);$env:PATH" }
 $localNodeRoot = Join-Path $RepositoryRoot '.toolcache/node-v24.21.0-win-x64'
-if (Test-Path -LiteralPath (Join-Path $localNodeRoot 'node.exe')) { $env:PATH = "$localNodeRoot;$env:PATH" }
+$localCorepackShims = $null
+if (Test-Path -LiteralPath (Join-Path $localNodeRoot 'node.exe')) {
+    $localCorepackShims = Join-Path $localNodeRoot 'node_modules/corepack/shims'
+    $env:PATH = if (Test-Path -LiteralPath $localCorepackShims) {
+        "$localNodeRoot;$localCorepackShims;$env:PATH"
+    } else {
+        "$localNodeRoot;$env:PATH"
+    }
+}
 $node = (Get-Command node -ErrorAction Stop).Source
-$pnpm = (Get-Command pnpm -ErrorAction Stop).Source
+$localPnpmCommand = if ($null -ne $localCorepackShims) { Join-Path $localCorepackShims 'pnpm.cmd' } else { $null }
+$pnpm = if ($null -ne $localPnpmCommand -and (Test-Path -LiteralPath $localPnpmCommand)) {
+    $localPnpmCommand
+} else {
+    (Get-Command pnpm -ErrorAction Stop).Source
+}
 
 function Assert-Version {
     param([string]$Name, [string]$Actual, [string]$Expected)
@@ -99,11 +112,15 @@ function Invoke-Task {
             & (Join-Path $RepositoryRoot 'build/verify-vs02.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
             & (Join-Path $RepositoryRoot 'build/verify-vs02.ps1') -RepositoryRoot $RepositoryRoot
         }
+        'D04Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-financial-profile-authority.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+            & (Join-Path $RepositoryRoot 'build/verify-financial-profile-authority.ps1') -RepositoryRoot $RepositoryRoot
+        }
     }
 }
 
 $taskOrder = if ($Task -ceq 'Verify') {
-    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification')
+    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification')
 } else { @($Task) }
 
 foreach ($current in $taskOrder) { Invoke-Task $current }

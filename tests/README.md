@@ -1,11 +1,20 @@
 # Verification
 
-D02 adds xUnit architecture/boundary tests. D03 adds 27 xUnit VS-02 tests,
-Vitest/React Testing Library
-component and accessibility tests, and a Playwright keyboard smoke test for the
-toolchain shell and VS-02 route, plus a Playwright reference-flow scenario.
-Producer/consumer compatibility covers 14/14 scoped contracts and the
+D02 adds xUnit architecture/boundary tests. D03 provides 27 tests in the
+independent `Monergy.Vs02.Tests` project. D04 provides 38 authority and exact
+contract tests in `tests/financial-profile/Monergy.FinancialProfile.Tests`.
+Vitest/React Testing Library component and accessibility tests and Playwright
+keyboard/reference-flow scenarios retain the accepted frontend regression.
+Producer/consumer compatibility preserves D03 14/14 and adds D04 7/7. The
 five-boundary vertical slice is evidenced at D07 `SIMULATOR` level.
+
+D04 coverage includes all governed Financial Profile categories, lifecycle,
+revision/history, provenance, governed idempotency identity and payload-conflict
+handling, customer isolation, Audit propagation, strict producer/consumer
+serialization, malformed input per contract, and the Financial Goal
+no-methodology boundary. The seven architecture-boundary tests include a
+negative dependency rule that prevents the Financial Profile infrastructure
+adapter from owning CID-036 contract semantics.
 
 Tests must use public service contracts and must not bypass service boundaries
 through cross-service persistence access.

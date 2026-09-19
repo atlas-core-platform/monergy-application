@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D03 Accepted
+# Monergy Application Repository Structure — D04 Accepted
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -32,6 +32,26 @@ D02 provides the accepted toolchain foundation. D03 adds:
 - `build/measure-frontend-bundle.mjs` for reproducible production-bundle size
   and lazy-route isolation evidence;
 - `build/verify-vs02.ps1` with deterministic checks and negative self-tests.
+
+D04 adds without changing the six-area topology:
+
+- `build/governance/d04-scope-lock.json` for the exact seven Features,
+  CID-030–CID-036, two participating boundaries, Business Objects, and exact
+  DP/EP/NFR/TQ obligations;
+- `contracts/Monergy.Contracts/D04ContractCatalog.cs` and
+  `contracts/schemas/financial-profile-authority.schema.json` as a separate
+  seven-contract surface that does not widen the accepted D03 catalog;
+- Financial Profile aggregate/query behavior, thirteen governed child object
+  categories, explicit revisions, immutable fact/provenance history, and a
+  LOCAL/CI-only reference outbox;
+- permanent domain, lifecycle, isolation, idempotency, audit, serialization,
+  malformed-input, and D03 regression tests, with D04-owned coverage isolated
+  in `tests/financial-profile/Monergy.FinancialProfile.Tests`;
+- `build/verify-financial-profile-authority.ps1` with deterministic checks and
+  negative self-tests.
+- `build/governance/d04-acceptance.json` with the approved candidate,
+  workflow/artifact hashes, exact contract overlap, remediation outcomes,
+  security findings and unchanged stage gates.
 
 D02 assets retained include:
 

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.monergy.invalid/financial-profile-authority/1.0.0",
+  "title": "MWP-03-D04 Financial Profile Authority contracts",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractId",
+    "contractName",
+    "contractVersion",
+    "requestId",
+    "correlationId",
+    "security",
+    "payload"
+  ],
+  "properties": {
+    "contractId": {
+      "enum": ["CID-030", "CID-031", "CID-032", "CID-033", "CID-034", "CID-035", "CID-036"]
+    },
+    "contractName": {
+      "enum": [
+        "GetFinancialProfile",
+        "NormalizeSourceFacts",
+        "GetFinancialFact",
+        "GetFinancialProvenance",
+        "FinancialFactCreated",
+        "FinancialFactUpdated",
+        "FinancialProfileChanged"
+      ]
+    },
+    "contractVersion": { "const": "1.0.0" },
+    "requestId": { "type": "string", "minLength": 1 },
+    "correlationId": { "type": "string", "minLength": 1 },
+    "causationId": { "type": ["string", "null"] },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "workload", "access"],
+      "properties": {
+        "actor": { "type": "object" },
+        "workload": { "type": "object" },
+        "access": { "type": "object" }
+      }
+    },
+    "payload": { "type": "object" }
+  }
+}

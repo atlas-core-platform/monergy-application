@@ -188,7 +188,7 @@ Add-Check 'Safe lifecycle telemetry' (-not (Test-SensitiveTelemetry $telemetry) 
 
 $testFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'tests/vs02/Monergy.Vs02.Tests') -File -Filter '*.cs')
 $testText = @($testFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
-Add-Check 'VS-02 permanent test suite' ($testFiles.Count -ge 6 -and $testText.Contains('FiveBoundary')) 'Unit, contract, security, persistence, lineage, audit, failure, and five-boundary tests'
+Add-Check 'VS-02 permanent test suite' ($testFiles.Count -ge 6 -and $testText.Contains('FiveBoundary') -and @($testFiles | Where-Object Name -in @('FinancialProfileAuthorityTests.cs', 'FinancialProfileContractCompatibilityTests.cs')).Count -eq 0) 'D03-owned unit, contract, security, persistence, lineage, audit, failure and five-boundary tests; D04 tests excluded'
 Add-Check 'Executed contract compatibility surface' (@($expectedContracts | Where-Object { -not $testText.Contains($_) }).Count -eq 0) 'Every scoped CID appears in permanent tests'
 $frontendText = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'apps/customer-web/src') -Recurse -File | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 $bundleEvidencePath = Join-Path $RepositoryRoot '.artifacts/components/frontend-bundle.json'

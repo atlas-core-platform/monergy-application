@@ -6,6 +6,7 @@ on:
       - main
       - delivery/mwp03-d02-product-technology-toolchain
       - delivery/mwp03-d03-vs02-evidence-financial-truth
+      - delivery/mwp03-d04-financial-profile-authority-expansion
   pull_request:
   workflow_dispatch:
 
@@ -19,7 +20,7 @@ concurrency:
 
 jobs:
   toolchain:
-    name: Verify D01-D03 controlled implementation
+    name: Verify D01-D04 controlled implementation
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -129,11 +130,15 @@ jobs:
         shell: pwsh
         run: ./build/Invoke-Toolchain.ps1 -Task D03Verification
 
+      - name: Verify Financial Profile authority and negative self-tests
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task D04Verification
+
       - name: Preserve raw machine-readable evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: d03-vs02-evidence-${{ github.run_id }}
+          name: d04-financial-profile-authority-evidence-${{ github.run_id }}
           path: |
             .artifacts/components/
             .artifacts/provenance/
