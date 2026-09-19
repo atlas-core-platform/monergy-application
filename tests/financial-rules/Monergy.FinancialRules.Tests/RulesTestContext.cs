@@ -36,6 +36,7 @@ internal sealed class OwnerReader(FinancialProfileApplication owner) : IFinancia
     public bool MissingProvenance { get; set; }
     public bool Drift { get; set; }
     public bool Mismatch { get; set; }
+    public string? InvalidProvenanceField { get; set; }
     public ConcurrentQueue<string> Calls { get; } = [];
 
     public async Task<ContractResult<AuthoritativeFinancialFact>> GetFactAsync(ContractRequest<GetFinancialFact> request, CancellationToken cancellationToken)
@@ -58,6 +59,21 @@ internal sealed class OwnerReader(FinancialProfileApplication owner) : IFinancia
         }
 
         var result = await owner.GetFinancialProvenanceAsync(Harness.Wire(request), cancellationToken);
+        if (result.Data is not null && InvalidProvenanceField is not null)
+        {
+            result = result with
+            {
+                Data = InvalidProvenanceField switch
+                {
+                    "extraction" => result.Data with { ExtractionVersion = "" },
+                    "validation" => result.Data with { ValidationVersion = "" },
+                    "actor" => result.Data with { ActorId = "" },
+                    "workload" => result.Data with { WorkloadIdentityId = "" },
+                    "time" => result.Data with { RecordedAt = default },
+                    _ => result.Data with { CorrelationId = "" },
+                }
+            };
+        }
         return Harness.Wire(Drift && result.Data is not null
             ? result with { Data = result.Data with { NormalizationVersion = "changed" } } : result);
     }

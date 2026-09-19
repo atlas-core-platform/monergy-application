@@ -239,7 +239,10 @@ public sealed class FinancialRulesApplication(
         if (provenance.FinancialProvenanceId != id || provenance.CustomerId != customer ||
             string.IsNullOrWhiteSpace(provenance.FinancialFactId) || string.IsNullOrWhiteSpace(provenance.EvidenceId) ||
             string.IsNullOrWhiteSpace(provenance.DocumentVersionId) || string.IsNullOrWhiteSpace(provenance.SourceFactId) ||
-            string.IsNullOrWhiteSpace(provenance.NormalizationVersion))
+            string.IsNullOrWhiteSpace(provenance.ExtractionVersion) || string.IsNullOrWhiteSpace(provenance.ValidationVersion) ||
+            string.IsNullOrWhiteSpace(provenance.NormalizationVersion) || string.IsNullOrWhiteSpace(provenance.ActorId) ||
+            string.IsNullOrWhiteSpace(provenance.WorkloadIdentityId) || provenance.RecordedAt == default ||
+            string.IsNullOrWhiteSpace(provenance.CorrelationId))
         {
             throw new CalculationException("calculation.provenance.invalid", ContractErrorCategory.DependencyFailure);
         }
@@ -286,10 +289,10 @@ public sealed class FinancialRulesApplication(
     private static ContractResult<TResult> DependencyFailure<TRequest, TResult>(ContractRequest<TRequest> request) =>
         ContractResult<TResult>.Failed(request, "calculation.dependency.unavailable", ContractErrorCategory.DependencyFailure, "Authoritative history is unavailable.", true);
 
-    private static T RequireSuccess<T>(ContractResult<T> response) where T : class =>
-        response.Outcome == ContractOutcome.Success && response.Data is not null
+    private static T RequireSuccess<T>(ContractResult<T>? response) where T : class =>
+        response?.Outcome == ContractOutcome.Success && response.Data is not null
             ? response.Data
-            : throw new CalculationException("calculation.input.unavailable", response.Error?.Category ?? ContractErrorCategory.DependencyFailure);
+            : throw new CalculationException("calculation.input.unavailable", response?.Error?.Category ?? ContractErrorCategory.DependencyFailure);
 
     private static ContractRequest<TPayload> Forward<TSource, TPayload>(ContractRequest<TSource> source, string name, TPayload payload) =>
         new(name, ContractGuard.CurrentVersion, source.RequestId, source.CorrelationId, source.CausationId,

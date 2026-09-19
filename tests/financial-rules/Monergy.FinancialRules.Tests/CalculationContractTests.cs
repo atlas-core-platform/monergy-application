@@ -185,4 +185,22 @@ public sealed class CalculationContractTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{malformed", Encoding.UTF8, "application/json") });
     }
+
+    [Theory]
+    [InlineData("extraction")]
+    [InlineData("validation")]
+    [InlineData("actor")]
+    [InlineData("workload")]
+    [InlineData("time")]
+    [InlineData("correlation")]
+    public async Task IncompleteAuthoritativeProvenanceCannotBecomeCalculationLineage(string field)
+    {
+        var h = new Harness();
+        await h.SeedAsync();
+        h.Reader.InvalidProvenanceField = field;
+        var result = await h.App.ExecuteAsync(h.Execute());
+        Assert.Equal("calculation.provenance.invalid", result.Error?.Code);
+        Assert.Null(result.Data);
+        Assert.Empty(h.Repository.PendingEvents());
+    }
 }
