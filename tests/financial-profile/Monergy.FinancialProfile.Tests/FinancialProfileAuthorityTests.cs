@@ -5,7 +5,7 @@ using Monergy.Services.FinancialProfile.Application;
 using Monergy.Services.FinancialProfile.Infrastructure;
 using Xunit;
 
-namespace Monergy.Vs02.Tests;
+namespace Monergy.FinancialProfile.Tests;
 
 public sealed class FinancialProfileAuthorityTests
 {
@@ -21,9 +21,9 @@ public sealed class FinancialProfileAuthorityTests
             .ToArray();
 
         var normalized = await application.NormalizeSourceFactsAsync(NormalizeRequest(facts, "request-all", "idempotency-all"));
-        var profile = await application.GetFinancialProfileAsync(Vs02TestContext.Request(
+        var profile = await application.GetFinancialProfileAsync(FinancialProfileTestContext.Request(
             Vs02ContractNames.GetFinancialProfile,
-            new GetFinancialProfile("financial-profile-001", Vs02TestContext.CustomerId),
+            new GetFinancialProfile("financial-profile-001", FinancialProfileTestContext.CustomerId),
             "request-profile"));
 
         Assert.Equal(ContractOutcome.Success, normalized.Outcome);
@@ -45,20 +45,20 @@ public sealed class FinancialProfileAuthorityTests
             NormalizeRequest([Fact(FinancialObjectTypes.BankAccount, "source-account", "Primary account", 100m)], "request-create", "key-create"));
         var factId = normalized.Data!.Facts.Single().FinancialFactId;
 
-        var allowed = await application.GetFinancialFactAsync(Vs02TestContext.Request(
+        var allowed = await application.GetFinancialFactAsync(FinancialProfileTestContext.Request(
             Vs02ContractNames.GetFinancialFact,
-            new GetFinancialFact(factId, Vs02TestContext.CustomerId),
+            new GetFinancialFact(factId, FinancialProfileTestContext.CustomerId),
             "request-fact"));
-        var hidden = await application.GetFinancialFactAsync(Vs02TestContext.Request(
+        var hidden = await application.GetFinancialFactAsync(FinancialProfileTestContext.Request(
             Vs02ContractNames.GetFinancialFact,
             new GetFinancialFact(factId, "customer-002"),
             "request-fact-hidden",
-            security: Vs02TestContext.Security("customer-002")));
-        var mismatched = await application.GetFinancialProfileAsync(Vs02TestContext.Request(
+            security: FinancialProfileTestContext.Security("customer-002")));
+        var mismatched = await application.GetFinancialProfileAsync(FinancialProfileTestContext.Request(
             Vs02ContractNames.GetFinancialProfile,
-            new GetFinancialProfile("financial-profile-001", Vs02TestContext.CustomerId),
+            new GetFinancialProfile("financial-profile-001", FinancialProfileTestContext.CustomerId),
             "request-profile-mismatch",
-            security: Vs02TestContext.Security("customer-002")));
+            security: FinancialProfileTestContext.Security("customer-002")));
 
         Assert.Equal(ContractOutcome.Success, allowed.Outcome);
         Assert.Equal(ContractErrorCategory.NotFound, hidden.Error?.Category);
@@ -100,6 +100,61 @@ public sealed class FinancialProfileAuthorityTests
             Payload = createRequest.Payload with { Facts = [Fact(FinancialObjectTypes.Income, "source-conflict", "Salary", 200m)] },
         });
         Assert.Equal(ContractErrorCategory.Conflict, conflict.Error?.Category);
+    }
+
+    [Fact]
+    public async Task IdempotencyIdentityIncludesContractVersionCustomerScopeAndCallerKey()
+    {
+        var repository = new InMemoryFinancialProfileRepository();
+        var application = new FinancialProfileApplication(repository, new CapturingTelemetry(), TimeProvider.System);
+        var customerOne = NormalizeRequest(
+            [Fact(FinancialObjectTypes.Income, "source-one", "Salary", 100m)],
+            "request-one",
+            "shared-caller-key");
+        var customerTwo = FinancialProfileTestContext.Request(
+            Vs02ContractNames.NormalizeSourceFacts,
+            new NormalizeSourceFacts(
+                "financial-profile-002",
+                "customer-002",
+                "processing-two",
+                [Fact(FinancialObjectTypes.Expense, "source-two", "Rent", 20m) with { CustomerId = "customer-002" }],
+                "provider-neutral-normalization/1.0.0",
+                DateTimeOffset.UtcNow),
+            "request-two",
+            "shared-caller-key",
+            FinancialProfileTestContext.Security("customer-002"));
+
+        var first = await application.NormalizeSourceFactsAsync(customerOne);
+        var second = await application.NormalizeSourceFactsAsync(customerTwo);
+        var firstIdentity = FinancialNormalizationIdentity.From(customerOne);
+        var secondIdentity = FinancialNormalizationIdentity.From(customerTwo);
+
+        Assert.Equal(ContractOutcome.Success, first.Outcome);
+        Assert.Equal(ContractOutcome.Success, second.Outcome);
+        Assert.NotEqual(firstIdentity, secondIdentity);
+        Assert.Equal(Vs02ContractNames.NormalizeSourceFacts, firstIdentity.ContractName);
+        Assert.Equal(ContractGuard.CurrentVersion, firstIdentity.ContractVersion);
+        Assert.Equal(FinancialProfileTestContext.CustomerId, firstIdentity.CustomerId);
+        Assert.Equal("shared-caller-key", firstIdentity.IdempotencyKey);
+    }
+
+    [Fact]
+    public async Task ApplicationOwnedProfileChangePreservesCorrelationAndCausation()
+    {
+        var repository = new InMemoryFinancialProfileRepository();
+        var application = new FinancialProfileApplication(repository, new CapturingTelemetry(), TimeProvider.System);
+
+        await application.NormalizeSourceFactsAsync(NormalizeRequest(
+            [Fact(FinancialObjectTypes.BankAccount, "source-correlation", "Primary", 50m)],
+            "request-profile-change",
+            "key-profile-change"));
+        var profileChanged = Assert.IsType<DomainEvent<FinancialProfileChangedPayload>>(
+            repository.DrainOutbox().Single(item => item is DomainEvent<FinancialProfileChangedPayload>));
+
+        Assert.Equal("CID-036", profileChanged.ContractId);
+        Assert.Equal(FinancialProfileTestContext.CorrelationId, profileChanged.CorrelationId);
+        Assert.Equal("request-profile-change", profileChanged.CausationId);
+        Assert.Equal("Financial Profile Service", profileChanged.Producer);
     }
 
     [Fact]
@@ -165,7 +220,7 @@ public sealed class FinancialProfileAuthorityTests
     private static ValidatedSourceFact Fact(string type, string sourceFactId, string label, decimal value) =>
         new(
             sourceFactId,
-            Vs02TestContext.CustomerId,
+            FinancialProfileTestContext.CustomerId,
             type,
             label,
             value,
@@ -182,11 +237,11 @@ public sealed class FinancialProfileAuthorityTests
         IReadOnlyList<ValidatedSourceFact> facts,
         string requestId,
         string idempotencyKey) =>
-        Vs02TestContext.Request(
+        FinancialProfileTestContext.Request(
             Vs02ContractNames.NormalizeSourceFacts,
             new NormalizeSourceFacts(
                 "financial-profile-001",
-                Vs02TestContext.CustomerId,
+                FinancialProfileTestContext.CustomerId,
                 "processing-d04",
                 facts,
                 "provider-neutral-normalization/1.0.0",

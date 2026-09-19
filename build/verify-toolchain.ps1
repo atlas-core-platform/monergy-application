@@ -161,8 +161,10 @@ Add-Check 'Empty service-owned migrations' $migrationOwnershipValid '12 independ
 Add-Check 'Controlled host scope' $healthOnlyValid 'Seven non-participants remain health/startup-only; VS-02 participants may expose governed contracts'
 
 $lockFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter 'packages.lock.json' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
-Add-Check 'NuGet lock coverage' ($lockFiles.Count -eq 16) '12 services, shared platform, contracts, architecture tests, and VS-02 tests'
-$projectText = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+$projectFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
+$projectsWithoutLocks = @($projectFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $_.DirectoryName 'packages.lock.json')) })
+Add-Check 'NuGet lock coverage' ($lockFiles.Count -eq $projectFiles.Count -and $projectsWithoutLocks.Count -eq 0) 'Every service, shared, contract, and independently owned test project has a lock file'
+$projectText = @($projectFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 $forbiddenProviders = 'EntityFrameworkCore|Npgsql|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Amazon\.|Google\.Cloud|OpenAI'
 Add-Check 'Provider-neutral dependency graph' ($projectText -notmatch $forbiddenProviders) 'No database, cloud, broker, storage, search, OCR, AI, identity, secret, or orchestrator SDK'
 Add-Check 'Vendor-neutral observability bootstrap' ($projectText.Contains('OpenTelemetry.Extensions.Hosting') -and $projectText.Contains('OpenTelemetry.Exporter.OpenTelemetryProtocol')) 'OpenTelemetry SDK and OTLP exporter only'

@@ -31,12 +31,53 @@ public sealed record FinancialNormalizationSave(
     IReadOnlySet<string> CreatedFactIds,
     bool Persisted);
 
+public sealed record FinancialNormalizationIdentity(
+    string ContractName,
+    string ContractVersion,
+    string CustomerId,
+    string IdempotencyKey)
+{
+    public static FinancialNormalizationIdentity From(ContractRequest<NormalizeSourceFacts> request) =>
+        new(
+            request.ContractName,
+            request.ContractVersion,
+            request.Security.Access.CustomerId,
+            request.IdempotencyKey!);
+}
+
+public sealed record FinancialProfileChangeTransition(
+    DateTimeOffset OccurredAt,
+    string CorrelationId,
+    string CausationId)
+{
+    public DomainEvent<FinancialProfileChangedPayload> CreateEvent(
+        FinancialProfileRecord profile,
+        IReadOnlyList<FinancialFactRecord> changedFacts) =>
+        new(
+            "CID-036",
+            $"evt-profile-{profile.FinancialProfileId}-{profile.Revision}",
+            Vs02ContractNames.FinancialProfileChanged,
+            ContractGuard.CurrentVersion,
+            OccurredAt,
+            CorrelationId,
+            CausationId,
+            "Financial Profile Service",
+            "financial-profile",
+            profile.FinancialProfileId,
+            new FinancialProfileChangedPayload(
+                profile.FinancialProfileId,
+                profile.CustomerId,
+                OccurredAt,
+                profile.Revision,
+                changedFacts.Select(fact => fact.FinancialFactId).Order(StringComparer.Ordinal).ToArray()));
+}
+
 public interface IFinancialProfileRepository
 {
     Task<FinancialNormalizationSave> NormalizeAsync(
-        string idempotencyKey,
+        FinancialNormalizationIdentity idempotencyIdentity,
         ContractRequest<NormalizeSourceFacts> request,
-        DateTimeOffset recordedAt,
+        FinancialProfileChangeTransition profileChange,
         CancellationToken cancellationToken);
 
     Task<FinancialProfileRecord?> GetProfileAsync(
@@ -85,10 +126,16 @@ public sealed class FinancialProfileApplication(
 
         try
         {
+            var recordedAt = timeProvider.GetUtcNow();
+            var idempotencyIdentity = FinancialNormalizationIdentity.From(request);
+            var profileChange = new FinancialProfileChangeTransition(
+                recordedAt,
+                request.CorrelationId,
+                request.RequestId);
             var saved = await repository.NormalizeAsync(
-                request.IdempotencyKey,
+                idempotencyIdentity,
                 request,
-                timeProvider.GetUtcNow(),
+                profileChange,
                 cancellationToken);
             var normalized = saved.Facts.Select(fact => new NormalizedFinancialFact(
                 fact.FinancialFactId,

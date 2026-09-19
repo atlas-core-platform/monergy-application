@@ -7,7 +7,8 @@ if (-not (Test-Path -LiteralPath $path)) { throw 'Candidate release manifest is 
 $manifest = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
 if ($manifest.status -cne 'D03_CANDIDATE_EVIDENCE_NOT_A_RELEASE') { throw 'Manifest status is not the governed candidate state.' }
 if (@($manifest.componentArtifacts).Count -ne 13) { throw 'Manifest must identify 12 services and one frontend bundle.' }
-if (@($manifest.dependencyLocks.nugetLocks).Count -ne 16) { throw 'Manifest must identify all NuGet lock files.' }
+$projectCount = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' }).Count
+if (@($manifest.dependencyLocks.nugetLocks).Count -ne $projectCount) { throw 'Manifest must identify one NuGet lock file for every project.' }
 if ($manifest.published -or $manifest.deployed) { throw 'Candidate evidence cannot claim publication or deployment.' }
 if ($manifest.sourceTree -notmatch '^(?:WORKTREE_UNCOMMITTED|COMMIT_TREE):[0-9a-f]{40,64}$') { throw 'Candidate source-tree identity is invalid.' }
 $ociComponents = @($manifest.componentArtifacts | Where-Object kind -ceq 'OCI_IMAGE')

@@ -1,20 +1,21 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Monergy.Contracts;
 using Xunit;
 
-namespace Monergy.Vs02.Tests;
+namespace Monergy.FinancialProfile.Tests;
 
 public sealed class FinancialProfileContractCompatibilityTests
 {
     public static TheoryData<string, object, Type> ContractPayloads => new()
     {
-        { "CID-030", new GetFinancialProfile("profile-001", Vs02TestContext.CustomerId), typeof(GetFinancialProfile) },
-        { "CID-031", new NormalizeSourceFacts("profile-001", Vs02TestContext.CustomerId, "processing-001", [], "normalization/1.0.0", DateTimeOffset.UnixEpoch), typeof(NormalizeSourceFacts) },
-        { "CID-032", new GetFinancialFact("fact-001", Vs02TestContext.CustomerId), typeof(GetFinancialFact) },
-        { "CID-033", new GetFinancialProvenance("provenance-001", Vs02TestContext.CustomerId), typeof(GetFinancialProvenance) },
+        { "CID-030", new GetFinancialProfile("profile-001", FinancialProfileTestContext.CustomerId), typeof(GetFinancialProfile) },
+        { "CID-031", new NormalizeSourceFacts("profile-001", FinancialProfileTestContext.CustomerId, "processing-001", [], "normalization/1.0.0", DateTimeOffset.UnixEpoch), typeof(NormalizeSourceFacts) },
+        { "CID-032", new GetFinancialFact("fact-001", FinancialProfileTestContext.CustomerId), typeof(GetFinancialFact) },
+        { "CID-033", new GetFinancialProvenance("provenance-001", FinancialProfileTestContext.CustomerId), typeof(GetFinancialProvenance) },
         { "CID-034", new FinancialFactChangedPayload("profile-001", "fact-001", FinancialObjectTypes.Income, DateTimeOffset.UnixEpoch, "provenance-001", 1), typeof(FinancialFactChangedPayload) },
         { "CID-035", new FinancialFactChangedPayload("profile-001", "fact-001", FinancialObjectTypes.Income, DateTimeOffset.UnixEpoch, "provenance-002", 2), typeof(FinancialFactChangedPayload) },
-        { "CID-036", new FinancialProfileChangedPayload("profile-001", Vs02TestContext.CustomerId, DateTimeOffset.UnixEpoch, 2, ["fact-001"]), typeof(FinancialProfileChangedPayload) },
+        { "CID-036", new FinancialProfileChangedPayload("profile-001", FinancialProfileTestContext.CustomerId, DateTimeOffset.UnixEpoch, 2, ["fact-001"]), typeof(FinancialProfileChangedPayload) },
     };
 
     [Fact]
@@ -35,22 +36,47 @@ public sealed class FinancialProfileContractCompatibilityTests
 
     [Theory]
     [MemberData(nameof(ContractPayloads))]
-    public void EveryProducerAndConsumerPayloadRoundTripsStrictly(string contractId, object payload, Type payloadType)
+    public void EveryProducerSerializesItsCanonicalPayload(string contractId, object payload, Type payloadType)
     {
         var serialized = JsonSerializer.Serialize(payload, payloadType, ContractJson.Options);
-        var roundTrip = JsonSerializer.Deserialize(serialized, payloadType, ContractJson.Options);
 
-        Assert.NotNull(roundTrip);
+        Assert.NotEqual("{}", serialized);
         Assert.Contains(D04ContractCatalog.All, contract => contract.Id == contractId);
         Assert.DoesNotContain("provider", serialized, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public void MalformedPayloadWithUnknownMemberIsRejected()
+    [Theory]
+    [MemberData(nameof(ContractPayloads))]
+    public void EveryConsumerDeserializesItsCanonicalPayload(string contractId, object payload, Type payloadType)
     {
-        const string malformed = "{\"financialFactId\":\"fact-001\",\"customerId\":\"customer-001\",\"unexpected\":true}";
+        var serialized = JsonSerializer.Serialize(payload, payloadType, ContractJson.Options);
+        var consumed = JsonSerializer.Deserialize(serialized, payloadType, ContractJson.Options);
 
-        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<GetFinancialFact>(malformed, ContractJson.Options));
+        Assert.NotNull(consumed);
+        Assert.Contains(D04ContractCatalog.All, contract => contract.Id == contractId);
+    }
+
+    [Theory]
+    [MemberData(nameof(ContractPayloads))]
+    public void EveryPayloadRoundTripsThroughTheStrictSerializer(string contractId, object payload, Type payloadType)
+    {
+        var serialized = JsonSerializer.Serialize(payload, payloadType, ContractJson.Options);
+        var consumed = JsonSerializer.Deserialize(serialized, payloadType, ContractJson.Options)!;
+        var replay = JsonSerializer.Serialize(consumed, payloadType, ContractJson.Options);
+
+        Assert.Equal(serialized, replay);
+        Assert.Contains(D04ContractCatalog.All, contract => contract.Id == contractId);
+    }
+
+    [Theory]
+    [MemberData(nameof(ContractPayloads))]
+    public void EveryContractRejectsMalformedUnknownMembers(string contractId, object payload, Type payloadType)
+    {
+        var malformed = JsonNode.Parse(JsonSerializer.Serialize(payload, payloadType, ContractJson.Options))!.AsObject();
+        malformed["unexpected"] = true;
+
+        Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(malformed.ToJsonString(), payloadType, ContractJson.Options));
+        Assert.Contains(D04ContractCatalog.All, contract => contract.Id == contractId);
     }
 
     [Fact]

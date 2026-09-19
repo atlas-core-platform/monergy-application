@@ -45,7 +45,8 @@ D04 adds without changing the six-area topology:
   categories, explicit revisions, immutable fact/provenance history, and a
   LOCAL/CI-only reference outbox;
 - permanent domain, lifecycle, isolation, idempotency, audit, serialization,
-  malformed-input, and D03 regression tests;
+  malformed-input, and D03 regression tests, with D04-owned coverage isolated
+  in `tests/financial-profile/Monergy.FinancialProfile.Tests`;
 - `build/verify-financial-profile-authority.ps1` with deterministic checks and
   negative self-tests.
 

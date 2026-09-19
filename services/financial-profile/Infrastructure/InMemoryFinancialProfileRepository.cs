@@ -14,23 +14,23 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
     private readonly Dictionary<string, List<FinancialFactRecord>> factHistory = new(StringComparer.Ordinal);
     private readonly Dictionary<string, FinancialProfileRecord> profiles = new(StringComparer.Ordinal);
     private readonly Dictionary<string, FinancialProvenance> provenance = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, FinancialNormalizationSave> idempotency = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> idempotencyPayloads = new(StringComparer.Ordinal);
+    private readonly Dictionary<FinancialNormalizationIdentity, FinancialNormalizationSave> idempotency = [];
+    private readonly Dictionary<FinancialNormalizationIdentity, string> idempotencyPayloads = [];
     private readonly List<object> outbox = [];
 
     public Task<FinancialNormalizationSave> NormalizeAsync(
-        string idempotencyKey,
+        FinancialNormalizationIdentity idempotencyIdentity,
         ContractRequest<NormalizeSourceFacts> request,
-        DateTimeOffset recordedAt,
+        FinancialProfileChangeTransition profileChange,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         lock (sync)
         {
             var payloadSignature = JsonSerializer.Serialize(request.Payload, ContractJson.Options);
-            if (idempotency.TryGetValue(idempotencyKey, out var prior))
+            if (idempotency.TryGetValue(idempotencyIdentity, out var prior))
             {
-                if (!string.Equals(idempotencyPayloads[idempotencyKey], payloadSignature, StringComparison.Ordinal))
+                if (!string.Equals(idempotencyPayloads[idempotencyIdentity], payloadSignature, StringComparison.Ordinal))
                 {
                     throw new InvalidOperationException("Idempotency key conflict.");
                 }
@@ -81,7 +81,7 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
                     request.Payload.NormalizationVersion,
                     request.Security.Actor.ActorId,
                     request.Security.Workload.WorkloadIdentityId,
-                    recordedAt,
+                    profileChange.OccurredAt,
                     request.CorrelationId,
                     request.CausationId);
                 savedFacts.Add(fact);
@@ -98,7 +98,7 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
                     $"evt-financial-{factId}-{revision}",
                     eventName,
                     ContractGuard.CurrentVersion,
-                    recordedAt,
+                    profileChange.OccurredAt,
                     request.CorrelationId,
                     request.RequestId,
                     "Financial Profile Service",
@@ -108,7 +108,7 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
                         fact.FinancialProfileId,
                         fact.FinancialFactId,
                         fact.FactType,
-                        recordedAt,
+                        profileChange.OccurredAt,
                         fact.FinancialProvenanceId,
                         revision)));
             }
@@ -126,25 +126,9 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
                 request.Payload.FinancialProfileId,
                 request.Payload.CustomerId,
                 profileRevision,
-                recordedAt,
+                profileChange.OccurredAt,
                 currentFacts);
-            events.Add(new DomainEvent<FinancialProfileChangedPayload>(
-                "CID-036",
-                $"evt-profile-{profile.FinancialProfileId}-{profile.Revision}",
-                Vs02ContractNames.FinancialProfileChanged,
-                ContractGuard.CurrentVersion,
-                recordedAt,
-                request.CorrelationId,
-                request.RequestId,
-                "Financial Profile Service",
-                "financial-profile",
-                profile.FinancialProfileId,
-                new FinancialProfileChangedPayload(
-                    profile.FinancialProfileId,
-                    profile.CustomerId,
-                    recordedAt,
-                    profile.Revision,
-                    savedFacts.Select(fact => fact.FinancialFactId).Order(StringComparer.Ordinal).ToArray())));
+            events.Add(profileChange.CreateEvent(profile, savedFacts));
 
             foreach (var fact in savedFacts)
             {
@@ -168,8 +152,8 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
             profiles[profile.FinancialProfileId] = profile;
             outbox.AddRange(events);
             var result = new FinancialNormalizationSave(savedFacts, savedProvenance, events, profile, createdFactIds, true);
-            idempotency.Add(idempotencyKey, result);
-            idempotencyPayloads.Add(idempotencyKey, payloadSignature);
+            idempotency.Add(idempotencyIdentity, result);
+            idempotencyPayloads.Add(idempotencyIdentity, payloadSignature);
             return Task.FromResult(result);
         }
     }

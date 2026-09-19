@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Monergy.FinancialProfile.Tests</AssemblyName>
+    <RootNamespace>Monergy.FinancialProfile.Tests</RootNamespace>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
+    <ProjectReference Include="../../../services/audit/Monergy.Services.Audit.csproj" />
+    <ProjectReference Include="../../../services/financial-profile/Monergy.Services.FinancialProfile.csproj" />
+    <ProjectReference Include="../../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+  </ItemGroup>
+</Project>
