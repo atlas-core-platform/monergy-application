@@ -4,6 +4,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Monergy.Contracts;
+using Monergy.Platform;
 using Monergy.Services.FinancialRules.Domain;
 using Monergy.Services.FinancialRules.Infrastructure;
 using Xunit;
@@ -12,6 +13,19 @@ namespace Monergy.FinancialRules.Tests;
 
 public sealed class CalculationContractTests
 {
+    private static readonly string[] ExpectedLifecycleFields =
+        ["Service", "Operation", "Outcome", "RequestId", "CorrelationId", "CausationId", "SubjectType", "SubjectId", "AdapterKind"];
+    private static readonly (string Service, string Operation, string Outcome, string SubjectType)[] ExpectedCalculationCategories =
+    [
+        ("Financial Profile Service", Vs02ContractNames.NormalizeSourceFacts, "PROMOTED", "financial-profile"),
+        ("Financial Profile Service", Vs02ContractNames.GetFinancialFact, "READ", "financial-fact"),
+        ("Financial Profile Service", Vs02ContractNames.GetFinancialProvenance, "READ", "financial-provenance"),
+        ("Financial Rules Service", FinancialRulesContractNames.ExecuteCalculation, "RECORDED", "financial-calculation"),
+        ("Financial Rules Service", FinancialRulesContractNames.ExecuteCalculation, "REPLAYED", "financial-calculation"),
+        ("Audit Service", "ConsumeGovernedEvent", "APPENDED", "financial-calculation"),
+        ("Audit Service", "ConsumeGovernedEvent", "REPLAYED", "financial-calculation"),
+    ];
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -45,7 +59,75 @@ public sealed class CalculationContractTests
         Assert.Equal(outcome.EventId, audit.SourceEventId);
         Assert.Equal(outcome.SubjectId, audit.SubjectId);
         Assert.Equal(outcome.ContractId, audit.SourceContractId);
-        Assert.DoesNotContain(h.Telemetry.Signals, signal => signal.ToString().Contains("125", StringComparison.Ordinal));
+        Assert.All(h.Telemetry.Signals, AssertCalculationLifecycleMetadataOnly);
+        // Require the governed activities, not an incidental total record count.
+        var categories = h.Telemetry.Signals.Select(signal =>
+            (signal.Service, signal.Operation, signal.Outcome, signal.SubjectType)).ToHashSet();
+        Assert.All(ExpectedCalculationCategories, category => Assert.Contains(category, categories));
+        Assert.All(h.Telemetry.Signals.Where(signal => signal.Service == "Financial Rules Service"), signal =>
+        {
+            Assert.Equal(request.RequestId, signal.RequestId);
+            Assert.Equal(request.CorrelationId, signal.CorrelationId);
+            Assert.Equal(request.CausationId, signal.CausationId);
+            Assert.Equal(outcome.SubjectId, signal.SubjectId);
+        });
+        Assert.All(h.Telemetry.Signals.Where(signal => signal.Service == "Audit Service"), signal =>
+        {
+            Assert.Equal(outcome.EventId, signal.RequestId);
+            Assert.Equal(outcome.CorrelationId, signal.CorrelationId);
+            Assert.Equal(outcome.CausationId, signal.CausationId);
+            Assert.Equal(outcome.SubjectId, signal.SubjectId);
+        });
+    }
+
+    [Fact]
+    public void CalculationTelemetryPrivacyAllowsOpaqueIdentifiersContainingFinancialDigits()
+    {
+        AssertCalculationLifecycleMetadataOnly(PrivacyRegressionSignal());
+    }
+
+    [Theory]
+    [InlineData("Service")]
+    [InlineData("Operation")]
+    [InlineData("Outcome")]
+    [InlineData("SubjectType")]
+    [InlineData("AdapterKind")]
+    public void CalculationTelemetryPrivacyRejectsFinancialPayloadInSemanticMetadata(string field)
+    {
+        var signal = PrivacyRegressionSignal();
+        const string payload = "{\"inputs\":[100,25],\"result\":{\"value\":125,\"unit\":\"INR\"}}";
+        var leaking = field switch
+        {
+            "Service" => signal with { Service = payload },
+            "Operation" => signal with { Operation = payload },
+            "Outcome" => signal with { Outcome = payload },
+            "SubjectType" => signal with { SubjectType = payload },
+            "AdapterKind" => signal with { AdapterKind = payload },
+            _ => throw new ArgumentOutOfRangeException(nameof(field)),
+        };
+        Assert.ThrowsAny<Xunit.Sdk.XunitException>(() => AssertCalculationLifecycleMetadataOnly(leaking));
+    }
+
+    private static LifecycleSignal PrivacyRegressionSignal() => new(
+        "Audit Service", "ConsumeGovernedEvent", "APPENDED",
+        "9e88b7fa3599422685f121125b12b6c6", "correlation-125", "causation-125",
+        "financial-calculation", "subject-125", "IN_MEMORY_REFERENCE");
+
+    // Scoped to this D05 calculation/outbox scenario, not a global telemetry policy.
+    private static void AssertCalculationLifecycleMetadataOnly(LifecycleSignal signal)
+    {
+        // Exact public wire fields exclude input/result payload, amount/value and provenance fields.
+        var emitted = JsonSerializer.SerializeToElement(signal);
+        Assert.Equal(
+            ExpectedLifecycleFields.Order(StringComparer.Ordinal),
+            emitted.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+        Assert.Contains((signal.Service, signal.Operation, signal.Outcome, signal.SubjectType), ExpectedCalculationCategories);
+        Assert.Equal("IN_MEMORY_REFERENCE", signal.AdapterKind);
+        // Identifiers are opaque; equality with governed scenario IDs is asserted by the caller.
+        Assert.False(string.IsNullOrWhiteSpace(signal.RequestId));
+        Assert.False(string.IsNullOrWhiteSpace(signal.CorrelationId));
+        Assert.False(string.IsNullOrWhiteSpace(signal.SubjectId));
+        Assert.False(string.IsNullOrWhiteSpace(signal.CausationId));
     }
 
     [Theory]
