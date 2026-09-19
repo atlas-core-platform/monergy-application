@@ -47,6 +47,9 @@ $expectedFeatureNames = @(
     'Insurance, Property & Vehicle', 'Tax Records & Financial Goals', 'Authoritative APIs & events'
 )
 $expectedContracts = @('CID-030', 'CID-031', 'CID-032', 'CID-033', 'CID-034', 'CID-035', 'CID-036')
+$expectedD03Contracts = @('CID-020', 'CID-021', 'CID-022', 'CID-023', 'CID-024', 'CID-025', 'CID-027', 'CID-028', 'CID-031', 'CID-033', 'CID-034', 'CID-035', 'CID-055', 'CID-057')
+$expectedContractOverlap = @('CID-031', 'CID-033', 'CID-034', 'CID-035')
+$expectedD04Only = @('CID-030', 'CID-032', 'CID-036')
 $expectedContractNames = @(
     'GetFinancialProfile', 'NormalizeSourceFacts', 'GetFinancialFact', 'GetFinancialProvenance',
     'FinancialFactCreated', 'FinancialFactUpdated', 'FinancialProfileChanged'
@@ -69,7 +72,7 @@ function Add-Check {
 }
 
 $scope = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d04-scope-lock.json') -Raw | ConvertFrom-Json
-Add-Check 'Candidate identity and evidence boundary' ($scope.deliverable -ceq 'MWP-03-D04' -and $scope.status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and $scope.evidenceLevel -ceq 'SIMULATOR_CANDIDATE') 'Candidate only; no stronger readiness claim'
+Add-Check 'Accepted identity and evidence boundary' ($scope.deliverable -ceq 'MWP-03-D04' -and $scope.status -ceq 'ACCEPTED_COMPLETE' -and $scope.evidenceLevel -ceq 'SIMULATOR_ACCEPTED') 'Accepted / Complete at SIMULATOR; no stronger readiness claim'
 Add-Check 'Exact seven Feature IDs' (Test-ExactSequence @($scope.features.id) $expectedFeatures) '7/7 exact governed IDs'
 Add-Check 'Exact seven Feature names' (Test-ExactSequence @($scope.features.name) $expectedFeatureNames) '7/7 exact governed names'
 Add-Check 'Unique Financial Profile Feature ownership' (@($scope.features | Where-Object owner -cne 'Financial Profile Service').Count -eq 0 -and @($scope.features.id | Select-Object -Unique).Count -eq 7) 'Financial Profile Service owns 7/7'
@@ -121,13 +124,19 @@ $d03TestFiles = @(Get-ChildItem -LiteralPath $d03TestRoot -File -Filter '*.cs')
 Add-Check 'D04 test ownership is independent from D03' ((Test-Path -LiteralPath (Join-Path $testRoot 'Monergy.FinancialProfile.Tests.csproj')) -and @($d03TestFiles | Where-Object Name -in @('FinancialProfileAuthorityTests.cs', 'FinancialProfileContractCompatibilityTests.cs')).Count -eq 0) 'D04 authority and compatibility tests live only in the Financial Profile test project'
 
 $manifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
-Add-Check 'Truthful D04 candidate lifecycle' ($manifest.d04Status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and $manifest.d04FeatureState -ceq 'IMPLEMENTATION_CANDIDATE_7_OF_7' -and $manifest.d04ContractState -ceq 'COMPATIBILITY_EVIDENCE_CANDIDATE_7_OF_7' -and $manifest.d04EvidenceLevel -ceq 'SIMULATOR_CANDIDATE' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED') 'No acceptance, Integration, UAT, Production or deployment claim'
+Add-Check 'Truthful D04 accepted lifecycle' ($manifest.d04Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.d04FeatureState -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR_7_OF_7' -and $manifest.d04ContractState -ceq 'APPLICABLE_COMPATIBILITY_AND_BEHAVIORAL_EVIDENCE_ACCEPTED_SIMULATOR_7_OF_7' -and $manifest.d04EvidenceLevel -ceq 'SIMULATOR_ACCEPTED' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED') 'Accepted / Complete at SIMULATOR; no Integration, UAT, Production or deployment claim'
 $serviceCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 $financialProfile = $serviceCatalog.services | Where-Object id -ceq 'financial-profile'
 $audit = $serviceCatalog.services | Where-Object id -ceq 'audit'
-Add-Check 'D04 service catalog assignment' ($financialProfile.d04Status -ceq 'IMPLEMENTATION_CANDIDATE' -and (Test-ExactSequence @($financialProfile.d04FeatureIds) $expectedFeatures) -and $audit.d04Status -ceq 'GOVERNED_AUDIT_PARTICIPANT') 'Seven Features assigned once; Audit is supporting only'
+Add-Check 'D04 service catalog assignment' ($financialProfile.d04Status -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR' -and (Test-ExactSequence @($financialProfile.d04FeatureIds) $expectedFeatures) -and $audit.d04Status -ceq 'GOVERNED_AUDIT_PARTICIPANT') 'Seven Features assigned once; Audit is supporting only'
 $frontendD04References = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'apps') -Recurse -File | Select-String -SimpleMatch 'MWP-03-D04')
 Add-Check 'Frontend business scope unchanged' ($frontendD04References.Count -eq 0) 'NONE REQUIRED BY D04 FEATURE SCOPE'
+
+$acceptance = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d04-acceptance.json') -Raw | ConvertFrom-Json
+Add-Check 'Approved candidates and CTO evidence basis recorded' ($acceptance.applicationLifecycle -ceq 'ACCEPTED_COMPLETE' -and $acceptance.crossRepositoryLifecycle -ceq 'PENDING_ARCHITECTURE_CLOSURE' -and $acceptance.evidenceLevel -ceq 'SIMULATOR' -and $acceptance.approvedCandidates.application -ceq '3b253887dd18dc780848b56bbda4d5fd1744c407' -and $acceptance.approvedCandidates.architecture -ceq '7fba22efbbd526a7ca031bca9af8471b92e47c42' -and $acceptance.approvalBasis.independentCtoGithubConnectorInspection -ceq 'HTTP_404') 'Supplied CTO approval basis and independently unavailable connector inspection are explicit'
+Add-Check 'D03 and D04 contract overlap is exact' ((Test-ExactSequence @($acceptance.contracts.d04Applicable) $expectedContracts) -and (Test-ExactSequence @($acceptance.contracts.acceptedD03) $expectedD03Contracts) -and (Test-ExactSequence @($acceptance.contracts.overlap) $expectedContractOverlap) -and (Test-ExactSequence @($acceptance.contracts.d04OnlyRelativeToD03) $expectedD04Only) -and $acceptance.contracts.programWideUnionCount -eq 17) 'D04 applicable 7; overlap 4; D04-only 3; program union 17'
+Add-Check 'Approved hosted candidate evidence is pinned' (@($acceptance.workflows).Count -eq 2 -and @($acceptance.workflows | Where-Object conclusion -cne 'success').Count -eq 0 -and (Test-ExactSet @($acceptance.workflows.id) @(35455698197, 35455695670)) -and @($acceptance.workflows | Where-Object { $_.artifact.sha256 -notmatch '^[0-9a-f]{64}$' -or $_.artifact.manifestSha256 -notmatch '^[0-9a-f]{64}$' -or $_.artifact.repositorySbomSha256 -notmatch '^[0-9a-f]{64}$' -or $_.artifact.ociEvidenceMatrixSha256 -notmatch '^[0-9a-f]{64}$' }).Count -eq 0) 'PR and push workflow identities, source identity and immutable artifact hashes recorded'
+Add-Check 'Acceptance preserves actual security findings and stage gates' ($acceptance.verification.hosted.ociImages -eq 12 -and $acceptance.verification.hosted.ociGrypeMatches.total -eq 120 -and $acceptance.verification.hosted.vulnerabilityPolicyResult -ceq 'PASS_WITH_RECORDED_NON_BLOCKING_OCI_FINDINGS' -and $acceptance.stageGates.'SG-01' -ceq 'READY' -and $acceptance.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and $acceptance.stageGates.'SG-03' -ceq 'BLOCKED' -and $acceptance.stageGates.'SG-04' -ceq 'BLOCKED' -and -not $acceptance.publication.packages -and -not $acceptance.publication.images -and -not $acceptance.publication.deployment -and -not $acceptance.publication.tag) 'Non-blocking OCI findings retained; gates unchanged; nothing published, deployed or tagged'
 
 $failures = @($checks | Where-Object { -not $_.Passed })
 foreach ($check in $checks) {

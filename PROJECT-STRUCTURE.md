@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D04 Candidate
+# Monergy Application Repository Structure — D04 Accepted
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -49,6 +49,9 @@ D04 adds without changing the six-area topology:
   in `tests/financial-profile/Monergy.FinancialProfile.Tests`;
 - `build/verify-financial-profile-authority.ps1` with deterministic checks and
   negative self-tests.
+- `build/governance/d04-acceptance.json` with the approved candidate,
+  workflow/artifact hashes, exact contract overlap, remediation outcomes,
+  security findings and unchanged stage gates.
 
 D02 assets retained include:
 

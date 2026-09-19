@@ -12,8 +12,10 @@ facade for accepted D01 tasks.
 D03 and D04 add their independent deterministic verifier tasks. D04 reads
 `governance/d04-scope-lock.json`, checks exact Feature/contract/control IDs,
 provider neutrality, reference-adapter restrictions, runtime realization,
-permanent tests and truthful candidate lifecycle. Both verifiers include
-negative self-tests.
+permanent tests and the accepted SIMULATOR lifecycle. Both verifiers include
+negative self-tests. `governance/d04-acceptance.json` pins the approved
+candidate, hosted evidence, actual security findings and exact D03/D04 contract
+overlap without claiming publication or deployment.
 
 `hosted-oci-evidence.ps1` is the non-publishing Linux evidence path. For each
 of the twelve service artifacts it creates a Docker archive, records the

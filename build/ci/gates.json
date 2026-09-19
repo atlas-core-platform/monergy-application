@@ -60,7 +60,7 @@
       "realization": "IMPLEMENTED_EXECUTABLE",
       "result": "PASS",
       "command": "./build/Invoke-Toolchain.ps1 -Task Test; D03Verification; D04Verification",
-      "scope": "Executed producer/consumer and serialization compatibility for the exact fourteen VS-02 contracts plus the separate exact seven D04 Financial Profile contracts"
+      "scope": "Executed producer/consumer and serialization compatibility for the exact fourteen VS-02 contracts and exact seven D04-applicable Financial Profile contracts; CID-031, CID-033, CID-034 and CID-035 overlap and the program-wide union is seventeen"
     },
     {
       "id": "CG-08",

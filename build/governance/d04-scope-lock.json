@@ -2,8 +2,8 @@
   "schemaVersion": "1.0.0",
   "deliverable": "MWP-03-D04",
   "title": "Financial Profile Authority Expansion",
-  "status": "CANDIDATE_PENDING_CTO_REVIEW",
-  "evidenceLevel": "SIMULATOR_CANDIDATE",
+  "status": "ACCEPTED_COMPLETE",
+  "evidenceLevel": "SIMULATOR_ACCEPTED",
   "features": [
     {
       "id": "M2-WS04-E01-F01",

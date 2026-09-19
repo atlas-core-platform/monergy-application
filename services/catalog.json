@@ -60,7 +60,7 @@
         "M2-WS04-E03-F01",
         "M2-WS04-E03-F02"
       ],
-      "d04Status": "IMPLEMENTATION_CANDIDATE",
+      "d04Status": "IMPLEMENTATION_ACCEPTED_SIMULATOR",
       "d04FeatureIds": [
         "M2-WS04-E01-F01",
         "M2-WS04-E01-F02",

@@ -2,14 +2,14 @@
 
 `monergy-application` is the bounded product monorepo defined by the accepted
 MWP-02-D05 engineering-platform baseline. Accepted MWP-03-D03 implements the
-eight canonical VS-02 Evidence-to-Financial-Truth Features. MWP-03-D04 is the
-candidate Financial Profile Authority Expansion across seven READY Features,
-using provider-neutral reference adapters restricted to LOCAL and CI / EPHEMERAL
-execution.
+eight canonical VS-02 Evidence-to-Financial-Truth Features. Accepted
+MWP-03-D04 completes the Financial Profile Authority Expansion across seven
+READY Features, using provider-neutral reference adapters restricted to LOCAL
+and CI / EPHEMERAL execution.
 
 ## Current state
 
-- Status: MWP-03-D04 Candidate — Pending CTO Review
+- Status: MWP-03-D04 Accepted / Complete
 - Architecture basis: Monergy Architecture Baseline v1.0
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Backend: .NET SDK 10.0.401, .NET runtime 10.0.12, C# 14, ASP.NET Core and
@@ -18,7 +18,7 @@ execution.
   Vite 8.3.0, Ant Design 6.6.3 and Tailwind CSS 4.3.3
 - Hosted repository: private GitHub repository at
   `https://github.com/atlas-core-platform/monergy-application`
-- Hosted CI: GitHub Actions configured for D01-D03 gates and evidence
+- Hosted CI: GitHub Actions configured for D01-D04 gates and evidence
 - Governance: GitHub Free exception accepted; branch protection is
   `NOT_IMPLEMENTED — GITHUB FREE PLAN LIMITATION`; CODEOWNERS is advisory and CI
   flags direct pushes to `main`
@@ -28,9 +28,11 @@ execution.
 - Deployment: none
 - VS-02: implementation accepted at `SIMULATOR` — 8/8 Features, 14/14
   compatibility-evidenced contracts, 5/5 service boundaries
-- D04: implementation candidate at `SIMULATOR` — 7/7 Features and CID-030
-  through CID-036 (7/7); Financial Profile Service owns authority and Audit
-  participates only through governed fact events
+- D04: implementation accepted at `SIMULATOR` — 7/7 Features and the exact
+  applicable CID-030 through CID-036 set (7/7); CID-031, CID-033, CID-034 and
+  CID-035 overlap the accepted D03 set, so the program-wide union is 17 rather
+  than 21; Financial Profile Service owns authority and Audit participates only
+  through governed fact events
 - Achieved integration-evidence level: `SIMULATOR` through non-production
   reference adapters; no provider sandbox or Production compatibility claim
 
@@ -53,10 +55,10 @@ Run from the repository root:
 ```
 
 The task surface performs locked restore, formatting, lint, strict type checks,
-build, tests, security evidence, packaging, candidate-manifest checks, and D01/
-D02/D03/D04 verification. Generated evidence stays under ignored `.artifacts/`. OCI
+build, tests, security evidence, packaging, acceptance-evidence manifest checks,
+and D01/D02/D03/D04 verification. Generated evidence stays under ignored `.artifacts/`. OCI
 packaging is `BLOCKED`, not `PASS`, when a Linux Docker engine is unavailable.
-The D03 branch workflow supplies the approved hosted Linux path: it builds all
+The hosted workflow supplies the approved Linux evidence path: it builds all
 twelve images without pushing, records image digests, generates image CycloneDX
 SBOMs, runs fail-closed Grype scans, and uploads only evidence. Nothing in D03
 represents UAT, Production, provider-compatibility, publication, or deployment
