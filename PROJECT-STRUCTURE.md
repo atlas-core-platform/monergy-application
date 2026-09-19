@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D04 Accepted / D05 Candidate
+# Monergy Application Repository Structure — D04/D05 Accepted at SIMULATOR
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -55,7 +55,7 @@ D04 adds without changing the six-area topology:
 
 D02 assets retained include:
 
-## D05 candidate additions
+## D05 implementation and application acceptance
 
 - `services/financial-rules/Domain/EngineeringRules.cs`: typed engineering fixtures, not client methodology.
 - `services/financial-rules/Application/`: rule/input/access/persistence ports and owner-controlled execution, queries and historical reproduction.
@@ -63,7 +63,9 @@ D02 assets retained include:
 - `FinancialRulesRegistration.cs` and `FinancialRulesEndpoints.cs`: gated composition and CID-037–CID-039 endpoints.
 - `contracts/Monergy.Contracts/FinancialRulesContracts.cs` and `contracts/schemas/financial-rules.schema.json`: separate five-contract D05 surface.
 - `tests/financial-rules/Monergy.FinancialRules.Tests/`: owned behavior, contract and actual-owner lineage evidence; no test moved out of D03/D04.
-- `build/governance/d05-scope-lock.json` and `build/verify-financial-rules.ps1`: bounded scope and candidate verifier.
+- `build/governance/d05-scope-lock.json` and `build/verify-financial-rules.ps1`: unchanged reviewed candidate scope and live behavioral verifier.
+- `build/governance/d05-acceptance.json`: exact CTO-reviewed identities, accepted six Features/five new contracts, 22-contract program union, retained evidence, architecture dirty-file exception and unchanged readiness limits.
+- `build/verify-d05-acceptance.ps1`: acceptance-record/negative checks and immutable business-tree verification; no architecture repository mutation.
 - `services/financial-rules/README.md`: reference execution instructions and limits.
 
 ## Retained D02 assets

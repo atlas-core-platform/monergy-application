@@ -34,6 +34,7 @@ function Test-RequiredBehavior {
 $scopePath = Join-Path $RepositoryRoot 'build/governance/d05-scope-lock.json'
 $scope = Get-Content -LiteralPath $scopePath -Raw -Encoding utf8 | ConvertFrom-Json
 if ($SelfTest) {
+    & (Join-Path $RepositoryRoot 'build/verify-d05-acceptance.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
     $checks = [ordered]@{}
     $checks['valid candidate'] = Test-Scope $scope
     foreach ($mutation in @('missing-feature', 'duplicate-contract', 'fabricated-acceptance', 'overstated-evidence', 'foreign-owner')) {
@@ -61,8 +62,9 @@ if ($SelfTest) {
     Write-Output "D05 self-tests passed: $($checks.Count)/$($checks.Count)."
     exit 0
 }
+& (Join-Path $RepositoryRoot 'build/verify-d05-acceptance.ps1') -RepositoryRoot $RepositoryRoot
 $checks = [ordered]@{}
-$checks['Exact candidate scope, ownership and consumed contracts'] = Test-Scope $scope
+$checks['Exact reviewed candidate scope, ownership and consumed contracts'] = Test-Scope $scope
 $checks['Starting application baseline pinned'] = $scope.startingCommits.application -ceq '9aae295846f0dd1ca01f9d7f99f0233cd53c7626'
 $checks['Starting architecture branch explicitly authorized'] = $scope.startingCommits.architecture -ceq '866c05122a0823d38dcaf243d3164b5b2b0947d9'
 $checks['Requirements baseline remains pinned'] = $scope.startingCommits.architectureRequirements -ceq '5e7fb1cc9a56cc7b0411640bbb63c13c02c83657'
@@ -81,7 +83,7 @@ $schema = Get-Content (Join-Path $RepositoryRoot 'contracts/schemas/financial-ru
 $checks['Wire schema separates three requests and two events'] = $schema.oneOf.Count -eq 5 -and @($schema.oneOf | Where-Object additionalProperties).Count -eq 0
 $checks['Owned test project exists'] = Test-Path (Join-Path $RepositoryRoot 'tests/financial-rules/Monergy.FinancialRules.Tests/Monergy.FinancialRules.Tests.csproj')
 $manifest = Get-Content (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
-$checks['Prior acceptance is preserved separately'] = $manifest.d04Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.d05Status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED'
+$checks['Prior acceptance is preserved separately'] = $manifest.d04Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.d05Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED'
 $checks['No frontend scope added'] = $manifest.d05FrontendBusinessChange -ceq 'NONE_REQUIRED_BY_D05_FEATURE_SCOPE'
 
 # Behavioral claims come from the actual test-run evidence, never source-string presence.
@@ -118,7 +120,7 @@ $failed = @($checks.Values | Where-Object { -not $_ })
 $evidenceRoot = Join-Path $RepositoryRoot '.artifacts/d05'
 New-Item -ItemType Directory -Path $evidenceRoot -Force | Out-Null
 [ordered]@{
-    deliverable='MWP-03-D05';status='CANDIDATE_PENDING_CTO_REVIEW';evidenceLevel='SIMULATOR'
+    deliverable='MWP-03-D05';status='ACCEPTED_COMPLETE';evidenceLevel='SIMULATOR';mergeAuthorization='NOT_AUTHORIZED'
     sourceCommit=(& git -C $RepositoryRoot rev-parse HEAD).Trim()
     behavior=$behavior;checks=$checks;contractEvidence=$contracts
     testEvidence=if(Test-Path $trxPath){[ordered]@{path='.artifacts/tests/Monergy.FinancialRules.Tests.trx';sha256=(Get-FileHash $trxPath -Algorithm SHA256).Hash;total=[int]$counters.total;passed=[int]$counters.passed}}else{$null}

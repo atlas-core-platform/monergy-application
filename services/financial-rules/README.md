@@ -1,6 +1,7 @@
-# Financial Rules — MWP-03-D05 candidate
+# Financial Rules — MWP-03-D05 accepted at SIMULATOR
 
-Six READY Features, CID-037–CID-041, SIMULATOR only; pending CTO review.
+Six Features and CID-037–CID-041 accepted at SIMULATOR. Application acceptance
+preparation does not authorize merge, architecture closure, publication or deployment.
 Financial Profile remains the authoritative owner of inputs and provenance.
 Rules owns immutable calculations, captured input lineage and outcome decisions.
 Audit owns separate append-only evidence.

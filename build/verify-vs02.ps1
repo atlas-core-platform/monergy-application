@@ -151,7 +151,7 @@ Add-Check 'Contract security context' ($contractTypesText.Contains('TrustedSecur
 $catalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 $candidateServices = @($catalog.services | Where-Object status -ceq 'VS02_IMPLEMENTATION_CANDIDATE')
 Add-Check 'Service catalog reviewed set' (Test-ExactSet @($candidateServices.id) $expectedServiceIds) 'Exactly five reviewed D03 candidate boundaries'
-Add-Check 'No unrelated service implementation' (@($catalog.services | Where-Object status -ceq 'TOOLCHAIN_SCAFFOLD').Count -eq 6 -and @($catalog.services | Where-Object { $_.id -ceq 'financial-rules' -and $_.status -ceq 'D05_IMPLEMENTATION_CANDIDATE' }).Count -eq 1) 'Six scaffolds plus separately authorized D05 Rules; D03 Feature ownership unchanged'
+Add-Check 'No unrelated service implementation' (@($catalog.services | Where-Object status -ceq 'TOOLCHAIN_SCAFFOLD').Count -eq 6 -and @($catalog.services | Where-Object { $_.id -ceq 'financial-rules' -and $_.status -ceq 'D05_IMPLEMENTATION_ACCEPTED_SIMULATOR' }).Count -eq 1) 'Six scaffolds plus separately accepted D05 Rules; D03 Feature ownership unchanged'
 $catalogFeatures = @($catalog.services.featureIds | Where-Object { $_ })
 Add-Check 'Service catalog Feature coverage' (Test-ExactSet $catalogFeatures $expectedFeatures) '8/8 Features assigned once'
 

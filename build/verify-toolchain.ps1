@@ -123,7 +123,7 @@ $catalogStateValid = @($catalog.services | Where-Object {
         $_.status -cne 'VS02_IMPLEMENTATION_CANDIDATE' -or
         $_.featureImplementation -notin @('IMPLEMENTATION_CANDIDATE', 'SUPPORTING_BOUNDARY')
     } elseif ($_.id -ceq 'financial-rules') {
-        $_.status -cne 'D05_IMPLEMENTATION_CANDIDATE' -or $_.d05Status -cne 'IMPLEMENTATION_CANDIDATE_SIMULATOR'
+        $_.status -cne 'D05_IMPLEMENTATION_ACCEPTED_SIMULATOR' -or $_.d05Status -cne 'IMPLEMENTATION_ACCEPTED_SIMULATOR'
     } else {
         $_.status -cne 'TOOLCHAIN_SCAFFOLD' -or $_.featureImplementation -cne 'NONE'
     }
