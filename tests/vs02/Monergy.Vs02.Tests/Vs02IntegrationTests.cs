@@ -94,7 +94,10 @@ public sealed class Vs02IntegrationTests
         Assert.All(normalized.Data!.Facts, fact => Assert.True(fact.Created));
         foreach (var source in financialRepository.DrainOutbox())
         {
-            await ConsumeAsync(audit, source);
+            if (source is not DomainEvent<FinancialProfileChangedPayload>)
+            {
+                await ConsumeAsync(audit, source);
+            }
         }
 
         var provenanceId = normalized.Data.Facts[0].FinancialProvenanceId;

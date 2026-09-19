@@ -59,8 +59,8 @@
       "category": "Contract compatibility",
       "realization": "IMPLEMENTED_EXECUTABLE",
       "result": "PASS",
-      "command": "./build/Invoke-Toolchain.ps1 -Task Test; D03Verification",
-      "scope": "Executed producer/consumer and serialization compatibility for the exact fourteen VS-02 contracts"
+      "command": "./build/Invoke-Toolchain.ps1 -Task Test; D03Verification; D04Verification",
+      "scope": "Executed producer/consumer and serialization compatibility for the exact fourteen VS-02 contracts plus the separate exact seven D04 Financial Profile contracts"
     },
     {
       "id": "CG-08",
@@ -91,8 +91,8 @@
       "category": "Integration verification",
       "realization": "IMPLEMENTED_EXECUTABLE",
       "result": "PASS",
-      "command": "./build/Invoke-Toolchain.ps1 -Task Test; BrowserTest; D03Verification",
-      "scope": "Five-boundary VS-02 integration passes at D07 SIMULATOR level using LOCAL/CI reference adapters; this is not SG-02 readiness"
+      "command": "./build/Invoke-Toolchain.ps1 -Task Test; BrowserTest; D03Verification; D04Verification",
+      "scope": "Five-boundary VS-02 and D04 Financial Profile authority integration pass at D07 SIMULATOR level using LOCAL/CI reference adapters; this is not SG-02 readiness"
     }
   ]
 }

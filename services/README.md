@@ -19,3 +19,11 @@ database technology, schema, migration, shared migration authority, or
 application-startup migration behavior. Its in-memory repositories, fixture
 extractor and append-only audit store are non-production reference adapters
 guarded to LOCAL/CI execution zones.
+
+D04 expands only Financial Profile Service and the already-governed Audit
+consumer. Financial Profile now owns provider-neutral current profile/fact
+queries, thirteen child financial-object categories, explicit revisions,
+immutable provenance history, idempotent normalization and CID-034–CID-036
+reference outbox events. Audit remains append-only and consumes only its
+canonical CID-034/CID-035 event families. No service imports another service
+implementation.

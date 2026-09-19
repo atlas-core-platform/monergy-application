@@ -9,6 +9,12 @@ OCI packaging, SBOM, vulnerability and secret scans, candidate release-manifest
 generation, and D01/D02 verification. `Invoke-Bootstrap.ps1` is a compatibility
 facade for accepted D01 tasks.
 
+D03 and D04 add their independent deterministic verifier tasks. D04 reads
+`governance/d04-scope-lock.json`, checks exact Feature/contract/control IDs,
+provider neutrality, reference-adapter restrictions, runtime realization,
+permanent tests and truthful candidate lifecycle. Both verifiers include
+negative self-tests.
+
 `hosted-oci-evidence.ps1` is the non-publishing Linux evidence path. For each
 of the twelve service artifacts it creates a Docker archive, records the
 content-addressed image identity and archive hash, generates a CycloneDX image

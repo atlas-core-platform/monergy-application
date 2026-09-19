@@ -12,3 +12,9 @@ type.
 The shared envelope carries trusted actor, workload, authorization, purpose,
 customer, correlation, causation and idempotency context. Provider payloads and
 provider-specific types are excluded.
+
+MWP-03-D04 adds a separate `D04ContractCatalog` and
+`schemas/financial-profile-authority.schema.json` for exactly CID-030 through
+CID-036. Contract version remains `1.0.0`. The accepted fourteen-contract D03
+catalog/schema is intentionally unchanged so D03 remains independently
+regression-verifiable.

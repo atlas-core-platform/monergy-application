@@ -59,6 +59,16 @@
         "M2-WS03-E03-F03",
         "M2-WS04-E03-F01",
         "M2-WS04-E03-F02"
+      ],
+      "d04Status": "IMPLEMENTATION_CANDIDATE",
+      "d04FeatureIds": [
+        "M2-WS04-E01-F01",
+        "M2-WS04-E01-F02",
+        "M2-WS04-E01-F03",
+        "M2-WS04-E02-F01",
+        "M2-WS04-E02-F02",
+        "M2-WS04-E02-F03",
+        "M2-WS04-E03-F03"
       ]
     },
     {
@@ -113,7 +123,9 @@
       "primaryHost": "WORKER",
       "status": "VS02_IMPLEMENTATION_CANDIDATE",
       "featureImplementation": "SUPPORTING_BOUNDARY",
-      "featureIds": []
+      "featureIds": [],
+      "d04Status": "GOVERNED_AUDIT_PARTICIPANT",
+      "d04FeatureIds": []
     }
   ]
 }
