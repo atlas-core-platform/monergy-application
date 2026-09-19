@@ -7,6 +7,7 @@ on:
       - delivery/mwp03-d02-product-technology-toolchain
       - delivery/mwp03-d03-vs02-evidence-financial-truth
       - delivery/mwp03-d04-financial-profile-authority-expansion
+      - delivery/mwp03-d05-financial-rules-calculation-lineage
   pull_request:
   workflow_dispatch:
 
@@ -20,7 +21,7 @@ concurrency:
 
 jobs:
   toolchain:
-    name: Verify D01-D04 controlled implementation
+    name: Verify D01-D05 controlled implementation
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -136,14 +137,21 @@ jobs:
 
       - name: Preserve raw machine-readable evidence
         if: always()
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task D05Verification
+
+      - name: Upload raw machine-readable evidence
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: d04-financial-profile-authority-evidence-${{ github.run_id }}
+          name: d05-financial-rules-lineage-evidence-${{ github.run_id }}
           path: |
             .artifacts/components/
             .artifacts/provenance/
             .artifacts/release/
             .artifacts/security/
+            .artifacts/tests/
+            .artifacts/d05/
             .artifacts/oci/images.json
             .artifacts/oci/evidence-matrix.json
             .artifacts/oci/sboms/

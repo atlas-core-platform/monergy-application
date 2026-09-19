@@ -5,5 +5,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+    <ProjectReference Include="../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
   </ItemGroup>
 </Project>

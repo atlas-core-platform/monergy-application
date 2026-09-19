@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D04 Accepted
+# Monergy Application Repository Structure — D04 Accepted / D05 Candidate
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -54,6 +54,19 @@ D04 adds without changing the six-area topology:
   security findings and unchanged stage gates.
 
 D02 assets retained include:
+
+## D05 candidate additions
+
+- `services/financial-rules/Domain/EngineeringRules.cs`: typed engineering fixtures, not client methodology.
+- `services/financial-rules/Application/`: rule/input/access/persistence ports and owner-controlled execution, queries and historical reproduction.
+- `services/financial-rules/Infrastructure/`: LOCAL/CI-only atomic in-memory repository, immutable registry, explicit synthetic policy grants, governed Financial Profile transport and post-commit outbox dispatch.
+- `FinancialRulesRegistration.cs` and `FinancialRulesEndpoints.cs`: gated composition and CID-037–CID-039 endpoints.
+- `contracts/Monergy.Contracts/FinancialRulesContracts.cs` and `contracts/schemas/financial-rules.schema.json`: separate five-contract D05 surface.
+- `tests/financial-rules/Monergy.FinancialRules.Tests/`: owned behavior, contract and actual-owner lineage evidence; no test moved out of D03/D04.
+- `build/governance/d05-scope-lock.json` and `build/verify-financial-rules.ps1`: bounded scope and candidate verifier.
+- `services/financial-rules/README.md`: reference execution instructions and limits.
+
+## Retained D02 assets
 
 - `.dockerignore` for the controlled OCI build context;
 - exact .NET/Node/pnpm/package pins and dependency locks at the root;

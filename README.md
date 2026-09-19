@@ -9,7 +9,9 @@ and CI / EPHEMERAL execution.
 
 ## Current state
 
-- Status: MWP-03-D04 Accepted / Complete
+- Accepted foundation: MWP-03-D03 and MWP-03-D04 Accepted / Complete at SIMULATOR
+- Active candidate: MWP-03-D05 Deterministic Financial Rules & Calculation Lineage, pending CTO review; six READY Features and CID-037–CID-041
+- D05 frontend business change: NONE REQUIRED BY D05 FEATURE SCOPE
 - Architecture basis: Monergy Architecture Baseline v1.0
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Backend: .NET SDK 10.0.401, .NET runtime 10.0.12, C# 14, ASP.NET Core and
@@ -18,7 +20,7 @@ and CI / EPHEMERAL execution.
   Vite 8.3.0, Ant Design 6.6.3 and Tailwind CSS 4.3.3
 - Hosted repository: private GitHub repository at
   `https://github.com/atlas-core-platform/monergy-application`
-- Hosted CI: GitHub Actions configured for D01-D04 gates and evidence
+- Hosted CI: GitHub Actions configured for D01-D05 gates and evidence
 - Governance: GitHub Free exception accepted; branch protection is
   `NOT_IMPLEMENTED — GITHUB FREE PLAN LIMITATION`; CODEOWNERS is advisory and CI
   flags direct pushes to `main`
@@ -46,7 +48,7 @@ The pre-existing `Monergy/Application/monergy-poc` and `Prototype` folders are
 outside this repository and are intentionally untouched. They are not treated as
 accepted implementation inputs.
 
-## D04 verification
+## Candidate verification
 
 Run from the repository root:
 
@@ -56,7 +58,7 @@ Run from the repository root:
 
 The task surface performs locked restore, formatting, lint, strict type checks,
 build, tests, security evidence, packaging, acceptance-evidence manifest checks,
-and D01/D02/D03/D04 verification. Generated evidence stays under ignored `.artifacts/`. OCI
+and D01/D02/D03/D04/D05 verification. Generated evidence stays under ignored `.artifacts/`. OCI
 packaging is `BLOCKED`, not `PASS`, when a Linux Docker engine is unavailable.
 The hosted workflow supplies the approved Linux evidence path: it builds all
 twelve images without pushing, records image digests, generates image CycloneDX

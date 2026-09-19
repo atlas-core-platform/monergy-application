@@ -1,0 +1,645 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D05",
+  "title": "Deterministic Financial Rules & Calculation Lineage",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "evidenceLevel": "SIMULATOR_CANDIDATE",
+  "startingCommits": {
+    "application": "9aae295846f0dd1ca01f9d7f99f0233cd53c7626",
+    "architecture": "866c05122a0823d38dcaf243d3164b5b2b0947d9",
+    "architectureRequirements": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+  },
+  "preflight": {
+    "fetches": "SUCCESS",
+    "architectureBaseDeviation": "User authorized updated main; only additional D04 CTO acknowledgement changes tree compared with accepted requirements baseline.",
+    "suppliedSource": "Existing untracked CTO commentary preserved separately; complete downloaded authorization retained as governed source.",
+    "preservedStash": "8667213f8630eb305b94a9546fb3adf361d6f9c4"
+  },
+  "features": [
+    {
+      "id": "M2-WS05-E01-F01",
+      "name": "Rule definition & version identity",
+      "owner": "Financial Rules Service",
+      "readiness": "READY",
+      "status": "IMPLEMENTATION_CANDIDATE",
+      "acceptance": "Each calculation rule has immutable/versioned identity.",
+      "contracts": ["INTERNAL_ONLY"]
+    },
+    {
+      "id": "M2-WS05-E01-F02",
+      "name": "Deterministic calculation executor",
+      "owner": "Financial Rules Service",
+      "readiness": "READY",
+      "status": "IMPLEMENTATION_CANDIDATE",
+      "acceptance": "Same rule version plus same authoritative inputs produces the same result.",
+      "contracts": ["CID-037"]
+    },
+    {
+      "id": "M2-WS05-E01-F03",
+      "name": "Rule verification harness",
+      "owner": "Financial Rules Service",
+      "readiness": "READY",
+      "status": "IMPLEMENTATION_CANDIDATE",
+      "acceptance": "Rules support automated example, boundary and regression verification.",
+      "contracts": ["INTERNAL_ONLY"]
+    },
+    {
+      "id": "M2-WS05-E02-F01",
+      "name": "Calculation result persistence",
+      "owner": "Financial Rules Service",
+      "readiness": "READY",
+      "status": "IMPLEMENTATION_CANDIDATE",
+      "acceptance": "Result records retain calculation and rule-version identity.",
+      "contracts": ["CID-037", "CID-038", "CID-040", "CID-041"]
+    },
+    {
+      "id": "M2-WS05-E02-F02",
+      "name": "Input and provenance lineage",
+      "owner": "Financial Rules Service",
+      "readiness": "READY",
+      "status": "IMPLEMENTATION_CANDIDATE",
+      "acceptance": "Result can explain authoritative inputs and their evidence provenance.",
+      "contracts": ["CID-033", "CID-038", "CID-039"]
+    },
+    {
+      "id": "M2-WS05-E02-F03",
+      "name": "Historical reproducibility & explanation",
+      "owner": "Financial Rules Service",
+      "readiness": "READY",
+      "status": "IMPLEMENTATION_CANDIDATE",
+      "acceptance": "Historical result remains explainable after newer rule versions are released.",
+      "contracts": ["CID-038", "CID-039"]
+    }
+  ],
+  "contracts": [
+    {
+      "id": "CID-037",
+      "name": "ExecuteCalculation",
+      "type": "COMMAND",
+      "owner": "Financial Rules Service",
+      "version": "1.0.0",
+      "direction": "Reporting/AI caller -> Financial Rules responder",
+      "consumers": ["Reporting Service", "AI Intelligence Service"],
+      "input": "Customer, rule identity/version, named authoritative fact identifiers and optional expected revisions; never caller values/provenance",
+      "output": "Immutable calculation result, rule/input lineage and outcome",
+      "idempotency": "IDEMPOTENCY_KEY_REQUIRED",
+      "authorization": "Trusted actor/workload/customer/purpose and current owner policy; applicable current consent; deny unknown context",
+      "errors": [
+        "VALIDATION_ERROR",
+        "AUTHENTICATION_REQUIRED",
+        "ACCESS_DENIED",
+        "CONSENT_REQUIRED",
+        "CONSENT_EXPIRED",
+        "CONSENT_REVOKED",
+        "NOT_FOUND",
+        "CONFLICT",
+        "PRECONDITION_FAILED",
+        "DEPENDENCY_FAILURE",
+        "PROCESSING_FAILED",
+        "TEMPORARILY_UNAVAILABLE",
+        "UNSUPPORTED_OPERATION"
+      ],
+      "lineage": "Exact rule/version/implementation, consumed fact revisions, immutable Financial Provenance and evidence references, result, correlation/causation and event linkage"
+    },
+    {
+      "id": "CID-038",
+      "name": "GetCalculationResult",
+      "type": "QUERY",
+      "owner": "Financial Rules Service",
+      "version": "1.0.0",
+      "direction": "Reporting/AI caller -> Financial Rules responder",
+      "consumers": ["Reporting Service", "AI Intelligence Service"],
+      "input": "Authorized calculation and customer identity",
+      "output": "Immutable calculation result and versioned input lineage",
+      "idempotency": "READ_ONLY",
+      "authorization": "Trusted actor/workload/customer/purpose and current owner policy; applicable current consent; deny unknown context",
+      "errors": [
+        "VALIDATION_ERROR",
+        "AUTHENTICATION_REQUIRED",
+        "ACCESS_DENIED",
+        "CONSENT_REQUIRED",
+        "CONSENT_EXPIRED",
+        "CONSENT_REVOKED",
+        "NOT_FOUND",
+        "CONFLICT",
+        "PRECONDITION_FAILED",
+        "DEPENDENCY_FAILURE",
+        "PROCESSING_FAILED",
+        "TEMPORARILY_UNAVAILABLE",
+        "UNSUPPORTED_OPERATION"
+      ],
+      "lineage": "Exact rule/version/implementation, consumed fact revisions, immutable Financial Provenance and evidence references, result, correlation/causation and event linkage"
+    },
+    {
+      "id": "CID-039",
+      "name": "ExplainCalculation",
+      "type": "QUERY",
+      "owner": "Financial Rules Service",
+      "version": "1.0.0",
+      "direction": "Reporting/AI caller -> Financial Rules responder",
+      "consumers": ["Reporting Service", "AI Intelligence Service"],
+      "input": "Authorized calculation and customer identity",
+      "output": "Recorded rule, actual operations and authorized input lineage",
+      "idempotency": "READ_ONLY",
+      "authorization": "Trusted actor/workload/customer/purpose and current owner policy; applicable current consent; deny unknown context",
+      "errors": [
+        "VALIDATION_ERROR",
+        "AUTHENTICATION_REQUIRED",
+        "ACCESS_DENIED",
+        "CONSENT_REQUIRED",
+        "CONSENT_EXPIRED",
+        "CONSENT_REVOKED",
+        "NOT_FOUND",
+        "CONFLICT",
+        "PRECONDITION_FAILED",
+        "DEPENDENCY_FAILURE",
+        "PROCESSING_FAILED",
+        "TEMPORARILY_UNAVAILABLE",
+        "UNSUPPORTED_OPERATION"
+      ],
+      "lineage": "Exact rule/version/implementation, consumed fact revisions, immutable Financial Provenance and evidence references, result, correlation/causation and event linkage"
+    },
+    {
+      "id": "CID-040",
+      "name": "CalculationCompleted",
+      "type": "EVENT",
+      "owner": "Financial Rules Service",
+      "version": "1.0.0",
+      "direction": "Financial Rules producer -> Reporting/Search/Audit consumers",
+      "consumers": ["Reporting Service", "Search & Retrieval Service", "Audit Service"],
+      "input": "Application-owned committed execution outcome",
+      "output": "Identifier-only calculation/lineage, rule-version and classified outcome references",
+      "idempotency": "IMMUTABLE_REPLAY_SAFE",
+      "authorization": "Trusted actor/workload/customer/purpose and current owner policy; applicable current consent; deny unknown context",
+      "errors": [
+        "VALIDATION_ERROR",
+        "AUTHENTICATION_REQUIRED",
+        "ACCESS_DENIED",
+        "CONSENT_REQUIRED",
+        "CONSENT_EXPIRED",
+        "CONSENT_REVOKED",
+        "NOT_FOUND",
+        "CONFLICT",
+        "PRECONDITION_FAILED",
+        "DEPENDENCY_FAILURE",
+        "PROCESSING_FAILED",
+        "TEMPORARILY_UNAVAILABLE",
+        "UNSUPPORTED_OPERATION"
+      ],
+      "lineage": "Exact rule/version/implementation, consumed fact revisions, immutable Financial Provenance and evidence references, result, correlation/causation and event linkage"
+    },
+    {
+      "id": "CID-041",
+      "name": "CalculationFailed",
+      "type": "EVENT",
+      "owner": "Financial Rules Service",
+      "version": "1.0.0",
+      "direction": "Financial Rules producer -> Reporting/Audit consumers",
+      "consumers": ["Reporting Service", "Audit Service"],
+      "input": "Application-owned committed execution outcome",
+      "output": "Identifier-only calculation/lineage, rule-version and classified outcome references",
+      "idempotency": "IMMUTABLE_REPLAY_SAFE",
+      "authorization": "Trusted actor/workload/customer/purpose and current owner policy; applicable current consent; deny unknown context",
+      "errors": [
+        "VALIDATION_ERROR",
+        "AUTHENTICATION_REQUIRED",
+        "ACCESS_DENIED",
+        "CONSENT_REQUIRED",
+        "CONSENT_EXPIRED",
+        "CONSENT_REVOKED",
+        "NOT_FOUND",
+        "CONFLICT",
+        "PRECONDITION_FAILED",
+        "DEPENDENCY_FAILURE",
+        "PROCESSING_FAILED",
+        "TEMPORARILY_UNAVAILABLE",
+        "UNSUPPORTED_OPERATION"
+      ],
+      "lineage": "Exact rule/version/implementation, consumed fact revisions, immutable Financial Provenance and evidence references, result, correlation/causation and event linkage"
+    }
+  ],
+  "consumedContracts": [
+    {
+      "id": "CID-032",
+      "name": "GetFinancialFact",
+      "owner": "Financial Profile Service",
+      "direction": "Financial Rules caller -> Financial Profile responder",
+      "purpose": "Read exact returned current revision; expected revision is a Rules-side precondition, not a changed Profile API"
+    },
+    {
+      "id": "CID-033",
+      "name": "GetFinancialProvenance",
+      "owner": "Financial Profile Service",
+      "direction": "Financial Rules caller -> Financial Profile responder",
+      "purpose": "Authorize immutable provenance and verify fact/customer association at execution and historical read"
+    }
+  ],
+  "regressionContracts": ["CID-030", "CID-031", "CID-034", "CID-035", "CID-036"],
+  "harnessSupportingContracts": [
+    "CID-020",
+    "CID-022",
+    "CID-023",
+    "CID-024",
+    "CID-025",
+    "CID-027",
+    "CID-028",
+    "CID-031",
+    "CID-055",
+    "CID-057"
+  ],
+  "ownedObjects": ["Financial Calculation", "Calculation Lineage", "Rule definition/version"],
+  "consumedObjects": ["Normalized Financial Fact", "Financial Provenance"],
+  "supportingOwners": {
+    "Financial Profile Service": "Financial facts and provenance",
+    "Audit Service": "Audit Event"
+  },
+  "applicableControls": {
+    "dp": [
+      "DP-01",
+      "DP-02",
+      "DP-03",
+      "DP-04",
+      "DP-05",
+      "DP-06",
+      "DP-07",
+      "DP-08",
+      "DP-09",
+      "DP-10",
+      "DP-11",
+      "DP-12",
+      "DP-13",
+      "DP-14",
+      "DP-17",
+      "DP-18",
+      "DP-19",
+      "DP-24",
+      "DP-25",
+      "DP-27",
+      "DP-28",
+      "DP-29",
+      "DP-30",
+      "DP-31",
+      "DP-32",
+      "DP-33",
+      "DP-34",
+      "DP-35",
+      "DP-36",
+      "DP-37",
+      "DP-39",
+      "DP-40",
+      "DP-41",
+      "DP-42",
+      "DP-43",
+      "DP-44",
+      "DP-45"
+    ],
+    "ep": [
+      "EP-01",
+      "EP-02",
+      "EP-03",
+      "EP-04",
+      "EP-05",
+      "EP-06",
+      "EP-07",
+      "EP-08",
+      "EP-09",
+      "EP-10",
+      "EP-11",
+      "EP-12",
+      "EP-13",
+      "EP-14",
+      "EP-15",
+      "EP-16",
+      "EP-17",
+      "EP-18",
+      "EP-19",
+      "EP-20",
+      "EP-21",
+      "EP-22",
+      "EP-27",
+      "EP-28",
+      "EP-29",
+      "EP-30",
+      "EP-31",
+      "EP-32",
+      "EP-33",
+      "EP-34",
+      "EP-35",
+      "EP-36",
+      "EP-37",
+      "EP-38",
+      "EP-39",
+      "EP-40",
+      "EP-41",
+      "EP-42",
+      "EP-43",
+      "EP-44",
+      "EP-45",
+      "EP-46",
+      "EP-47",
+      "EP-48"
+    ],
+    "nfr": [
+      "NFR-01",
+      "NFR-02",
+      "NFR-03",
+      "NFR-04",
+      "NFR-05",
+      "NFR-06",
+      "NFR-07",
+      "NFR-08",
+      "NFR-09",
+      "NFR-10",
+      "NFR-11",
+      "NFR-12",
+      "NFR-17",
+      "NFR-18",
+      "NFR-19",
+      "NFR-24",
+      "NFR-27",
+      "NFR-29",
+      "NFR-30",
+      "NFR-31",
+      "NFR-32",
+      "NFR-34",
+      "NFR-35",
+      "NFR-36",
+      "NFR-37",
+      "NFR-38",
+      "NFR-39",
+      "NFR-40",
+      "NFR-41",
+      "NFR-42",
+      "NFR-43",
+      "NFR-44",
+      "NFR-45",
+      "NFR-46",
+      "NFR-47",
+      "NFR-48",
+      "NFR-49",
+      "NFR-50"
+    ],
+    "tq": [
+      "TQ-01",
+      "TQ-02",
+      "TQ-03",
+      "TQ-04",
+      "TQ-05",
+      "TQ-06",
+      "TQ-07",
+      "TQ-08",
+      "TQ-09",
+      "TQ-10",
+      "TQ-11",
+      "TQ-12",
+      "TQ-13",
+      "TQ-14",
+      "TQ-16",
+      "TQ-17",
+      "TQ-18",
+      "TQ-19",
+      "TQ-20",
+      "TQ-21",
+      "TQ-22",
+      "TQ-23",
+      "TQ-24",
+      "TQ-25",
+      "TQ-26",
+      "TQ-27",
+      "TQ-28",
+      "TQ-29",
+      "TQ-30",
+      "TQ-31",
+      "TQ-32",
+      "TQ-33",
+      "TQ-34",
+      "TQ-35",
+      "TQ-36",
+      "TQ-37",
+      "TQ-38",
+      "TQ-39",
+      "TQ-40",
+      "TQ-45",
+      "TQ-46",
+      "TQ-47",
+      "TQ-48"
+    ]
+  },
+  "controlApplicability": "D05 engineering applicability analysis over canonical invariants; includes design/deferred constraints, not a fabricated canonical Feature-to-invariant mapping or blanket PASS.",
+  "sourceLocators": [
+    {
+      "id": "D02",
+      "path": "docs/13-Implementation-Readiness/D02/Epic-and-Feature-Decomposition.md",
+      "section": "WS-05 E01/E02",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "VS-03",
+      "path": "docs/13-Implementation-Readiness/D02/Delivery-Slices.md",
+      "section": "VS-03",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D03",
+      "path": "docs/13-Implementation-Readiness/D03/Service-Contract-Matrix.md",
+      "section": "Applicable Rules/Profile families and common definitions",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D03",
+      "path": "docs/13-Implementation-Readiness/D03/API-Contract-Baseline.md",
+      "section": "Applicable Rules/Profile families and common definitions",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D03",
+      "path": "docs/13-Implementation-Readiness/D03/Command-and-Job-Contracts.md",
+      "section": "Applicable Rules/Profile families and common definitions",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D03",
+      "path": "docs/13-Implementation-Readiness/D03/Event-Contract-Baseline.md",
+      "section": "Applicable Rules/Profile families and common definitions",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D03",
+      "path": "docs/13-Implementation-Readiness/D03/Security-Context-Contract.md",
+      "section": "Applicable Rules/Profile families and common definitions",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D03",
+      "path": "docs/13-Implementation-Readiness/D03/Error-and-Idempotency-Model.md",
+      "section": "Applicable Rules/Profile families and common definitions",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D03",
+      "path": "docs/13-Implementation-Readiness/D03/Contract-Versioning.md",
+      "section": "Applicable Rules/Profile families and common definitions",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D03",
+      "path": "docs/13-Implementation-Readiness/D03/Provenance-Across-Contracts.md",
+      "section": "Applicable Rules/Profile families and common definitions",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D03",
+      "path": "docs/13-Implementation-Readiness/D03/D02-Feature-to-Contract-Traceability.md",
+      "section": "Applicable Rules/Profile families and common definitions",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D04",
+      "path": "docs/13-Implementation-Readiness/D04/README.md",
+      "section": "Financial Rules and applicable invariants",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D04",
+      "path": "docs/13-Implementation-Readiness/D04/Persistence-Ownership-Matrix.md",
+      "section": "Financial Rules and applicable invariants",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D04",
+      "path": "docs/13-Implementation-Readiness/D04/Transaction-and-Consistency-Model.md",
+      "section": "Financial Rules and applicable invariants",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D04",
+      "path": "docs/13-Implementation-Readiness/D04/Evidence-and-Provenance-Persistence.md",
+      "section": "Financial Rules and applicable invariants",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D04",
+      "path": "docs/13-Implementation-Readiness/D04/Migration-Concurrency-and-Reference-Model.md",
+      "section": "Financial Rules and applicable invariants",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D04",
+      "path": "docs/13-Implementation-Readiness/D04/D03-Contract-to-Persistence-Traceability.md",
+      "section": "Financial Rules and applicable invariants",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D04",
+      "path": "docs/13-Implementation-Readiness/D04/D02-Feature-to-Persistence-Traceability.md",
+      "section": "Financial Rules and applicable invariants",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "R3",
+      "path": "docs/04-Service-Architecture/R3/Service-Catalog.md",
+      "section": "Financial Rules Service",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "R4",
+      "path": "docs/05-Data-Evidence-Knowledge/R4/Calculation-Lineage.md",
+      "section": "Complete",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "R4",
+      "path": "docs/05-Data-Evidence-Knowledge/R4/Provenance-Model.md",
+      "section": "Calculation extension",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "R6",
+      "path": "docs/07-Security-Governance/R6/Authorization-and-Policy-Enforcement.md",
+      "section": "Protected operations",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "R6",
+      "path": "docs/07-Security-Governance/R6/Consent-Governance.md",
+      "section": "Protected operations",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "R6",
+      "path": "docs/07-Security-Governance/R6/Audit-Architecture.md",
+      "section": "Protected operations",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "EP",
+      "path": "docs/13-Implementation-Readiness/D05/README.md",
+      "section": "EP-01 through EP-48",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "NFR",
+      "path": "docs/13-Implementation-Readiness/D06/README.md",
+      "section": "NFR-01 through NFR-50",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "TQ",
+      "path": "docs/13-Implementation-Readiness/D07/Quality-Engineering-Taxonomy.md",
+      "section": "TQ-01 through TQ-48",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    },
+    {
+      "id": "D08",
+      "path": "docs/13-Implementation-Readiness/D08/Implementation-Start-Guardrails.md",
+      "section": "Complete",
+      "commit": "5e7fb1cc9a56cc7b0411640bbb63c13c02c83657"
+    }
+  ],
+  "newAuthorizationDecisions": [
+    "Six READY Features at SIMULATOR",
+    "Typed engineering fixture registry only; no client methodology",
+    "Retain exact historical input values needed for reproduction under Rules ownership",
+    "No frontend business change",
+    "Updated architecture branch base authorized by user"
+  ],
+  "fixtureChoices": {
+    "ids": ["engineering.sum", "engineering.ratio"],
+    "versions": ["1.0.0", "2.0.0"],
+    "numeric": "System.Decimal checked arithmetic; same explicit currency for all monetary inputs; ordinal role order; ratio explicitly rounds to 4 decimals ToEven as fixture-only semantics",
+    "inputBound": 32,
+    "definitionIdentity": "SHA-256 of canonical definition metadata and pinned typed implementation identity; immutable registration",
+    "reproduction": "Internal test operation reuses retained exact rule version and input values; reauthorizes original provenance; read-only and does not write a new result",
+    "snapshot": "Individual authoritative revisioned reads; no distributed snapshot guarantee"
+  },
+  "decisionDependencies": [
+    "OD-06",
+    "OD-07",
+    "OD-08",
+    "OD-09",
+    "OD-13",
+    "OD-14",
+    "C-06",
+    "C-07",
+    "C-10",
+    "C-22"
+  ],
+  "exclusions": [
+    "M2-WS05-E03-F01",
+    "M2-WS05-E03-F02",
+    "M2-WS05-E03-F03",
+    "M2-WS08-E01-F03",
+    "approved formulas or client rounding policy",
+    "full VS-03 completion",
+    "provider selection or physical persistence/messaging",
+    "UI business changes",
+    "R1-R7 changes or R8",
+    "acceptance, merge, tag, publication, deployment"
+  ],
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  }
+}

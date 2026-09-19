@@ -79,9 +79,10 @@ public sealed class BoundaryTests
 
             Assert.Contains(references, reference =>
                 reference?.EndsWith("shared/platform/Monergy.Platform/Monergy.Platform.csproj", StringComparison.OrdinalIgnoreCase) == true);
-            Assert.Equal(Vs02ServiceIds.Contains(serviceId, StringComparer.Ordinal) ? 2 : 1, references.Length);
+            var governedContracts = Vs02ServiceIds.Contains(serviceId, StringComparer.Ordinal) || serviceId == "financial-rules";
+            Assert.Equal(governedContracts ? 2 : 1, references.Length);
             Assert.Equal(
-                Vs02ServiceIds.Contains(serviceId, StringComparer.Ordinal),
+                governedContracts,
                 references.Any(reference =>
                     reference?.EndsWith("contracts/Monergy.Contracts/Monergy.Contracts.csproj", StringComparison.OrdinalIgnoreCase) == true));
             Assert.DoesNotContain(references, reference => reference?.Contains("services/", StringComparison.OrdinalIgnoreCase) == true);
@@ -153,6 +154,19 @@ public sealed class BoundaryTests
         Assert.Contains("profileChange.CreateEvent", infrastructure, StringComparison.Ordinal);
         Assert.DoesNotContain("CID-036", infrastructure, StringComparison.Ordinal);
         Assert.DoesNotContain("FinancialProfileChangedPayload", infrastructure, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FinancialRulesApplicationOwnsOutcomeSemanticsAndAdaptersHaveNoForeignRepositoryAccess()
+    {
+        var application = File.ReadAllText(Path.Combine(ServicesRoot, "financial-rules", "Application", "FinancialRulesApplication.cs"));
+        var infrastructure = string.Join('\n', Directory.GetFiles(Path.Combine(ServicesRoot, "financial-rules", "Infrastructure"), "*.cs").Select(File.ReadAllText));
+        Assert.Contains("CID-040", application, StringComparison.Ordinal);
+        Assert.Contains("CID-041", application, StringComparison.Ordinal);
+        Assert.DoesNotContain("new DomainEvent", infrastructure, StringComparison.Ordinal);
+        Assert.DoesNotContain("FinancialProfileRepository", infrastructure, StringComparison.Ordinal);
+        Assert.DoesNotContain("AuditRepository", infrastructure, StringComparison.Ordinal);
+        Assert.DoesNotContain("FinancialFactRecord", application + infrastructure, StringComparison.Ordinal);
     }
 
     private static XDocument LoadServiceProject(string serviceId) =>
