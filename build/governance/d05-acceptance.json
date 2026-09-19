@@ -6,6 +6,62 @@
   "crossRepositoryLifecycle": "PENDING_ARCHITECTURE_CLOSURE",
   "mergeAuthorization": "NOT_AUTHORIZED",
   "evidenceLevel": "SIMULATOR",
+  "closureReadiness": "CLOSURE_PENDING_REMEDIATION",
+  "lifecycleRemediation": {
+    "authority": "CTO AUTHORIZATION - D05 FRONTEND TEST-LIFECYCLE REMEDIATION ONLY",
+    "initialAcceptanceCommit": "e669bf248ac2a8f362c538cbddf2e2d5a65174ef",
+    "initialAcceptanceTree": "9d786d44684419495eaf481534cae646a3189d22",
+    "initialAcceptanceHostedResult": "FAIL",
+    "retainedFailedRuns": [35471222663, 35474527894, 35474529730],
+    "failedAcceptanceArtifacts": [
+      {
+        "run": 35474527894,
+        "id": 10593928406,
+        "name": "d05-financial-rules-lineage-evidence-35474527894",
+        "sha256": "e4cf27191849bb2a05a7ac6a2910744a4df39a4f397787a7b8404b2f41290cd8",
+        "result": "FAIL"
+      },
+      {
+        "run": 35474529730,
+        "id": 10594098190,
+        "name": "d05-financial-rules-lineage-evidence-35474529730",
+        "sha256": "31097309c15f0e41a6598ba872c24ed93896311bdc1b555a81e9a10ca3b39ddd",
+        "result": "FAIL"
+      }
+    ],
+    "diagnosis": "build/governance/d05-frontend-lifecycle.md",
+    "scope": "TEST_LIFECYCLE_AND_VERIFICATION_EVIDENCE_ONLY",
+    "productBehaviorOrDependencyChanges": false,
+    "probe": {
+      "platform": "linux",
+      "executions": 20,
+      "existingTestsPerExecution": 7,
+      "retry": 0,
+      "failurePolicy": "STOP_NO_RETRY_UNTIL_DIAGNOSED",
+      "purpose": "REMEDIATION_EVIDENCE_NOT_PRODUCT_NFR",
+      "result": "GENERATED_AT_EXACT_REMEDIATION_HEAD_NOT_PRECLAIMED"
+    },
+    "headEvidence": "Generated acceptance-verification.json and lifecycle probe summary identify the actual commit/tree; post-commit review evidence enumerates remediation commits. No self-referential hash or preclaimed hosted success.",
+    "changedPaths": [
+      ".github/workflows/bootstrap.yml",
+      "PROJECT-STRUCTURE.md",
+      "README.md",
+      "apps/customer-web/tests/FormLifecycle.diagnostic.tsx",
+      "apps/customer-web/tests/Vs02Experience.test.tsx",
+      "apps/customer-web/tests/componentLifecycle.ts",
+      "apps/customer-web/tests/lifecycle.config.ts",
+      "build/frontend-lifecycle-reporter.mjs",
+      "build/governance/d05-acceptance.json",
+      "build/governance/d05-frontend-lifecycle.md",
+      "build/probe-frontend-lifecycle.mjs",
+      "build/verify-d05-acceptance.ps1"
+    ],
+    "protectedGitTreeEntries": 227,
+    "protectedGitTreeSha256": "2E8961E749A8D42A2B6C841342B88F2505E9E129EB9C1F73989B64ABDAF20F4C",
+    "fingerprintMethod": "Initial e669bf acceptance tree excluding only original closure paths plus exact remediation paths, UTF-8 LF Git entries. Runtime must match; business code, dependencies, locks, contracts and rule fixtures remain protected.",
+    "architectureMutationAuthorized": false,
+    "newExactHeadApprovalRequired": true
+  },
   "approvalBasis": {
     "decision": "CTO_REVIEWED_CANDIDATE_ACCEPTED_APPLICATION_ONLY_PREPARATION",
     "source": "Supplied CTO REVIEW DECISION and explicit CTO APPLICATION-ONLY ACCEPTANCE preflight exception",

@@ -10,7 +10,7 @@ and CI / EPHEMERAL execution.
 ## Current state
 
 - Accepted foundation: MWP-03-D03 and MWP-03-D04 Accepted / Complete at SIMULATOR
-- MWP-03-D05: Accepted / Complete at SIMULATOR — six Features and CID-037–CID-041; application acceptance preparation only, exact-commit merge approval pending
+- MWP-03-D05: business implementation accepted at SIMULATOR — six Features and CID-037–CID-041; closure pending frontend test-lifecycle remediation verification and new exact-head approval
 - D05 frontend business change: NONE REQUIRED BY D05 FEATURE SCOPE
 - Architecture basis: Monergy Architecture Baseline v1.0
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
@@ -42,6 +42,13 @@ and CI / EPHEMERAL execution.
   reference adapters; no provider sandbox or Production compatibility claim
 
 ## D05 application acceptance boundary
+
+The initial acceptance head `e669bf248ac2a8f362c538cbddf2e2d5a65174ef` failed both
+fresh hosted workflows (`35474527894`, `35474529730`); those failures and earlier
+`35471222663` remain FAIL. [The bounded lifecycle remediation](build/governance/d05-frontend-lifecycle.md)
+changes test-clock ownership only, preserves business behavior/dependencies, and
+requires a fail-fast twenty-execution Linux probe before renewed full verification.
+Its native watcher-port diagnostic is retained separately, not claimed fixed.
 
 `build/governance/d05-acceptance.json` records the exact CTO-reviewed candidates,
 Feature/contract union, prior run/artifact identities and explicit limits. The

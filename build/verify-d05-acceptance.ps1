@@ -6,6 +6,7 @@ if (-not $RepositoryRoot) { $RepositoryRoot = Split-Path -Parent $PSScriptRoot }
 
 function Test-Sequence($Actual, $Expected) { ($Actual -join '|') -ceq ($Expected -join '|') }
 $expectedPaths = @('PROJECT-STRUCTURE.md','README.md','services/financial-rules/README.md','repository.manifest.json','services/catalog.json','build/governance/d05-acceptance.json','build/verify-d05-acceptance.ps1','build/verify-financial-rules.ps1','build/verify-bootstrap.ps1','build/verify-toolchain.ps1','build/verify-vs02.ps1','build/release/New-CandidateManifest.ps1','build/release/verify-candidate-manifest.ps1')
+$remediationPaths = @('.github/workflows/bootstrap.yml','PROJECT-STRUCTURE.md','README.md','apps/customer-web/tests/FormLifecycle.diagnostic.tsx','apps/customer-web/tests/Vs02Experience.test.tsx','apps/customer-web/tests/componentLifecycle.ts','apps/customer-web/tests/lifecycle.config.ts','build/frontend-lifecycle-reporter.mjs','build/governance/d05-acceptance.json','build/governance/d05-frontend-lifecycle.md','build/probe-frontend-lifecycle.mjs','build/verify-d05-acceptance.ps1')
 $scope = Get-Content (Join-Path $RepositoryRoot 'build/governance/d05-scope-lock.json') -Raw -Encoding utf8 | ConvertFrom-Json
 $d04 = Get-Content (Join-Path $RepositoryRoot 'build/governance/d04-acceptance.json') -Raw -Encoding utf8 | ConvertFrom-Json
 $prior = @(@($d04.contracts.acceptedD03) + @($d04.contracts.d04Applicable) | Sort-Object -Unique)
@@ -35,13 +36,17 @@ function Get-AcceptanceChecks($Value) {
     $policy = $Value.acceptanceVerificationPolicy
     $checks['Fresh new-head verification and explicit STOP controls required'] = $policy.freshLocalAndHostedRequired -and $policy.reviewedRunsAreNotNewHeadProof -and $policy.frontendTeardownRecurrence -ceq 'STOP_NO_RERUN_UNTIL_GREEN' -and $policy.vulnerabilityDifference -ceq 'STOP_REPORT_EXACT_DELTA' -and $Value.approvalBasis.newAcceptanceHeadRequiresExactCommitMergeApproval
     $checks['Closure-only file set and protected-tree identity fixed'] = (Test-Sequence $Value.closureBoundary.allowedPaths $expectedPaths) -and $Value.closureBoundary.protectedGitTreeEntries -eq 229 -and $Value.closureBoundary.protectedGitTreeSha256 -ceq '144F32789E1428D2D514AF00487940EAF5F5F7E8612EB2CACA61F762EEA82FC7' -and -not $Value.closureBoundary.businessContractFixtureDependencySecurityFrontendChanges
+    $remediation = $Value.lifecycleRemediation
+    $checks['Initial acceptance remains failed; all historical failures retained'] = $Value.closureReadiness -ceq 'CLOSURE_PENDING_REMEDIATION' -and $remediation.initialAcceptanceCommit -ceq 'e669bf248ac2a8f362c538cbddf2e2d5a65174ef' -and $remediation.initialAcceptanceTree -ceq '9d786d44684419495eaf481534cae646a3189d22' -and $remediation.initialAcceptanceHostedResult -ceq 'FAIL' -and (Test-Sequence $remediation.retainedFailedRuns @(35471222663,35474527894,35474529730)) -and (Test-Sequence $remediation.failedAcceptanceArtifacts.id @(10593928406,10594098190)) -and (Test-Sequence $remediation.failedAcceptanceArtifacts.sha256 @('e4cf27191849bb2a05a7ac6a2910744a4df39a4f397787a7b8404b2f41290cd8','31097309c15f0e41a6598ba872c24ed93896311bdc1b555a81e9a10ca3b39ddd')) -and @($remediation.failedAcceptanceArtifacts | Where-Object result -cne 'FAIL').Count -eq 0
+    $checks['Twenty-run probe is bounded evidence, not a retry or preclaimed pass'] = $remediation.probe.platform -ceq 'linux' -and $remediation.probe.executions -eq 20 -and $remediation.probe.existingTestsPerExecution -eq 7 -and $remediation.probe.retry -eq 0 -and $remediation.probe.failurePolicy -ceq 'STOP_NO_RETRY_UNTIL_DIAGNOSED' -and $remediation.probe.purpose -ceq 'REMEDIATION_EVIDENCE_NOT_PRODUCT_NFR' -and $remediation.probe.result -ceq 'GENERATED_AT_EXACT_REMEDIATION_HEAD_NOT_PRECLAIMED'
+    $checks['Remediation protects business/dependencies and requires new CTO approval'] = (Test-Sequence $remediation.changedPaths $remediationPaths) -and $remediation.protectedGitTreeEntries -eq 227 -and $remediation.protectedGitTreeSha256 -ceq '2E8961E749A8D42A2B6C841342B88F2505E9E129EB9C1F73989B64ABDAF20F4C' -and $remediation.scope -ceq 'TEST_LIFECYCLE_AND_VERIFICATION_EVIDENCE_ONLY' -and -not $remediation.productBehaviorOrDependencyChanges -and -not $remediation.architectureMutationAuthorized -and $remediation.newExactHeadApprovalRequired
     return $checks
 }
 
 if ($SelfTest) {
     $cases = [ordered]@{}
     $cases['valid acceptance'] = @((Get-AcceptanceChecks $record).Values | Where-Object { -not $_ }).Count -eq 0
-    foreach ($mutation in @('candidate','requirements','duplicate-feature','duplicate-contract','failed-run','artifact-digest','vulnerability-delta','fix-installed','gate','open-decision','publication','architecture-mutation','old-head-proof','protected-tree')) {
+    foreach ($mutation in @('candidate','requirements','duplicate-feature','duplicate-contract','failed-run','artifact-digest','vulnerability-delta','fix-installed','gate','open-decision','publication','architecture-mutation','old-head-proof','protected-tree','acceptance-failure','probe-retry','remediation-scope','remediation-tree')) {
         $copy = $record | ConvertTo-Json -Depth 30 | ConvertFrom-Json
         switch ($mutation) {
             'candidate' { $copy.approvedCandidates.application = 'unreviewed' }
@@ -58,6 +63,10 @@ if ($SelfTest) {
             'architecture-mutation' { $copy.preflightException.architectureMutationAuthorized = $true }
             'old-head-proof' { $copy.acceptanceVerificationPolicy.reviewedRunsAreNotNewHeadProof = $false }
             'protected-tree' { $copy.closureBoundary.protectedGitTreeSha256 = '0' * 64 }
+            'acceptance-failure' { $copy.lifecycleRemediation.initialAcceptanceHostedResult = 'PASS' }
+            'probe-retry' { $copy.lifecycleRemediation.probe.retry = 1 }
+            'remediation-scope' { $copy.lifecycleRemediation.productBehaviorOrDependencyChanges = $true }
+            'remediation-tree' { $copy.lifecycleRemediation.protectedGitTreeSha256 = '0' * 64 }
         }
         $cases["reject $mutation"] = @((Get-AcceptanceChecks $copy).Values | Where-Object { -not $_ }).Count -gt 0
     }
@@ -70,15 +79,15 @@ $checks = Get-AcceptanceChecks $record
 $manifest = Get-Content (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
 $service = (Get-Content (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json).services | Where-Object id -ceq 'financial-rules'
 $checks['Application lifecycle and Rules service catalog agree'] = $manifest.d05Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.d05FeatureState -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR_6_OF_6' -and $manifest.d05ContractState -ceq 'BEHAVIORAL_COMPATIBILITY_EVIDENCE_ACCEPTED_SIMULATOR_5_OF_5' -and $manifest.d05EvidenceLevel -ceq 'SIMULATOR_ACCEPTED' -and $service.status -ceq 'D05_IMPLEMENTATION_ACCEPTED_SIMULATOR' -and $service.featureImplementation -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR' -and $service.d05Status -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR' -and (Test-Sequence $service.d05FeatureIds $featureIds)
-$protected = @(& git -C $RepositoryRoot ls-tree -r HEAD | Where-Object { ($_ -split "`t",2)[1] -cnotin $expectedPaths })
+$protected = @(& git -C $RepositoryRoot ls-tree -r HEAD | Where-Object { ($_ -split "`t",2)[1] -cnotin @($expectedPaths + $remediationPaths) })
 if ($LASTEXITCODE -ne 0) { throw 'Cannot read committed application tree.' }
 $sha = [Security.Cryptography.SHA256]::Create()
 try { $fingerprint = ([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(($protected -join "`n") + "`n")))).Replace('-','') }
 finally { $sha.Dispose() }
-$checks['Reviewed business, contracts, fixtures, dependencies and tests unchanged'] = $protected.Count -eq $record.closureBoundary.protectedGitTreeEntries -and $fingerprint -ceq $record.closureBoundary.protectedGitTreeSha256
+$checks['Reviewed business, contracts, fixtures, dependencies and unrelated tests unchanged'] = $protected.Count -eq $record.lifecycleRemediation.protectedGitTreeEntries -and $fingerprint -ceq $record.lifecycleRemediation.protectedGitTreeSha256
 foreach ($check in $checks.GetEnumerator()) { Write-Output "[$(if($check.Value){'PASS'}else{'FAIL'})] $($check.Key)" }
 $out = Join-Path $RepositoryRoot '.artifacts/d05'
 New-Item -ItemType Directory -Path $out -Force | Out-Null
-[ordered]@{deliverable='MWP-03-D05';applicationLifecycle='ACCEPTED_COMPLETE';mergeAuthorization='NOT_AUTHORIZED';sourceCommit=(& git -C $RepositoryRoot rev-parse HEAD).Trim();sourceTree=(& git -C $RepositoryRoot rev-parse 'HEAD^{tree}').Trim();protectedTreeSha256=$fingerprint;checks=$checks;acceptanceRecordSha256=(Get-FileHash (Join-Path $RepositoryRoot 'build/governance/d05-acceptance.json') -Algorithm SHA256).Hash} | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $out 'acceptance-verification.json') -Encoding utf8
+[ordered]@{deliverable='MWP-03-D05';applicationLifecycle='ACCEPTED_COMPLETE';closureReadiness=$record.closureReadiness;initialAcceptanceCommit=$record.lifecycleRemediation.initialAcceptanceCommit;initialAcceptanceHostedResult='FAIL';retainedFailedRuns=$record.lifecycleRemediation.retainedFailedRuns;mergeAuthorization='NOT_AUTHORIZED';sourceCommit=(& git -C $RepositoryRoot rev-parse HEAD).Trim();sourceTree=(& git -C $RepositoryRoot rev-parse 'HEAD^{tree}').Trim();protectedTreeSha256=$fingerprint;checks=$checks;acceptanceRecordSha256=(Get-FileHash (Join-Path $RepositoryRoot 'build/governance/d05-acceptance.json') -Algorithm SHA256).Hash} | ConvertTo-Json -Depth 8 | Set-Content (Join-Path $out 'acceptance-verification.json') -Encoding utf8
 if (@($checks.Values | Where-Object { -not $_ }).Count) { throw 'D05 acceptance verification failed.' }
 Write-Output "D05 acceptance verification passed: $($checks.Count)/$($checks.Count)."

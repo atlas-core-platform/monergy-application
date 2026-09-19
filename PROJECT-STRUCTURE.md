@@ -66,6 +66,10 @@ D02 assets retained include:
 - `build/governance/d05-scope-lock.json` and `build/verify-financial-rules.ps1`: unchanged reviewed candidate scope and live behavioral verifier.
 - `build/governance/d05-acceptance.json`: exact CTO-reviewed identities, accepted six Features/five new contracts, 22-contract program union, retained evidence, architecture dirty-file exception and unchanged readiness limits.
 - `build/verify-d05-acceptance.ps1`: acceptance-record/negative checks and immutable business-tree verification; no architecture repository mutation.
+- `build/governance/d05-frontend-lifecycle.md`: bounded closure-pending remediation diagnosis and retained failed evidence.
+- `apps/customer-web/tests/componentLifecycle.ts`: VS-02 test-owned clock cleanup, not product code.
+- `apps/customer-web/tests/FormLifecycle.diagnostic.tsx` and `tests/lifecycle.config.ts`: isolated before/after lifecycle diagnostic, separate from the seven-test frontend suite.
+- `build/probe-frontend-lifecycle.mjs` and `build/frontend-lifecycle-reporter.mjs`: fail-fast twenty-execution Linux remediation evidence; the D05 branch's workflow gates full CI on it without retries.
 - `services/financial-rules/README.md`: reference execution instructions and limits.
 
 ## Retained D02 assets
