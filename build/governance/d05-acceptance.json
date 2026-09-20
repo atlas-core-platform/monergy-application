@@ -62,6 +62,95 @@
     "architectureMutationAuthorized": false,
     "newExactHeadApprovalRequired": true
   },
+  "testRemediation": {
+    "authority": "CTO AUTHORIZATION - D05 EVIDENCE-ONLY ACCEPTANCE METADATA UPDATE",
+    "state": "ACCEPTED_FOR_CONTINUATION_NOT_MERGE",
+    "acceptedFrontend": {
+      "commit": "d6af418450aa2cd08b3a8901e7af387c1939ed58",
+      "tree": "7c33186a27193b97601e9b86c0e67c9bfe0b6919",
+      "status": "ACCEPTED",
+      "pushRun": 35475751887,
+      "pushResult": "PASS",
+      "prRun": 35475754194,
+      "prResult": "FAIL",
+      "failedArtifact": 10594370997,
+      "failedArtifactSha256": "9B2F9AC8457E784AED9F01388F313E20931A704975A5A227682B197319EFD200"
+    },
+    "commit": "02bc0123c8725a8e0a5b7fb2f10a5f657e798b3d",
+    "tree": "48e4145e5d1f2ceb0d676d89904c266356db2ee2",
+    "parent": "d6af418450aa2cd08b3a8901e7af387c1939ed58",
+    "sourceChange": {
+      "path": "tests/financial-rules/Monergy.FinancialRules.Tests/CalculationContractTests.cs",
+      "reviewedBlob": "b80e46a11d510a5228ebaa2c40e95c528c7ee44f",
+      "reviewedSha256": "9A63053B1A1B2D802A601CA89D32C53E191B14826F853A1844A44F593FC3CD79",
+      "authorizedBlob": "74bed03392fd99c3c74e4e9068ef0e94e0498962",
+      "authorizedSha256": "83E4FA035366F07A411379CA2A5E4031581BBEAF881734E22DF63C590E48816F",
+      "hashMethod": "SHA-256 over raw git cat-file blob bytes from the recorded committed tree, without text or newline conversion"
+    },
+    "defects": {
+      "original": "Raw numeric substring search across LifecycleSignal.ToString() falsely classified opaque IDs containing 125 as financial leakage.",
+      "firstCorrection": "Unsupported total-count assertion expected 6 while the valid scenario emitted 16, including Financial Profile reads.",
+      "finalCorrection": "Scenario-local structured semantic-field and property checks; required Financial Profile read, Financial Rules and Audit categories; no global record-count assumption; opaque IDs containing 125 allowed; protected financial payloads in semantic locations rejected.",
+      "failedDirectEvidence": {
+        "result": "FAIL",
+        "executed": 2,
+        "passed": 0,
+        "failed": 2,
+        "skipped": 0,
+        "expectedCount": 6,
+        "actualCount": 16,
+        "trxSha256": "949B7D9057BF731D21EB591F74C3686A103B3F88C69D93E30E14A30A310EA2E0"
+      }
+    },
+    "correctedSemantics": [
+      "SCENARIO_LOCAL_ALLOWED_SEMANTIC_CATEGORIES",
+      "REQUIRED_CATEGORIES_WITHOUT_TOTAL_COUNT",
+      "FINANCIAL_PROFILE_READS_PERMITTED",
+      "EXACT_LIFECYCLE_PROPERTIES_NO_FINANCIAL_PAYLOAD_FIELDS",
+      "OPAQUE_IDS_NOT_NUMERIC_SUBSTRING_TARGETS",
+      "NEGATIVE_FINANCIAL_PAYLOAD_FIXTURES_REJECTED"
+    ],
+    "verificationAtTestRemediation": {
+      "direct": "2/2 PASS",
+      "directTrxSha256": "CDBFC7E963F8AB3002E65DDA1E2EF7796146E2F16409FAB3AF914830F6DC16EF",
+      "privacyRegressions": "6/6 PASS",
+      "privacyTrxSha256": "1A0D078B2639243DEB9D4D293D9CC49E7BB452CEAFA235CA46735A6E4D13ADEE",
+      "stabilityExecutions": 20,
+      "casesPerExecution": 2,
+      "skipped": 0,
+      "retries": 0,
+      "stabilityResult": "PASS",
+      "stabilitySummarySha256": "352A97E023C37A8CD6736C7A76E99B33CD135A9C6C6BE66B9A4F4C6DFE7021A0",
+      "stabilityScope": "UNCHANGED_PRECOMMIT_WORKTREE_IDENTICAL_TO_COMMITTED_TEST_BLOB",
+      "purpose": "REMEDIATION_EVIDENCE_NOT_PRODUCT_NFR",
+      "dotnet": "145/145 PASS",
+      "frontend": "7/7 PASS",
+      "browser": "2/2 PASS",
+      "acceptanceVerifier": "16/17 FAIL_STALE_PROTECTED_TEST_FINGERPRINT",
+      "newHeadEvidence": "Fresh local and hosted evidence must identify the new governance commit/tree; historical results are not final-head proof."
+    },
+    "historicalOtherTrackedFiles": {
+      "observedEntries": 247,
+      "sha256": "380CD5D4CC040DC008CADAC4DDCD258A082099F13FBA62DE116E4D56ABBCC272",
+      "delta": 0,
+      "interpretation": "Evidence from d6af418 to 02bc012 excluding only the exact authorized test path; the verifier derives the protected set from those Git trees, not a timeless count."
+    },
+    "governanceUpdatePaths": [
+      "build/governance/d05-acceptance.json",
+      "build/verify-d05-acceptance.ps1"
+    ],
+    "protectedBoundary": "Require approved ancestry and exact test blob/SHA-256; compare every other current tracked entry with 02bc012 excluding only the two governance files. Reconstruct and verify the historical fingerprint using the exact reviewed test entry, never a blanket test exclusion.",
+    "shallowCheckoutPolicy": "If approved ancestry is unavailable in a shallow CI checkout, fetch only the current commit with depth 8 and no tags. Fail closed if the approved chain is still unavailable; do not change checkout, workflow or failure semantics.",
+    "historicalFailedRuns": [
+      { "id": 35471222663, "result": "FAIL" },
+      { "id": 35474527894, "result": "FAIL" },
+      { "id": 35474529730, "result": "FAIL" },
+      { "id": 35475754194, "result": "FAIL" }
+    ],
+    "arbitraryFutureTestChangesAllowed": false,
+    "architectureMutationAuthorized": false,
+    "newExactHeadApprovalRequired": true
+  },
   "approvalBasis": {
     "decision": "CTO_REVIEWED_CANDIDATE_ACCEPTED_APPLICATION_ONLY_PREPARATION",
     "source": "Supplied CTO REVIEW DECISION and explicit CTO APPLICATION-ONLY ACCEPTANCE preflight exception",
