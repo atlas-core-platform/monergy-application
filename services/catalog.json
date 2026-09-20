@@ -76,9 +76,18 @@
       "name": "Financial Rules Service",
       "artifact": "monergy-financial-rules",
       "primaryHost": "HTTP",
-      "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE",
-      "featureIds": []
+      "status": "D05_IMPLEMENTATION_ACCEPTED_SIMULATOR",
+      "featureImplementation": "IMPLEMENTATION_ACCEPTED_SIMULATOR",
+      "featureIds": [],
+      "d05Status": "IMPLEMENTATION_ACCEPTED_SIMULATOR",
+      "d05FeatureIds": [
+        "M2-WS05-E01-F01",
+        "M2-WS05-E01-F02",
+        "M2-WS05-E01-F03",
+        "M2-WS05-E02-F01",
+        "M2-WS05-E02-F02",
+        "M2-WS05-E02-F03"
+      ]
     },
     {
       "id": "search-retrieval",

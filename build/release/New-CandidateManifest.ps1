@@ -62,8 +62,10 @@ $components += [pscustomobject]@{
 
 $manifest = [ordered]@{
     schemaVersion = '1.0.0'
-    status = 'D04_ACCEPTANCE_EVIDENCE_NOT_A_RELEASE'
-    releaseIdentity = 'MWP-03-D04-financial-profile-authority-acceptance'
+    status = 'D05_ACCEPTED_SIMULATOR_EVIDENCE_NOT_A_RELEASE'
+    releaseIdentity = 'MWP-03-D05-financial-rules-calculation-lineage-acceptance'
+    acceptanceRecord = [ordered]@{ path = 'build/governance/d05-acceptance.json'; sha256 = Get-FileHashOrState (Join-Path $RepositoryRoot 'build/governance/d05-acceptance.json') }
+    mergeAuthorization = 'NOT_AUTHORIZED'
     repositoryCommit = $sourceRevision
     sourceTree = $sourceTree
     runtimeVersions = $versions
@@ -89,4 +91,4 @@ $manifest = [ordered]@{
     deployed = $false
 }
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $artifactRoot 'product-release-manifest.json') -Encoding utf8
-Write-Output 'D04 acceptance Product Release Manifest generated as evidence; it is not a release and was not published.'
+Write-Output 'D05 application acceptance Product Release Manifest generated as evidence; it is not a release, merge approval or publication.'

@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D04 Accepted
+# Monergy Application Repository Structure — D04/D05 Accepted at SIMULATOR
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -54,6 +54,25 @@ D04 adds without changing the six-area topology:
   security findings and unchanged stage gates.
 
 D02 assets retained include:
+
+## D05 implementation and application acceptance
+
+- `services/financial-rules/Domain/EngineeringRules.cs`: typed engineering fixtures, not client methodology.
+- `services/financial-rules/Application/`: rule/input/access/persistence ports and owner-controlled execution, queries and historical reproduction.
+- `services/financial-rules/Infrastructure/`: LOCAL/CI-only atomic in-memory repository, immutable registry, explicit synthetic policy grants, governed Financial Profile transport and post-commit outbox dispatch.
+- `FinancialRulesRegistration.cs` and `FinancialRulesEndpoints.cs`: gated composition and CID-037–CID-039 endpoints.
+- `contracts/Monergy.Contracts/FinancialRulesContracts.cs` and `contracts/schemas/financial-rules.schema.json`: separate five-contract D05 surface.
+- `tests/financial-rules/Monergy.FinancialRules.Tests/`: owned behavior, contract and actual-owner lineage evidence; no test moved out of D03/D04.
+- `build/governance/d05-scope-lock.json` and `build/verify-financial-rules.ps1`: unchanged reviewed candidate scope and live behavioral verifier.
+- `build/governance/d05-acceptance.json`: exact CTO-reviewed identities, accepted six Features/five new contracts, 22-contract program union, retained evidence, architecture dirty-file exception and unchanged readiness limits.
+- `build/verify-d05-acceptance.ps1`: acceptance-record/negative checks and immutable business-tree verification; no architecture repository mutation.
+- `build/governance/d05-frontend-lifecycle.md`: bounded closure-pending remediation diagnosis and retained failed evidence.
+- `apps/customer-web/tests/componentLifecycle.ts`: VS-02 test-owned clock cleanup, not product code.
+- `apps/customer-web/tests/FormLifecycle.diagnostic.tsx` and `tests/lifecycle.config.ts`: isolated before/after lifecycle diagnostic, separate from the seven-test frontend suite.
+- `build/probe-frontend-lifecycle.mjs` and `build/frontend-lifecycle-reporter.mjs`: fail-fast twenty-execution Linux remediation evidence; the D05 branch's workflow gates full CI on it without retries.
+- `services/financial-rules/README.md`: reference execution instructions and limits.
+
+## Retained D02 assets
 
 - `.dockerignore` for the controlled OCI build context;
 - exact .NET/Node/pnpm/package pins and dependency locks at the root;

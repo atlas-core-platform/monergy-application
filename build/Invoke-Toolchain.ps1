@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'Verify')]
+    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Verification', 'Verify')]
     [string]$Task = 'Verify',
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot)
 )
@@ -68,7 +68,8 @@ function Invoke-Task {
             Invoke-Checked { & $pnpm --dir $RepositoryRoot run build } 'Frontend production build failed.'
         }
         'Test' {
-            Invoke-Checked { & $dotnet test (Join-Path $RepositoryRoot 'Monergy.Application.slnx') --configuration Release --no-build } '.NET test suite failed.'
+            Invoke-Checked { & $dotnet test (Join-Path $RepositoryRoot 'Monergy.Application.slnx') --configuration Release --no-build --logger 'trx' --results-directory (Join-Path $RepositoryRoot '.artifacts/tests') } '.NET test suite failed.'
+            Invoke-Checked { & $dotnet test (Join-Path $RepositoryRoot 'tests/financial-rules/Monergy.FinancialRules.Tests/Monergy.FinancialRules.Tests.csproj') --configuration Release --no-build --logger 'trx;LogFileName=Monergy.FinancialRules.Tests.trx' --results-directory (Join-Path $RepositoryRoot '.artifacts/tests') } 'D05 named behavioral evidence failed.'
             Invoke-Checked { & $pnpm --dir $RepositoryRoot run test } 'Frontend component/accessibility tests failed.'
         }
         'ArchitectureTest' {
@@ -116,11 +117,15 @@ function Invoke-Task {
             & (Join-Path $RepositoryRoot 'build/verify-financial-profile-authority.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
             & (Join-Path $RepositoryRoot 'build/verify-financial-profile-authority.ps1') -RepositoryRoot $RepositoryRoot
         }
+        'D05Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-financial-rules.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+            & (Join-Path $RepositoryRoot 'build/verify-financial-rules.ps1') -RepositoryRoot $RepositoryRoot -RequireBehavior
+        }
     }
 }
 
 $taskOrder = if ($Task -ceq 'Verify') {
-    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification')
+    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Verification')
 } else { @($Task) }
 
 foreach ($current in $taskOrder) { Invoke-Task $current }

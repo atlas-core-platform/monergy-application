@@ -1,10 +1,11 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import Vs02Experience from '../src/vs02/Vs02Experience';
+import { finishComponentClock, startComponentClock } from './componentLifecycle';
 
 const completedResult = {
   runId: 'run-001',
@@ -43,9 +44,14 @@ function renderExperience() {
   );
 }
 
-afterEach(() => {
-  cleanup();
-  vi.unstubAllGlobals();
+beforeEach(startComponentClock);
+
+afterEach(async () => {
+  try {
+    await finishComponentClock();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 
 describe('VS-02 evidence-to-financial-truth experience', () => {
@@ -59,7 +65,7 @@ describe('VS-02 evidence-to-financial-truth experience', () => {
   });
 
   it('announces success and separates observations from authoritative facts', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(completedResult), {
         status: 200,
@@ -85,7 +91,7 @@ describe('VS-02 evidence-to-financial-truth experience', () => {
   });
 
   it('surfaces classified reference failures without presenting stale success', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue(
@@ -109,7 +115,7 @@ describe('VS-02 evidence-to-financial-truth experience', () => {
   });
 
   it('provides accessible validation feedback and no detectable critical violations', async () => {
-    const user = userEvent.setup();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const { container } = renderExperience();
     await user.clear(screen.getByLabelText('Customer ID'));
     await user.click(screen.getByRole('button', { name: 'Run reference flow' }));

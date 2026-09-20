@@ -122,11 +122,13 @@ $catalogStateValid = @($catalog.services | Where-Object {
     if ($_.id -in $d03Services) {
         $_.status -cne 'VS02_IMPLEMENTATION_CANDIDATE' -or
         $_.featureImplementation -notin @('IMPLEMENTATION_CANDIDATE', 'SUPPORTING_BOUNDARY')
+    } elseif ($_.id -ceq 'financial-rules') {
+        $_.status -cne 'D05_IMPLEMENTATION_ACCEPTED_SIMULATOR' -or $_.d05Status -cne 'IMPLEMENTATION_ACCEPTED_SIMULATOR'
     } else {
         $_.status -cne 'TOOLCHAIN_SCAFFOLD' -or $_.featureImplementation -cne 'NONE'
     }
 }).Count -eq 0
-Add-Check 'Controlled post-D02 service state' $catalogStateValid 'Five reviewed VS-02 candidate boundaries; seven unchanged toolchain scaffolds'
+Add-Check 'Controlled post-D02 service state' $catalogStateValid 'Five VS-02 participants plus authorized D05 Rules; six unchanged toolchain scaffolds'
 
 $hostSplitValid = $true
 $serviceReferenceValid = $true
@@ -140,25 +142,26 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
     $hostSplitValid = $hostSplitValid -and $project.Project.Sdk -ceq $entry.Value
     $references = @($project.Project.ItemGroup.ProjectReference | Where-Object { $_ })
     $referenceText = @($references | ForEach-Object { [string]$_.Include })
-    $expectedReferenceCount = if ($entry.Key -in $d03Services) { 2 } else { 1 }
+    $governedContractParticipant = $entry.Key -in $d03Services -or $entry.Key -ceq 'financial-rules'
+    $expectedReferenceCount = if ($governedContractParticipant) { 2 } else { 1 }
     $serviceReferenceValid = $serviceReferenceValid -and $references.Count -eq $expectedReferenceCount -and
         @($referenceText | Where-Object { $_ -match 'shared[\\/]platform[\\/]Monergy\.Platform' }).Count -eq 1 -and
         @($referenceText | Where-Object { $_ -match 'services[\\/]' }).Count -eq 0 -and
-        (($entry.Key -notin $d03Services) -or @($referenceText | Where-Object { $_ -match 'contracts[\\/]Monergy\.Contracts' }).Count -eq 1)
+        ((-not $governedContractParticipant) -or @($referenceText | Where-Object { $_ -match 'contracts[\\/]Monergy\.Contracts' }).Count -eq 1)
     $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $serviceRoot 'migrations') -File | Where-Object Name -cne '.gitkeep')
     $migrationOwnershipValid = $migrationOwnershipValid -and $migrationFiles.Count -eq 0
     $program = Get-Content -LiteralPath (Join-Path $serviceRoot 'Program.cs') -Raw
     if ($entry.Value -ceq 'Microsoft.NET.Sdk.Web') {
         $healthOnlyValid = $healthOnlyValid -and $program.Contains('MapHealthChecks') -and
-            (($entry.Key -in $d03Services) -or $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\(')
+            ($governedContractParticipant -or $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\(')
     } else {
         $healthOnlyValid = $healthOnlyValid -and $program.Contains('AddHostedService<StartupWorker>') -and $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\('
     }
 }
 Add-Check 'Evidence-based host split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 8 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 4) 'Eight HTTP hosts and four primary workers'
-Add-Check 'No service-to-service project references' $serviceReferenceValid 'Services reference only Monergy.Platform and, for exact VS-02 participants, Monergy.Contracts'
+Add-Check 'No service-to-service project references' $serviceReferenceValid 'Only Platform and Contracts for exact VS-02/D05 participants; service-to-service references forbidden'
 Add-Check 'Empty service-owned migrations' $migrationOwnershipValid '12 independent empty migration histories'
-Add-Check 'Controlled host scope' $healthOnlyValid 'Seven non-participants remain health/startup-only; VS-02 participants may expose governed contracts'
+Add-Check 'Controlled host scope' $healthOnlyValid 'Six non-participants remain health/startup-only; VS-02/D05 participants may expose governed contracts'
 
 $lockFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter 'packages.lock.json' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
 $projectFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })

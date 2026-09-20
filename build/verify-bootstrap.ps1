@@ -67,11 +67,13 @@ $serviceStateValid = @($serviceCatalog.services | Where-Object {
     if ($_.id -in $d03Services) {
         $_.status -cne 'VS02_IMPLEMENTATION_CANDIDATE' -or
         $_.featureImplementation -notin @('IMPLEMENTATION_CANDIDATE', 'SUPPORTING_BOUNDARY')
+    } elseif ($_.id -ceq 'financial-rules') {
+        $_.status -cne 'D05_IMPLEMENTATION_ACCEPTED_SIMULATOR' -or $_.d05Status -cne 'IMPLEMENTATION_ACCEPTED_SIMULATOR'
     } else {
         $_.status -notin @('RESERVED', 'TOOLCHAIN_SCAFFOLD') -or $_.featureImplementation -cne 'NONE'
     }
 }).Count -eq 0
-Add-Check 'Controlled service realization state' $serviceStateValid 'Exactly five VS-02 boundaries may advance; seven services remain toolchain scaffolds'
+Add-Check 'Controlled service realization state' $serviceStateValid 'Five accepted VS-02 boundaries plus D05 Rules accepted at SIMULATOR; six remaining scaffolds'
 
 $serviceFoldersValid = $true
 $migrationFoldersValid = $true

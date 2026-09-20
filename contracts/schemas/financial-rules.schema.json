@@ -1,0 +1,461 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.monergy.invalid/financial-rules/1.0.0",
+  "title": "MWP-03-D05 wire contracts — requests and published events",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractName",
+        "contractVersion",
+        "requestId",
+        "correlationId",
+        "causationId",
+        "security",
+        "idempotencyKey",
+        "payload"
+      ],
+      "properties": {
+        "contractName": {
+          "const": "ExecuteCalculation"
+        },
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "correlationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "causationId": {
+          "type": ["string", "null"]
+        },
+        "security": {
+          "$ref": "#/$defs/security"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["customerId", "ruleId", "ruleVersion", "inputs"],
+          "properties": {
+            "customerId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ruleId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ruleVersion": {
+              "type": "string",
+              "minLength": 1
+            },
+            "inputs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": {
+                "$ref": "#/$defs/input"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractName",
+        "contractVersion",
+        "requestId",
+        "correlationId",
+        "causationId",
+        "security",
+        "idempotencyKey",
+        "payload"
+      ],
+      "properties": {
+        "contractName": {
+          "const": "GetCalculationResult"
+        },
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "correlationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "causationId": {
+          "type": ["string", "null"]
+        },
+        "security": {
+          "$ref": "#/$defs/security"
+        },
+        "idempotencyKey": {
+          "type": ["string", "null"]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["customerId", "calculationResultId"],
+          "properties": {
+            "customerId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "calculationResultId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractName",
+        "contractVersion",
+        "requestId",
+        "correlationId",
+        "causationId",
+        "security",
+        "idempotencyKey",
+        "payload"
+      ],
+      "properties": {
+        "contractName": {
+          "const": "ExplainCalculation"
+        },
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "correlationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "causationId": {
+          "type": ["string", "null"]
+        },
+        "security": {
+          "$ref": "#/$defs/security"
+        },
+        "idempotencyKey": {
+          "type": ["string", "null"]
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["customerId", "calculationResultId"],
+          "properties": {
+            "customerId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "calculationResultId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractId",
+        "eventId",
+        "eventName",
+        "eventVersion",
+        "occurredAt",
+        "correlationId",
+        "causationId",
+        "producer",
+        "subjectType",
+        "subjectId",
+        "payload"
+      ],
+      "properties": {
+        "contractId": {
+          "const": "CID-040"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "eventName": {
+          "const": "CalculationCompleted"
+        },
+        "eventVersion": {
+          "const": "1.0.0"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "correlationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "causationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "producer": {
+          "const": "Financial Rules Service"
+        },
+        "subjectType": {
+          "const": "financial-calculation"
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "customerId",
+            "calculationResultId",
+            "calculationLineageId",
+            "ruleId",
+            "ruleVersion",
+            "revision",
+            "failureCode"
+          ],
+          "properties": {
+            "customerId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "calculationResultId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "calculationLineageId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ruleId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ruleVersion": {
+              "type": "string",
+              "minLength": 1
+            },
+            "revision": {
+              "const": 1
+            },
+            "failureCode": {
+              "type": "null"
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractId",
+        "eventId",
+        "eventName",
+        "eventVersion",
+        "occurredAt",
+        "correlationId",
+        "causationId",
+        "producer",
+        "subjectType",
+        "subjectId",
+        "payload"
+      ],
+      "properties": {
+        "contractId": {
+          "const": "CID-041"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "eventName": {
+          "const": "CalculationFailed"
+        },
+        "eventVersion": {
+          "const": "1.0.0"
+        },
+        "occurredAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "correlationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "causationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "producer": {
+          "const": "Financial Rules Service"
+        },
+        "subjectType": {
+          "const": "financial-calculation"
+        },
+        "subjectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "customerId",
+            "calculationResultId",
+            "calculationLineageId",
+            "ruleId",
+            "ruleVersion",
+            "revision",
+            "failureCode"
+          ],
+          "properties": {
+            "customerId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "calculationResultId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "calculationLineageId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ruleId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "ruleVersion": {
+              "type": "string",
+              "minLength": 1
+            },
+            "revision": {
+              "const": 1
+            },
+            "failureCode": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "workload", "access"],
+      "properties": {
+        "actor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["actorId", "actorType", "authenticatedAt", "authenticationContextId"],
+          "properties": {
+            "actorId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actorType": {
+              "type": "string",
+              "minLength": 1
+            },
+            "authenticatedAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "authenticationContextId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "workload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["workloadId", "workloadIdentityId"],
+          "properties": {
+            "workloadId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "workloadIdentityId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "access": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["purpose", "consentReferenceId", "authorizationContextId", "customerId"],
+          "properties": {
+            "purpose": {
+              "type": "string",
+              "minLength": 1
+            },
+            "consentReferenceId": {
+              "type": ["string", "null"]
+            },
+            "authorizationContextId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "customerId": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "financialFactId", "expectedRevision"],
+      "properties": {
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "financialFactId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "expectedRevision": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        }
+      }
+    }
+  }
+}

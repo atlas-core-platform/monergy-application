@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
+    <ProjectReference Include="../../../services/financial-rules/Monergy.Services.FinancialRules.csproj" />
+    <ProjectReference Include="../../../services/financial-profile/Monergy.Services.FinancialProfile.csproj" />
+    <ProjectReference Include="../../../services/evidence/Monergy.Services.Evidence.csproj" />
+    <ProjectReference Include="../../../services/document-intelligence/Monergy.Services.DocumentIntelligence.csproj" />
+    <ProjectReference Include="../../../services/job-management/Monergy.Services.JobManagement.csproj" />
+    <ProjectReference Include="../../../services/audit/Monergy.Services.Audit.csproj" />
+    <ProjectReference Include="../../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+  </ItemGroup>
+</Project>
