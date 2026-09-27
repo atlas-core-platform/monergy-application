@@ -131,7 +131,16 @@ $checks['D06 contract catalog has exact realized set'] = ([regex]::Matches($cata
 $schema = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'contracts/schemas/integration-gateway-core.schema.json') -Raw | ConvertFrom-Json
 $checks['Closed D06 wire schema exists'] = $schema.oneOf.Count -eq 4 -and $schema.unevaluatedProperties -eq $false
 $checks['Isolated D06 tests exist'] = Test-Path -LiteralPath (Join-Path $RepositoryRoot 'tests/integration-gateway/Monergy.IntegrationGateway.Tests/Monergy.IntegrationGateway.Tests.csproj')
-$changedPaths = @(& git -C $RepositoryRoot diff --name-only $scope.startingCommits.application)
+$requiredBaseline = [string]$scope.startingCommits.application
+& git -C $RepositoryRoot cat-file -e "$requiredBaseline^{commit}"
+if ($LASTEXITCODE -ne 0) {
+    throw "D06 verification requires historical baseline commit '$requiredBaseline', but it is unavailable in this checkout."
+}
+
+$changedPaths = @(& git -C $RepositoryRoot diff --name-only $requiredBaseline)
+if ($LASTEXITCODE -ne 0) {
+    throw "D06 verification could not compare the current checkout to historical baseline '$requiredBaseline'."
+}
 $checks['No frontend business implementation'] = Test-ChangedPaths $changedPaths
 
 foreach ($entry in $checks.GetEnumerator()) { Write-Output "[$(if($entry.Value){'PASS'}else{'FAIL'})] $($entry.Key)" }
