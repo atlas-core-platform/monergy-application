@@ -2,7 +2,8 @@
 param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
     [switch]$SelfTest,
-    [switch]$RequireBehavior
+    [switch]$RequireBehavior,
+    [switch]$RegressionOnly
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -33,8 +34,13 @@ function Test-RequiredBehavior {
 }
 $scopePath = Join-Path $RepositoryRoot 'build/governance/d05-scope-lock.json'
 $scope = Get-Content -LiteralPath $scopePath -Raw -Encoding utf8 | ConvertFrom-Json
+if ($RegressionOnly) {
+    Write-Output 'D05 forward-regression mode: historical exact-tree acceptance is intentionally not invoked.'
+}
 if ($SelfTest) {
-    & (Join-Path $RepositoryRoot 'build/verify-d05-acceptance.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+    if (-not $RegressionOnly) {
+        & (Join-Path $RepositoryRoot 'build/verify-d05-acceptance.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+    }
     $checks = [ordered]@{}
     $checks['valid candidate'] = Test-Scope $scope
     foreach ($mutation in @('missing-feature', 'duplicate-contract', 'fabricated-acceptance', 'overstated-evidence', 'foreign-owner')) {
@@ -62,7 +68,9 @@ if ($SelfTest) {
     Write-Output "D05 self-tests passed: $($checks.Count)/$($checks.Count)."
     exit 0
 }
-& (Join-Path $RepositoryRoot 'build/verify-d05-acceptance.ps1') -RepositoryRoot $RepositoryRoot
+if (-not $RegressionOnly) {
+    & (Join-Path $RepositoryRoot 'build/verify-d05-acceptance.ps1') -RepositoryRoot $RepositoryRoot
+}
 $checks = [ordered]@{}
 $checks['Exact reviewed candidate scope, ownership and consumed contracts'] = Test-Scope $scope
 $checks['Starting application baseline pinned'] = $scope.startingCommits.application -ceq '9aae295846f0dd1ca01f9d7f99f0233cd53c7626'
@@ -83,7 +91,38 @@ $schema = Get-Content (Join-Path $RepositoryRoot 'contracts/schemas/financial-ru
 $checks['Wire schema separates three requests and two events'] = $schema.oneOf.Count -eq 5 -and @($schema.oneOf | Where-Object additionalProperties).Count -eq 0
 $checks['Owned test project exists'] = Test-Path (Join-Path $RepositoryRoot 'tests/financial-rules/Monergy.FinancialRules.Tests/Monergy.FinancialRules.Tests.csproj')
 $manifest = Get-Content (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
-$checks['Prior acceptance is preserved separately'] = $manifest.d04Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.d05Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED'
+$d06Scope = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d06-scope-lock.json') -Raw | ConvertFrom-Json
+$expectedD06Features = 'M2-WS06-E01-F01|M2-WS06-E01-F02|M2-WS06-E01-F03|M2-WS06-E02-F01|M2-WS06-E02-F02|M2-WS06-E02-F03'
+$d06CandidateBounded = $manifest.d06Status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and
+    $manifest.d06FeatureState -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR_6_OF_6' -and
+    $manifest.d06ContractState -ceq 'CONSUMED_2_REALIZED_4_CANDIDATE' -and
+    $manifest.d06EvidenceLevel -ceq 'SIMULATOR_CANDIDATE' -and
+    $manifest.integrationEvidenceLevel -ceq 'SIMULATOR_REFERENCE_ADAPTER' -and
+    $manifest.d06FrontendBusinessChange -ceq 'NONE_REQUIRED_BY_D06_FEATURE_SCOPE' -and
+    (@($manifest.d06OutstandingDecisions | Sort-Object) -join '|') -ceq 'OD-04|OD-05|OD-06' -and
+    $manifest.stageGates.'SG-01' -ceq 'READY' -and
+    $manifest.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and
+    $manifest.stageGates.'SG-03' -ceq 'BLOCKED' -and
+    $manifest.stageGates.'SG-04' -ceq 'BLOCKED' -and
+    $d06Scope.status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and
+    $d06Scope.evidenceLevel -ceq 'SIMULATOR' -and
+    (@($d06Scope.features.id) -join '|') -ceq $expectedD06Features -and
+    @($d06Scope.features | Where-Object { $_.owner -cne 'Integration Gateway Service' -or $_.readiness -cne 'READY' }).Count -eq 0 -and
+    (@($d06Scope.consumedContracts) -join '|') -ceq 'CID-007|CID-011' -and
+    (@($d06Scope.newlyRealizedContracts) -join '|') -ceq 'CID-015|CID-016|CID-017|CID-018' -and
+    (@($d06Scope.executionZones) -join '|') -ceq 'LOCAL|CI_EPHEMERAL' -and
+    $d06Scope.providerSelection -ceq 'UNRESOLVED' -and
+    $d06Scope.physicalPersistenceOrBroker -ceq 'NOT_SELECTED' -and
+    $d06Scope.frontendBusinessChange -ceq 'NONE' -and
+    @($d06Scope.outstandingDecisions.PSObject.Properties | Where-Object { $_.Name -notin @('OD-04', 'OD-05', 'OD-06') -or $_.Value -cne 'UNRESOLVED' }).Count -eq 0 -and
+    @($d06Scope.outstandingDecisions.PSObject.Properties).Count -eq 3 -and
+    $d06Scope.stageGates.'SG-01' -ceq 'READY' -and
+    $d06Scope.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and
+    $d06Scope.stageGates.'SG-03' -ceq 'BLOCKED' -and
+    $d06Scope.stageGates.'SG-04' -ceq 'BLOCKED' -and
+    $d06Scope.architectureIntegrity.'R1-R7' -ceq 'FROZEN_UNCHANGED' -and
+    $d06Scope.architectureIntegrity.R8 -ceq 'ABSENT'
+$checks['Prior acceptance is preserved separately'] = $manifest.d04Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.d05Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED' -and $d06CandidateBounded
 $checks['No frontend scope added'] = $manifest.d05FrontendBusinessChange -ceq 'NONE_REQUIRED_BY_D05_FEATURE_SCOPE'
 
 # Behavioral claims come from the actual test-run evidence, never source-string presence.

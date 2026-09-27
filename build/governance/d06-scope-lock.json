@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D06",
+  "title": "Integration Gateway Core",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "evidenceLevel": "SIMULATOR",
+  "startingCommits": {
+    "application": "7716e8f6f214ec81274508faa3d6041545141f2b",
+    "architecture": "c7c2e32c3f924b409c9f0b84cc061b03e725b722"
+  },
+  "architectureIntegrity": {
+    "evidenceSource": "CTO_USER_EXTERNAL_VERIFICATION",
+    "head": "c7c2e32c3f924b409c9f0b84cc061b03e725b722",
+    "worktree": "CLEAN",
+    "R1-R7": "FROZEN_UNCHANGED",
+    "R8": "ABSENT"
+  },
+  "features": [
+    {
+      "id": "M2-WS06-E01-F01",
+      "name": "Canonical integration request/result contracts",
+      "owner": "Integration Gateway Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS06-E01-F02",
+      "name": "Connector registration & execution boundary",
+      "owner": "Integration Gateway Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS06-E01-F03",
+      "name": "Authorization/consent enforcement",
+      "owner": "Integration Gateway Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS06-E02-F01",
+      "name": "Idempotency & retry",
+      "owner": "Integration Gateway Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS06-E02-F02",
+      "name": "Failure, rate-limit & circuit behavior",
+      "owner": "Integration Gateway Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS06-E02-F03",
+      "name": "Connector health & telemetry",
+      "owner": "Integration Gateway Service",
+      "readiness": "READY"
+    }
+  ],
+  "consumedContracts": ["CID-007", "CID-011"],
+  "newlyRealizedContracts": ["CID-015", "CID-016", "CID-017", "CID-018"],
+  "services": ["Integration Gateway Service", "Consent Service"],
+  "businessObjects": ["Data Source", "Consent"],
+  "executionZones": ["LOCAL", "CI_EPHEMERAL"],
+  "providerSelection": "UNRESOLVED",
+  "physicalPersistenceOrBroker": "NOT_SELECTED",
+  "frontendBusinessChange": "NONE",
+  "outstandingDecisions": {
+    "OD-04": "UNRESOLVED",
+    "OD-05": "UNRESOLVED",
+    "OD-06": "UNRESOLVED"
+  },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  },
+  "exclusions": [
+    "M2-WS06-E03 provider-specific Features",
+    "provider SDK or provider selection",
+    "physical database or broker",
+    "frontend business implementation",
+    "SANDBOX, UAT or Production evidence",
+    "R1-R7 mutation or R8 introduction",
+    "acceptance, merge, tag, publication or deployment"
+  ]
+}

@@ -23,6 +23,9 @@
           "OpenTelemetry.Api": "1.18.0"
         }
       },
+      "monergy.contracts": {
+        "type": "Project"
+      },
       "monergy.platform": {
         "type": "Project",
         "dependencies": {

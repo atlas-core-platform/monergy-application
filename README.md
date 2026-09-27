@@ -10,8 +10,10 @@ and CI / EPHEMERAL execution.
 ## Current state
 
 - Accepted foundation: MWP-03-D03 and MWP-03-D04 Accepted / Complete at SIMULATOR
-- MWP-03-D05: business implementation accepted at SIMULATOR — six Features and CID-037–CID-041; closure pending frontend test-lifecycle remediation verification and new exact-head approval
+- MWP-03-D05 — Accepted / Complete at SIMULATOR — six Features and CID-037 through CID-041
 - D05 frontend business change: NONE REQUIRED BY D05 FEATURE SCOPE
+- MWP-03-D06: Integration Gateway Core implementation candidate at SIMULATOR — exactly six Features, consuming CID-007/CID-011 and realizing CID-015–CID-018
+- D06 frontend business change: NONE REQUIRED BY D06 FEATURE SCOPE
 - Architecture basis: Monergy Architecture Baseline v1.0
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Backend: .NET SDK 10.0.401, .NET runtime 10.0.12, C# 14, ASP.NET Core and
@@ -87,6 +89,15 @@ outside this repository and are intentionally untouched. They are not treated as
 accepted implementation inputs.
 
 ## Candidate verification
+
+The D06 candidate adds a provider-neutral connector boundary, current
+authorization/consent checks on initial execution, replay and retry,
+idempotent/concurrent replay handling, explicit rate-limit/failure/unknown
+outcomes, a bounded circuit, derived health and semantic telemetry. It selects
+no provider, database or broker and does not claim sandbox, UAT or Production
+evidence. Run `build/verify-integration-gateway-core.ps1` and the isolated
+`Monergy.IntegrationGateway.Tests` project during the governed verification
+step.
 
 Run from the repository root:
 

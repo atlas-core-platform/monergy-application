@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D04/D05 Accepted at SIMULATOR
+# Monergy Application Repository Structure — D06 Integration Gateway Candidate
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -71,6 +71,18 @@ D02 assets retained include:
 - `apps/customer-web/tests/FormLifecycle.diagnostic.tsx` and `tests/lifecycle.config.ts`: isolated before/after lifecycle diagnostic, separate from the seven-test frontend suite.
 - `build/probe-frontend-lifecycle.mjs` and `build/frontend-lifecycle-reporter.mjs`: fail-fast twenty-execution Linux remediation evidence; the D05 branch's workflow gates full CI on it without retries.
 - `services/financial-rules/README.md`: reference execution instructions and limits.
+
+## D06 Integration Gateway Core candidate
+
+- `contracts/Monergy.Contracts/D06IntegrationGatewayContracts.cs` and `D06ContractCatalog.cs`: provider-neutral CID-015–CID-018 contract types and isolated catalog.
+- `contracts/schemas/integration-gateway-core.schema.json`: closed D06 wire-contract schema.
+- `services/integration-gateway/Application/`: orchestration and ports for access, connector execution, idempotency, events, health and telemetry.
+- `services/integration-gateway/Domain/`: canonical attempt, operation, replay and derived-health states.
+- `services/integration-gateway/Infrastructure/`: LOCAL/CI-only reference connector, registry, policy adapter, operation store, event sink, runtime state and telemetry.
+- `services/integration-gateway/IntegrationGatewayRegistration.cs` and `IntegrationGatewayEndpoints.cs`: guarded composition and CID-015/CID-016 HTTP compatibility surface.
+- `tests/integration-gateway/Monergy.IntegrationGateway.Tests/`: isolated D06 contract, security, replay, retry, failure, circuit, health and telemetry evidence.
+- `build/governance/d06-scope-lock.json`: exact six-Feature, two-consumed/four-realized-contract candidate boundary.
+- `build/verify-integration-gateway-core.ps1`: deterministic positive and negative D06 scope verifier.
 
 ## Retained D02 assets
 

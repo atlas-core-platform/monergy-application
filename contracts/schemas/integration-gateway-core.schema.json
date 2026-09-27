@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.monergy.invalid/integration-gateway-core.schema.json",
+  "title": "Monergy Integration Gateway Core Contracts",
+  "oneOf": [
+    { "$ref": "#/$defs/executeRequest" },
+    { "$ref": "#/$defs/statusRequest" },
+    { "$ref": "#/$defs/resultReceived" },
+    { "$ref": "#/$defs/operationFailed" }
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["actor", "workload", "access"],
+      "properties": {
+        "actor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["actorId", "actorType", "authenticatedAt", "authenticationContextId"],
+          "properties": {
+            "actorId": { "type": "string", "minLength": 1 },
+            "actorType": { "type": "string", "minLength": 1 },
+            "authenticatedAt": { "type": "string", "format": "date-time" },
+            "authenticationContextId": { "type": "string", "minLength": 1 }
+          }
+        },
+        "workload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["workloadId", "workloadIdentityId"],
+          "properties": {
+            "workloadId": { "type": "string", "minLength": 1 },
+            "workloadIdentityId": { "type": "string", "minLength": 1 }
+          }
+        },
+        "access": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["purpose", "consentReferenceId", "authorizationContextId", "customerId"],
+          "properties": {
+            "purpose": { "type": "string", "minLength": 1 },
+            "consentReferenceId": { "type": ["string", "null"] },
+            "authorizationContextId": { "type": "string", "minLength": 1 },
+            "customerId": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "executeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractName",
+        "contractVersion",
+        "requestId",
+        "correlationId",
+        "causationId",
+        "security",
+        "idempotencyKey",
+        "payload"
+      ],
+      "properties": {
+        "contractName": { "const": "ExecuteProviderRequest" },
+        "contractVersion": { "const": "1.0.0" },
+        "requestId": { "type": "string", "minLength": 1 },
+        "correlationId": { "type": "string", "minLength": 1 },
+        "causationId": { "type": ["string", "null"] },
+        "security": { "$ref": "#/$defs/security" },
+        "idempotencyKey": { "type": "string", "minLength": 1 },
+        "payload": { "$ref": "#/$defs/executePayload" }
+      }
+    },
+    "statusRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractName",
+        "contractVersion",
+        "requestId",
+        "correlationId",
+        "causationId",
+        "security",
+        "idempotencyKey",
+        "payload"
+      ],
+      "properties": {
+        "contractName": { "const": "GetProviderOperationStatus" },
+        "contractVersion": { "const": "1.0.0" },
+        "requestId": { "type": "string", "minLength": 1 },
+        "correlationId": { "type": "string", "minLength": 1 },
+        "causationId": { "type": ["string", "null"] },
+        "security": { "$ref": "#/$defs/security" },
+        "idempotencyKey": { "type": "null" },
+        "payload": { "$ref": "#/$defs/statusPayload" }
+      }
+    },
+    "executePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["customerId", "connectorId", "operation", "fields"],
+      "properties": {
+        "customerId": { "type": "string", "minLength": 1 },
+        "connectorId": { "type": "string", "minLength": 1 },
+        "operation": { "type": "string", "minLength": 1 },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "value"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "value": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "statusPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["customerId", "providerOperationId"],
+      "properties": {
+        "customerId": { "type": "string", "minLength": 1 },
+        "providerOperationId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "resultReceived": {
+      "$ref": "#/$defs/eventEnvelope",
+      "properties": {
+        "contractId": { "const": "CID-017" },
+        "eventName": { "const": "ProviderResultReceived" },
+        "payload": { "$ref": "#/$defs/resultPayload" }
+      }
+    },
+    "operationFailed": {
+      "$ref": "#/$defs/eventEnvelope",
+      "properties": {
+        "contractId": { "const": "CID-018" },
+        "eventName": { "const": "ProviderOperationFailed" },
+        "payload": { "$ref": "#/$defs/failurePayload" }
+      }
+    },
+    "eventEnvelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractId",
+        "eventId",
+        "eventName",
+        "eventVersion",
+        "occurredAt",
+        "correlationId",
+        "causationId",
+        "producer",
+        "subjectType",
+        "subjectId",
+        "payload"
+      ],
+      "properties": {
+        "contractId": { "type": "string" },
+        "eventId": { "type": "string", "minLength": 1 },
+        "eventName": { "type": "string" },
+        "eventVersion": { "const": "1.0.0" },
+        "occurredAt": { "type": "string", "format": "date-time" },
+        "correlationId": { "type": "string", "minLength": 1 },
+        "causationId": { "type": ["string", "null"] },
+        "producer": { "const": "Integration Gateway Service" },
+        "subjectType": { "const": "ProviderOperation" },
+        "subjectId": { "type": "string", "minLength": 1 },
+        "payload": { "type": "object" }
+      }
+    },
+    "resultPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providerOperationId",
+        "customerId",
+        "connectorId",
+        "operation",
+        "canonicalResultReferenceId",
+        "attemptCount"
+      ],
+      "properties": {
+        "providerOperationId": { "type": "string", "minLength": 1 },
+        "customerId": { "type": "string", "minLength": 1 },
+        "connectorId": { "type": "string", "minLength": 1 },
+        "operation": { "type": "string", "minLength": 1 },
+        "canonicalResultReferenceId": { "type": "string", "minLength": 1 },
+        "attemptCount": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "failurePayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "providerOperationId",
+        "customerId",
+        "connectorId",
+        "operation",
+        "failureCode",
+        "failureCategory",
+        "retryable",
+        "state",
+        "attemptCount"
+      ],
+      "properties": {
+        "providerOperationId": { "type": "string", "minLength": 1 },
+        "customerId": { "type": "string", "minLength": 1 },
+        "connectorId": { "type": "string", "minLength": 1 },
+        "operation": { "type": "string", "minLength": 1 },
+        "failureCode": { "type": "string", "minLength": 1 },
+        "failureCategory": { "type": "string", "minLength": 1 },
+        "retryable": { "type": "boolean" },
+        "state": { "enum": ["Failed", "RateLimited", "UnknownOutcome"] },
+        "attemptCount": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

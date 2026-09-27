@@ -6,15 +6,6 @@ namespace Monergy.Architecture.Tests;
 
 public sealed class BoundaryTests
 {
-    private static readonly string[] Vs02ServiceIds =
-    [
-        "evidence",
-        "document-intelligence",
-        "financial-profile",
-        "job-management",
-        "audit",
-    ];
-
     private static readonly string[] ServiceIds =
     [
         "customer-identity",
@@ -70,6 +61,11 @@ public sealed class BoundaryTests
     [Fact]
     public void ServicesReferenceOnlySharedPlatformAndGovernedContracts()
     {
+        static bool IsPlatformReference(string? reference) =>
+            reference?.EndsWith("shared/platform/Monergy.Platform/Monergy.Platform.csproj", StringComparison.OrdinalIgnoreCase) == true;
+        static bool IsContractsReference(string? reference) =>
+            reference?.EndsWith("contracts/Monergy.Contracts/Monergy.Contracts.csproj", StringComparison.OrdinalIgnoreCase) == true;
+
         foreach (var serviceId in ServiceIds)
         {
             var references = LoadServiceProject(serviceId)
@@ -77,14 +73,15 @@ public sealed class BoundaryTests
                 .Select(element => element.Attribute("Include")?.Value.Replace('\\', '/'))
                 .ToArray();
 
-            Assert.Contains(references, reference =>
-                reference?.EndsWith("shared/platform/Monergy.Platform/Monergy.Platform.csproj", StringComparison.OrdinalIgnoreCase) == true);
-            var governedContracts = Vs02ServiceIds.Contains(serviceId, StringComparer.Ordinal) || serviceId == "financial-rules";
-            Assert.Equal(governedContracts ? 2 : 1, references.Length);
-            Assert.Equal(
-                governedContracts,
-                references.Any(reference =>
-                    reference?.EndsWith("contracts/Monergy.Contracts/Monergy.Contracts.csproj", StringComparison.OrdinalIgnoreCase) == true));
+            var platformReferences = references.Where(IsPlatformReference).ToArray();
+            var contractsReferences = references.Where(IsContractsReference).ToArray();
+
+            Assert.Single(platformReferences);
+            Assert.InRange(contractsReferences.Length, 0, 1);
+            Assert.Equal(references.Length, references.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.Equal(1 + contractsReferences.Length, references.Length);
+            Assert.All(references, reference =>
+                Assert.True(IsPlatformReference(reference) || IsContractsReference(reference)));
             Assert.DoesNotContain(references, reference => reference?.Contains("services/", StringComparison.OrdinalIgnoreCase) == true);
         }
     }

@@ -123,6 +123,16 @@ $expectedContracts = @(
 )
 $expectedServices = @('Evidence Service', 'Document Intelligence Service', 'Financial Profile Service', 'Job Management Service', 'Audit Service')
 $expectedServiceIds = @('evidence', 'document-intelligence', 'financial-profile', 'job-management', 'audit')
+$expectedServiceImplementations = [ordered]@{
+    'evidence' = 'IMPLEMENTATION_CANDIDATE'
+    'document-intelligence' = 'IMPLEMENTATION_CANDIDATE'
+    'financial-profile' = 'IMPLEMENTATION_CANDIDATE'
+    'job-management' = 'SUPPORTING_BOUNDARY'
+    'audit' = 'SUPPORTING_BOUNDARY'
+}
+$expectedD05Features = @('M2-WS05-E01-F01', 'M2-WS05-E01-F02', 'M2-WS05-E01-F03', 'M2-WS05-E02-F01', 'M2-WS05-E02-F02', 'M2-WS05-E02-F03')
+$expectedD06Features = @('M2-WS06-E01-F01', 'M2-WS06-E01-F02', 'M2-WS06-E01-F03', 'M2-WS06-E02-F01', 'M2-WS06-E02-F02', 'M2-WS06-E02-F03')
+$expectedScaffoldIds = @('customer-identity', 'consent', 'search-retrieval', 'ai-intelligence', 'reporting')
 
 $checks = [System.Collections.Generic.List[object]]::new()
 function Add-Check {
@@ -150,9 +160,27 @@ Add-Check 'Contract security context' ($contractTypesText.Contains('TrustedSecur
 
 $catalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 $candidateServices = @($catalog.services | Where-Object status -ceq 'VS02_IMPLEMENTATION_CANDIDATE')
-Add-Check 'Service catalog reviewed set' (Test-ExactSet @($candidateServices.id) $expectedServiceIds) 'Exactly five reviewed D03 candidate boundaries'
-Add-Check 'No unrelated service implementation' (@($catalog.services | Where-Object status -ceq 'TOOLCHAIN_SCAFFOLD').Count -eq 6 -and @($catalog.services | Where-Object { $_.id -ceq 'financial-rules' -and $_.status -ceq 'D05_IMPLEMENTATION_ACCEPTED_SIMULATOR' }).Count -eq 1) 'Six scaffolds plus separately accepted D05 Rules; D03 Feature ownership unchanged'
-$catalogFeatures = @($catalog.services.featureIds | Where-Object { $_ })
+$d03CatalogStateValid = (Test-ExactSet @($candidateServices.id) $expectedServiceIds) -and
+    @($candidateServices | Where-Object { $_.featureImplementation -cne $expectedServiceImplementations[$_.id] }).Count -eq 0
+Add-Check 'Service catalog reviewed set' $d03CatalogStateValid 'Exactly five reviewed D03 candidate boundaries with exact implementation/supporting roles'
+$scaffoldServices = @($catalog.services | Where-Object { $_.id -in $expectedScaffoldIds })
+$financialRules = @($catalog.services | Where-Object id -ceq 'financial-rules')
+$integrationGateway = @($catalog.services | Where-Object id -ceq 'integration-gateway')
+$laterServiceStateValid = $scaffoldServices.Count -eq 5 -and
+    (Test-ExactSet @($scaffoldServices.id) $expectedScaffoldIds) -and
+    @($scaffoldServices | Where-Object { $_.status -cne 'TOOLCHAIN_SCAFFOLD' -or $_.featureImplementation -cne 'NONE' -or @($_.featureIds).Count -ne 0 }).Count -eq 0 -and
+    $financialRules.Count -eq 1 -and
+    $financialRules[0].status -ceq 'D05_IMPLEMENTATION_ACCEPTED_SIMULATOR' -and
+    $financialRules[0].featureImplementation -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR' -and
+    $financialRules[0].d05Status -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR' -and
+    @($financialRules[0].featureIds).Count -eq 0 -and
+    (Test-ExactSet @($financialRules[0].d05FeatureIds) $expectedD05Features) -and
+    $integrationGateway.Count -eq 1 -and
+    $integrationGateway[0].status -ceq 'D06_IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
+    $integrationGateway[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
+    (Test-ExactSet @($integrationGateway[0].featureIds) $expectedD06Features)
+Add-Check 'No unrelated service implementation' $laterServiceStateValid 'Five exact scaffolds, separately accepted D05 Rules, and the exact authorized D06 Gateway candidate; D03 ownership remains scoped'
+$catalogFeatures = @($catalog.services | Where-Object { $_.id -in $expectedServiceIds } | ForEach-Object { @($_.featureIds) } | Where-Object { $_ })
 Add-Check 'Service catalog Feature coverage' (Test-ExactSet $catalogFeatures $expectedFeatures) '8/8 Features assigned once'
 
 $referenceGuard = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'shared/platform/Monergy.Platform/ReferenceAdapterGuard.cs') -Raw
@@ -200,7 +228,32 @@ $frontendTests = (Get-Content -LiteralPath (Join-Path $RepositoryRoot 'apps/cust
 Add-Check 'Frontend component and browser coverage' ($frontendTests.Contains('axe.run') -and $frontendTests.Contains('preserves the authority boundary end to end')) 'Validation, error, accessibility, keyboard, and E2E'
 
 $manifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
-Add-Check 'Truthful accepted lifecycle' ($manifest.status -ceq 'ACCEPTED_COMPLETE' -and $manifest.vs02FeatureState -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR_8_OF_8' -and $manifest.vs02ContractState -ceq 'COMPATIBILITY_EVIDENCE_ACCEPTED_14_OF_14' -and $manifest.businessFeatureImplementation -ceq 'VS02_IMPLEMENTATION_ACCEPTED_SIMULATOR' -and $manifest.integrationEvidenceLevel -ceq 'SIMULATOR_REFERENCE_ADAPTER' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED') 'Accepted at SIMULATOR; not operational, Integration-ready, UAT-ready, Production-ready, published, or deployed'
+$d06Scope = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d06-scope-lock.json') -Raw | ConvertFrom-Json
+$laterLifecycleBounded = $manifest.d05Status -ceq 'ACCEPTED_COMPLETE' -and
+    $manifest.d06Status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and
+    $manifest.d06FeatureState -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR_6_OF_6' -and
+    $manifest.d06ContractState -ceq 'CONSUMED_2_REALIZED_4_CANDIDATE' -and
+    $manifest.d06EvidenceLevel -ceq 'SIMULATOR_CANDIDATE' -and
+    $manifest.d06FrontendBusinessChange -ceq 'NONE_REQUIRED_BY_D06_FEATURE_SCOPE' -and
+    (Test-ExactSet @($manifest.d06OutstandingDecisions) @('OD-04', 'OD-05', 'OD-06')) -and
+    $d06Scope.status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and
+    $d06Scope.evidenceLevel -ceq 'SIMULATOR' -and
+    (Test-ExactSet @($d06Scope.features.id) $expectedD06Features) -and
+    (Test-ExactSet @($d06Scope.consumedContracts) @('CID-007', 'CID-011')) -and
+    (Test-ExactSet @($d06Scope.newlyRealizedContracts) @('CID-015', 'CID-016', 'CID-017', 'CID-018')) -and
+    $d06Scope.providerSelection -ceq 'UNRESOLVED' -and
+    $d06Scope.physicalPersistenceOrBroker -ceq 'NOT_SELECTED' -and
+    $d06Scope.frontendBusinessChange -ceq 'NONE' -and
+    (Test-ExactSet @($d06Scope.executionZones) @('LOCAL', 'CI_EPHEMERAL')) -and
+    @($d06Scope.outstandingDecisions.PSObject.Properties | Where-Object { $_.Name -notin @('OD-04', 'OD-05', 'OD-06') -or $_.Value -cne 'UNRESOLVED' }).Count -eq 0 -and
+    @($d06Scope.outstandingDecisions.PSObject.Properties).Count -eq 3 -and
+    $d06Scope.stageGates.'SG-01' -ceq 'READY' -and
+    $d06Scope.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and
+    $d06Scope.stageGates.'SG-03' -ceq 'BLOCKED' -and
+    $d06Scope.stageGates.'SG-04' -ceq 'BLOCKED' -and
+    $d06Scope.architectureIntegrity.'R1-R7' -ceq 'FROZEN_UNCHANGED' -and
+    $d06Scope.architectureIntegrity.R8 -ceq 'ABSENT'
+Add-Check 'Truthful accepted lifecycle' ($manifest.status -ceq 'ACCEPTED_COMPLETE' -and $manifest.vs02FeatureState -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR_8_OF_8' -and $manifest.vs02ContractState -ceq 'COMPATIBILITY_EVIDENCE_ACCEPTED_14_OF_14' -and $manifest.businessFeatureImplementation -ceq 'VS02_IMPLEMENTATION_ACCEPTED_SIMULATOR' -and $manifest.integrationEvidenceLevel -ceq 'SIMULATOR_REFERENCE_ADAPTER' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED' -and $laterLifecycleBounded) 'D03/D05 accepted at SIMULATOR; D06 remains an exact SIMULATOR candidate with provider, physical infrastructure and frontend scope unresolved or excluded; no deployment claim'
 Add-Check 'Stage gates preserved' ($manifest.stageGates.'SG-01' -ceq 'READY' -and $manifest.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and $manifest.stageGates.'SG-03' -ceq 'BLOCKED' -and $manifest.stageGates.'SG-04' -ceq 'BLOCKED') 'SG-01 ready; later gates unchanged'
 $gates = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/ci/gates.json') -Raw | ConvertFrom-Json
 Add-Check 'Contract gate exact evidence' (($gates.gates | Where-Object id -ceq 'CG-07').result -ceq 'PASS' -and ($gates.gates | Where-Object id -ceq 'CG-07').scope.Contains('exact fourteen')) 'CG-07 PASS for 14/14 only'

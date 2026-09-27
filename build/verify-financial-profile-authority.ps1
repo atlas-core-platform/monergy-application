@@ -124,7 +124,42 @@ $d03TestFiles = @(Get-ChildItem -LiteralPath $d03TestRoot -File -Filter '*.cs')
 Add-Check 'D04 test ownership is independent from D03' ((Test-Path -LiteralPath (Join-Path $testRoot 'Monergy.FinancialProfile.Tests.csproj')) -and @($d03TestFiles | Where-Object Name -in @('FinancialProfileAuthorityTests.cs', 'FinancialProfileContractCompatibilityTests.cs')).Count -eq 0) 'D04 authority and compatibility tests live only in the Financial Profile test project'
 
 $manifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
-Add-Check 'Truthful D04 accepted lifecycle' ($manifest.d04Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.d04FeatureState -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR_7_OF_7' -and $manifest.d04ContractState -ceq 'APPLICABLE_COMPATIBILITY_AND_BEHAVIORAL_EVIDENCE_ACCEPTED_SIMULATOR_7_OF_7' -and $manifest.d04EvidenceLevel -ceq 'SIMULATOR_ACCEPTED' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED') 'Accepted / Complete at SIMULATOR; no Integration, UAT, Production or deployment claim'
+$expectedD06Features = @('M2-WS06-E01-F01', 'M2-WS06-E01-F02', 'M2-WS06-E01-F03', 'M2-WS06-E02-F01', 'M2-WS06-E02-F02', 'M2-WS06-E02-F03')
+$d06Scope = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d06-scope-lock.json') -Raw | ConvertFrom-Json
+$laterLifecycleBounded = $manifest.d05Status -ceq 'ACCEPTED_COMPLETE' -and
+    $manifest.d05FeatureState -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR_6_OF_6' -and
+    $manifest.d05ContractState -ceq 'BEHAVIORAL_COMPATIBILITY_EVIDENCE_ACCEPTED_SIMULATOR_5_OF_5' -and
+    $manifest.d05EvidenceLevel -ceq 'SIMULATOR_ACCEPTED' -and
+    $manifest.d06Status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and
+    $manifest.d06FeatureState -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR_6_OF_6' -and
+    $manifest.d06ContractState -ceq 'CONSUMED_2_REALIZED_4_CANDIDATE' -and
+    $manifest.d06EvidenceLevel -ceq 'SIMULATOR_CANDIDATE' -and
+    $manifest.integrationEvidenceLevel -ceq 'SIMULATOR_REFERENCE_ADAPTER' -and
+    $manifest.d06FrontendBusinessChange -ceq 'NONE_REQUIRED_BY_D06_FEATURE_SCOPE' -and
+    (Test-ExactSet @($manifest.d06OutstandingDecisions) @('OD-04', 'OD-05', 'OD-06')) -and
+    $manifest.stageGates.'SG-01' -ceq 'READY' -and
+    $manifest.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and
+    $manifest.stageGates.'SG-03' -ceq 'BLOCKED' -and
+    $manifest.stageGates.'SG-04' -ceq 'BLOCKED' -and
+    $d06Scope.status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and
+    $d06Scope.evidenceLevel -ceq 'SIMULATOR' -and
+    (Test-ExactSet @($d06Scope.features.id) $expectedD06Features) -and
+    @($d06Scope.features | Where-Object { $_.owner -cne 'Integration Gateway Service' -or $_.readiness -cne 'READY' }).Count -eq 0 -and
+    (Test-ExactSet @($d06Scope.consumedContracts) @('CID-007', 'CID-011')) -and
+    (Test-ExactSet @($d06Scope.newlyRealizedContracts) @('CID-015', 'CID-016', 'CID-017', 'CID-018')) -and
+    (Test-ExactSet @($d06Scope.executionZones) @('LOCAL', 'CI_EPHEMERAL')) -and
+    $d06Scope.providerSelection -ceq 'UNRESOLVED' -and
+    $d06Scope.physicalPersistenceOrBroker -ceq 'NOT_SELECTED' -and
+    $d06Scope.frontendBusinessChange -ceq 'NONE' -and
+    @($d06Scope.outstandingDecisions.PSObject.Properties | Where-Object { $_.Name -notin @('OD-04', 'OD-05', 'OD-06') -or $_.Value -cne 'UNRESOLVED' }).Count -eq 0 -and
+    @($d06Scope.outstandingDecisions.PSObject.Properties).Count -eq 3 -and
+    $d06Scope.stageGates.'SG-01' -ceq 'READY' -and
+    $d06Scope.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and
+    $d06Scope.stageGates.'SG-03' -ceq 'BLOCKED' -and
+    $d06Scope.stageGates.'SG-04' -ceq 'BLOCKED' -and
+    $d06Scope.architectureIntegrity.'R1-R7' -ceq 'FROZEN_UNCHANGED' -and
+    $d06Scope.architectureIntegrity.R8 -ceq 'ABSENT'
+Add-Check 'Truthful D04 accepted lifecycle' ($manifest.d04Status -ceq 'ACCEPTED_COMPLETE' -and $manifest.d04FeatureState -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR_7_OF_7' -and $manifest.d04ContractState -ceq 'APPLICABLE_COMPATIBILITY_AND_BEHAVIORAL_EVIDENCE_ACCEPTED_SIMULATOR_7_OF_7' -and $manifest.d04EvidenceLevel -ceq 'SIMULATOR_ACCEPTED' -and $manifest.deploymentState -ceq 'NOT_DEPLOYED' -and $laterLifecycleBounded) 'D04/D05 accepted at SIMULATOR; D06 remains an exact SIMULATOR candidate; stage gates and open provider decisions remain bounded; no deployment claim'
 $serviceCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 $financialProfile = $serviceCatalog.services | Where-Object id -ceq 'financial-profile'
 $audit = $serviceCatalog.services | Where-Object id -ceq 'audit'
