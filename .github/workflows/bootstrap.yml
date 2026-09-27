@@ -8,6 +8,7 @@ on:
       - delivery/mwp03-d03-vs02-evidence-financial-truth
       - delivery/mwp03-d04-financial-profile-authority-expansion
       - delivery/mwp03-d05-financial-rules-calculation-lineage
+      - delivery/mwp03-d06-integration-gateway-core
   pull_request:
   workflow_dispatch:
 
@@ -53,7 +54,7 @@ jobs:
   toolchain:
     needs: d05-lifecycle-probe
     if: always() && (needs.d05-lifecycle-probe.result == 'success' || needs.d05-lifecycle-probe.result == 'skipped')
-    name: Verify D01-D05 controlled implementation
+    name: Verify D01-D06 controlled implementation
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -167,10 +168,15 @@ jobs:
         shell: pwsh
         run: ./build/Invoke-Toolchain.ps1 -Task D04Verification
 
-      - name: Preserve raw machine-readable evidence
+      - name: Verify Financial Rules forward regression and preserve raw machine-readable evidence
         if: always()
         shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D05Verification
+        run: ./build/Invoke-Toolchain.ps1 -Task D05Regression
+
+      - name: Verify Integration Gateway core and negative self-tests
+        if: always()
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task D06Verification
 
       - name: Upload raw machine-readable evidence
         if: always()

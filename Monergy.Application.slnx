@@ -21,6 +21,7 @@
     <Project Path="tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj" />
     <Project Path="tests/financial-profile/Monergy.FinancialProfile.Tests/Monergy.FinancialProfile.Tests.csproj" />
     <Project Path="tests/financial-rules/Monergy.FinancialRules.Tests/Monergy.FinancialRules.Tests.csproj" />
+    <Project Path="tests/integration-gateway/Monergy.IntegrationGateway.Tests/Monergy.IntegrationGateway.Tests.csproj" />
     <Project Path="tests/vs02/Monergy.Vs02.Tests/Monergy.Vs02.Tests.csproj" />
   </Folder>
 </Solution>

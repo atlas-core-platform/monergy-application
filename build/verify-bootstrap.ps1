@@ -62,18 +62,90 @@ $serviceCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/
 $serviceIds = @($serviceCatalog.services | ForEach-Object { $_.id })
 Add-Check 'Twelve R3 service identities' (Test-ExactSet $serviceIds $expectedServiceIds) "$($serviceIds.Count) service entries"
 Add-Check 'Unique service artifact identities' (@($serviceCatalog.services.artifact | Select-Object -Unique).Count -eq 12) '12 independently named artifacts'
-$d03Services = @('evidence', 'document-intelligence', 'financial-profile', 'job-management', 'audit')
-$serviceStateValid = @($serviceCatalog.services | Where-Object {
-    if ($_.id -in $d03Services) {
-        $_.status -cne 'VS02_IMPLEMENTATION_CANDIDATE' -or
-        $_.featureImplementation -notin @('IMPLEMENTATION_CANDIDATE', 'SUPPORTING_BOUNDARY')
-    } elseif ($_.id -ceq 'financial-rules') {
-        $_.status -cne 'D05_IMPLEMENTATION_ACCEPTED_SIMULATOR' -or $_.d05Status -cne 'IMPLEMENTATION_ACCEPTED_SIMULATOR'
-    } else {
-        $_.status -notin @('RESERVED', 'TOOLCHAIN_SCAFFOLD') -or $_.featureImplementation -cne 'NONE'
+$expectedVs02Features = [ordered]@{
+    'evidence' = @('M2-WS03-E01-F02')
+    'document-intelligence' = @('M2-WS03-E02-F01', 'M2-WS03-E02-F02')
+    'financial-profile' = @('M2-WS03-E03-F01', 'M2-WS03-E03-F02', 'M2-WS03-E03-F03', 'M2-WS04-E03-F01', 'M2-WS04-E03-F02')
+    'job-management' = @()
+    'audit' = @()
+}
+$vs02StateValid = $true
+foreach ($serviceId in $expectedVs02Features.Keys) {
+    $service = @($serviceCatalog.services | Where-Object id -CEQ $serviceId)
+    $vs02StateValid = $vs02StateValid -and $service.Count -eq 1
+    if ($service.Count -eq 1) {
+        $expectedImplementation = if ($serviceId -in @('job-management', 'audit')) { 'SUPPORTING_BOUNDARY' } else { 'IMPLEMENTATION_CANDIDATE' }
+        $vs02StateValid = $vs02StateValid -and
+            $service[0].status -ceq 'VS02_IMPLEMENTATION_CANDIDATE' -and
+            $service[0].featureImplementation -ceq $expectedImplementation -and
+            (Test-ExactSet @($service[0].featureIds) $expectedVs02Features[$serviceId])
     }
-}).Count -eq 0
-Add-Check 'Controlled service realization state' $serviceStateValid 'Five accepted VS-02 boundaries plus D05 Rules accepted at SIMULATOR; six remaining scaffolds'
+}
+
+$expectedD05Features = @(
+    'M2-WS05-E01-F01', 'M2-WS05-E01-F02', 'M2-WS05-E01-F03',
+    'M2-WS05-E02-F01', 'M2-WS05-E02-F02', 'M2-WS05-E02-F03'
+)
+$financialRules = @($serviceCatalog.services | Where-Object id -CEQ 'financial-rules')
+$financialRulesStateValid = $financialRules.Count -eq 1 -and
+    $financialRules[0].status -ceq 'D05_IMPLEMENTATION_ACCEPTED_SIMULATOR' -and
+    $financialRules[0].featureImplementation -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR' -and
+    @($financialRules[0].featureIds).Count -eq 0 -and
+    $financialRules[0].d05Status -ceq 'IMPLEMENTATION_ACCEPTED_SIMULATOR' -and
+    (Test-ExactSet @($financialRules[0].d05FeatureIds) $expectedD05Features)
+
+$expectedD06Features = @(
+    'M2-WS06-E01-F01', 'M2-WS06-E01-F02', 'M2-WS06-E01-F03',
+    'M2-WS06-E02-F01', 'M2-WS06-E02-F02', 'M2-WS06-E02-F03'
+)
+$integrationGateway = @($serviceCatalog.services | Where-Object id -CEQ 'integration-gateway')
+$integrationGatewayStateValid = $integrationGateway.Count -eq 1 -and
+    $integrationGateway[0].status -ceq 'D06_IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
+    $integrationGateway[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
+    (Test-ExactSet @($integrationGateway[0].featureIds) $expectedD06Features)
+
+$expectedScaffoldIds = @('customer-identity', 'consent', 'search-retrieval', 'ai-intelligence', 'reporting')
+$scaffoldStateValid = $true
+foreach ($serviceId in $expectedScaffoldIds) {
+    $service = @($serviceCatalog.services | Where-Object id -CEQ $serviceId)
+    $scaffoldStateValid = $scaffoldStateValid -and $service.Count -eq 1
+    if ($service.Count -eq 1) {
+        $scaffoldStateValid = $scaffoldStateValid -and
+            $service[0].status -ceq 'TOOLCHAIN_SCAFFOLD' -and
+            $service[0].featureImplementation -ceq 'NONE' -and
+            @($service[0].featureIds).Count -eq 0
+    }
+}
+
+$serviceStateManifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
+$d06Scope = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d06-scope-lock.json') -Raw | ConvertFrom-Json
+$d06GovernanceValid = $serviceStateManifest.d06Status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and
+    $serviceStateManifest.d06FeatureState -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR_6_OF_6' -and
+    $serviceStateManifest.d06EvidenceLevel -ceq 'SIMULATOR_CANDIDATE' -and
+    $serviceStateManifest.integrationEvidenceLevel -ceq 'SIMULATOR_REFERENCE_ADAPTER' -and
+    (Test-ExactSet @($serviceStateManifest.d06OutstandingDecisions) @('OD-04', 'OD-05', 'OD-06')) -and
+    $serviceStateManifest.stageGates.'SG-01' -ceq 'READY' -and
+    $serviceStateManifest.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and
+    $serviceStateManifest.stageGates.'SG-03' -ceq 'BLOCKED' -and
+    $serviceStateManifest.stageGates.'SG-04' -ceq 'BLOCKED' -and
+    $d06Scope.status -ceq 'CANDIDATE_PENDING_CTO_REVIEW' -and
+    $d06Scope.evidenceLevel -ceq 'SIMULATOR' -and
+    (Test-ExactSet @($d06Scope.features.id) $expectedD06Features) -and
+    $d06Scope.providerSelection -ceq 'UNRESOLVED' -and
+    $d06Scope.physicalPersistenceOrBroker -ceq 'NOT_SELECTED' -and
+    $d06Scope.outstandingDecisions.'OD-04' -ceq 'UNRESOLVED' -and
+    $d06Scope.outstandingDecisions.'OD-05' -ceq 'UNRESOLVED' -and
+    $d06Scope.outstandingDecisions.'OD-06' -ceq 'UNRESOLVED' -and
+    $d06Scope.stageGates.'SG-01' -ceq 'READY' -and
+    $d06Scope.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and
+    $d06Scope.stageGates.'SG-03' -ceq 'BLOCKED' -and
+    $d06Scope.stageGates.'SG-04' -ceq 'BLOCKED' -and
+    $d06Scope.architectureIntegrity.'R1-R7' -ceq 'FROZEN_UNCHANGED' -and
+    $d06Scope.architectureIntegrity.R8 -ceq 'ABSENT'
+
+$serviceStateValid = $vs02StateValid -and $financialRulesStateValid -and
+    $integrationGatewayStateValid -and $scaffoldStateValid -and $d06GovernanceValid
+Add-Check 'Controlled service realization state' $serviceStateValid 'Five VS-02 boundaries; D05 Rules accepted; D06 Gateway candidate; five scaffolds; SIMULATOR and governance limits preserved'
 
 $serviceFoldersValid = $true
 $migrationFoldersValid = $true
