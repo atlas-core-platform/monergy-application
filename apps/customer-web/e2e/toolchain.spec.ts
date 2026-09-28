@@ -108,3 +108,69 @@ test('D07 authorized search exposes derived provenance without frontend filterin
   await expect(page.getByText('Evidence Service')).toBeVisible();
   await expect(page.getByText('provenance-e2e-1')).toBeVisible();
 });
+
+test('D08 trusted report supports source drill-down and deterministic export', async ({ page }) => {
+  const report = {
+    reportId: 'report-e2e-1',
+    customerId: 'reference-customer',
+    state: 'GENERATED',
+    generatedAt: '2026-09-01T00:00:00Z',
+    items: [
+      {
+        label: 'Monthly income',
+        value: 125000,
+        unit: 'INR',
+        source: {
+          sourceType: 'FinancialFact',
+          sourceId: 'fact-e2e-1',
+          authoritativeOwner: 'Financial Profile Service',
+          evidenceReferenceId: 'evidence-e2e-1',
+          financialProvenanceReferenceId: 'provenance-e2e-1',
+          calculationLineageReferenceId: null,
+        },
+      },
+      {
+        label: 'Savings ratio',
+        value: 0.36,
+        unit: 'RATIO',
+        source: {
+          sourceType: 'FinancialCalculation',
+          sourceId: 'calculation-e2e-1',
+          authoritativeOwner: 'Financial Rules Service',
+          evidenceReferenceId: null,
+          financialProvenanceReferenceId: 'provenance-e2e-1',
+          calculationLineageReferenceId: 'lineage-e2e-1',
+        },
+      },
+    ],
+    sourceFinancialReferences: ['fact-e2e-1', 'calculation-e2e-1'],
+    evidenceReferences: ['evidence-e2e-1'],
+    financialProvenanceReferences: ['provenance-e2e-1'],
+    calculationLineageReferences: ['lineage-e2e-1'],
+    aiResponseTraceReference: null,
+    auditCompatibilityReferenceId: 'audit-compatible-report-e2e-1',
+    export: {
+      fileName: 'trusted-financial-report.json',
+      mediaType: 'application/json',
+      content: '{}',
+      sha256: 'ABC123',
+    },
+  };
+  await page.route('**/contracts/cid-05{1,2}/v1', async (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ outcome: 'Success', error: null, data: report }),
+    }),
+  );
+  await page.goto('/reports');
+  await expect(page.getByRole('heading', { name: 'Trusted financial report' })).toBeVisible();
+  await expect(page.getByText('REFERENCE · LOCAL / CI ONLY')).toBeVisible();
+  await page.getByRole('button', { name: 'Generate basic report' }).click();
+  await expect(page.getByText('Financial snapshot')).toBeVisible();
+  await page.getByText('Savings ratio · Financial Rules Service').click();
+  await expect(page.getByText('lineage-e2e-1')).toBeVisible();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Export basic report' }).click();
+  expect((await downloadPromise).suggestedFilename()).toBe('trusted-financial-report.json');
+});

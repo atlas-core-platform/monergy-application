@@ -8,6 +8,12 @@ reference adapters and makes no provider-sandbox or Production claim.
 behavior and canonical contract/schema suite for authorized derived search,
 deterministic semantic ranking, rebuildability, provenance and access isolation.
 
+`reporting/Monergy.Reporting.Tests` is the isolated MWP-03-D08 suite for the
+authorized basic report lifecycle, deterministic export, authoritative source
+references, customer isolation, provenance/lineage continuity, and LOCAL/CI-only
+reference adapters. It does not evidence formal report packs, advice, AI, provider
+compatibility, persistent infrastructure, or deployment.
+
 D02 adds xUnit architecture/boundary tests. D03 provides 27 tests in the
 independent `Monergy.Vs02.Tests` project. D04 provides 38 authority and exact
 contract tests in `tests/financial-profile/Monergy.FinancialProfile.Tests`.

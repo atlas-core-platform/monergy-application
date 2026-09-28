@@ -124,10 +124,10 @@
       "id": "reporting",
       "name": "Reporting Service",
       "artifact": "monergy-reporting",
-      "primaryHost": "WORKER",
-      "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE",
-      "featureIds": []
+      "primaryHost": "HTTP",
+      "status": "D08_IMPLEMENTATION_CANDIDATE_SIMULATOR",
+      "featureImplementation": "IMPLEMENTATION_CANDIDATE_SIMULATOR",
+      "featureIds": ["M2-WS08-E01-F02", "M2-WS08-E02-F01", "M2-WS08-E02-F03"]
     },
     {
       "id": "job-management",

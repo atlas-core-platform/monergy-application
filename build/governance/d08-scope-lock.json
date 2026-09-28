@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D08",
+  "title": "Trusted Financial Summary, Drill-Down & Export",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "evidenceLevel": "SIMULATOR",
+  "startingCommits": {
+    "application": "f24e4e5646ac41a865c0855a8eaf5cd3f59eee68",
+    "architecture": "ccc9ed550e6713e55f8315798a40cc4533d823f2"
+  },
+  "features": [
+    {
+      "id": "M2-WS08-E01-F02",
+      "name": "Financial profile & evidence drill-down",
+      "owner": "Reporting Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS08-E02-F01",
+      "name": "Basic summary/export",
+      "owner": "Reporting Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS08-E02-F03",
+      "name": "Report provenance & audit",
+      "owner": "Reporting Service",
+      "readiness": "READY"
+    }
+  ],
+  "consumedContracts": [
+    "CID-022",
+    "CID-030",
+    "CID-033",
+    "CID-038",
+    "CID-039",
+    "CID-048",
+    "CID-061"
+  ],
+  "newlyRealizedContracts": ["CID-051", "CID-052", "CID-053"],
+  "excludedFeatures": [
+    "M2-WS08-E01-F01",
+    "M2-WS08-E01-F03",
+    "M2-WS08-E02-F02",
+    "M2-WS08-E03-F01",
+    "M2-WS08-E03-F02",
+    "M2-WS08-E03-F03"
+  ],
+  "executionZones": ["LOCAL", "CI_EPHEMERAL"],
+  "reportingAuthority": [
+    "REPORT_IDENTITY",
+    "REFERENCE_GENERATION_LIFECYCLE",
+    "OUTPUT_METADATA",
+    "SOURCE_REFERENCE_ASSOCIATION"
+  ],
+  "externalAuthorities": [
+    "Evidence Service",
+    "Financial Profile Service",
+    "Financial Rules Service",
+    "Audit Service"
+  ],
+  "exportFormat": "DETERMINISTIC_JSON_REFERENCE",
+  "providerSelection": "NONE",
+  "physicalPersistenceObjectStoreOrBroker": "NOT_SELECTED",
+  "aiExecution": "NOT_IMPLEMENTED",
+  "outstandingDecisions": {
+    "C-11": "UNRESOLVED",
+    "C-14": "UNRESOLVED",
+    "OD-08": "UNRESOLVED",
+    "C-10": "UNRESOLVED"
+  },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  },
+  "architectureIntegrity": {
+    "head": "ccc9ed550e6713e55f8315798a40cc4533d823f2",
+    "R1-R7": "FROZEN_UNCHANGED",
+    "R8": "ABSENT"
+  }
+}
