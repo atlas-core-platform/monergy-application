@@ -18,6 +18,7 @@ public static class ReportingRegistration
         services.AddSingleton<IReportSourceReader>(new ReferenceReportSourceReader(configuration));
         services.AddSingleton<IReportRepository>(new InMemoryReportRepository(configuration));
         services.AddSingleton<IReportEvidenceSink>(new InMemoryReportEvidenceSink(configuration));
+        services.AddSingleton(TimeProvider.System);
         services.AddTransient<ReportingApplication>();
         return services;
     }

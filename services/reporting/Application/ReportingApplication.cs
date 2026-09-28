@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -12,7 +11,8 @@ public sealed class ReportingApplication(
     IReportSourceReader sourceReader,
     IReportRepository repository,
     IReportingAuthorizationPolicy authorizationPolicy,
-    IReportEvidenceSink evidenceSink)
+    IReportEvidenceSink evidenceSink,
+    TimeProvider timeProvider)
 {
     public async Task<ContractResult<TrustedFinancialReport>> GenerateAsync(
         ContractRequest<GenerateReport> request, CancellationToken cancellationToken = default)
@@ -29,27 +29,42 @@ public sealed class ReportingApplication(
             request.ContractName, request.CorrelationId, cancellationToken).ConfigureAwait(false);
         if (accessError is not null) return Rejected<GenerateReport>(request, accessError);
 
-        var snapshot = await sourceReader.ReadAsync(request.Payload.CustomerId, cancellationToken).ConfigureAwait(false);
-        if (snapshot is null)
+        var identity = new ReportOperationIdentity(request.ContractName, request.ContractVersion,
+            request.Payload.CustomerId, request.IdempotencyKey);
+        var operation = await repository.GetOrCreateAsync(identity, async operationCancellationToken =>
         {
-            return ContractResult<TrustedFinancialReport>.Rejected(request, "report.source.not-found",
-                ContractErrorCategory.NotFound, "No authorized report source is available.");
-        }
-        if (!string.Equals(snapshot.CustomerId, request.Payload.CustomerId, StringComparison.Ordinal))
-        {
-            return ContractResult<TrustedFinancialReport>.Rejected(request, "report.source.boundary-invalid",
-                ContractErrorCategory.AccessDenied, "The report source is outside the current customer boundary.");
-        }
+            var snapshot = await sourceReader.ReadAsync(request.Payload.CustomerId, operationCancellationToken)
+                .ConfigureAwait(false);
+            if (snapshot is null)
+            {
+                return ReportGenerationAttempt.Rejected(new("report.source.not-found",
+                    ContractErrorCategory.NotFound, "No authorized report source is available.", false,
+                    request.CorrelationId));
+            }
+            if (!string.Equals(snapshot.CustomerId, request.Payload.CustomerId, StringComparison.Ordinal))
+            {
+                return ReportGenerationAttempt.Rejected(new("report.source.boundary-invalid",
+                    ContractErrorCategory.AccessDenied, "The report source is outside the current customer boundary.",
+                    false, request.CorrelationId));
+            }
 
-        var report = BuildReport(snapshot, request.IdempotencyKey);
-        repository.Save(report);
-        evidenceSink.Record(new("CID-053", $"report-generated-{report.ReportId}", ReportingContractNames.ReportGenerated,
-            ContractGuard.CurrentVersion, snapshot.AsOf, request.CorrelationId, request.CausationId,
-            ReportingAuthority.ReportingService, "Report", report.ReportId,
-            new(report.ReportId, report.CustomerId, report.State, report.SourceFinancialReferences,
-                report.EvidenceReferences, report.FinancialProvenanceReferences,
-                report.CalculationLineageReferences, report.AiResponseTraceReference,
-                report.AuditCompatibilityReferenceId, report.Export.Sha256)));
+            return ReportGenerationAttempt.Succeeded(BuildReport(snapshot, identity, timeProvider.GetUtcNow()));
+        }, cancellationToken).ConfigureAwait(false);
+
+        if (operation.Error is not null) return Rejected<GenerateReport>(request, operation.Error);
+
+        var report = operation.Report!;
+        if (operation.Created)
+        {
+            evidenceSink.Record(new("CID-053", $"report-generated-{report.ReportId}",
+                ReportingContractNames.ReportGenerated, ContractGuard.CurrentVersion, report.GeneratedAt,
+                request.CorrelationId, request.CausationId, ReportingAuthority.ReportingService, "Report",
+                report.ReportId, new(report.ReportId, report.CustomerId, report.State,
+                    report.SourceFinancialReferences, report.EvidenceReferences,
+                    report.FinancialProvenanceReferences, report.CalculationLineageReferences,
+                    report.AiResponseTraceReference, report.AuditCompatibilityReferenceId,
+                    report.Export.Sha256)));
+        }
         return ContractResult<TrustedFinancialReport>.Succeeded(request, report);
     }
 
@@ -82,19 +97,19 @@ public sealed class ReportingApplication(
             : null;
     }
 
-    private static TrustedFinancialReport BuildReport(ReportSourceSnapshot snapshot, string idempotencyKey)
+    private static TrustedFinancialReport BuildReport(ReportSourceSnapshot snapshot,
+        ReportOperationIdentity identity, DateTimeOffset generatedAt)
     {
         var items = snapshot.Items.OrderBy(item => item.Label, StringComparer.Ordinal).ToImmutableArray();
-        var identityMaterial = string.Join("|", snapshot.CustomerId, idempotencyKey,
-            string.Join("|", items.Select(item => string.Join(":", item.Label,
-                item.Value.ToString(CultureInfo.InvariantCulture), item.Unit, item.Source.SourceId))));
+        var identityMaterial = string.Join("|", identity.ContractName, identity.ContractVersion,
+            identity.CustomerId, identity.IdempotencyKey);
         var reportId = $"report-{Hash(identityMaterial)[..20].ToLowerInvariant()}";
         var exportModel = new
         {
             reportId,
             customerId = snapshot.CustomerId,
             state = ReportingAuthority.Generated,
-            generatedAt = snapshot.AsOf,
+            generatedAt,
             items = items.Select(item => new
             {
                 item.Label,
@@ -106,7 +121,7 @@ public sealed class ReportingApplication(
         var content = JsonSerializer.Serialize(exportModel, ContractJson.Options);
         var export = new ReportExport($"trusted-financial-report-{reportId}.json", "application/json",
             content, Hash(content));
-        return new(reportId, snapshot.CustomerId, ReportingAuthority.Generated, snapshot.AsOf, items,
+        return new(reportId, snapshot.CustomerId, ReportingAuthority.Generated, generatedAt, items,
             Distinct(items.Select(item => item.Source.SourceId)),
             Distinct(items.Select(item => item.Source.EvidenceReferenceId)),
             Distinct(items.Select(item => item.Source.FinancialProvenanceReferenceId)),

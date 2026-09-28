@@ -32,7 +32,12 @@ const security = {
   },
 };
 
-async function invoke<T>(contractId: string, contractName: string, payload: object): Promise<T> {
+async function invoke<T>(
+  contractId: string,
+  contractName: string,
+  payload: object,
+  idempotencyKey: string | null = null,
+): Promise<T> {
   const requestId = `report-request-${globalThis.crypto.randomUUID()}`;
   const response = await fetch(`/contracts/${contractId}/v1`, {
     method: 'POST',
@@ -44,7 +49,7 @@ async function invoke<T>(contractId: string, contractName: string, payload: obje
       correlationId: requestId,
       causationId: null,
       security,
-      idempotencyKey: contractId === 'cid-051' ? 'reference-basic-report' : null,
+      idempotencyKey,
       payload,
     }),
   });
@@ -61,9 +66,15 @@ async function invoke<T>(contractId: string, contractName: string, payload: obje
 }
 
 export async function generateReferenceReport(): Promise<TrustedFinancialReport> {
-  const generated = await invoke<TrustedFinancialReport>('cid-051', 'GenerateReport', {
-    customerId: 'reference-customer',
-  });
+  const generationIdempotencyKey = `report-generation-${globalThis.crypto.randomUUID()}`;
+  const generated = await invoke<TrustedFinancialReport>(
+    'cid-051',
+    'GenerateReport',
+    {
+      customerId: 'reference-customer',
+    },
+    generationIdempotencyKey,
+  );
   return invoke<TrustedFinancialReport>('cid-052', 'GetReport', {
     customerId: 'reference-customer',
     reportId: generated.reportId,

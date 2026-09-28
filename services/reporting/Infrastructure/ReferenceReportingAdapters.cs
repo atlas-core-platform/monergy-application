@@ -40,22 +40,53 @@ public sealed class ReferenceReportSourceReader : IReportSourceReader
     }
 }
 
-public sealed class InMemoryReportRepository(IConfiguration configuration) : IReportRepository
+public sealed class InMemoryReportRepository(IConfiguration configuration) : IReportRepository, IDisposable
 {
     private readonly Dictionary<string, TrustedFinancialReport> reports = new(StringComparer.Ordinal);
+    private readonly Dictionary<ReportOperationIdentity, TrustedFinancialReport> operations = new();
+    private readonly SemaphoreSlim operationGate = new(1, 1);
     private readonly object sync = new();
     private readonly bool allowed = Ensure(configuration);
 
-    public void Save(TrustedFinancialReport report)
+    public async Task<ReportOperationResult> GetOrCreateAsync(
+        ReportOperationIdentity identity,
+        Func<CancellationToken, Task<ReportGenerationAttempt>> reportFactory,
+        CancellationToken cancellationToken = default)
     {
         _ = allowed;
-        lock (sync) reports[$"{report.CustomerId}|{report.ReportId}"] = report;
+        await operationGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (operations.TryGetValue(identity, out var committedReport))
+            {
+                return new(committedReport, null, false);
+            }
+
+            var attempt = await reportFactory(cancellationToken).ConfigureAwait(false);
+            if (attempt.Report is null || attempt.Error is not null)
+            {
+                return new(null, attempt.Error, false);
+            }
+
+            lock (sync)
+            {
+                reports[$"{attempt.Report.CustomerId}|{attempt.Report.ReportId}"] = attempt.Report;
+                operations[identity] = attempt.Report;
+            }
+            return new(attempt.Report, null, true);
+        }
+        finally
+        {
+            operationGate.Release();
+        }
     }
 
     public TrustedFinancialReport? Find(string customerId, string reportId)
     {
         lock (sync) return reports.GetValueOrDefault($"{customerId}|{reportId}");
     }
+
+    public void Dispose() => operationGate.Dispose();
 
     private static bool Ensure(IConfiguration configuration)
     {
@@ -93,8 +124,16 @@ public sealed class ReferenceReportingAuthorizationPolicy(IConfiguration configu
 public sealed class InMemoryReportEvidenceSink(IConfiguration configuration) : IReportEvidenceSink
 {
     private readonly List<DomainEvent<ReportGeneratedPayload>> events = [];
+    private readonly object sync = new();
     private readonly bool allowed = Ensure(configuration);
-    public IReadOnlyList<DomainEvent<ReportGeneratedPayload>> Events => events;
-    public void Record(DomainEvent<ReportGeneratedPayload> generatedEvent) { _ = allowed; events.Add(generatedEvent); }
+    public IReadOnlyList<DomainEvent<ReportGeneratedPayload>> Events
+    {
+        get { lock (sync) return events.ToArray(); }
+    }
+    public void Record(DomainEvent<ReportGeneratedPayload> generatedEvent)
+    {
+        _ = allowed;
+        lock (sync) events.Add(generatedEvent);
+    }
     private static bool Ensure(IConfiguration configuration) { ReferenceAdapterGuard.EnsureAllowed(configuration); return true; }
 }

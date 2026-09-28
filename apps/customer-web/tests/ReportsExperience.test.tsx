@@ -105,6 +105,30 @@ describe('D08 trusted reporting experience', () => {
     );
   });
 
+  it('uses a new CID-051 idempotency key for each explicit generation action', async () => {
+    const user = userEvent.setup();
+    const fetchMock = successfulFetch();
+    vi.stubGlobal('fetch', fetchMock);
+    renderReports();
+
+    await user.click(screen.getByRole('button', { name: 'Generate basic report' }));
+    await screen.findByRole('button', { name: 'Refresh basic report' });
+    await user.click(screen.getByRole('button', { name: 'Refresh basic report' }));
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(4);
+    });
+
+    const generationRequests = fetchMock.mock.calls
+      .filter(([url]) => url === '/contracts/cid-051/v1')
+      .map(([, options]) => JSON.parse(String(options?.body)) as { idempotencyKey: string });
+    expect(generationRequests).toHaveLength(2);
+    const [firstGeneration, secondGeneration] = generationRequests;
+    if (!firstGeneration || !secondGeneration) throw new Error('Expected two generation requests.');
+    expect(firstGeneration.idempotencyKey).toMatch(/^report-generation-/);
+    expect(secondGeneration.idempotencyKey).toMatch(/^report-generation-/);
+    expect(firstGeneration.idempotencyKey).not.toBe(secondGeneration.idempotencyKey);
+  });
+
   it('drills down to evidence, provenance and calculation lineage', async () => {
     const user = userEvent.setup();
     vi.stubGlobal('fetch', successfulFetch());

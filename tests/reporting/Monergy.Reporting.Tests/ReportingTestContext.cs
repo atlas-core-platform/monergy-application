@@ -15,22 +15,25 @@ internal sealed class ReportingTestContext
         CustomerA = Security("customer-a", "authorization-a", "actor-a", "workload-a");
         CustomerB = Security("customer-b", "authorization-b", "actor-b", "workload-b");
         var snapshots = new[] { Snapshot("customer-a", 125000m), Snapshot("customer-b", 98000m) };
-        Source = new ReferenceReportSourceReader(Configuration, snapshots);
+        Source = new CountingReportSourceReader(new ReferenceReportSourceReader(Configuration, snapshots));
         Repository = new InMemoryReportRepository(Configuration);
         Authorization = new ReferenceReportingAuthorizationPolicy(Configuration);
         Authorization.Grant(CustomerA);
         Authorization.Grant(CustomerB);
         Evidence = new InMemoryReportEvidenceSink(Configuration);
-        Application = new ReportingApplication(Source, Repository, Authorization, Evidence);
+        Clock = new TestTimeProvider(DateTimeOffset.Parse("2026-09-28T10:15:00Z", null,
+            System.Globalization.DateTimeStyles.RoundtripKind));
+        Application = new ReportingApplication(Source, Repository, Authorization, Evidence, Clock);
     }
 
     public IConfiguration Configuration { get; }
     public TrustedSecurityContext CustomerA { get; }
     public TrustedSecurityContext CustomerB { get; }
-    public ReferenceReportSourceReader Source { get; }
+    public CountingReportSourceReader Source { get; }
     public InMemoryReportRepository Repository { get; }
     public ReferenceReportingAuthorizationPolicy Authorization { get; }
     public InMemoryReportEvidenceSink Evidence { get; }
+    public TestTimeProvider Clock { get; }
     public ReportingApplication Application { get; }
 
     public ContractRequest<T> Request<T>(string name, T payload, TrustedSecurityContext? security = null,
@@ -56,4 +59,24 @@ internal sealed class ReportingTestContext
     private static TrustedSecurityContext Security(string customer, string authorization, string actor, string workload) =>
         new(new(actor, "HUMAN", DateTimeOffset.UnixEpoch, $"authentication-{actor}"),
             new("reporting", workload), new("REFERENCE_REPORTING", null, authorization, customer));
+}
+
+internal sealed class CountingReportSourceReader(IReportSourceReader inner) : IReportSourceReader
+{
+    private int readCount;
+
+    public int ReadCount => Volatile.Read(ref readCount);
+
+    public Task<ReportSourceSnapshot?> ReadAsync(string customerId, CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref readCount);
+        return inner.ReadAsync(customerId, cancellationToken);
+    }
+}
+
+internal sealed class TestTimeProvider(DateTimeOffset utcNow) : TimeProvider
+{
+    public DateTimeOffset UtcNow { get; set; } = utcNow;
+
+    public override DateTimeOffset GetUtcNow() => UtcNow;
 }
