@@ -58,10 +58,56 @@ public sealed class SearchBehaviorTests
         var first = context.Index.Rebuild(context.Source.ReadAll());
         var second = context.Index.Rebuild(context.Source.ReadAll().Reverse());
         Assert.Equal(first, second);
+        var expected = context.Index.RebuildCustomer("customer-a", context.Source.ReadForCustomer("customer-a"));
         var refresh = await context.Application.RefreshAsync(context.Request(SearchContractNames.IndexRefreshRequested,
             new IndexRefreshRequested("customer-a")));
-        Assert.Equal(first.RebuildFingerprint, refresh.Data!.RebuildFingerprint);
-        Assert.Equal(SearchAuthority.DerivedRebuildable, refresh.Data.RepresentationState);
+        Assert.Equal(expected, refresh.Data);
+        Assert.Equal(SearchAuthority.DerivedRebuildable, refresh.Data!.RepresentationState);
+    }
+
+    [Fact]
+    public async Task CustomerRefreshPreservesOtherPartitionsAndReturnsOnlyCustomerScopedEvidence()
+    {
+        var context = new SearchTestContext();
+        var customerARecords = context.Records.Where(item => item.CustomerId == "customer-a").ToImmutableArray();
+        var originalCustomerB = Assert.Single(context.Records, item => item.CustomerId == "customer-b");
+
+        context.Source.Replace(customerARecords);
+        var firstRefresh = await context.Application.RefreshAsync(context.Request(
+            SearchContractNames.IndexRefreshRequested, new IndexRefreshRequested("customer-a")));
+
+        Assert.Equal(ContractOutcome.Success, firstRefresh.Outcome);
+        Assert.Equal(customerARecords.Length, firstRefresh.Data!.RecordCount);
+
+        var changedCustomerB = originalCustomerB with
+        {
+            Title = "Changed customer B projection",
+            SearchableText = "content unavailable to salary search",
+        };
+        context.Source.Replace(customerARecords.Append(changedCustomerB));
+        var secondRefresh = await context.Application.RefreshAsync(context.Request(
+            SearchContractNames.IndexRefreshRequested, new IndexRefreshRequested("customer-a")));
+
+        Assert.Equal(customerARecords.Length, secondRefresh.Data!.RecordCount);
+        Assert.Equal(firstRefresh.Data.RebuildFingerprint, secondRefresh.Data.RebuildFingerprint);
+
+        var customerBSearch = await context.Application.SearchDocumentsAsync(context.Request(
+            SearchContractNames.SearchDocuments,
+            new SearchDocuments("customer-b", "salary", SearchMatchMode.Lexical),
+            context.CustomerB));
+        var customerBResult = Assert.Single(customerBSearch.Data!.Items);
+        Assert.Equal(originalCustomerB.Title, customerBResult.Title);
+
+        var customerASearch = await context.Application.SearchDocumentsAsync(context.Request(
+            SearchContractNames.SearchDocuments,
+            new SearchDocuments("customer-a", "salary", SearchMatchMode.Lexical)));
+        Assert.DoesNotContain(customerASearch.Data!.Items, item => item.SearchRecordId == originalCustomerB.SearchRecordId);
+
+        var crossCustomer = await context.Application.SearchDocumentsAsync(context.Request(
+            SearchContractNames.SearchDocuments,
+            new SearchDocuments("customer-b", "salary", SearchMatchMode.Lexical),
+            context.CustomerA));
+        Assert.Equal(ContractOutcome.Rejected, crossCustomer.Outcome);
     }
 
     [Fact]

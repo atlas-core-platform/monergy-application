@@ -17,11 +17,13 @@ public interface ISearchAuthorizationPolicy
 public interface ISearchProjectionSource
 {
     ImmutableArray<DerivedSearchRecord> ReadAll();
+    ImmutableArray<DerivedSearchRecord> ReadForCustomer(string customerId);
 }
 
 public interface IDerivedSearchIndex
 {
     IndexRefreshResult Rebuild(IEnumerable<DerivedSearchRecord> records);
+    IndexRefreshResult RebuildCustomer(string customerId, IEnumerable<DerivedSearchRecord> records);
     ImmutableArray<RankedSearchRecord> Search(
         string customerId,
         string authorizationContextId,

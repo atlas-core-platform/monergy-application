@@ -22,6 +22,9 @@ public sealed class ReferenceSearchProjectionSource : ISearchProjectionSource
 
     public ImmutableArray<DerivedSearchRecord> ReadAll() => records;
 
+    public ImmutableArray<DerivedSearchRecord> ReadForCustomer(string customerId) =>
+        records.Where(item => item.CustomerId == customerId).ToImmutableArray();
+
     public void Replace(IEnumerable<DerivedSearchRecord> replacement) =>
         records = replacement.OrderBy(item => item.SearchRecordId, StringComparer.Ordinal).ToImmutableArray();
 
@@ -84,14 +87,31 @@ public sealed partial class InMemoryDerivedSearchIndex : IDerivedSearchIndex
     {
         var ordered = records.OrderBy(item => item.SearchRecordId, StringComparer.Ordinal).ToArray();
         Validate(ordered);
-        var rebuilt = ordered.Select(item => new IndexedRecord(item, Vectorize(item.Title + " " + item.SearchableText))).ToImmutableArray();
+        var rebuilt = Build(ordered);
         lock (sync) { this.records = rebuilt; }
-        var identity = string.Join('\n', ordered.Select(item => string.Join('|', item.SearchRecordId, item.CustomerId,
-            item.RequiredAuthorizationContextId, item.ResultType, item.Title, item.SearchableText,
-            item.AuthoritativeOwner, item.Source.SourceObjectType, item.Source.SourceObjectId,
-            item.Source.SourceReferenceId, item.Source.ProvenanceReferenceId, item.Source.CalculationLineageReferenceId)));
-        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
-        return new(rebuilt.Length, fingerprint, SearchAuthority.DerivedRebuildable);
+        return Result(ordered);
+    }
+
+    public IndexRefreshResult RebuildCustomer(string customerId, IEnumerable<DerivedSearchRecord> records)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(customerId);
+        var ordered = records.OrderBy(item => item.SearchRecordId, StringComparer.Ordinal).ToArray();
+        Validate(ordered);
+        if (ordered.Any(item => item.CustomerId != customerId))
+        {
+            throw new ArgumentException("A customer rebuild may contain records only for its requested customer boundary.", nameof(records));
+        }
+
+        var rebuilt = Build(ordered);
+        lock (sync)
+        {
+            this.records = this.records.Where(item => item.Record.CustomerId != customerId)
+                .Concat(rebuilt)
+                .OrderBy(item => item.Record.CustomerId, StringComparer.Ordinal)
+                .ThenBy(item => item.Record.SearchRecordId, StringComparer.Ordinal)
+                .ToImmutableArray();
+        }
+        return Result(ordered);
     }
 
     public ImmutableArray<RankedSearchRecord> Search(string customerId, string authorizationContextId,
@@ -144,6 +164,19 @@ public sealed partial class InMemoryDerivedSearchIndex : IDerivedSearchIndex
         {
             throw new ArgumentException("Derived search projections require unique IDs and source-owned authority references.", nameof(source));
         }
+    }
+
+    private static ImmutableArray<IndexedRecord> Build(IEnumerable<DerivedSearchRecord> source) =>
+        source.Select(item => new IndexedRecord(item, Vectorize(item.Title + " " + item.SearchableText))).ToImmutableArray();
+
+    private static IndexRefreshResult Result(DerivedSearchRecord[] ordered)
+    {
+        var identity = string.Join('\n', ordered.Select(item => string.Join('|', item.SearchRecordId, item.CustomerId,
+            item.RequiredAuthorizationContextId, item.ResultType, item.Title, item.SearchableText,
+            item.AuthoritativeOwner, item.Source.SourceObjectType, item.Source.SourceObjectId,
+            item.Source.SourceReferenceId, item.Source.ProvenanceReferenceId, item.Source.CalculationLineageReferenceId)));
+        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)));
+        return new(ordered.Length, fingerprint, SearchAuthority.DerivedRebuildable);
     }
 
     private static string[] Tokens(string value) => WordPattern().Matches(value.ToLowerInvariant())

@@ -71,7 +71,9 @@ public sealed class SearchRetrievalApplication(
         var accessError = await authorizationPolicy.AuthorizeAsync(request.Security, request.Payload.CustomerId,
             request.ContractName, request.CorrelationId, cancellationToken).ConfigureAwait(false);
         if (accessError is not null) { return Rejected<IndexRefreshRequested, IndexRefreshResult>(request, accessError); }
-        return ContractResult<IndexRefreshResult>.Succeeded(request, index.Rebuild(projectionSource.ReadAll()));
+        var customerId = request.Payload.CustomerId;
+        return ContractResult<IndexRefreshResult>.Succeeded(request,
+            index.RebuildCustomer(customerId, projectionSource.ReadForCustomer(customerId)));
     }
 
     private async Task<ContractResult<SearchResults>> SearchAsync<TPayload>(
