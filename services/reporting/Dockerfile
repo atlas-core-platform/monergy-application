@@ -6,11 +6,14 @@ COPY ["Directory.Packages.props", "."]
 COPY ["NuGet.Config", "."]
 COPY ["shared/platform/Monergy.Platform/Monergy.Platform.csproj", "shared/platform/Monergy.Platform/"]
 COPY ["shared/platform/Monergy.Platform/packages.lock.json", "shared/platform/Monergy.Platform/"]
+COPY ["contracts/Monergy.Contracts/Monergy.Contracts.csproj", "contracts/Monergy.Contracts/"]
+COPY ["contracts/Monergy.Contracts/packages.lock.json", "contracts/Monergy.Contracts/"]
 COPY ["services/reporting/Monergy.Services.Reporting.csproj", "services/reporting/"]
 COPY ["services/reporting/packages.lock.json", "services/reporting/"]
 RUN dotnet restore "services/reporting/Monergy.Services.Reporting.csproj" --locked-mode
 
 COPY ["shared/platform/Monergy.Platform/", "shared/platform/Monergy.Platform/"]
+COPY ["contracts/Monergy.Contracts/", "contracts/Monergy.Contracts/"]
 COPY ["services/reporting/", "services/reporting/"]
 RUN dotnet publish "services/reporting/Monergy.Services.Reporting.csproj" \
     --configuration Release \
@@ -18,7 +21,7 @@ RUN dotnet publish "services/reporting/Monergy.Services.Reporting.csproj" \
     --output /app/publish \
     /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0.12-noble-chiseled@sha256:f828e6ef5140bb1b2f5b681535f197a243d91ce0ab3651399879a0c567dd1de7 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS final
 WORKDIR /app
 COPY --from=build --chown=$APP_UID:$APP_UID /app/publish .
 USER $APP_UID

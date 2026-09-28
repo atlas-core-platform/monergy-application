@@ -17,6 +17,8 @@ and CI / EPHEMERAL execution.
 - MWP-03-D07: Authorized Search & Provenance Retrieval implementation candidate at SIMULATOR — exactly five Features, consuming CID-007/CID-023/CID-024/CID-033–CID-036/CID-039 and realizing CID-042/CID-043/CID-044/CID-046
 - D07 frontend reference experience: lazy-loaded `/search`, explicitly labeled `REFERENCE · LOCAL / CI ONLY`
 - Architecture basis: Monergy Architecture Baseline v1.0
+- MWP-03-D08: Trusted Financial Summary, Drill-Down & Export implementation candidate at SIMULATOR — exactly three READY Features, consuming CID-022/CID-030/CID-033/CID-038/CID-039/CID-048/CID-061 and realizing CID-051/CID-052/CID-053
+- D08 product reference experience: lazy-loaded `/reports`, explicitly labeled `REFERENCE · LOCAL / CI ONLY`; conditional summary, goal/explanation, formal-pack, and notification Features remain excluded
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Backend: .NET SDK 10.0.401, .NET runtime 10.0.12, C# 14, ASP.NET Core and
   Worker Service according to accepted service responsibilities
@@ -108,6 +110,13 @@ retrieval-freshness semantics remain unresolved; no AI/model, provider, physical
 search store, vector database, database or broker is selected.
 
 Run from the repository root:
+
+The D08 candidate adds an authorized basic report, source/evidence/provenance/
+calculation-lineage drill-down, deterministic JSON reference export, and
+ReportGenerated audit-compatibility evidence. Reporting owns only report identity,
+lifecycle, output metadata, and source association. It selects no provider,
+database, object store, broker, AI/model, formal report format, delivery channel,
+or deployment target; C-10, C-11, C-14, and OD-08 remain unresolved.
 
 ```powershell
 ./build/Invoke-Toolchain.ps1 -Task Verify

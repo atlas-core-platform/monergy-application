@@ -6,6 +6,14 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
+      '/contracts/cid-051': {
+        target: 'http://127.0.0.1:5189',
+        changeOrigin: true,
+      },
+      '/contracts/cid-052': {
+        target: 'http://127.0.0.1:5189',
+        changeOrigin: true,
+      },
       '/contracts': {
         target: 'http://127.0.0.1:5188',
         changeOrigin: true,

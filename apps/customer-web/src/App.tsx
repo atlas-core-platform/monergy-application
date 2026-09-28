@@ -3,6 +3,7 @@ import { lazy, Suspense, useState } from 'react';
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const SearchExperience = lazy(() => import('./search/SearchExperience'));
+const ReportsExperience = lazy(() => import('./reports/ReportsExperience'));
 const { Paragraph, Text, Title } = Typography;
 
 function ToolchainFoundation() {
@@ -39,6 +40,9 @@ function ToolchainFoundation() {
             </Button>
             <Button size="large" href="/search">
               Open authorized search
+            </Button>
+            <Button size="large" href="/reports">
+              Open trusted reports
             </Button>
             <Text keyboard>Build {__BUILD_REVISION__.slice(0, 12)}</Text>
           </Space>
@@ -89,6 +93,20 @@ function ToolchainFoundation() {
 }
 
 export function App() {
+  if (window.location.pathname === '/reports') {
+    return (
+      <Suspense
+        fallback={
+          <main className="grid min-h-screen place-items-center bg-canvas p-6" aria-busy="true">
+            <Text>Loading reports…</Text>
+          </main>
+        }
+      >
+        <ReportsExperience />
+      </Suspense>
+    );
+  }
+
   if (window.location.pathname === '/search') {
     return (
       <Suspense

@@ -165,7 +165,8 @@ $expectedServiceImplementations = [ordered]@{
 $expectedD05Features = @('M2-WS05-E01-F01', 'M2-WS05-E01-F02', 'M2-WS05-E01-F03', 'M2-WS05-E02-F01', 'M2-WS05-E02-F02', 'M2-WS05-E02-F03')
 $expectedD06Features = @('M2-WS06-E01-F01', 'M2-WS06-E01-F02', 'M2-WS06-E01-F03', 'M2-WS06-E02-F01', 'M2-WS06-E02-F02', 'M2-WS06-E02-F03')
 $expectedD07Features = @('M2-WS07-E01-F01', 'M2-WS07-E01-F02', 'M2-WS07-E01-F03', 'M2-WS07-E02-F01', 'M2-WS07-E02-F03')
-$expectedScaffoldIds = @('customer-identity', 'consent', 'ai-intelligence', 'reporting')
+$expectedD08Features = @('M2-WS08-E01-F02', 'M2-WS08-E02-F01', 'M2-WS08-E02-F03')
+$expectedScaffoldIds = @('customer-identity', 'consent', 'ai-intelligence')
 
 $checks = [System.Collections.Generic.List[object]]::new()
 function Add-Check {
@@ -200,7 +201,8 @@ $scaffoldServices = @($catalog.services | Where-Object { $_.id -in $expectedScaf
 $financialRules = @($catalog.services | Where-Object id -ceq 'financial-rules')
 $integrationGateway = @($catalog.services | Where-Object id -ceq 'integration-gateway')
 $searchRetrieval = @($catalog.services | Where-Object id -ceq 'search-retrieval')
-$laterServiceStateValid = $scaffoldServices.Count -eq 4 -and
+$reporting = @($catalog.services | Where-Object id -CEQ 'reporting')
+$laterServiceStateValid = $scaffoldServices.Count -eq 3 -and
     (Test-ExactSet @($scaffoldServices.id) $expectedScaffoldIds) -and
     @($scaffoldServices | Where-Object { $_.status -cne 'TOOLCHAIN_SCAFFOLD' -or $_.featureImplementation -cne 'NONE' -or @($_.featureIds).Count -ne 0 }).Count -eq 0 -and
     $financialRules.Count -eq 1 -and
@@ -216,8 +218,12 @@ $laterServiceStateValid = $scaffoldServices.Count -eq 4 -and
     $searchRetrieval.Count -eq 1 -and
     $searchRetrieval[0].status -ceq 'D07_IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
     $searchRetrieval[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
-    (Test-ExactSet @($searchRetrieval[0].featureIds) $expectedD07Features)
-Add-Check 'No unrelated service implementation' $laterServiceStateValid 'Four exact scaffolds, accepted D05 Rules, and exact D06 Gateway plus D07 Search candidates; D03 ownership remains scoped'
+    (Test-ExactSet @($searchRetrieval[0].featureIds) $expectedD07Features) -and
+    $reporting.Count -eq 1 -and
+    $reporting[0].status -ceq 'D08_IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
+    $reporting[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
+    (Test-ExactSet @($reporting[0].featureIds) $expectedD08Features)
+Add-Check 'No unrelated service implementation' $laterServiceStateValid 'Three exact scaffolds, accepted D05 Rules, and exact D06 Gateway, D07 Search plus D08 Reporting candidates; D03 ownership remains scoped'
 $catalogFeatures = @($catalog.services | Where-Object { $_.id -in $expectedServiceIds } | ForEach-Object { @($_.featureIds) } | Where-Object { $_ })
 Add-Check 'Service catalog Feature coverage' (Test-ExactSet $catalogFeatures $expectedFeatures) '8/8 Features assigned once'
 

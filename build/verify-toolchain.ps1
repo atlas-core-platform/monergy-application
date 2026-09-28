@@ -112,7 +112,7 @@ $expectedServices = [ordered]@{
     'customer-identity' = 'Microsoft.NET.Sdk.Web'; 'consent' = 'Microsoft.NET.Sdk.Web'; 'integration-gateway' = 'Microsoft.NET.Sdk.Web'
     'evidence' = 'Microsoft.NET.Sdk.Web'; 'document-intelligence' = 'Microsoft.NET.Sdk.Worker'; 'financial-profile' = 'Microsoft.NET.Sdk.Web'
     'financial-rules' = 'Microsoft.NET.Sdk.Web'; 'search-retrieval' = 'Microsoft.NET.Sdk.Web'; 'ai-intelligence' = 'Microsoft.NET.Sdk.Web'
-    'reporting' = 'Microsoft.NET.Sdk.Worker'; 'job-management' = 'Microsoft.NET.Sdk.Worker'; 'audit' = 'Microsoft.NET.Sdk.Worker'
+    'reporting' = 'Microsoft.NET.Sdk.Web'; 'job-management' = 'Microsoft.NET.Sdk.Worker'; 'audit' = 'Microsoft.NET.Sdk.Worker'
 }
 $catalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 Add-Check 'Twelve canonical services' (Test-ExactSet @($catalog.services.id) @($expectedServices.Keys)) '12/12 R3 service identities'
@@ -135,8 +135,9 @@ $d03Services = @($d03ServiceFeatures.Keys)
 $d05Features = @('M2-WS05-E01-F01', 'M2-WS05-E01-F02', 'M2-WS05-E01-F03', 'M2-WS05-E02-F01', 'M2-WS05-E02-F02', 'M2-WS05-E02-F03')
 $d06Features = @('M2-WS06-E01-F01', 'M2-WS06-E01-F02', 'M2-WS06-E01-F03', 'M2-WS06-E02-F01', 'M2-WS06-E02-F02', 'M2-WS06-E02-F03')
 $d07Features = @('M2-WS07-E01-F01', 'M2-WS07-E01-F02', 'M2-WS07-E01-F03', 'M2-WS07-E02-F01', 'M2-WS07-E02-F03')
-$scaffoldServices = @('customer-identity', 'consent', 'ai-intelligence', 'reporting')
-$governedContractServices = $d03Services + @('financial-rules', 'integration-gateway', 'search-retrieval')
+$d08Features = @('M2-WS08-E01-F02', 'M2-WS08-E02-F01', 'M2-WS08-E02-F03')
+$scaffoldServices = @('customer-identity', 'consent', 'ai-intelligence')
+$governedContractServices = $d03Services + @('financial-rules', 'integration-gateway', 'search-retrieval', 'reporting')
 $catalogStateValid = @($catalog.services | Where-Object {
     if ($_.id -in $d03Services) {
         $_.status -cne 'VS02_IMPLEMENTATION_CANDIDATE' -or
@@ -156,6 +157,10 @@ $catalogStateValid = @($catalog.services | Where-Object {
         $_.status -cne 'D07_IMPLEMENTATION_CANDIDATE_SIMULATOR' -or
         $_.featureImplementation -cne 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -or
         -not (Test-ExactSet @($_.featureIds) $d07Features)
+    } elseif ($_.id -ceq 'reporting') {
+        $_.status -cne 'D08_IMPLEMENTATION_CANDIDATE_SIMULATOR' -or
+        $_.featureImplementation -cne 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -or
+        -not (Test-ExactSet @($_.featureIds) $d08Features)
     } else {
         $_.id -notin $scaffoldServices -or
         $_.status -cne 'TOOLCHAIN_SCAFFOLD' -or
@@ -191,7 +196,7 @@ $d06GovernanceValid = $d06Scope.deliverable -ceq 'MWP-03-D06' -and
     $d06Manifest.integrationEvidenceLevel -ceq 'SIMULATOR_REFERENCE_ADAPTER' -and
     $d06Manifest.d06FrontendBusinessChange -ceq 'NONE_REQUIRED_BY_D06_FEATURE_SCOPE' -and
     (Test-ExactSet @($d06Manifest.d06OutstandingDecisions) @('OD-04', 'OD-05', 'OD-06'))
-Add-Check 'Controlled post-D02 service state' ($catalogStateValid -and $d06GovernanceValid) 'Five exact D03 participants, accepted D05 Rules, exact D06 Gateway and D07 Search candidates at SIMULATOR, and four exact toolchain scaffolds'
+Add-Check 'Controlled post-D02 service state' ($catalogStateValid -and $d06GovernanceValid) 'Five exact D03 participants, accepted D05 Rules, exact D06 Gateway, D07 Search and D08 Reporting candidates at SIMULATOR, and three exact toolchain scaffolds'
 
 $hostSplitValid = $true
 $serviceReferenceValid = $true
@@ -231,14 +236,19 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
                 $program.Contains('MapSearchRetrievalContracts') -and
                 $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\('
         }
+        if ($entry.Key -ceq 'reporting') {
+            $healthOnlyValid = $healthOnlyValid -and
+                $program.Contains('MapReportingContracts') -and
+                $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\('
+        }
     } else {
         $healthOnlyValid = $healthOnlyValid -and $program.Contains('AddHostedService<StartupWorker>') -and $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\('
     }
 }
-Add-Check 'Evidence-based host split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 8 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 4) 'Eight HTTP hosts and four primary workers'
+Add-Check 'Evidence-based host split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 9 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 3) 'Nine HTTP hosts and three primary workers'
 Add-Check 'No service-to-service project references' $serviceReferenceValid 'Every service references Platform exactly once, Contracts zero or one time, and no other project; service/test/app and duplicate references are forbidden'
 Add-Check 'Empty service-owned migrations' $migrationOwnershipValid '12 independent empty migration histories'
-Add-Check 'Controlled host scope' $healthOnlyValid 'Four true scaffolds remain health/startup-only; exact D03, D05, D06 and D07 governed participants may expose contract surfaces'
+Add-Check 'Controlled host scope' $healthOnlyValid 'Three true scaffolds remain health/startup-only; exact D03 and D05-D08 governed participants may expose contract surfaces'
 
 $lockFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter 'packages.lock.json' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
 $projectFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })

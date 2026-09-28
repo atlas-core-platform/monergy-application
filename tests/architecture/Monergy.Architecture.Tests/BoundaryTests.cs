@@ -34,7 +34,7 @@ public sealed class BoundaryTests
             ["financial-rules"] = "Microsoft.NET.Sdk.Web",
             ["search-retrieval"] = "Microsoft.NET.Sdk.Web",
             ["ai-intelligence"] = "Microsoft.NET.Sdk.Web",
-            ["reporting"] = "Microsoft.NET.Sdk.Worker",
+            ["reporting"] = "Microsoft.NET.Sdk.Web",
             ["job-management"] = "Microsoft.NET.Sdk.Worker",
             ["audit"] = "Microsoft.NET.Sdk.Worker",
         };
@@ -177,6 +177,22 @@ public sealed class BoundaryTests
         Assert.Contains("SearchSourceReference", domain, StringComparison.Ordinal);
         Assert.Contains("RequiredAuthorizationContextId", infrastructure, StringComparison.Ordinal);
         Assert.DoesNotContain("FinancialProfileRepository", application + infrastructure, StringComparison.Ordinal);
+        Assert.DoesNotContain("EvidenceRepository", application + infrastructure, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReportingOwnsReportLifecycleButRetainsExternalAuthorityReferences()
+    {
+        var application = File.ReadAllText(Path.Combine(ServicesRoot, "reporting", "Application", "ReportingApplication.cs"));
+        var domain = File.ReadAllText(Path.Combine(ServicesRoot, "reporting", "Domain", "ReportingDomain.cs"));
+        var infrastructure = File.ReadAllText(Path.Combine(ServicesRoot, "reporting", "Infrastructure", "ReferenceReportingAdapters.cs"));
+        var contracts = File.ReadAllText(Path.Combine(RepositoryRoot, "contracts", "Monergy.Contracts", "D08ReportingContracts.cs"));
+        Assert.Contains("ReportSourceReference", contracts, StringComparison.Ordinal);
+        Assert.Contains("Financial Profile Service", domain, StringComparison.Ordinal);
+        Assert.Contains("Financial Rules Service", domain, StringComparison.Ordinal);
+        Assert.Contains("AuditCompatibilityReferenceId", application, StringComparison.Ordinal);
+        Assert.DoesNotContain("FinancialProfileRepository", application + infrastructure, StringComparison.Ordinal);
+        Assert.DoesNotContain("FinancialRulesRepository", application + infrastructure, StringComparison.Ordinal);
         Assert.DoesNotContain("EvidenceRepository", application + infrastructure, StringComparison.Ordinal);
     }
 

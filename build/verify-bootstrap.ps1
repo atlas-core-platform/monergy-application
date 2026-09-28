@@ -111,7 +111,14 @@ $searchRetrievalStateValid = $searchRetrieval.Count -eq 1 -and
     $searchRetrieval[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
     (Test-ExactSet @($searchRetrieval[0].featureIds) $expectedD07Features)
 
-$expectedScaffoldIds = @('customer-identity', 'consent', 'ai-intelligence', 'reporting')
+$expectedD08Features = @('M2-WS08-E01-F02', 'M2-WS08-E02-F01', 'M2-WS08-E02-F03')
+$reporting = @($serviceCatalog.services | Where-Object id -CEQ 'reporting')
+$reportingStateValid = $reporting.Count -eq 1 -and
+    $reporting[0].status -ceq 'D08_IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
+    $reporting[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
+    (Test-ExactSet @($reporting[0].featureIds) $expectedD08Features)
+
+$expectedScaffoldIds = @('customer-identity', 'consent', 'ai-intelligence')
 $scaffoldStateValid = $true
 foreach ($serviceId in $expectedScaffoldIds) {
     $service = @($serviceCatalog.services | Where-Object id -CEQ $serviceId)
@@ -151,8 +158,8 @@ $d06GovernanceValid = $serviceStateManifest.d06Status -ceq 'CANDIDATE_PENDING_CT
     $d06Scope.architectureIntegrity.R8 -ceq 'ABSENT'
 
 $serviceStateValid = $vs02StateValid -and $financialRulesStateValid -and
-    $integrationGatewayStateValid -and $searchRetrievalStateValid -and $scaffoldStateValid -and $d06GovernanceValid
-Add-Check 'Controlled service realization state' $serviceStateValid 'Five VS-02 boundaries; D05 Rules accepted; D06 Gateway and D07 Search candidates; four scaffolds; SIMULATOR and governance limits preserved'
+    $integrationGatewayStateValid -and $searchRetrievalStateValid -and $reportingStateValid -and $scaffoldStateValid -and $d06GovernanceValid
+Add-Check 'Controlled service realization state' $serviceStateValid 'Five VS-02 boundaries; D05 Rules accepted; D06 Gateway, D07 Search and D08 Reporting candidates; three scaffolds; SIMULATOR and governance limits preserved'
 
 $serviceFoldersValid = $true
 $migrationFoldersValid = $true
