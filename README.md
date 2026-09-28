@@ -14,6 +14,8 @@ and CI / EPHEMERAL execution.
 - D05 frontend business change: NONE REQUIRED BY D05 FEATURE SCOPE
 - MWP-03-D06: Integration Gateway Core implementation candidate at SIMULATOR — exactly six Features, consuming CID-007/CID-011 and realizing CID-015–CID-018
 - D06 frontend business change: NONE REQUIRED BY D06 FEATURE SCOPE
+- MWP-03-D07: Authorized Search & Provenance Retrieval implementation candidate at SIMULATOR — exactly five Features, consuming CID-007/CID-023/CID-024/CID-033–CID-036/CID-039 and realizing CID-042/CID-043/CID-044/CID-046
+- D07 frontend reference experience: lazy-loaded `/search`, explicitly labeled `REFERENCE · LOCAL / CI ONLY`
 - Architecture basis: Monergy Architecture Baseline v1.0
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Backend: .NET SDK 10.0.401, .NET runtime 10.0.12, C# 14, ASP.NET Core and
@@ -98,6 +100,12 @@ no provider, database or broker and does not claim sandbox, UAT or Production
 evidence. Run `build/verify-integration-gateway-core.ps1` and the isolated
 `Monergy.IntegrationGateway.Tests` project during the governed verification
 step.
+
+The D07 candidate adds authorized derived/rebuildable document, financial and
+deterministic semantic reference indexes. Search results retain authoritative
+owner, source, provenance and calculation-lineage references. OD-14 and
+retrieval-freshness semantics remain unresolved; no AI/model, provider, physical
+search store, vector database, database or broker is selected.
 
 Run from the repository root:
 

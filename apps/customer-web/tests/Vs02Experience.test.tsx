@@ -59,7 +59,7 @@ describe('VS-02 evidence-to-financial-truth experience', () => {
     renderExperience();
 
     expect(screen.getByText('REFERENCE · LOCAL / CI ONLY')).toBeVisible();
-    expect(screen.getByText('VS-02 IMPLEMENTATION CANDIDATE')).toBeVisible();
+    expect(screen.getByText('VS-02 ACCEPTED · SIMULATOR')).toBeVisible();
     expect(screen.getByText(/Run the reference flow to inspect/)).toBeVisible();
     expect(screen.queryByText('AUTHORITATIVE')).not.toBeInTheDocument();
   });

@@ -36,8 +36,32 @@ function Test-BundleEvidence {
     $javascript = $Evidence.d03.totalJavaScript
     $css = $Evidence.d03.totalCss
     $combined = $Evidence.d03.totalJavaScriptAndCss
-    $expectedJavaScriptMinified = [math]::Round($initial.minifiedKb + $runtime.minifiedKb + $lazy.minifiedKb, 2)
-    $expectedJavaScriptGzip = [math]::Round($initial.gzipKb + $runtime.gzipKb + $lazy.gzipKb, 2)
+    if ($Evidence.d03.PSObject.Properties.Name -notcontains 'javascriptChunks' -or
+        $Evidence.d03.PSObject.Properties.Name -notcontains 'cssChunks') {
+        return $false
+    }
+    $javascriptChunks = @($Evidence.d03.javascriptChunks)
+    $cssChunks = @($Evidence.d03.cssChunks)
+    $allChunks = @($javascriptChunks + $cssChunks)
+    if ($javascriptChunks.Count -eq 0 -or $cssChunks.Count -eq 0 -or
+        @($allChunks | Where-Object {
+                $_.PSObject.Properties.Name -notcontains 'file' -or
+                $_.PSObject.Properties.Name -notcontains 'minifiedBytes' -or
+                $_.PSObject.Properties.Name -notcontains 'minifiedKb' -or
+                $_.PSObject.Properties.Name -notcontains 'gzipKb'
+            }).Count -gt 0) {
+        return $false
+    }
+    $expectedJavaScriptMinified = [math]::Round(($javascriptChunks | Measure-Object -Property minifiedKb -Sum).Sum, 2)
+    $expectedJavaScriptGzip = [math]::Round(($javascriptChunks | Measure-Object -Property gzipKb -Sum).Sum, 2)
+    $expectedCssMinified = [math]::Round(($cssChunks | Measure-Object -Property minifiedKb -Sum).Sum, 2)
+    $expectedCssGzip = [math]::Round(($cssChunks | Measure-Object -Property gzipKb -Sum).Sum, 2)
+    $expectedJavaScriptBytes = ($javascriptChunks | Measure-Object -Property minifiedBytes -Sum).Sum
+    $expectedCssBytes = ($cssChunks | Measure-Object -Property minifiedBytes -Sum).Sum
+    $javascriptFilesExact = Test-ExactSet @($javascript.files) @($javascriptChunks.file)
+    $cssFilesExact = Test-ExactSet @($css.files) @($cssChunks.file)
+    $combinedFilesExact = Test-ExactSet @($combined.files) @($javascriptChunks.file + $cssChunks.file)
+    $knownChunksPresent = @($initial.file, $runtime.file, $lazy.file | Where-Object { $_ -notin @($javascriptChunks.file) }).Count -eq 0
     $expectedDeltaMinified = [math]::Round($initial.minifiedKb - 628.65, 2)
     $expectedDeltaGzip = [math]::Round($initial.gzipKb - 202.69, 2)
     $expectedPercentageMinified = [math]::Round(($expectedDeltaMinified / 628.65) * 100, 2)
@@ -51,8 +75,16 @@ function Test-BundleEvidence {
         $runtime.minifiedKb -gt 0 -and $runtime.gzipKb -gt 0 -and
         $lazy.minifiedKb -gt 0 -and $lazy.gzipKb -gt 0 -and
         $css.minifiedKb -gt 0 -and $css.gzipKb -gt 0 -and
+        $knownChunksPresent -and $javascriptFilesExact -and $cssFilesExact -and $combinedFilesExact -and
+        @($javascriptChunks.file | Select-Object -Unique).Count -eq $javascriptChunks.Count -and
+        @($cssChunks.file | Select-Object -Unique).Count -eq $cssChunks.Count -and
+        $javascript.minifiedBytes -eq $expectedJavaScriptBytes -and
+        $css.minifiedBytes -eq $expectedCssBytes -and
+        $combined.minifiedBytes -eq ($expectedJavaScriptBytes + $expectedCssBytes) -and
         (Test-ApproximatelyEqual $javascript.minifiedKb $expectedJavaScriptMinified) -and
         (Test-ApproximatelyEqual $javascript.gzipKb $expectedJavaScriptGzip) -and
+        (Test-ApproximatelyEqual $css.minifiedKb $expectedCssMinified) -and
+        (Test-ApproximatelyEqual $css.gzipKb $expectedCssGzip) -and
         (Test-ApproximatelyEqual $combined.minifiedKb ($javascript.minifiedKb + $css.minifiedKb)) -and
         (Test-ApproximatelyEqual $combined.gzipKb ($javascript.gzipKb + $css.gzipKb)) -and
         (Test-ApproximatelyEqual $Evidence.d02ToD03InitialShellDelta.absolute.minifiedKb $expectedDeltaMinified) -and
@@ -132,7 +164,8 @@ $expectedServiceImplementations = [ordered]@{
 }
 $expectedD05Features = @('M2-WS05-E01-F01', 'M2-WS05-E01-F02', 'M2-WS05-E01-F03', 'M2-WS05-E02-F01', 'M2-WS05-E02-F02', 'M2-WS05-E02-F03')
 $expectedD06Features = @('M2-WS06-E01-F01', 'M2-WS06-E01-F02', 'M2-WS06-E01-F03', 'M2-WS06-E02-F01', 'M2-WS06-E02-F02', 'M2-WS06-E02-F03')
-$expectedScaffoldIds = @('customer-identity', 'consent', 'search-retrieval', 'ai-intelligence', 'reporting')
+$expectedD07Features = @('M2-WS07-E01-F01', 'M2-WS07-E01-F02', 'M2-WS07-E01-F03', 'M2-WS07-E02-F01', 'M2-WS07-E02-F03')
+$expectedScaffoldIds = @('customer-identity', 'consent', 'ai-intelligence', 'reporting')
 
 $checks = [System.Collections.Generic.List[object]]::new()
 function Add-Check {
@@ -166,7 +199,8 @@ Add-Check 'Service catalog reviewed set' $d03CatalogStateValid 'Exactly five rev
 $scaffoldServices = @($catalog.services | Where-Object { $_.id -in $expectedScaffoldIds })
 $financialRules = @($catalog.services | Where-Object id -ceq 'financial-rules')
 $integrationGateway = @($catalog.services | Where-Object id -ceq 'integration-gateway')
-$laterServiceStateValid = $scaffoldServices.Count -eq 5 -and
+$searchRetrieval = @($catalog.services | Where-Object id -ceq 'search-retrieval')
+$laterServiceStateValid = $scaffoldServices.Count -eq 4 -and
     (Test-ExactSet @($scaffoldServices.id) $expectedScaffoldIds) -and
     @($scaffoldServices | Where-Object { $_.status -cne 'TOOLCHAIN_SCAFFOLD' -or $_.featureImplementation -cne 'NONE' -or @($_.featureIds).Count -ne 0 }).Count -eq 0 -and
     $financialRules.Count -eq 1 -and
@@ -178,8 +212,12 @@ $laterServiceStateValid = $scaffoldServices.Count -eq 5 -and
     $integrationGateway.Count -eq 1 -and
     $integrationGateway[0].status -ceq 'D06_IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
     $integrationGateway[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
-    (Test-ExactSet @($integrationGateway[0].featureIds) $expectedD06Features)
-Add-Check 'No unrelated service implementation' $laterServiceStateValid 'Five exact scaffolds, separately accepted D05 Rules, and the exact authorized D06 Gateway candidate; D03 ownership remains scoped'
+    (Test-ExactSet @($integrationGateway[0].featureIds) $expectedD06Features) -and
+    $searchRetrieval.Count -eq 1 -and
+    $searchRetrieval[0].status -ceq 'D07_IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
+    $searchRetrieval[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
+    (Test-ExactSet @($searchRetrieval[0].featureIds) $expectedD07Features)
+Add-Check 'No unrelated service implementation' $laterServiceStateValid 'Four exact scaffolds, accepted D05 Rules, and exact D06 Gateway plus D07 Search candidates; D03 ownership remains scoped'
 $catalogFeatures = @($catalog.services | Where-Object { $_.id -in $expectedServiceIds } | ForEach-Object { @($_.featureIds) } | Where-Object { $_ })
 Add-Check 'Service catalog Feature coverage' (Test-ExactSet $catalogFeatures $expectedFeatures) '8/8 Features assigned once'
 

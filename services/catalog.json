@@ -101,9 +101,15 @@
       "name": "Search & Retrieval Service",
       "artifact": "monergy-search-retrieval",
       "primaryHost": "HTTP",
-      "status": "TOOLCHAIN_SCAFFOLD",
-      "featureImplementation": "NONE",
-      "featureIds": []
+      "status": "D07_IMPLEMENTATION_CANDIDATE_SIMULATOR",
+      "featureImplementation": "IMPLEMENTATION_CANDIDATE_SIMULATOR",
+      "featureIds": [
+        "M2-WS07-E01-F01",
+        "M2-WS07-E01-F02",
+        "M2-WS07-E01-F03",
+        "M2-WS07-E02-F01",
+        "M2-WS07-E02-F03"
+      ]
     },
     {
       "id": "ai-intelligence",

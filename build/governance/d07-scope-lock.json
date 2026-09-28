@@ -1,0 +1,71 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D07",
+  "title": "Authorized Search & Provenance Retrieval",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "evidenceLevel": "SIMULATOR",
+  "startingCommits": {
+    "application": "0071cdd8a997533398322eeb91423d52dd163ba8",
+    "architecture": "cdda23d8304167e5ec2ed2778d0abd175bf54262"
+  },
+  "features": [
+    {
+      "id": "M2-WS07-E01-F01",
+      "name": "Document search index",
+      "owner": "Search & Retrieval Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS07-E01-F02",
+      "name": "Financial search index",
+      "owner": "Search & Retrieval Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS07-E01-F03",
+      "name": "Semantic/vector index",
+      "owner": "Search & Retrieval Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS07-E02-F01",
+      "name": "Authorization-aware query execution",
+      "owner": "Search & Retrieval Service",
+      "readiness": "READY"
+    },
+    {
+      "id": "M2-WS07-E02-F03",
+      "name": "Provenance-aware retrieval",
+      "owner": "Search & Retrieval Service",
+      "readiness": "READY"
+    }
+  ],
+  "consumedContracts": [
+    "CID-007",
+    "CID-023",
+    "CID-024",
+    "CID-033",
+    "CID-034",
+    "CID-035",
+    "CID-036",
+    "CID-039"
+  ],
+  "newlyRealizedContracts": ["CID-042", "CID-043", "CID-044", "CID-046"],
+  "excludedFeatures": ["M2-WS07-E02-F02", "M2-WS07-E03-F01", "M2-WS07-E03-F02", "M2-WS07-E03-F03"],
+  "executionZones": ["LOCAL", "CI_EPHEMERAL"],
+  "searchAuthority": "DERIVED_REBUILDABLE",
+  "providerSelection": "NONE",
+  "physicalPersistenceOrBroker": "NOT_SELECTED",
+  "outstandingDecisions": { "OD-14": "UNRESOLVED" },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  },
+  "architectureIntegrity": {
+    "head": "cdda23d8304167e5ec2ed2778d0abd175bf54262",
+    "R1-R7": "FROZEN_UNCHANGED",
+    "R8": "ABSENT"
+  }
+}

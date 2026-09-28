@@ -36,7 +36,9 @@ $ociEvidence = if (Test-Path -LiteralPath $ociEvidencePath) { @(Get-Content -Lit
 
 $components = foreach ($service in $services) {
     $image = @($ociEvidence | Where-Object service -ceq $service.id | Select-Object -First 1)
-    $imagePassed = $image.Count -eq 1 -and $image[0].buildResult -ceq 'PASS'
+    $imagePassed = $image.Count -eq 1 -and
+        $image[0].PSObject.Properties.Name -contains 'buildResult' -and
+        $image[0].buildResult -ceq 'PASS'
     [pscustomobject]@{
         name = $service.artifact
         kind = 'OCI_IMAGE'

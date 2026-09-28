@@ -4,6 +4,10 @@
 candidate suite. It exercises only deterministic `LOCAL`/`CI_EPHEMERAL`
 reference adapters and makes no provider-sandbox or Production claim.
 
+`search-retrieval/Monergy.SearchRetrieval.Tests` is the isolated MWP-03-D07
+behavior and canonical contract/schema suite for authorized derived search,
+deterministic semantic ranking, rebuildability, provenance and access isolation.
+
 D02 adds xUnit architecture/boundary tests. D03 provides 27 tests in the
 independent `Monergy.Vs02.Tests` project. D04 provides 38 authority and exact
 contract tests in `tests/financial-profile/Monergy.FinancialProfile.Tests`.

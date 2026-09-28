@@ -90,7 +90,7 @@ export default function Vs02Experience() {
           <div>
             <Space wrap>
               <Tag color="gold">REFERENCE · LOCAL / CI ONLY</Tag>
-              <Tag color="processing">VS-02 IMPLEMENTATION CANDIDATE</Tag>
+              <Tag color="success">VS-02 ACCEPTED · SIMULATOR</Tag>
             </Space>
             <Title level={1} className="mt-3">
               Evidence to financial truth

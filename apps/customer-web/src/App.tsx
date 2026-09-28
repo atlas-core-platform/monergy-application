@@ -2,6 +2,7 @@ import { Button, Card, Descriptions, Modal, Space, Tag, Typography } from 'antd'
 import { lazy, Suspense, useState } from 'react';
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
+const SearchExperience = lazy(() => import('./search/SearchExperience'));
 const { Paragraph, Text, Title } = Typography;
 
 function ToolchainFoundation() {
@@ -36,6 +37,9 @@ function ToolchainFoundation() {
             <Button size="large" href="/vs02">
               Open VS-02 reference flow
             </Button>
+            <Button size="large" href="/search">
+              Open authorized search
+            </Button>
             <Text keyboard>Build {__BUILD_REVISION__.slice(0, 12)}</Text>
           </Space>
         </section>
@@ -50,7 +54,7 @@ function ToolchainFoundation() {
                 <Tag color="success">TOOLCHAIN READY</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="VS-02">
-                <Tag color="processing">IMPLEMENTATION CANDIDATE</Tag>
+                <Tag color="success">ACCEPTED · SIMULATOR</Tag>
               </Descriptions.Item>
             </Descriptions>
           </Card>
@@ -85,6 +89,20 @@ function ToolchainFoundation() {
 }
 
 export function App() {
+  if (window.location.pathname === '/search') {
+    return (
+      <Suspense
+        fallback={
+          <main className="grid min-h-screen place-items-center bg-canvas p-6" aria-busy="true">
+            <Text>Loading search…</Text>
+          </main>
+        }
+      >
+        <SearchExperience />
+      </Suspense>
+    );
+  }
+
   if (window.location.pathname === '/vs02') {
     return (
       <Suspense

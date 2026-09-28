@@ -98,6 +98,12 @@ const percentageDelta = {
   minifiedPercent: round((absoluteDelta.minifiedKb / d02Baseline.minifiedKb) * 100),
   gzipPercent: round((absoluteDelta.gzipKb / d02Baseline.gzipKb) * 100),
 };
+const describeChunks = (selectedFiles) =>
+  selectedFiles.map((file) => ({
+    file,
+    ...toRawSize([buffers.get(file)]),
+    ...requireReporterSize(file),
+  }));
 
 const evidence = {
   schemaVersion: '1.0.0',
@@ -119,6 +125,8 @@ const evidence = {
       ...toRawSize([buffers.get(vs02File)]),
       ...requireReporterSize(vs02File),
     },
+    javascriptChunks: describeChunks(javascriptFiles),
+    cssChunks: describeChunks(cssFiles),
     totalJavaScript: {
       files: javascriptFiles,
       ...toRawSize(javascriptFiles.map((file) => buffers.get(file))),
