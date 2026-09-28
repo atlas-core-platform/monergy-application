@@ -166,6 +166,20 @@ public sealed class BoundaryTests
         Assert.DoesNotContain("FinancialFactRecord", application + infrastructure, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void SearchRetrievalOwnsOnlyAuthorizedDerivedIndexesAndSourceReferences()
+    {
+        var application = File.ReadAllText(Path.Combine(ServicesRoot, "search-retrieval", "Application", "SearchRetrievalApplication.cs"));
+        var domain = File.ReadAllText(Path.Combine(ServicesRoot, "search-retrieval", "Domain", "SearchDomain.cs"));
+        var infrastructure = File.ReadAllText(Path.Combine(ServicesRoot, "search-retrieval", "Infrastructure", "ReferenceSearchAdapters.cs"));
+        Assert.Contains("ISearchAuthorizationPolicy", application, StringComparison.Ordinal);
+        Assert.Contains("DERIVED_REBUILDABLE", domain, StringComparison.Ordinal);
+        Assert.Contains("SearchSourceReference", domain, StringComparison.Ordinal);
+        Assert.Contains("RequiredAuthorizationContextId", infrastructure, StringComparison.Ordinal);
+        Assert.DoesNotContain("FinancialProfileRepository", application + infrastructure, StringComparison.Ordinal);
+        Assert.DoesNotContain("EvidenceRepository", application + infrastructure, StringComparison.Ordinal);
+    }
+
     private static XDocument LoadServiceProject(string serviceId) =>
         XDocument.Load(Directory.GetFiles(Path.Combine(ServicesRoot, serviceId), "*.csproj").Single());
 

@@ -9,6 +9,7 @@ on:
       - delivery/mwp03-d04-financial-profile-authority-expansion
       - delivery/mwp03-d05-financial-rules-calculation-lineage
       - delivery/mwp03-d06-integration-gateway-core
+      - delivery/mwp03-d07-authorized-search-provenance
   pull_request:
   workflow_dispatch:
 
@@ -54,7 +55,7 @@ jobs:
   toolchain:
     needs: d05-lifecycle-probe
     if: always() && (needs.d05-lifecycle-probe.result == 'success' || needs.d05-lifecycle-probe.result == 'skipped')
-    name: Verify D01-D06 controlled implementation
+    name: Verify D01-D07 controlled implementation
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -179,6 +180,11 @@ jobs:
         if: always()
         shell: pwsh
         run: ./build/Invoke-Toolchain.ps1 -Task D06Verification
+
+      - name: Verify authorized search and provenance retrieval
+        if: always()
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task D07Verification
 
       - name: Upload raw machine-readable evidence
         if: always()

@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.monergy.invalid/authorized-search.schema.json",
+  "title": "MWP-03-D07 authorized search contracts",
+  "oneOf": [
+    { "$ref": "#/$defs/searchDocuments" },
+    { "$ref": "#/$defs/searchFinancialData" },
+    { "$ref": "#/$defs/buildRetrievalContext" },
+    { "$ref": "#/$defs/indexRefreshRequested" }
+  ],
+  "$defs": {
+    "security": {
+      "type": "object",
+      "required": ["actor", "workload", "access"],
+      "properties": {
+        "actor": { "type": "object" },
+        "workload": { "type": "object" },
+        "access": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "base": {
+      "type": "object",
+      "required": [
+        "contractName",
+        "contractVersion",
+        "requestId",
+        "correlationId",
+        "security",
+        "payload"
+      ],
+      "properties": {
+        "contractName": { "type": "string" },
+        "contractVersion": { "const": "1.0.0" },
+        "requestId": { "type": "string", "minLength": 1 },
+        "correlationId": { "type": "string", "minLength": 1 },
+        "causationId": { "type": ["string", "null"] },
+        "security": { "$ref": "#/$defs/security" },
+        "idempotencyKey": { "type": ["string", "null"] },
+        "payload": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "searchDocuments": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "contractName": { "const": "SearchDocuments" },
+            "payload": { "$ref": "#/$defs/searchPayload" }
+          }
+        }
+      ]
+    },
+    "searchFinancialData": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "contractName": { "const": "SearchFinancialData" },
+            "payload": { "$ref": "#/$defs/searchPayload" }
+          }
+        }
+      ]
+    },
+    "searchPayload": {
+      "type": "object",
+      "required": ["customerId", "query", "matchMode", "limit"],
+      "properties": {
+        "customerId": { "type": "string", "minLength": 1 },
+        "query": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "matchMode": { "enum": ["Lexical", "Semantic"] },
+        "limit": { "type": "integer", "minimum": 1, "maximum": 50 }
+      },
+      "additionalProperties": false
+    },
+    "buildRetrievalContext": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "contractName": { "const": "BuildRetrievalContext" },
+            "payload": {
+              "type": "object",
+              "required": ["customerId", "searchRecordIds"],
+              "properties": {
+                "customerId": { "type": "string", "minLength": 1 },
+                "searchRecordIds": {
+                  "type": "array",
+                  "minItems": 1,
+                  "uniqueItems": true,
+                  "items": { "type": "string", "minLength": 1 }
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    },
+    "indexRefreshRequested": {
+      "allOf": [
+        { "$ref": "#/$defs/base" },
+        {
+          "properties": {
+            "contractName": { "const": "IndexRefreshRequested" },
+            "payload": {
+              "type": "object",
+              "required": ["customerId"],
+              "properties": { "customerId": { "type": "string", "minLength": 1 } },
+              "additionalProperties": false
+            }
+          }
+        }
+      ]
+    }
+  },
+  "unevaluatedProperties": false
+}

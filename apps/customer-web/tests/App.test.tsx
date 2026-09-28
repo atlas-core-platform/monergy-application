@@ -9,7 +9,7 @@ import { App } from '../src/App';
 afterEach(cleanup);
 
 describe('D02 toolchain shell', () => {
-  it('preserves toolchain evidence and advertises the bounded VS-02 candidate', () => {
+  it('preserves toolchain evidence and exposes accepted VS-02 plus authorized search', () => {
     render(
       <FoundationProvider>
         <App />
@@ -17,10 +17,14 @@ describe('D02 toolchain shell', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Monergy frontend foundation' })).toBeVisible();
-    expect(screen.getByText('IMPLEMENTATION CANDIDATE')).toBeVisible();
+    expect(screen.getByText('ACCEPTED · SIMULATOR')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Open VS-02 reference flow' })).toHaveAttribute(
       'href',
       '/vs02',
+    );
+    expect(screen.getByRole('link', { name: 'Open authorized search' })).toHaveAttribute(
+      'href',
+      '/search',
     );
   });
 

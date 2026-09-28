@@ -5,8 +5,18 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 try {
-    $null = & docker info 2>&1
-    if ($LASTEXITCODE -ne 0) {
+    $docker = (Get-Command docker -ErrorAction Stop).Source
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        # Docker Desktop can emit benign host-capability warnings on stderr even
+        # when the Linux engine is healthy. Availability is governed by exit code.
+        $ErrorActionPreference = 'Continue'
+        $null = & $docker info 2>&1
+        $dockerExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    if ($dockerExitCode -ne 0) {
         Write-Output 'BLOCKED: Docker Linux engine is unavailable; no OCI build is represented as PASS.'
         exit 2
     }
