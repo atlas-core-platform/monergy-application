@@ -17,7 +17,21 @@ public static class ReportingRegistration
         services.AddSingleton<IReportingAuthorizationPolicy>(authorization);
         services.AddSingleton<IReportSourceReader>(new ReferenceReportSourceReader(configuration));
         services.AddSingleton<IReportRepository>(new InMemoryReportRepository(configuration));
-        services.AddSingleton<IReportEvidenceSink>(new InMemoryReportEvidenceSink(configuration));
+        services.AddSingleton(TimeProvider.System);
+        services.AddTransient<ReportingApplication>();
+        return services;
+    }
+
+    public static IServiceCollection AddReportingPhysicalPersistence(this IServiceCollection services, IConfiguration configuration)
+    {
+        PhysicalPersistenceGuard.EnsureAllowed(configuration);
+        var authorization = new ReferenceReportingAuthorizationPolicy(configuration);
+        authorization.Grant(new(new("reference-actor", "HUMAN", DateTimeOffset.UnixEpoch, "reference-authentication"),
+            new("reporting", "reference-reporting-workload"),
+            new("REFERENCE_REPORTING", null, "reference-reporting-authorization", "reference-customer")));
+        services.AddSingleton<IReportingAuthorizationPolicy>(authorization);
+        services.AddSingleton<IReportSourceReader>(new ReferenceReportSourceReader(configuration));
+        services.AddSingleton<IReportRepository, PostgresReportRepository>();
         services.AddSingleton(TimeProvider.System);
         services.AddTransient<ReportingApplication>();
         return services;

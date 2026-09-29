@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Monergy.DatabaseMigrator</AssemblyName>
+    <RootNamespace>Monergy.DatabaseMigrator</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="dbup-postgresql" />
+  </ItemGroup>
+</Project>

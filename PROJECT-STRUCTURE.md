@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D06 Integration Gateway Candidate
+# Monergy Application Repository Structure — D09 Persistent Data Foundation Candidate
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -84,6 +84,17 @@ D02 assets retained include:
 - `build/governance/d06-scope-lock.json`: exact six-Feature, two-consumed/four-realized-contract candidate boundary.
 - `build/verify-integration-gateway-core.ps1`: deterministic positive and negative D06 scope verifier.
 
+## D09 persistent data foundation candidate
+
+- `build/Monergy.DatabaseMigrator/`: DbUp orchestration for independently owned service migration folders; it contains no business schema definitions.
+- `build/d09/`: pinned PostgreSQL 18.6 and SeaweedFS 4.47 LOCAL/CI composition, runtime-generated credentials, migration execution, and retained-volume durability orchestration.
+- `build/governance/d09-scope-lock.json`: exact technology, five-service cohort, provider exclusions, stage gates, and architecture-integrity lock.
+- `build/verify-persistent-data-foundation.ps1`: D09 deterministic verifier and 18 negative self-tests.
+- `services/{evidence,financial-profile,financial-rules,reporting,audit}/migrations/`: ordered, immutable, service-owned PostgreSQL migrations.
+- `services/*/Infrastructure/Postgres*.cs`: runtime-role adapters behind the accepted application ports. Reference adapters remain available for their governed execution mode.
+- `services/evidence/Infrastructure/PostgresEvidenceAdapters.cs`: PostgreSQL Evidence metadata plus private, versioned S3-compatible byte storage with Monergy SHA-256 integrity.
+- `tests/persistence/Monergy.Persistence.Tests/`: real PostgreSQL/S3 ownership, isolation, idempotency, outbox, append-only, reconstruction, and durability checks.
+
 ## Retained D02 assets
 
 - `.dockerignore` for the controlled OCI build context;
@@ -98,10 +109,7 @@ D02 assets retained include:
   The hosted OCI script emits twelve archive/digest/SBOM/scan rows without
   publishing images.
 
-No physical persistence schema, migration, provider SDK/integration,
-credential, persistent-environment deployment or artifact publication is
-introduced. In-memory/fixture behavior is reference evidence, never a
-Production adapter.
+D09 introduces only the approved PostgreSQL and S3-compatible physical persistence technology for LOCAL / CI_EPHEMERAL. It does not select a Production hosting product, broker, search/vector provider, AI/model provider, cloud, orchestrator, or persistent-environment deployment. Runtime credentials are generated outside tracked source. Reference adapters remain governed evidence and are not Production adapters.
 
 See the catalogs and README files in each responsibility area for the maintained
 boundary inventory.

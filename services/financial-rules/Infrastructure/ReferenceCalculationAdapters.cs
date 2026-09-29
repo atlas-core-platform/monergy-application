@@ -93,6 +93,8 @@ public sealed class ReferenceCalculationAccessPolicy : ICalculationAccessPolicy
 
 public sealed class InMemoryCalculationRepository : ICalculationRepository
 {
+    public string AdapterKind => "IN_MEMORY_REFERENCE";
+
     private readonly object sync = new();
     private readonly Dictionary<CalculationRequestIdentity, (string Fingerprint, CalculationExecution Execution)> requests = [];
     private readonly Dictionary<string, CalculationExecution> results = new(StringComparer.Ordinal);

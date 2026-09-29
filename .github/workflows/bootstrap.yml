@@ -11,6 +11,7 @@ on:
       - delivery/mwp03-d06-integration-gateway-core
       - delivery/mwp03-d07-authorized-search-provenance
       - delivery/mwp03-d08-trusted-financial-summary-export
+      - delivery/mwp03-d09-persistent-relational-data-foundation
   pull_request:
   workflow_dispatch:
 
@@ -191,6 +192,16 @@ jobs:
         if: always()
         shell: pwsh
         run: ./build/Invoke-Toolchain.ps1 -Task D08Verification
+
+      - name: Verify persistent relational data foundation
+        if: always()
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task D09Verification
+
+      - name: Verify D09 PostgreSQL and S3-compatible persistence
+        if: always()
+        shell: pwsh
+        run: ./build/d09/Invoke-D09Persistence.ps1 -Reset
 
       - name: Upload raw machine-readable evidence
         if: always()

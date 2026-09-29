@@ -18,4 +18,15 @@ public static class FinancialProfileRegistration
         services.AddSingleton<FinancialProfileApplication>();
         return services;
     }
+
+    public static IServiceCollection AddFinancialProfilePhysicalPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        PhysicalPersistenceGuard.EnsureAllowed(configuration);
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IFinancialProfileRepository, PostgresFinancialProfileRepository>();
+        services.AddSingleton<FinancialProfileApplication>();
+        return services;
+    }
 }

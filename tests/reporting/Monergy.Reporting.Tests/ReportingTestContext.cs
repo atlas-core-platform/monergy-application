@@ -20,10 +20,9 @@ internal sealed class ReportingTestContext
         Authorization = new ReferenceReportingAuthorizationPolicy(Configuration);
         Authorization.Grant(CustomerA);
         Authorization.Grant(CustomerB);
-        Evidence = new InMemoryReportEvidenceSink(Configuration);
         Clock = new TestTimeProvider(DateTimeOffset.Parse("2026-09-28T10:15:00Z", null,
             System.Globalization.DateTimeStyles.RoundtripKind));
-        Application = new ReportingApplication(Source, Repository, Authorization, Evidence, Clock);
+        Application = new ReportingApplication(Source, Repository, Authorization, Clock);
     }
 
     public IConfiguration Configuration { get; }
@@ -32,7 +31,7 @@ internal sealed class ReportingTestContext
     public CountingReportSourceReader Source { get; }
     public InMemoryReportRepository Repository { get; }
     public ReferenceReportingAuthorizationPolicy Authorization { get; }
-    public InMemoryReportEvidenceSink Evidence { get; }
+    public InMemoryReportRepository Evidence => Repository;
     public TestTimeProvider Clock { get; }
     public ReportingApplication Application { get; }
 

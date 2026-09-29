@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'Verify')]
+    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'D09Verification', 'Verify')]
     [string]$Task = 'Verify',
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot)
 )
@@ -39,6 +39,23 @@ Assert-Version 'Node.js' (& $node --version) '24.21.0'
 Assert-Version 'pnpm' (& $pnpm --version) '12.4.1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $env:DOTNET_NOLOGO = '1'
+$d09ForwardArguments = @{}
+
+$d09ForwardTasks = @(
+    'Verify',
+    'D01Verification',
+    'D02Verification',
+    'D03Verification',
+    'D04Verification',
+    'D05Regression',
+    'D08Verification'
+)
+
+if (($d09ForwardTasks -contains $Task) -and
+    (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d09-scope-lock.json'))) {
+
+    $d09ForwardArguments.D09ForwardRegression = $true
+}
 
 function Invoke-Checked {
     param([scriptblock]$Operation, [string]$Failure)
@@ -68,7 +85,7 @@ function Invoke-Task {
             Invoke-Checked { & $pnpm --dir $RepositoryRoot run build } 'Frontend production build failed.'
         }
         'Test' {
-            Invoke-Checked { & $dotnet test (Join-Path $RepositoryRoot 'Monergy.Application.slnx') --configuration Release --no-build --logger 'trx' --results-directory (Join-Path $RepositoryRoot '.artifacts/tests') } '.NET test suite failed.'
+            Invoke-Checked { & $dotnet test (Join-Path $RepositoryRoot 'Monergy.Application.slnx') --configuration Release --no-build --filter 'FullyQualifiedName!~Monergy.Persistence.Tests' --logger 'trx' --results-directory (Join-Path $RepositoryRoot '.artifacts/tests') } '.NET test suite failed.'
             Invoke-Checked { & $dotnet test (Join-Path $RepositoryRoot 'tests/financial-rules/Monergy.FinancialRules.Tests/Monergy.FinancialRules.Tests.csproj') --configuration Release --no-build --logger 'trx;LogFileName=Monergy.FinancialRules.Tests.trx' --results-directory (Join-Path $RepositoryRoot '.artifacts/tests') } 'D05 named behavioral evidence failed.'
             Invoke-Checked { & $pnpm --dir $RepositoryRoot run test } 'Frontend component/accessibility tests failed.'
         }
@@ -103,27 +120,27 @@ function Invoke-Task {
             & (Join-Path $RepositoryRoot 'build/release/verify-candidate-manifest.ps1') -RepositoryRoot $RepositoryRoot
         }
         'D01Verification' {
-            & (Join-Path $RepositoryRoot 'build/verify-bootstrap.ps1') -RepositoryRoot $RepositoryRoot
+            & (Join-Path $RepositoryRoot 'build/verify-bootstrap.ps1') -RepositoryRoot $RepositoryRoot @d09ForwardArguments
         }
         'D02Verification' {
-            & (Join-Path $RepositoryRoot 'build/verify-toolchain.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
-            & (Join-Path $RepositoryRoot 'build/verify-toolchain.ps1') -RepositoryRoot $RepositoryRoot
+            & (Join-Path $RepositoryRoot 'build/verify-toolchain.ps1') -RepositoryRoot $RepositoryRoot -SelfTest @d09ForwardArguments
+            & (Join-Path $RepositoryRoot 'build/verify-toolchain.ps1') -RepositoryRoot $RepositoryRoot @d09ForwardArguments
         }
         'D03Verification' {
-            & (Join-Path $RepositoryRoot 'build/verify-vs02.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
-            & (Join-Path $RepositoryRoot 'build/verify-vs02.ps1') -RepositoryRoot $RepositoryRoot
+            & (Join-Path $RepositoryRoot 'build/verify-vs02.ps1') -RepositoryRoot $RepositoryRoot -SelfTest @d09ForwardArguments
+            & (Join-Path $RepositoryRoot 'build/verify-vs02.ps1') -RepositoryRoot $RepositoryRoot @d09ForwardArguments
         }
         'D04Verification' {
-            & (Join-Path $RepositoryRoot 'build/verify-financial-profile-authority.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
-            & (Join-Path $RepositoryRoot 'build/verify-financial-profile-authority.ps1') -RepositoryRoot $RepositoryRoot
+            & (Join-Path $RepositoryRoot 'build/verify-financial-profile-authority.ps1') -RepositoryRoot $RepositoryRoot -SelfTest @d09ForwardArguments
+            & (Join-Path $RepositoryRoot 'build/verify-financial-profile-authority.ps1') -RepositoryRoot $RepositoryRoot @d09ForwardArguments
         }
         'D05Verification' {
             & (Join-Path $RepositoryRoot 'build/verify-financial-rules.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
             & (Join-Path $RepositoryRoot 'build/verify-financial-rules.ps1') -RepositoryRoot $RepositoryRoot -RequireBehavior
         }
         'D05Regression' {
-            & (Join-Path $RepositoryRoot 'build/verify-financial-rules.ps1') -RepositoryRoot $RepositoryRoot -RegressionOnly -SelfTest
-            & (Join-Path $RepositoryRoot 'build/verify-financial-rules.ps1') -RepositoryRoot $RepositoryRoot -RegressionOnly -RequireBehavior
+            & (Join-Path $RepositoryRoot 'build/verify-financial-rules.ps1') -RepositoryRoot $RepositoryRoot -RegressionOnly -SelfTest @d09ForwardArguments
+            & (Join-Path $RepositoryRoot 'build/verify-financial-rules.ps1') -RepositoryRoot $RepositoryRoot -RegressionOnly -RequireBehavior @d09ForwardArguments
         }
         'D06Verification' {
             & (Join-Path $RepositoryRoot 'build/verify-integration-gateway-core.ps1') -RepositoryRoot $RepositoryRoot -RegressionOnly -SelfTest
@@ -134,14 +151,18 @@ function Invoke-Task {
             & (Join-Path $RepositoryRoot 'build/verify-authorized-search.ps1') -RepositoryRoot $RepositoryRoot
         }
         'D08Verification' {
-            & (Join-Path $RepositoryRoot 'build/verify-trusted-reporting.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
-            & (Join-Path $RepositoryRoot 'build/verify-trusted-reporting.ps1') -RepositoryRoot $RepositoryRoot
+            & (Join-Path $RepositoryRoot 'build/verify-trusted-reporting.ps1') -RepositoryRoot $RepositoryRoot -SelfTest @d09ForwardArguments
+            & (Join-Path $RepositoryRoot 'build/verify-trusted-reporting.ps1') -RepositoryRoot $RepositoryRoot @d09ForwardArguments
+        }
+        'D09Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-persistent-data-foundation.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+            & (Join-Path $RepositoryRoot 'build/verify-persistent-data-foundation.ps1') -RepositoryRoot $RepositoryRoot
         }
     }
 }
 
 $taskOrder = if ($Task -ceq 'Verify') {
-    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification')
+    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'D09Verification')
 } else { @($Task) }
 
 foreach ($current in $taskOrder) { Invoke-Task $current }

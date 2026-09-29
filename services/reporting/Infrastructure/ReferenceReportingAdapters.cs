@@ -44,6 +44,7 @@ public sealed class InMemoryReportRepository(IConfiguration configuration) : IRe
 {
     private readonly Dictionary<string, TrustedFinancialReport> reports = new(StringComparer.Ordinal);
     private readonly Dictionary<ReportOperationIdentity, TrustedFinancialReport> operations = new();
+    private readonly Dictionary<string, DomainEvent<ReportGeneratedPayload>> outbox = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim operationGate = new(1, 1);
     private readonly object sync = new();
     private readonly bool allowed = Ensure(configuration);
@@ -51,6 +52,7 @@ public sealed class InMemoryReportRepository(IConfiguration configuration) : IRe
     public async Task<ReportOperationResult> GetOrCreateAsync(
         ReportOperationIdentity identity,
         Func<CancellationToken, Task<ReportGenerationAttempt>> reportFactory,
+        Func<TrustedFinancialReport, DomainEvent<ReportGeneratedPayload>> eventFactory,
         CancellationToken cancellationToken = default)
     {
         _ = allowed;
@@ -72,6 +74,8 @@ public sealed class InMemoryReportRepository(IConfiguration configuration) : IRe
             {
                 reports[$"{attempt.Report.CustomerId}|{attempt.Report.ReportId}"] = attempt.Report;
                 operations[identity] = attempt.Report;
+                var governedEvent = eventFactory(attempt.Report);
+                outbox[governedEvent.EventId] = governedEvent;
             }
             return new(attempt.Report, null, true);
         }
@@ -85,6 +89,13 @@ public sealed class InMemoryReportRepository(IConfiguration configuration) : IRe
     {
         lock (sync) return reports.GetValueOrDefault($"{customerId}|{reportId}");
     }
+
+    public IReadOnlyList<DomainEvent<ReportGeneratedPayload>> PendingEvents()
+    {
+        lock (sync) return outbox.Values.OrderBy(item => item.EventId, StringComparer.Ordinal).ToArray();
+    }
+
+    public IReadOnlyList<DomainEvent<ReportGeneratedPayload>> Events => PendingEvents();
 
     public void Dispose() => operationGate.Dispose();
 
@@ -119,21 +130,4 @@ public sealed class ReferenceReportingAuthorizationPolicy(IConfiguration configu
         ReferenceAdapterGuard.EnsureAllowed(configuration);
         return true;
     }
-}
-
-public sealed class InMemoryReportEvidenceSink(IConfiguration configuration) : IReportEvidenceSink
-{
-    private readonly List<DomainEvent<ReportGeneratedPayload>> events = [];
-    private readonly object sync = new();
-    private readonly bool allowed = Ensure(configuration);
-    public IReadOnlyList<DomainEvent<ReportGeneratedPayload>> Events
-    {
-        get { lock (sync) return events.ToArray(); }
-    }
-    public void Record(DomainEvent<ReportGeneratedPayload> generatedEvent)
-    {
-        _ = allowed;
-        lock (sync) events.Add(generatedEvent);
-    }
-    private static bool Ensure(IConfiguration configuration) { ReferenceAdapterGuard.EnsureAllowed(configuration); return true; }
 }

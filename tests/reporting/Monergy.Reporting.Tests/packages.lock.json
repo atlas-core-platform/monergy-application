@@ -384,9 +384,17 @@
       "monergy.services.reporting": {
         "type": "Project",
         "dependencies": {
+          "Dapper": "[2.1.89, )",
           "Monergy.Contracts": "[1.0.0, )",
-          "Monergy.Platform": "[1.0.0, )"
+          "Monergy.Platform": "[1.0.0, )",
+          "Npgsql": "[10.0.3, )"
         }
+      },
+      "Dapper": {
+        "type": "CentralTransitive",
+        "requested": "[2.1.89, )",
+        "resolved": "2.1.89",
+        "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
       },
       "Microsoft.Extensions.Hosting": {
         "type": "CentralTransitive",
@@ -416,6 +424,15 @@
           "Microsoft.Extensions.Logging.EventLog": "10.0.12",
           "Microsoft.Extensions.Logging.EventSource": "10.0.12",
           "Microsoft.Extensions.Options": "10.0.12"
+        }
+      },
+      "Npgsql": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.3, )",
+        "resolved": "10.0.3",
+        "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
         }
       },
       "OpenTelemetry.Exporter.OpenTelemetryProtocol": {

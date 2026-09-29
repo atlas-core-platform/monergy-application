@@ -11,7 +11,6 @@ public sealed class ReportingApplication(
     IReportSourceReader sourceReader,
     IReportRepository repository,
     IReportingAuthorizationPolicy authorizationPolicy,
-    IReportEvidenceSink evidenceSink,
     TimeProvider timeProvider)
 {
     public async Task<ContractResult<TrustedFinancialReport>> GenerateAsync(
@@ -49,22 +48,18 @@ public sealed class ReportingApplication(
             }
 
             return ReportGenerationAttempt.Succeeded(BuildReport(snapshot, identity, timeProvider.GetUtcNow()));
-        }, cancellationToken).ConfigureAwait(false);
+        }, report => new("CID-053", $"report-generated-{report.ReportId}",
+            ReportingContractNames.ReportGenerated, ContractGuard.CurrentVersion, report.GeneratedAt,
+            request.CorrelationId, request.CausationId, ReportingAuthority.ReportingService, "Report",
+            report.ReportId, new(report.ReportId, report.CustomerId, report.State,
+                report.SourceFinancialReferences, report.EvidenceReferences,
+                report.FinancialProvenanceReferences, report.CalculationLineageReferences,
+                report.AiResponseTraceReference, report.AuditCompatibilityReferenceId,
+                report.Export.Sha256)), cancellationToken).ConfigureAwait(false);
 
         if (operation.Error is not null) return Rejected<GenerateReport>(request, operation.Error);
 
         var report = operation.Report!;
-        if (operation.Created)
-        {
-            evidenceSink.Record(new("CID-053", $"report-generated-{report.ReportId}",
-                ReportingContractNames.ReportGenerated, ContractGuard.CurrentVersion, report.GeneratedAt,
-                request.CorrelationId, request.CausationId, ReportingAuthority.ReportingService, "Report",
-                report.ReportId, new(report.ReportId, report.CustomerId, report.State,
-                    report.SourceFinancialReferences, report.EvidenceReferences,
-                    report.FinancialProvenanceReferences, report.CalculationLineageReferences,
-                    report.AiResponseTraceReference, report.AuditCompatibilityReferenceId,
-                    report.Export.Sha256)));
-        }
         return ContractResult<TrustedFinancialReport>.Succeeded(request, report);
     }
 

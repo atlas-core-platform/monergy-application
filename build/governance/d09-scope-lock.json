@@ -1,0 +1,41 @@
+{
+  "deliverable": "MWP-03-D09",
+  "title": "Persistent Relational Data Foundation",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "businessFeatureCompletion": "NONE",
+  "executionZones": ["LOCAL", "CI_EPHEMERAL"],
+  "database": {
+    "technology": "PostgreSQL",
+    "version": "18.6",
+    "productionHosting": "NOT_SELECTED"
+  },
+  "packages": {
+    "Npgsql": "10.0.3",
+    "Dapper": "2.1.89",
+    "dbup-postgresql": "7.0.1",
+    "AWSSDK.S3": "4.0.103.4"
+  },
+  "evidenceContent": {
+    "technology": "S3_COMPATIBLE",
+    "localCiFixture": "SeaweedFS 4.47",
+    "productionHosting": "NOT_SELECTED",
+    "versioning": "REQUIRED",
+    "integrity": "MONERGY_SHA256_NOT_ETAG"
+  },
+  "persistedServices": ["evidence", "financial-profile", "financial-rules", "reporting", "audit"],
+  "databaseOwnership": "SEPARATE_DATABASE_OWNER_AND_RUNTIME_ROLES",
+  "transactionalOutbox": ["evidence", "financial-profile", "financial-rules", "reporting"],
+  "providers": {
+    "messageBroker": "NOT_SELECTED",
+    "searchVector": "NOT_SELECTED",
+    "aiModel": "NOT_SELECTED",
+    "cloudOrchestrator": "NOT_SELECTED"
+  },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  },
+  "architectureIntegrity": { "R1-R7": "FROZEN_UNCHANGED", "R8": "ABSENT" }
+}

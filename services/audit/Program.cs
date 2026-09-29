@@ -10,6 +10,10 @@ if (ReferenceAdapterGuard.IsSelected(builder.Configuration))
 {
     builder.Services.AddAuditReferenceAdapters(builder.Configuration);
 }
+else if (PhysicalPersistenceGuard.IsSelected(builder.Configuration))
+{
+    builder.Services.AddAuditPhysicalPersistence(builder.Configuration);
+}
 builder.Services.AddHostedService<StartupWorker>();
 
 await builder.Build().RunAsync();

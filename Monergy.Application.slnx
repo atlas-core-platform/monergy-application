@@ -17,6 +17,9 @@
     <Project Path="contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
     <Project Path="shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
   </Folder>
+  <Folder Name="/Build/">
+    <Project Path="build/Monergy.DatabaseMigrator/Monergy.DatabaseMigrator.csproj" />
+  </Folder>
   <Folder Name="/Tests/">
     <Project Path="tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj" />
     <Project Path="tests/financial-profile/Monergy.FinancialProfile.Tests/Monergy.FinancialProfile.Tests.csproj" />
@@ -25,5 +28,6 @@
     <Project Path="tests/reporting/Monergy.Reporting.Tests/Monergy.Reporting.Tests.csproj" />
     <Project Path="tests/search-retrieval/Monergy.SearchRetrieval.Tests/Monergy.SearchRetrieval.Tests.csproj" />
     <Project Path="tests/vs02/Monergy.Vs02.Tests/Monergy.Vs02.Tests.csproj" />
+    <Project Path="tests/persistence/Monergy.Persistence.Tests/Monergy.Persistence.Tests.csproj" />
   </Folder>
 </Solution>

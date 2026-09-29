@@ -4,7 +4,13 @@ using Monergy.Platform;
 
 namespace Monergy.Services.Evidence.Application;
 
-public sealed record EvidenceContentDescriptor(string Reference, string Sha256, string ContentType);
+public sealed record EvidenceContentDescriptor(
+    string Reference,
+    string Sha256,
+    string ContentType,
+    long ContentLength = 0,
+    string? StorageKey = null,
+    string? StorageVersionId = null);
 
 public sealed record EvidenceVersionRecord(
     string DocumentId,
@@ -18,14 +24,25 @@ public sealed record EvidenceVersionRecord(
     string ContentReference,
     string ContentSha256,
     DateTimeOffset ReceivedAt,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    long ContentLength = 0,
+    string? ContentStorageKey = null,
+    string? ContentStorageVersionId = null);
 
 public sealed record EvidenceSaveResult(EvidenceVersionRecord Version, bool Created, bool FirstVersion);
 
+public sealed record EvidenceOperationIdentity(
+    string ContractName,
+    string ContractVersion,
+    string CustomerId,
+    string IdempotencyKey);
+
 public interface IEvidenceRepository
 {
+    string AdapterKind { get; }
+
     Task<EvidenceSaveResult> SaveVersionAsync(
-        string idempotencyKey,
+        EvidenceOperationIdentity identity,
         EvidenceVersionRecord candidate,
         Func<EvidenceVersionRecord, IReadOnlyList<object>> eventFactory,
         CancellationToken cancellationToken);
@@ -106,12 +123,16 @@ public sealed class EvidenceApplication(
             payload.ContentReference,
             payload.ContentSha256.ToLowerInvariant(),
             payload.ReceivedAt,
-            now);
+            now,
+            content.ContentLength,
+            content.StorageKey,
+            content.StorageVersionId);
 
         try
         {
             var saved = await repository.SaveVersionAsync(
-                request.IdempotencyKey,
+                new EvidenceOperationIdentity(request.ContractName, request.ContractVersion,
+                    payload.CustomerId, request.IdempotencyKey),
                 candidate,
                 version => CreateEvents(version, request),
                 cancellationToken);
@@ -133,7 +154,7 @@ public sealed class EvidenceApplication(
                 request.CausationId,
                 "document-version",
                 saved.Version.DocumentVersionId,
-                "REFERENCE_OR_PORT"));
+                repository.AdapterKind));
             return ContractResult<DocumentVersionCreatedResult>.Succeeded(request, result);
         }
         catch (InvalidOperationException)

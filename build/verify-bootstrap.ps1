@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
-    [switch]$SelfTest
+    [switch]$SelfTest,
+    [switch]$D09ForwardRegression
 )
 
 $ErrorActionPreference = 'Stop'
@@ -171,7 +172,12 @@ Add-Check 'Service source folders' $serviceFoldersValid 'All 12 governed folders
 Add-Check 'Service-owned migration scaffolds' $migrationFoldersValid 'All 12 services own a migration history location'
 
 $sqlFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
-Add-Check 'No speculative migrations' ($sqlFiles.Count -eq 0) "$($sqlFiles.Count) SQL migration files"
+if ($D09ForwardRegression) {
+    $authorized = @($sqlFiles | Where-Object { $_.FullName -match '[\\/](evidence|financial-profile|financial-rules|reporting|audit)[\\/]migrations[\\/]' })
+    Add-Check 'D09-authorized service migrations only' ($sqlFiles.Count -eq 9 -and $authorized.Count -eq 9) 'Exact five-service D09 cohort; historical default remains zero migrations'
+} else {
+    Add-Check 'No speculative migrations' ($sqlFiles.Count -eq 0) "$($sqlFiles.Count) SQL migration files"
+}
 
 $appCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'apps/catalog.json') -Raw | ConvertFrom-Json
 Add-Check 'D05 application boundaries' (Test-ExactSet @($appCatalog.applications.folder) @('customer-web', 'administration-web')) 'Two reserved applications'

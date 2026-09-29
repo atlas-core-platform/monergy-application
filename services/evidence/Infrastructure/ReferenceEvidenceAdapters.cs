@@ -7,11 +7,13 @@ public sealed class InMemoryEvidenceRepository : IEvidenceRepository
 {
     private readonly object sync = new();
     private readonly Dictionary<string, EvidenceVersionRecord> versions = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, string> idempotency = new(StringComparer.Ordinal);
+    private readonly Dictionary<EvidenceOperationIdentity, string> idempotency = [];
     private readonly List<object> outbox = [];
 
+    public string AdapterKind => "IN_MEMORY_REFERENCE";
+
     public Task<EvidenceSaveResult> SaveVersionAsync(
-        string idempotencyKey,
+        EvidenceOperationIdentity identity,
         EvidenceVersionRecord candidate,
         Func<EvidenceVersionRecord, IReadOnlyList<object>> eventFactory,
         CancellationToken cancellationToken)
@@ -19,7 +21,7 @@ public sealed class InMemoryEvidenceRepository : IEvidenceRepository
         cancellationToken.ThrowIfCancellationRequested();
         lock (sync)
         {
-            if (idempotency.TryGetValue(idempotencyKey, out var existingId))
+            if (idempotency.TryGetValue(identity, out var existingId))
             {
                 var prior = versions[existingId];
                 if (!Equivalent(prior, candidate))
@@ -46,7 +48,7 @@ public sealed class InMemoryEvidenceRepository : IEvidenceRepository
 
             var saved = candidate with { Version = documentVersions.Length + 1 };
             versions.Add(saved.DocumentVersionId, saved);
-            idempotency.Add(idempotencyKey, saved.DocumentVersionId);
+            idempotency.Add(identity, saved.DocumentVersionId);
             outbox.AddRange(eventFactory(saved));
             return Task.FromResult(new EvidenceSaveResult(saved, true, documentVersions.Length == 0));
         }
