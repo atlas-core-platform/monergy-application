@@ -36,4 +36,4 @@ CREATE TABLE reporting.idempotency_operations (
 GRANT SELECT, INSERT ON reporting.reports TO monergy_reporting_runtime;
 GRANT SELECT, INSERT ON reporting.idempotency_operations TO monergy_reporting_runtime;
 ALTER DEFAULT PRIVILEGES IN SCHEMA reporting
-    GRANT SELECT, INSERT, UPDATE ON TABLES TO monergy_reporting_runtime;
+    GRANT SELECT, INSERT ON TABLES TO monergy_reporting_runtime;

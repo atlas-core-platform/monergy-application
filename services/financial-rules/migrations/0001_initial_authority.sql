@@ -34,4 +34,4 @@ CREATE TABLE financial_rules.idempotency_operations (
 GRANT SELECT, INSERT ON financial_rules.calculations TO monergy_financial_rules_runtime;
 GRANT SELECT, INSERT ON financial_rules.idempotency_operations TO monergy_financial_rules_runtime;
 ALTER DEFAULT PRIVILEGES IN SCHEMA financial_rules
-    GRANT SELECT, INSERT, UPDATE ON TABLES TO monergy_financial_rules_runtime;
+    GRANT SELECT, INSERT ON TABLES TO monergy_financial_rules_runtime;

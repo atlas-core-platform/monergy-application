@@ -53,4 +53,4 @@ GRANT SELECT, INSERT ON financial_profile.fact_revisions TO monergy_financial_pr
 GRANT SELECT, INSERT ON financial_profile.provenance TO monergy_financial_profile_runtime;
 GRANT SELECT, INSERT ON financial_profile.idempotency_operations TO monergy_financial_profile_runtime;
 ALTER DEFAULT PRIVILEGES IN SCHEMA financial_profile
-    GRANT SELECT, INSERT, UPDATE ON TABLES TO monergy_financial_profile_runtime;
+    GRANT SELECT, INSERT ON TABLES TO monergy_financial_profile_runtime;

@@ -62,6 +62,20 @@ public sealed class PersistentFoundationTests
             "ALTER TABLE financial_rules.calculations ADD COLUMN forbidden text;"));
         await Assert.ThrowsAnyAsync<PostgresException>(() => runtime.ExecuteAsync(
             "DROP TABLE financial_rules.calculations;"));
+
+        foreach (var service in new[] { "evidence", "financial-profile", "financial-rules", "reporting" })
+        {
+            var schema = service.Replace('-', '_');
+            var outbox = $"{schema}.outbox";
+            await using var outboxRuntime = new NpgsqlConnection(Runtime(service));
+            await outboxRuntime.OpenAsync();
+
+            Assert.False(await outboxRuntime.ExecuteScalarAsync<bool>(
+                "SELECT has_table_privilege(current_user, @Outbox, 'UPDATE');", new { Outbox = outbox }));
+            Assert.True(await outboxRuntime.ExecuteScalarAsync<bool>(
+                "SELECT has_column_privilege(current_user, @Outbox, 'dispatched_at', 'UPDATE');",
+                new { Outbox = outbox }));
+        }
     }
 
     [Fact]
