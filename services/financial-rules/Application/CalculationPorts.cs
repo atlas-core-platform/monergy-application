@@ -26,6 +26,8 @@ public sealed record CalculationExecution(
 
 public interface ICalculationRepository
 {
+    string AdapterKind { get; }
+
     CalculationExecution? FindRequest(CalculationRequestIdentity identity, string fingerprint);
     CalculationExecution? FindResult(string calculationId, string customerId);
     CalculationExecution Commit(CalculationRequestIdentity identity, string fingerprint, Func<CalculationExecution> applicationTransition);

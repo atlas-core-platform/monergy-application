@@ -19,6 +19,8 @@ and CI / EPHEMERAL execution.
 - Architecture basis: Monergy Architecture Baseline v1.0
 - MWP-03-D08: Trusted Financial Summary, Drill-Down & Export implementation candidate at SIMULATOR — exactly three READY Features, consuming CID-022/CID-030/CID-033/CID-038/CID-039/CID-048/CID-061 and realizing CID-051/CID-052/CID-053
 - D08 product reference experience: lazy-loaded `/reports`, explicitly labeled `REFERENCE · LOCAL / CI ONLY`; conditional summary, goal/explanation, formal-pack, and notification Features remain excluded
+- MWP-03-D09: Persistent Relational Data Foundation candidate; durable PostgreSQL/S3-compatible persistence for the existing Evidence, Financial Profile, Financial Rules, Reporting, and Audit boundaries; no new business Feature completion
+- D09 execution is restricted to LOCAL / CI_EPHEMERAL. PostgreSQL and S3-compatible storage are technology selections only; Production hosting remains NOT_SELECTED.
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Backend: .NET SDK 10.0.401, .NET runtime 10.0.12, C# 14, ASP.NET Core and
   Worker Service according to accepted service responsibilities
@@ -26,7 +28,7 @@ and CI / EPHEMERAL execution.
   Vite 8.3.0, Ant Design 6.6.3 and Tailwind CSS 4.3.3
 - Hosted repository: private GitHub repository at
   `https://github.com/atlas-core-platform/monergy-application`
-- Hosted CI: GitHub Actions configured for D01-D05 gates and evidence
+- Hosted CI: GitHub Actions configured for D01-D09 gates and evidence
 - Governance: GitHub Free exception accepted; branch protection is
   `NOT_IMPLEMENTED — GITHUB FREE PLAN LIMITATION`; CODEOWNERS is advisory and CI
   flags direct pushes to `main`
@@ -121,6 +123,8 @@ or deployment target; C-10, C-11, C-14, and OD-08 remain unresolved.
 ```powershell
 ./build/Invoke-Toolchain.ps1 -Task Verify
 ```
+
+The D09 candidate replaces reference persistence behind exactly five accepted service boundaries with service-owned PostgreSQL databases and an S3-compatible Evidence content store. Each database has separate owner/migrator and runtime roles; Evidence, Financial Profile, Financial Rules, and Reporting persist governed event intent through a transactional outbox. Run `build/d09/Invoke-D09Persistence.ps1 -Reset` for the real LOCAL/CI migration, isolation, adapter-reconstruction, object-versioning, SHA-256, and retained-volume restart evidence. This is not Production recovery evidence.
 
 The task surface performs locked restore, formatting, lint, strict type checks,
 build, tests, security evidence, packaging, acceptance-evidence manifest checks,

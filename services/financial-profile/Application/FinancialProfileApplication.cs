@@ -74,6 +74,8 @@ public sealed record FinancialProfileChangeTransition(
 
 public interface IFinancialProfileRepository
 {
+    string AdapterKind { get; }
+
     Task<FinancialNormalizationSave> NormalizeAsync(
         FinancialNormalizationIdentity idempotencyIdentity,
         ContractRequest<NormalizeSourceFacts> request,
@@ -158,7 +160,7 @@ public sealed class FinancialProfileApplication(
                 request.CausationId,
                 "financial-profile",
                 payload.FinancialProfileId,
-                "IN_MEMORY_REFERENCE"));
+                repository.AdapterKind));
             return ContractResult<NormalizationResult>.Succeeded(request, new NormalizationResult(normalized));
         }
         catch (InvalidOperationException)
@@ -294,7 +296,7 @@ public sealed class FinancialProfileApplication(
             fact.Revision,
             fact.FinancialProvenanceId);
 
-    private static LifecycleSignal QuerySignal<TPayload>(
+    private LifecycleSignal QuerySignal<TPayload>(
         string operation,
         ContractRequest<TPayload> request,
         string subjectType,
@@ -308,7 +310,7 @@ public sealed class FinancialProfileApplication(
             request.CausationId,
             subjectType,
             subjectId,
-            "IN_MEMORY_REFERENCE");
+            repository.AdapterKind);
 
     private static ContractResult<TData> Reject<TData, TPayload>(
         ContractRequest<TPayload> request,

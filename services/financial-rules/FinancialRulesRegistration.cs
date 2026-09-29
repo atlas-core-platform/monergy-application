@@ -33,4 +33,35 @@ public static class FinancialRulesRegistration
         services.AddTransient<FinancialRulesApplication>();
         return services;
     }
+
+    public static IServiceCollection AddFinancialRulesPhysicalPersistence(this IServiceCollection services, IConfiguration configuration)
+    {
+        PhysicalPersistenceGuard.EnsureAllowed(configuration);
+        AddCommon(services, configuration);
+        services.AddSingleton<ICalculationRepository, PostgresCalculationRepository>();
+        return services;
+    }
+
+    private static void AddCommon(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<ReferenceRuleRegistry>(_ =>
+        {
+            var registry = new ReferenceRuleRegistry(configuration);
+            registry.Register(new EngineeringRule("engineering.sum", "1.0.0"));
+            registry.Register(new EngineeringRule("engineering.sum", "2.0.0"));
+            registry.Register(new EngineeringRule("engineering.ratio", "1.0.0"));
+            return registry;
+        });
+        services.AddSingleton<IRuleRegistry>(provider => provider.GetRequiredService<ReferenceRuleRegistry>());
+        services.AddSingleton<ReferenceCalculationAccessPolicy>();
+        services.AddSingleton<ICalculationAccessPolicy>(provider => provider.GetRequiredService<ReferenceCalculationAccessPolicy>());
+        services.AddHttpClient<IFinancialInputReader, FinancialProfileContractClient>(client =>
+        {
+            var endpoint = configuration["Monergy:FinancialProfileBaseAddress"];
+            if (!string.IsNullOrWhiteSpace(endpoint)) client.BaseAddress = new Uri(endpoint, UriKind.Absolute);
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+        services.AddTransient<FinancialRulesApplication>();
+    }
 }

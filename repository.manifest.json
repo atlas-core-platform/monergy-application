@@ -44,6 +44,16 @@
   "d08EvidenceLevel": "SIMULATOR_CANDIDATE",
   "d08FrontendBusinessChange": "REFERENCE_TRUSTED_REPORT_ROUTE",
   "d08OutstandingDecisions": ["C-10", "C-11", "C-14", "OD-08"],
+  "d09Status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "d09BusinessFeatureCompletion": "NONE",
+  "d09PersistenceCohort": [
+    "evidence",
+    "financial-profile",
+    "financial-rules",
+    "reporting",
+    "audit"
+  ],
+  "d09EvidenceLevel": "LOCAL_CI_PERSISTENCE_CANDIDATE",
   "integrationEvidenceLevel": "SIMULATOR_REFERENCE_ADAPTER",
   "businessFeatureImplementation": "VS02_IMPLEMENTATION_ACCEPTED_SIMULATOR",
   "referenceAdapterExecutionZones": ["LOCAL", "CI_EPHEMERAL"],

@@ -87,39 +87,119 @@ public sealed class BoundaryTests
     }
 
     [Fact]
-    public void MigrationHistoriesRemainServiceOwnedAndEmpty()
+    public void SqlMigrationsRemainOwnedByTheExactD09PersistenceCohort()
     {
+        var persistenceCohort = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "audit",
+            "evidence",
+            "financial-profile",
+            "financial-rules",
+            "reporting",
+        };
+        var authorizedRoots = persistenceCohort
+            .Select(serviceId => Path.GetFullPath(Path.Combine(ServicesRoot, serviceId, "migrations")))
+            .ToArray();
+
         foreach (var serviceId in ServiceIds)
         {
             var migrationRoot = Path.Combine(ServicesRoot, serviceId, "migrations");
             Assert.True(Directory.Exists(migrationRoot));
-            Assert.DoesNotContain(
-                Directory.GetFiles(migrationRoot),
-                path => !path.EndsWith(".gitkeep", StringComparison.Ordinal));
+            var sqlMigrations = Directory.GetFiles(migrationRoot, "*.sql", SearchOption.AllDirectories);
+            if (persistenceCohort.Contains(serviceId))
+            {
+                Assert.NotEmpty(sqlMigrations);
+            }
+            else
+            {
+                Assert.Empty(sqlMigrations);
+            }
         }
+
+        var allBusinessMigrations = Directory.GetFiles(RepositoryRoot, "*.sql", SearchOption.AllDirectories)
+            .Where(path => !HasIgnoredSegment(path))
+            .Select(Path.GetFullPath)
+            .ToArray();
+        Assert.All(allBusinessMigrations, path =>
+            Assert.Contains(authorizedRoots, root => IsUnderRoot(path, root)));
     }
 
     [Fact]
-    public void NoDatabaseOrProviderSdkIsSelected()
+    public void PhysicalPersistenceDependenciesRemainInsideAuthorizedD09Boundaries()
     {
         var forbidden = new[]
         {
             "EntityFrameworkCore",
-            "Npgsql",
             "SqlClient",
             "MongoDB",
             "StackExchange.Redis",
             "Azure.",
-            "Amazon.",
             "Google.Cloud",
             "OpenAI",
+        };
+        var persistenceCohort = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "audit",
+            "evidence",
+            "financial-profile",
+            "financial-rules",
+            "reporting",
         };
 
         foreach (var projectPath in Directory.GetFiles(RepositoryRoot, "*.csproj", SearchOption.AllDirectories))
         {
+            if (HasIgnoredSegment(projectPath)) continue;
             var content = File.ReadAllText(projectPath);
             Assert.DoesNotContain(forbidden, value => content.Contains(value, StringComparison.OrdinalIgnoreCase));
+
+            var relative = Path.GetRelativePath(RepositoryRoot, projectPath).Replace('\\', '/');
+            var packages = XDocument.Load(projectPath)
+                .Descendants("PackageReference")
+                .Select(element => element.Attribute("Include")?.Value)
+                .Where(value => value is not null)
+                .Cast<string>()
+                .ToArray();
+            var serviceId = relative.StartsWith("services/", StringComparison.Ordinal)
+                ? relative.Split('/')[1]
+                : null;
+            var persistenceBoundary = serviceId is not null && persistenceCohort.Contains(serviceId)
+                || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
+                || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal);
+
+            if (packages.Contains("Npgsql", StringComparer.OrdinalIgnoreCase)
+                || packages.Contains("Dapper", StringComparer.OrdinalIgnoreCase))
+            {
+                Assert.True(persistenceBoundary, $"D09 database dependency escaped its boundary: {relative}");
+            }
+            if (packages.Contains("AWSSDK.S3", StringComparer.OrdinalIgnoreCase))
+            {
+                Assert.True(relative.StartsWith("services/evidence/", StringComparison.Ordinal)
+                    || relative.StartsWith("tests/persistence/", StringComparison.Ordinal),
+                    $"S3 dependency escaped Evidence/D09 test scope: {relative}");
+            }
+            if (packages.Contains("dbup-postgresql", StringComparer.OrdinalIgnoreCase))
+            {
+                Assert.True(relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal),
+                    $"DbUp dependency escaped D09 migration tooling: {relative}");
+            }
         }
+
+        var persistenceSource = Directory.GetFiles(RepositoryRoot, "*.cs", SearchOption.AllDirectories)
+            .Where(path => !HasIgnoredSegment(path))
+            .Where(path =>
+            {
+                var content = File.ReadAllText(path);
+                return System.Text.RegularExpressions.Regex.IsMatch(
+                    content,
+                    @"(?m)^\s*using\s+(Npgsql|Amazon\.|DbUp)");
+            })
+            .Select(path => Path.GetRelativePath(RepositoryRoot, path).Replace('\\', '/'))
+            .ToArray();
+        Assert.All(persistenceSource, relative => Assert.True(
+            persistenceCohort.Any(serviceId => relative.StartsWith($"services/{serviceId}/Infrastructure/", StringComparison.Ordinal))
+            || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
+            || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal),
+            $"Physical persistence source escaped its D09 boundary: {relative}"));
     }
 
     [Fact]
@@ -201,6 +281,15 @@ public sealed class BoundaryTests
 
     private static string ProjectServiceId(string path) =>
         new DirectoryInfo(Path.GetDirectoryName(path)!).Name;
+
+    private static bool HasIgnoredSegment(string path)
+    {
+        var relative = Path.GetRelativePath(RepositoryRoot, path).Replace('\\', '/');
+        return relative.Split('/').Any(segment => segment is ".git" or ".artifacts" or ".toolcache" or "bin" or "node_modules" or "obj");
+    }
+
+    private static bool IsUnderRoot(string path, string root) =>
+        path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
     private static string ServicesRoot => Path.Combine(RepositoryRoot, "services");
 

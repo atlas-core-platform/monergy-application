@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
-    [switch]$SelfTest
+    [switch]$SelfTest,
+    [switch]$D09ForwardRegression
 )
 
 $ErrorActionPreference = 'Stop'
@@ -221,7 +222,11 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
         @($referenceText | Select-Object -Unique).Count -eq $referenceText.Count -and
         @($referenceText | Where-Object { $_ -match '[\\/](?:services|tests|apps)[\\/]' }).Count -eq 0
     $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $serviceRoot 'migrations') -File | Where-Object Name -cne '.gitkeep')
-    $migrationOwnershipValid = $migrationOwnershipValid -and $migrationFiles.Count -eq 0
+    if ($D09ForwardRegression -and $entry.Key -in @('evidence','financial-profile','financial-rules','reporting','audit')) {
+        $migrationOwnershipValid = $migrationOwnershipValid -and $migrationFiles.Count -ge 1
+    } else {
+        $migrationOwnershipValid = $migrationOwnershipValid -and $migrationFiles.Count -eq 0
+    }
     $program = Get-Content -LiteralPath (Join-Path $serviceRoot 'Program.cs') -Raw
     if ($entry.Value -ceq 'Microsoft.NET.Sdk.Web') {
         $healthOnlyValid = $healthOnlyValid -and $program.Contains('MapHealthChecks') -and
@@ -247,7 +252,7 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
 }
 Add-Check 'Evidence-based host split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 9 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 3) 'Nine HTTP hosts and three primary workers'
 Add-Check 'No service-to-service project references' $serviceReferenceValid 'Every service references Platform exactly once, Contracts zero or one time, and no other project; service/test/app and duplicate references are forbidden'
-Add-Check 'Empty service-owned migrations' $migrationOwnershipValid '12 independent empty migration histories'
+Add-Check $(if ($D09ForwardRegression) { 'D09-bounded service-owned migrations' } else { 'Empty service-owned migrations' }) $migrationOwnershipValid $(if ($D09ForwardRegression) { 'Exact five-service cohort populated; seven histories remain empty' } else { '12 independent empty migration histories' })
 Add-Check 'Controlled host scope' $healthOnlyValid 'Three true scaffolds remain health/startup-only; exact D03 and D05-D08 governed participants may expose contract surfaces'
 
 $lockFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter 'packages.lock.json' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
@@ -255,8 +260,8 @@ $projectFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Fil
 $projectsWithoutLocks = @($projectFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $_.DirectoryName 'packages.lock.json')) })
 Add-Check 'NuGet lock coverage' ($lockFiles.Count -eq $projectFiles.Count -and $projectsWithoutLocks.Count -eq 0) 'Every service, shared, contract, and independently owned test project has a lock file'
 $projectText = @($projectFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
-$forbiddenProviders = 'EntityFrameworkCore|Npgsql|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Amazon\.|Google\.Cloud|OpenAI'
-Add-Check 'Provider-neutral dependency graph' ($projectText -notmatch $forbiddenProviders) 'No database, cloud, broker, storage, search, OCR, AI, identity, secret, or orchestrator SDK'
+$forbiddenProviders = if ($D09ForwardRegression) { 'EntityFrameworkCore|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Google\.Cloud|OpenAI' } else { 'EntityFrameworkCore|Npgsql|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Amazon\.|Google\.Cloud|OpenAI' }
+Add-Check $(if ($D09ForwardRegression) { 'D09-bounded provider dependency graph' } else { 'Provider-neutral dependency graph' }) ($projectText -notmatch $forbiddenProviders) $(if ($D09ForwardRegression) { 'Only separately verified D09 persistence packages are allowed' } else { 'No database, cloud, broker, storage, search, OCR, AI, identity, secret, or orchestrator SDK' })
 Add-Check 'Vendor-neutral observability bootstrap' ($projectText.Contains('OpenTelemetry.Extensions.Hosting') -and $projectText.Contains('OpenTelemetry.Exporter.OpenTelemetryProtocol')) 'OpenTelemetry SDK and OTLP exporter only'
 Add-Check 'Architecture tests implemented' (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'tests/architecture/Monergy.Architecture.Tests/BoundaryTests.cs')) 'xUnit boundary suite exists'
 

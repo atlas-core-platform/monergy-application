@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot,
-    [switch]$SelfTest
+    [switch]$SelfTest,
+    [switch]$D09ForwardRegression
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -49,9 +50,12 @@ if ($SelfTest) {
 
 $checks = [ordered]@{}
 $checks['Exact three-Feature candidate scope'] = Test-Scope $scope
-$sourceFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services/reporting') -Recurse -File | Where-Object { $_.Extension -in '.cs','.csproj','.md' -and $_.FullName -notmatch '[\/](bin|obj)[\/]' })
+$sourceFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services/reporting') -Recurse -File | Where-Object {
+    $_.Extension -in '.cs','.csproj','.md' -and $_.FullName -notmatch '[\/](bin|obj)[\/]' -and
+    (-not $D09ForwardRegression -or ($_.Name -cne 'PostgresReportRepository.cs' -and $_.Extension -cne '.csproj'))
+})
 $sourceText = @($sourceFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
-$checks['No provider, physical persistence, broker or AI selected'] = Test-Forbidden $sourceText
+$checks[$(if ($D09ForwardRegression) { 'No D08 provider, broker or AI selection introduced' } else { 'No provider, physical persistence, broker or AI selected' })] = Test-Forbidden $sourceText
 $contractText = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'contracts/Monergy.Contracts/D08ReportingContracts.cs') -Raw
 $checks['Reporting authority remains bounded'] = $sourceText.Contains('ReportSourceSnapshot') -and $contractText.Contains('ReportSourceReference') -and $sourceText.Contains('Financial Profile Service') -and $sourceText.Contains('Financial Rules Service') -and $sourceText -notmatch 'FinancialProfileRepository|FinancialRulesRepository|EvidenceRepository'
 $checks['Authorization and customer isolation are server-side'] = $sourceText.Contains('IReportingAuthorizationPolicy') -and $sourceText.Contains('AuthorizeAsync') -and $sourceText.Contains('CustomerId')

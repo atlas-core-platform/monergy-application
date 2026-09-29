@@ -20,4 +20,17 @@ public static class EvidenceServiceRegistration
         services.AddSingleton<EvidenceApplication>();
         return services;
     }
+
+    public static IServiceCollection AddEvidencePhysicalPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        PhysicalPersistenceGuard.EnsureAllowed(configuration);
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IEvidenceRepository, PostgresEvidenceRepository>();
+        services.AddSingleton<S3EvidenceContentStore>();
+        services.AddSingleton<IEvidenceContentStore>(provider => provider.GetRequiredService<S3EvidenceContentStore>());
+        services.AddSingleton<EvidenceApplication>();
+        return services;
+    }
 }

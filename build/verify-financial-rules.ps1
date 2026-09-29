@@ -3,7 +3,8 @@ param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
     [switch]$SelfTest,
     [switch]$RequireBehavior,
-    [switch]$RegressionOnly
+    [switch]$RegressionOnly,
+    [switch]$D09ForwardRegression
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -78,8 +79,16 @@ $checks['Starting architecture branch explicitly authorized'] = $scope.startingC
 $checks['Requirements baseline remains pinned'] = $scope.startingCommits.architectureRequirements -ceq '5e7fb1cc9a56cc7b0411640bbb63c13c02c83657'
 $checks['Stage gates unchanged'] = $scope.stageGates.'SG-01' -ceq 'READY' -and $scope.stageGates.'SG-02' -ceq 'CONDITIONALLY_READY' -and $scope.stageGates.'SG-03' -ceq 'BLOCKED' -and $scope.stageGates.'SG-04' -ceq 'BLOCKED'
 $checks['Methodology remains client dependent'] = 'OD-08' -cin $scope.decisionDependencies -and 'C-10' -cin $scope.decisionDependencies
-$allSource = @(Get-ChildItem (Join-Path $RepositoryRoot 'services/financial-rules') -Recurse -Filter '*.cs' | Where-Object FullName -NotMatch '[\\/](bin|obj)[\\/]' | ForEach-Object { Get-Content $_.FullName -Raw }) -join "`n"
-$checks['Rules has no foreign persistence access'] = Test-Boundary $allSource
+$sourceFiles = @(Get-ChildItem (Join-Path $RepositoryRoot 'services/financial-rules') -Recurse -Filter '*.cs' |
+    Where-Object FullName -NotMatch '[\\/](bin|obj)[\\/]')
+$boundarySource = @($sourceFiles | Where-Object Name -cne 'PostgresCalculationRepository.cs' |
+    ForEach-Object { Get-Content $_.FullName -Raw }) -join "`n"
+$postgresSource = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/financial-rules/Infrastructure/PostgresCalculationRepository.cs') -Raw
+$checks['Rules has no foreign persistence access'] = (Test-Boundary $boundarySource) -and
+    ($(if ($D09ForwardRegression) {
+        $postgresSource.Contains('financial_rules.') -and
+        $postgresSource -notmatch '(evidence|financial_profile|reporting|audit)\.'
+    } else { -not (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'services/financial-rules/Infrastructure/PostgresCalculationRepository.cs')) }))
 $application = Get-Content (Join-Path $RepositoryRoot 'services/financial-rules/Application/FinancialRulesApplication.cs') -Raw
 $adapter = Get-Content (Join-Path $RepositoryRoot 'services/financial-rules/Infrastructure/ReferenceCalculationAdapters.cs') -Raw
 $checks['Application owns both outcome decisions'] = $application.Contains('"CID-040"') -and $application.Contains('"CID-041"') -and -not $adapter.Contains('new DomainEvent')

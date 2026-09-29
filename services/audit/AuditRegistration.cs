@@ -17,4 +17,15 @@ public static class AuditRegistration
         services.AddSingleton<AuditApplication>();
         return services;
     }
+
+    public static IServiceCollection AddAuditPhysicalPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        PhysicalPersistenceGuard.EnsureAllowed(configuration);
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IAuditEvidenceRepository, PostgresAuditEvidenceRepository>();
+        services.AddSingleton<AuditApplication>();
+        return services;
+    }
 }

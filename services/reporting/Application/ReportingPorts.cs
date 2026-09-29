@@ -19,9 +19,11 @@ public interface IReportRepository
     Task<ReportOperationResult> GetOrCreateAsync(
         ReportOperationIdentity identity,
         Func<CancellationToken, Task<ReportGenerationAttempt>> reportFactory,
+        Func<TrustedFinancialReport, DomainEvent<ReportGeneratedPayload>> eventFactory,
         CancellationToken cancellationToken = default);
 
     TrustedFinancialReport? Find(string customerId, string reportId);
+    IReadOnlyList<DomainEvent<ReportGeneratedPayload>> PendingEvents();
 }
 
 public sealed record ReportOperationIdentity(
@@ -37,8 +39,3 @@ public sealed record ReportGenerationAttempt(TrustedFinancialReport? Report, Con
 }
 
 public sealed record ReportOperationResult(TrustedFinancialReport? Report, ContractError? Error, bool Created);
-
-public interface IReportEvidenceSink
-{
-    void Record(DomainEvent<ReportGeneratedPayload> generatedEvent);
-}

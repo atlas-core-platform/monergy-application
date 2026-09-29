@@ -279,7 +279,7 @@ public sealed class FinancialRulesApplication(
 
     private void Record<T>(ContractRequest<T> request, string outcome, string id) =>
         telemetry.Record(new LifecycleSignal("Financial Rules Service", request.ContractName, outcome,
-            request.RequestId, request.CorrelationId, request.CausationId, "financial-calculation", id, "IN_MEMORY_REFERENCE"));
+            request.RequestId, request.CorrelationId, request.CausationId, "financial-calculation", id, repository.AdapterKind));
 
     private static ContractResult<TResult> Failure<TRequest, TResult>(ContractRequest<TRequest> request, CalculationException exception) =>
         exception.Category is ContractErrorCategory.DependencyFailure or ContractErrorCategory.TemporarilyUnavailable

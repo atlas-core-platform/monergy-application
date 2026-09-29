@@ -8,6 +8,8 @@ namespace Monergy.Services.FinancialProfile.Infrastructure;
 
 public sealed class InMemoryFinancialProfileRepository : IFinancialProfileRepository
 {
+    public string AdapterKind => "IN_MEMORY_REFERENCE";
+
     private readonly object sync = new();
     private readonly Dictionary<string, FinancialFactRecord> factsByBusinessKey = new(StringComparer.Ordinal);
     private readonly Dictionary<string, FinancialFactRecord> factsById = new(StringComparer.Ordinal);

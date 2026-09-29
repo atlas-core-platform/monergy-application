@@ -4,6 +4,8 @@
     <RootNamespace>Monergy.Services.FinancialRules</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Npgsql" />
     <ProjectReference Include="../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
     <ProjectReference Include="../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
   </ItemGroup>

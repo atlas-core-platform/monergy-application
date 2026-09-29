@@ -12,11 +12,16 @@ if (referenceAdapters)
 {
     builder.Services.AddFinancialProfileReferenceAdapters(builder.Configuration);
 }
+var physicalPersistence = PhysicalPersistenceGuard.IsSelected(builder.Configuration);
+if (physicalPersistence)
+{
+    builder.Services.AddFinancialProfilePhysicalPersistence(builder.Configuration);
+}
 
 var app = builder.Build();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
 app.MapHealthChecks("/health/ready");
-if (referenceAdapters)
+if (referenceAdapters || physicalPersistence)
 {
     app.MapFinancialProfileContracts();
 }

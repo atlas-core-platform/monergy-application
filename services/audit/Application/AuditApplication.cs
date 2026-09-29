@@ -18,6 +18,8 @@ public sealed record AuditEvidenceRecord(
 
 public interface IAuditEvidenceRepository
 {
+    string AdapterKind { get; }
+
     Task<(AuditEvidenceRecord Record, bool Created)> AppendAsync(
         AuditableEvent source,
         DateTimeOffset recordedAt,
@@ -64,7 +66,7 @@ public sealed class AuditApplication(
             source.CausationId,
             source.SubjectType,
             source.SubjectId,
-            "IN_MEMORY_REFERENCE"));
+            repository.AdapterKind));
         return appended.Record;
     }
 

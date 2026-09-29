@@ -4,7 +4,9 @@
     <RootNamespace>Monergy.Services.Audit</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Dapper" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Npgsql" />
     <ProjectReference Include="../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
     <ProjectReference Include="../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
   </ItemGroup>

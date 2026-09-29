@@ -5,6 +5,8 @@ namespace Monergy.Services.Audit.Infrastructure;
 
 public sealed class AppendOnlyInMemoryAuditRepository : IAuditEvidenceRepository
 {
+    public string AdapterKind => "IN_MEMORY_REFERENCE";
+
     private readonly object sync = new();
     private readonly Dictionary<string, AuditEvidenceRecord> records = new(StringComparer.Ordinal);
 
