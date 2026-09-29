@@ -40,7 +40,20 @@ Assert-Version 'pnpm' (& $pnpm --version) '12.4.1'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $env:DOTNET_NOLOGO = '1'
 $d09ForwardArguments = @{}
-if ($Task -ceq 'Verify' -and (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d09-scope-lock.json'))) {
+
+$d09ForwardTasks = @(
+    'Verify',
+    'D01Verification',
+    'D02Verification',
+    'D03Verification',
+    'D04Verification',
+    'D05Regression',
+    'D08Verification'
+)
+
+if (($d09ForwardTasks -contains $Task) -and
+    (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d09-scope-lock.json'))) {
+
     $d09ForwardArguments.D09ForwardRegression = $true
 }
 
