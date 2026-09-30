@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D09 Persistent Data Foundation Candidate
+# Monergy Application Repository Structure — D10 Durable Job and Audit Candidate
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -110,6 +110,18 @@ D02 assets retained include:
   publishing images.
 
 D09 introduces only the approved PostgreSQL and S3-compatible physical persistence technology for LOCAL / CI_EPHEMERAL. It does not select a Production hosting product, broker, search/vector provider, AI/model provider, cloud, orchestrator, or persistent-environment deployment. Runtime credentials are generated outside tracked source. Reference adapters remain governed evidence and are not Production adapters.
+
+## D10 durable Job Management and Audit propagation candidate
+
+- `build/d10/`: pinned LOCAL / CI_EPHEMERAL PostgreSQL composition, bootstrap, migration and retained-volume verification.
+- `build/governance/d10-scope-lock.json`: exact four-Feature, eighteen-contract and unchanged-governance scope lock.
+- `build/verify-durable-job-audit-propagation.ps1`: deterministic D10 verifier and negative self-tests.
+- `services/job-management/migrations/`: Job Management-owned lifecycle, idempotency, execution-attempt and transactional-outbox authority.
+- `shared/platform/Monergy.Platform/ReferenceEventTransport.cs`: provider-neutral LOCAL / CI event transport and delivery telemetry.
+- `services/audit/migrations/0002_event_inbox.sql`: consumer deduplication separate from immutable Audit evidence.
+- `tests/job-management/Monergy.JobManagement.Tests/`: deterministic lifecycle, restart, retry, cancellation, replay, least-privilege and Audit propagation evidence.
+
+D10 does not select a Production broker, hosting provider, identity provider, orchestration platform or monitoring product. The reference transport is not Production messaging evidence; OD-15 remains unresolved and stage gates are unchanged.
 
 See the catalogs and README files in each responsibility area for the maintained
 boundary inventory.

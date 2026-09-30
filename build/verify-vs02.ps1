@@ -2,7 +2,8 @@
 param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
     [switch]$SelfTest,
-    [switch]$D09ForwardRegression
+    [switch]$D09ForwardRegression,
+    [switch]$D10ForwardRegression
 )
 
 $ErrorActionPreference = 'Stop'
@@ -167,6 +168,7 @@ $expectedD05Features = @('M2-WS05-E01-F01', 'M2-WS05-E01-F02', 'M2-WS05-E01-F03'
 $expectedD06Features = @('M2-WS06-E01-F01', 'M2-WS06-E01-F02', 'M2-WS06-E01-F03', 'M2-WS06-E02-F01', 'M2-WS06-E02-F02', 'M2-WS06-E02-F03')
 $expectedD07Features = @('M2-WS07-E01-F01', 'M2-WS07-E01-F02', 'M2-WS07-E01-F03', 'M2-WS07-E02-F01', 'M2-WS07-E02-F03')
 $expectedD08Features = @('M2-WS08-E01-F02', 'M2-WS08-E02-F01', 'M2-WS08-E02-F03')
+$expectedD10Features = @('M2-WS09-E01-F01', 'M2-WS09-E01-F02', 'M2-WS09-E01-F03', 'M2-WS09-E02-F01')
 $expectedScaffoldIds = @('customer-identity', 'consent', 'ai-intelligence')
 
 $checks = [System.Collections.Generic.List[object]]::new()
@@ -195,8 +197,16 @@ Add-Check 'Contract security context' ($contractTypesText.Contains('TrustedSecur
 
 $catalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 $candidateServices = @($catalog.services | Where-Object status -ceq 'VS02_IMPLEMENTATION_CANDIDATE')
-$d03CatalogStateValid = (Test-ExactSet @($candidateServices.id) $expectedServiceIds) -and
+$expectedCandidateServiceIds = if ($D10ForwardRegression) { @($expectedServiceIds | Where-Object { $_ -cne 'job-management' }) } else { $expectedServiceIds }
+$d03CatalogStateValid = (Test-ExactSet @($candidateServices.id) $expectedCandidateServiceIds) -and
     @($candidateServices | Where-Object { $_.featureImplementation -cne $expectedServiceImplementations[$_.id] }).Count -eq 0
+if ($D10ForwardRegression) {
+    $jobManagement = @($catalog.services | Where-Object id -ceq 'job-management')
+    $d03CatalogStateValid = $d03CatalogStateValid -and $jobManagement.Count -eq 1 -and
+        $jobManagement[0].status -ceq 'D10_IMPLEMENTATION_CANDIDATE_LOCAL_CI' -and
+        $jobManagement[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_LOCAL_CI' -and
+        (Test-ExactSet @($jobManagement[0].featureIds) $expectedD10Features)
+}
 Add-Check 'Service catalog reviewed set' $d03CatalogStateValid 'Exactly five reviewed D03 candidate boundaries with exact implementation/supporting roles'
 $scaffoldServices = @($catalog.services | Where-Object { $_.id -in $expectedScaffoldIds })
 $financialRules = @($catalog.services | Where-Object id -ceq 'financial-rules')
@@ -225,7 +235,7 @@ $laterServiceStateValid = $scaffoldServices.Count -eq 3 -and
     $reporting[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_SIMULATOR' -and
     (Test-ExactSet @($reporting[0].featureIds) $expectedD08Features)
 Add-Check 'No unrelated service implementation' $laterServiceStateValid 'Three exact scaffolds, accepted D05 Rules, and exact D06 Gateway, D07 Search plus D08 Reporting candidates; D03 ownership remains scoped'
-$catalogFeatures = @($catalog.services | Where-Object { $_.id -in $expectedServiceIds } | ForEach-Object { @($_.featureIds) } | Where-Object { $_ })
+$catalogFeatures = @($catalog.services | Where-Object { $_.id -in $expectedServiceIds -and (-not $D10ForwardRegression -or $_.id -cne 'job-management') } | ForEach-Object { @($_.featureIds) } | Where-Object { $_ })
 Add-Check 'Service catalog Feature coverage' (Test-ExactSet $catalogFeatures $expectedFeatures) '8/8 Features assigned once'
 
 $referenceGuard = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'shared/platform/Monergy.Platform/ReferenceAdapterGuard.cs') -Raw
@@ -244,13 +254,15 @@ $localPackaging = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/pac
 $d03ImageIdentity = $hostedOci.Contains(':d03-$sourceIdentity') -and $localPackaging.Contains(':d03-candidate-local')
 Add-Check 'Five reference adapter and OCI implementations' ($referenceAdapterRoots.Count -eq 5 -and $contractReadyDockerfiles.Count -eq 5 -and $d03ImageIdentity) 'Five adapters, contract-aware OCI contexts, and D03 candidate image identities'
 $projectText = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj)[\\/]' } | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
-if ($D09ForwardRegression) {
+if ($D09ForwardRegression -or $D10ForwardRegression) {
     Add-Check 'D09-bounded provider dependencies' ($projectText -notmatch 'EntityFrameworkCore|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Google\.Cloud|OpenAI') 'Authorized D09 persistence packages are verified separately'
 } else {
     Add-Check 'No physical provider dependency' ($projectText -notmatch 'EntityFrameworkCore|Npgsql|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Amazon\.|Google\.Cloud|OpenAI') 'No provider, database, broker, OCR, AI, or cloud SDK selected'
 }
 $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
-if ($D09ForwardRegression) {
+if ($D10ForwardRegression) {
+    Add-Check 'D10-bounded migrations' ($migrationFiles.Count -eq 12 -and @($migrationFiles | Where-Object { $_.FullName -notmatch '[/\\](evidence|financial-profile|financial-rules|reporting|audit|job-management)[/\\]migrations[/\\]' }).Count -eq 0) 'D09 cohort plus D10 Audit inbox and Job Management authority/lease migrations only'
+} elseif ($D09ForwardRegression) {
     Add-Check 'D09-bounded migrations' ($migrationFiles.Count -eq 9 -and @($migrationFiles | Where-Object { $_.FullName -notmatch '[\\/](evidence|financial-profile|financial-rules|reporting|audit)[\\/]migrations[\\/]' }).Count -eq 0) 'Exact five-service D09 cohort only'
 } else {
     Add-Check 'No physical migrations' ($migrationFiles.Count -eq 0) 'Provider decisions remain open'

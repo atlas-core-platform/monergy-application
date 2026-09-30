@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
+    <ProjectReference Include="../../../services/audit/Monergy.Services.Audit.csproj" />
+    <ProjectReference Include="../../../services/document-intelligence/Monergy.Services.DocumentIntelligence.csproj" />
+    <ProjectReference Include="../../../services/job-management/Monergy.Services.JobManagement.csproj" />
+    <ProjectReference Include="../../../services/reporting/Monergy.Services.Reporting.csproj" />
+    <ProjectReference Include="../../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Monergy.Contracts;
 using Monergy.Platform;
 using Monergy.Services.Audit.Application;
 using Monergy.Services.Audit.Infrastructure;
@@ -15,6 +16,7 @@ public static class AuditRegistration
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IAuditEvidenceRepository, AppendOnlyInMemoryAuditRepository>();
         services.AddSingleton<AuditApplication>();
+        services.AddSingleton<IGovernedEventConsumer<AuditableEvent>, AuditTransportConsumer>();
         return services;
     }
 
@@ -26,6 +28,7 @@ public static class AuditRegistration
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IAuditEvidenceRepository, PostgresAuditEvidenceRepository>();
         services.AddSingleton<AuditApplication>();
+        services.AddSingleton<IGovernedEventConsumer<AuditableEvent>, AuditTransportConsumer>();
         return services;
     }
 }

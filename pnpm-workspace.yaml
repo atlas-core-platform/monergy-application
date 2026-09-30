@@ -4,5 +4,8 @@ packages:
 
 catalogMode: strict
 
+overrides:
+  brace-expansion: 5.0.12
+
 onlyBuiltDependencies:
   - esbuild

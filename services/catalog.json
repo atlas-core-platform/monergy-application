@@ -134,9 +134,9 @@
       "name": "Job Management Service",
       "artifact": "monergy-job-management",
       "primaryHost": "WORKER",
-      "status": "VS02_IMPLEMENTATION_CANDIDATE",
-      "featureImplementation": "SUPPORTING_BOUNDARY",
-      "featureIds": []
+      "status": "D10_IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+      "featureImplementation": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+      "featureIds": ["M2-WS09-E01-F01", "M2-WS09-E01-F02", "M2-WS09-E01-F03", "M2-WS09-E02-F01"]
     },
     {
       "id": "audit",

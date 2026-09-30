@@ -2,6 +2,12 @@
   "version": 2,
   "dependencies": {
     "net10.0": {
+      "Dapper": {
+        "type": "Direct",
+        "requested": "[2.1.89, )",
+        "resolved": "2.1.89",
+        "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
+      },
       "Microsoft.NET.Test.Sdk": {
         "type": "Direct",
         "requested": "[18.10.0, )",
@@ -10,6 +16,15 @@
         "dependencies": {
           "Microsoft.CodeCoverage": "18.10.0",
           "Microsoft.TestPlatform.TestHost": "18.10.0"
+        }
+      },
+      "Npgsql": {
+        "type": "Direct",
+        "requested": "[10.0.3, )",
+        "resolved": "10.0.3",
+        "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w==",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
         }
       },
       "xunit": {
@@ -28,11 +43,6 @@
         "requested": "[4.0.0, )",
         "resolved": "4.0.0",
         "contentHash": "kzLFyBYUnoidpGOXvpNOfIo8C92gVgVR6X8ncHwhcrDYugiOut5rrhDkr0L3cWHd7J2pKXf6LgaeXoBBDlx1ag=="
-      },
-      "AWSSDK.Core": {
-        "type": "Transitive",
-        "resolved": "4.0.102.6",
-        "contentHash": "YwUi9qpz/OHqwEgsf8I5jj1aC/xkkjmF91R8Yx6yD66dhOiORgQJynYQk0fzI4xdhBgUaw8SRGbMkLRrvL+CNA=="
       },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
@@ -404,25 +414,6 @@
           "Monergy.Platform": "[1.0.0, )"
         }
       },
-      "monergy.services.evidence": {
-        "type": "Project",
-        "dependencies": {
-          "AWSSDK.S3": "[4.0.103.4, )",
-          "Dapper": "[2.1.89, )",
-          "Monergy.Contracts": "[1.0.0, )",
-          "Monergy.Platform": "[1.0.0, )",
-          "Npgsql": "[10.0.3, )"
-        }
-      },
-      "monergy.services.financialprofile": {
-        "type": "Project",
-        "dependencies": {
-          "Dapper": "[2.1.89, )",
-          "Monergy.Contracts": "[1.0.0, )",
-          "Monergy.Platform": "[1.0.0, )",
-          "Npgsql": "[10.0.3, )"
-        }
-      },
       "monergy.services.jobmanagement": {
         "type": "Project",
         "dependencies": {
@@ -433,20 +424,14 @@
           "Npgsql": "[10.0.3, )"
         }
       },
-      "AWSSDK.S3": {
-        "type": "CentralTransitive",
-        "requested": "[4.0.103.4, )",
-        "resolved": "4.0.103.4",
-        "contentHash": "qi8NkWG7s6GkNePTWSxP51O6AaTEWquin4X4L82plMte8bTFL2A1/osRfr6DBmvmSOc8y0orx25jJXg9gcbMIQ==",
+      "monergy.services.reporting": {
+        "type": "Project",
         "dependencies": {
-          "AWSSDK.Core": "[4.0.102.6, 5.0.0)"
+          "Dapper": "[2.1.89, )",
+          "Monergy.Contracts": "[1.0.0, )",
+          "Monergy.Platform": "[1.0.0, )",
+          "Npgsql": "[10.0.3, )"
         }
-      },
-      "Dapper": {
-        "type": "CentralTransitive",
-        "requested": "[2.1.89, )",
-        "resolved": "2.1.89",
-        "contentHash": "1VjFE664wnxvuhlgP8kS4PeFFF4jqD3VkbIHW6Zlc52zuibgcz5ICnIHcQXlTp6pURpPNGLV0ZpNe5x9KePJnA=="
       },
       "Microsoft.Extensions.Hosting": {
         "type": "CentralTransitive",
@@ -476,15 +461,6 @@
           "Microsoft.Extensions.Logging.EventLog": "10.0.12",
           "Microsoft.Extensions.Logging.EventSource": "10.0.12",
           "Microsoft.Extensions.Options": "10.0.12"
-        }
-      },
-      "Npgsql": {
-        "type": "CentralTransitive",
-        "requested": "[10.0.3, )",
-        "resolved": "10.0.3",
-        "contentHash": "7nb5YzXuvWWJxB0J8DiyL3we+X4FOctZrt0fIBnucOIaIevFEEwGQVZKtiu9olXdlNAK1eNgqSral6r/jlhI4w==",
-        "dependencies": {
-          "Microsoft.Extensions.Logging.Abstractions": "10.0.0"
         }
       },
       "OpenTelemetry.Exporter.OpenTelemetryProtocol": {

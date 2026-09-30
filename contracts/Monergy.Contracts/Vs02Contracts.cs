@@ -18,7 +18,11 @@ public static class Vs02ContractNames
     public const string FinancialFactUpdated = "FinancialFactUpdated";
     public const string FinancialProfileChanged = "FinancialProfileChanged";
     public const string ScheduleJob = "ScheduleJob";
+    public const string CancelJob = "CancelJob";
     public const string GetJobStatus = "GetJobStatus";
+    public const string JobStarted = "JobStarted";
+    public const string JobCompleted = "JobCompleted";
+    public const string JobFailed = "JobFailed";
 }
 
 public sealed record CreateDocumentVersion(
@@ -217,6 +221,7 @@ public enum JobState
 {
     Scheduled,
     Running,
+    CancellationRequested,
     Completed,
     Failed,
     Cancelled,
@@ -235,3 +240,32 @@ public sealed record ScheduledJob(
     DateTimeOffset UpdatedAt);
 
 public sealed record GetJobStatus(string JobId, string CustomerId);
+
+public sealed record CancelJob(string JobId, string CustomerId, string Reason);
+
+public sealed record JobStartedPayload(
+    string JobId,
+    string JobName,
+    string OwnerService,
+    string CustomerId,
+    int Attempt,
+    DateTimeOffset StartedAt);
+
+public sealed record JobCompletedPayload(
+    string JobId,
+    string JobName,
+    string OwnerService,
+    string CustomerId,
+    int Attempt,
+    string? OutcomeReference,
+    DateTimeOffset CompletedAt);
+
+public sealed record JobFailedPayload(
+    string JobId,
+    string JobName,
+    string OwnerService,
+    string CustomerId,
+    int Attempt,
+    string FailureCode,
+    bool Retryable,
+    DateTimeOffset FailedAt);

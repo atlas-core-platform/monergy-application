@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.monergy.local/durable-job-audit-propagation.schema.json",
+  "title": "MWP-03-D10 durable job and audit propagation contracts",
+  "oneOf": [
+    { "$ref": "#/$defs/scheduleJob" },
+    { "$ref": "#/$defs/cancelJob" },
+    { "$ref": "#/$defs/getJobStatus" },
+    { "$ref": "#/$defs/jobEvent" }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": [
+        "contractName",
+        "contractVersion",
+        "requestId",
+        "correlationId",
+        "security",
+        "payload"
+      ],
+      "properties": {
+        "contractName": { "type": "string" },
+        "contractVersion": { "const": "1.0.0" },
+        "requestId": { "type": "string", "minLength": 1 },
+        "correlationId": { "type": "string", "minLength": 1 },
+        "causationId": { "type": ["string", "null"] },
+        "security": {
+          "type": "object",
+          "required": ["actor", "workload", "access"],
+          "properties": {
+            "actor": { "type": "object" },
+            "workload": { "type": "object" },
+            "access": { "type": "object" }
+          },
+          "additionalProperties": false
+        },
+        "idempotencyKey": { "type": ["string", "null"] },
+        "payload": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "scheduleJob": {
+      "allOf": [
+        { "$ref": "#/$defs/request" },
+        { "properties": { "contractName": { "const": "ScheduleJob" } } }
+      ]
+    },
+    "cancelJob": {
+      "allOf": [
+        { "$ref": "#/$defs/request" },
+        { "properties": { "contractName": { "const": "CancelJob" } } }
+      ]
+    },
+    "getJobStatus": {
+      "allOf": [
+        { "$ref": "#/$defs/request" },
+        { "properties": { "contractName": { "const": "GetJobStatus" } } }
+      ]
+    },
+    "jobEvent": {
+      "type": "object",
+      "required": ["contractId", "eventName", "eventVersion", "payload"],
+      "properties": {
+        "contractId": { "enum": ["CID-058", "CID-059", "CID-060"] },
+        "eventName": { "enum": ["JobStarted", "JobCompleted", "JobFailed"] },
+        "eventVersion": { "const": "1.0.0" },
+        "payload": { "type": "object" }
+      }
+    }
+  },
+  "unevaluatedProperties": false
+}

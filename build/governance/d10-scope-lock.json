@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D10",
+  "title": "Durable Job Management & Audit Propagation",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "evidenceLevel": "LOCAL_CI_EPHEMERAL_PHYSICAL",
+  "startingCommits": {
+    "application": "0d7c6635e1f2263fb4c574027ea5619bea897b72",
+    "architecture": "de1159970f798168f194cbfb81ce2295512db7c5"
+  },
+  "features": ["M2-WS09-E01-F01", "M2-WS09-E01-F02", "M2-WS09-E01-F03", "M2-WS09-E02-F01"],
+  "contractFootprint": [
+    "CID-005",
+    "CID-007",
+    "CID-011",
+    "CID-012",
+    "CID-013",
+    "CID-017",
+    "CID-023",
+    "CID-034",
+    "CID-040",
+    "CID-049",
+    "CID-053",
+    "CID-055",
+    "CID-056",
+    "CID-057",
+    "CID-058",
+    "CID-059",
+    "CID-060",
+    "CID-061"
+  ],
+  "advancedContracts": ["CID-055", "CID-057"],
+  "newlyRealizedContracts": ["CID-056", "CID-058", "CID-059", "CID-060", "CID-061"],
+  "observedOrConsumedContracts": [
+    "CID-005",
+    "CID-007",
+    "CID-011",
+    "CID-012",
+    "CID-013",
+    "CID-017",
+    "CID-023",
+    "CID-034",
+    "CID-040",
+    "CID-049",
+    "CID-053"
+  ],
+  "database": {
+    "name": "monergy_job_management",
+    "schema": "job_management",
+    "technology": "PostgreSQL",
+    "version": "18.6",
+    "productionHosting": "NOT_SELECTED"
+  },
+  "eventTransport": {
+    "implementation": "PROVIDER_NEUTRAL_REFERENCE",
+    "executionZones": ["LOCAL", "CI_EPHEMERAL"],
+    "productionProvider": "UNRESOLVED_OD_15"
+  },
+  "conditionalPlatformFeatures": {
+    "M2-WS01-E03-F01": "NOT_ACCEPTED_BY_D10",
+    "M2-WS01-E03-F02": "NOT_ACCEPTED_BY_D10"
+  },
+  "outstandingDecisions": {
+    "OD-12": "UNRESOLVED",
+    "OD-13": "UNRESOLVED",
+    "OD-14": "UNRESOLVED",
+    "OD-15": "UNRESOLVED"
+  },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  },
+  "architectureIntegrity": {
+    "R1-R7": "FROZEN_UNCHANGED",
+    "R8": "ABSENT"
+  }
+}

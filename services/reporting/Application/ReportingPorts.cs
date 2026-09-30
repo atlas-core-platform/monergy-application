@@ -24,6 +24,7 @@ public interface IReportRepository
 
     TrustedFinancialReport? Find(string customerId, string reportId);
     IReadOnlyList<DomainEvent<ReportGeneratedPayload>> PendingEvents();
+    void AcknowledgeEvent(string eventId);
 }
 
 public sealed record ReportOperationIdentity(

@@ -147,6 +147,13 @@ public sealed class PostgresReportRepository : IReportRepository, IAsyncDisposab
             JsonSerializer.Deserialize<ReportGeneratedPayload>(row.Payload, ContractJson.Options)!)).ToArray();
     }
 
+    public void AcknowledgeEvent(string eventId)
+    {
+        using var connection = dataSource.OpenConnection();
+        connection.Execute("UPDATE reporting.outbox SET dispatched_at=now() WHERE event_id=@eventId AND dispatched_at IS NULL;",
+            new { eventId });
+    }
+
     public ValueTask DisposeAsync() => dataSource.DisposeAsync();
 
     private static async Task<TrustedFinancialReport?> FindAsync(NpgsqlConnection connection,
