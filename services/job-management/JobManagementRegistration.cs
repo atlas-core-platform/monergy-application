@@ -14,6 +14,23 @@ public static class JobManagementRegistration
         ReferenceAdapterGuard.EnsureAllowed(configuration);
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IJobRepository, InMemoryJobRepository>();
+        services.AddSingleton<ReferenceJobExecutionPolicy>();
+        services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
+        services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
+        services.AddSingleton<JobManagementApplication>();
+        return services;
+    }
+
+    public static IServiceCollection AddJobManagementPhysicalPersistence(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        PhysicalPersistenceGuard.EnsureAllowed(configuration);
+        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IJobRepository, PostgresJobRepository>();
+        services.AddSingleton<ReferenceJobExecutionPolicy>();
+        services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
+        services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
         services.AddSingleton<JobManagementApplication>();
         return services;
     }

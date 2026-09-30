@@ -8,6 +8,7 @@ public sealed class AppendOnlyInMemoryAuditRepository : IAuditEvidenceRepository
     public string AdapterKind => "IN_MEMORY_REFERENCE";
 
     private readonly object sync = new();
+    private readonly HashSet<string> inbox = new(StringComparer.Ordinal);
     private readonly Dictionary<string, AuditEvidenceRecord> records = new(StringComparer.Ordinal);
 
     public Task<(AuditEvidenceRecord Record, bool Created)> AppendAsync(
@@ -18,9 +19,9 @@ public sealed class AppendOnlyInMemoryAuditRepository : IAuditEvidenceRepository
         cancellationToken.ThrowIfCancellationRequested();
         lock (sync)
         {
-            if (records.TryGetValue(source.EventId, out var existing))
+            if (!inbox.Add(source.EventId))
             {
-                return Task.FromResult((existing, false));
+                return Task.FromResult((records[source.EventId], false));
             }
 
             var record = new AuditEvidenceRecord(

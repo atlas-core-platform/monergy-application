@@ -2,7 +2,8 @@
 param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
     [switch]$SelfTest,
-    [switch]$D09ForwardRegression
+    [switch]$D09ForwardRegression,
+    [switch]$D10ForwardRegression
 )
 
 $ErrorActionPreference = 'Stop'
@@ -75,11 +76,18 @@ foreach ($serviceId in $expectedVs02Features.Keys) {
     $service = @($serviceCatalog.services | Where-Object id -CEQ $serviceId)
     $vs02StateValid = $vs02StateValid -and $service.Count -eq 1
     if ($service.Count -eq 1) {
-        $expectedImplementation = if ($serviceId -in @('job-management', 'audit')) { 'SUPPORTING_BOUNDARY' } else { 'IMPLEMENTATION_CANDIDATE' }
-        $vs02StateValid = $vs02StateValid -and
-            $service[0].status -ceq 'VS02_IMPLEMENTATION_CANDIDATE' -and
-            $service[0].featureImplementation -ceq $expectedImplementation -and
-            (Test-ExactSet @($service[0].featureIds) $expectedVs02Features[$serviceId])
+        if ($D10ForwardRegression -and $serviceId -ceq 'job-management') {
+            $vs02StateValid = $vs02StateValid -and
+                $service[0].status -ceq 'D10_IMPLEMENTATION_CANDIDATE_LOCAL_CI' -and
+                $service[0].featureImplementation -ceq 'IMPLEMENTATION_CANDIDATE_LOCAL_CI' -and
+                (Test-ExactSet @($service[0].featureIds) @('M2-WS09-E01-F01', 'M2-WS09-E01-F02', 'M2-WS09-E01-F03', 'M2-WS09-E02-F01'))
+        } else {
+            $expectedImplementation = if ($serviceId -in @('job-management', 'audit')) { 'SUPPORTING_BOUNDARY' } else { 'IMPLEMENTATION_CANDIDATE' }
+            $vs02StateValid = $vs02StateValid -and
+                $service[0].status -ceq 'VS02_IMPLEMENTATION_CANDIDATE' -and
+                $service[0].featureImplementation -ceq $expectedImplementation -and
+                (Test-ExactSet @($service[0].featureIds) $expectedVs02Features[$serviceId])
+        }
     }
 }
 
@@ -172,7 +180,10 @@ Add-Check 'Service source folders' $serviceFoldersValid 'All 12 governed folders
 Add-Check 'Service-owned migration scaffolds' $migrationFoldersValid 'All 12 services own a migration history location'
 
 $sqlFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
-if ($D09ForwardRegression) {
+if ($D10ForwardRegression) {
+    $authorized = @($sqlFiles | Where-Object { $_.FullName -match '[/\\](evidence|financial-profile|financial-rules|reporting|audit|job-management)[/\\]migrations[/\\]' })
+    Add-Check 'D10-authorized service migrations only' ($sqlFiles.Count -eq 11 -and $authorized.Count -eq 11) 'Exact D09 cohort plus D10 Audit inbox and Job Management authority migrations'
+} elseif ($D09ForwardRegression) {
     $authorized = @($sqlFiles | Where-Object { $_.FullName -match '[\\/](evidence|financial-profile|financial-rules|reporting|audit)[\\/]migrations[\\/]' })
     Add-Check 'D09-authorized service migrations only' ($sqlFiles.Count -eq 9 -and $authorized.Count -eq 9) 'Exact five-service D09 cohort; historical default remains zero migrations'
 } else {

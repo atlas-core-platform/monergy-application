@@ -2,7 +2,8 @@
 param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
     [switch]$SelfTest,
-    [switch]$D09ForwardRegression
+    [switch]$D09ForwardRegression,
+    [switch]$D10ForwardRegression
 )
 
 $ErrorActionPreference = 'Stop'
@@ -137,10 +138,15 @@ $d05Features = @('M2-WS05-E01-F01', 'M2-WS05-E01-F02', 'M2-WS05-E01-F03', 'M2-WS
 $d06Features = @('M2-WS06-E01-F01', 'M2-WS06-E01-F02', 'M2-WS06-E01-F03', 'M2-WS06-E02-F01', 'M2-WS06-E02-F02', 'M2-WS06-E02-F03')
 $d07Features = @('M2-WS07-E01-F01', 'M2-WS07-E01-F02', 'M2-WS07-E01-F03', 'M2-WS07-E02-F01', 'M2-WS07-E02-F03')
 $d08Features = @('M2-WS08-E01-F02', 'M2-WS08-E02-F01', 'M2-WS08-E02-F03')
+$d10Features = @('M2-WS09-E01-F01', 'M2-WS09-E01-F02', 'M2-WS09-E01-F03', 'M2-WS09-E02-F01')
 $scaffoldServices = @('customer-identity', 'consent', 'ai-intelligence')
 $governedContractServices = $d03Services + @('financial-rules', 'integration-gateway', 'search-retrieval', 'reporting')
 $catalogStateValid = @($catalog.services | Where-Object {
-    if ($_.id -in $d03Services) {
+    if ($D10ForwardRegression -and $_.id -ceq 'job-management') {
+        $_.status -cne 'D10_IMPLEMENTATION_CANDIDATE_LOCAL_CI' -or
+        $_.featureImplementation -cne 'IMPLEMENTATION_CANDIDATE_LOCAL_CI' -or
+        -not (Test-ExactSet @($_.featureIds) $d10Features)
+    } elseif ($_.id -in $d03Services) {
         $_.status -cne 'VS02_IMPLEMENTATION_CANDIDATE' -or
         $_.featureImplementation -cne $d03ServiceImplementations[$_.id] -or
         -not (Test-ExactSet @($_.featureIds) @($d03ServiceFeatures[$_.id]))
@@ -222,7 +228,9 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
         @($referenceText | Select-Object -Unique).Count -eq $referenceText.Count -and
         @($referenceText | Where-Object { $_ -match '[\\/](?:services|tests|apps)[\\/]' }).Count -eq 0
     $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $serviceRoot 'migrations') -File | Where-Object Name -cne '.gitkeep')
-    if ($D09ForwardRegression -and $entry.Key -in @('evidence','financial-profile','financial-rules','reporting','audit')) {
+    if ($D10ForwardRegression -and $entry.Key -in @('evidence','financial-profile','financial-rules','reporting','audit','job-management')) {
+        $migrationOwnershipValid = $migrationOwnershipValid -and $migrationFiles.Count -ge 1
+    } elseif ($D09ForwardRegression -and $entry.Key -in @('evidence','financial-profile','financial-rules','reporting','audit')) {
         $migrationOwnershipValid = $migrationOwnershipValid -and $migrationFiles.Count -ge 1
     } else {
         $migrationOwnershipValid = $migrationOwnershipValid -and $migrationFiles.Count -eq 0
@@ -252,7 +260,7 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
 }
 Add-Check 'Evidence-based host split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 9 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 3) 'Nine HTTP hosts and three primary workers'
 Add-Check 'No service-to-service project references' $serviceReferenceValid 'Every service references Platform exactly once, Contracts zero or one time, and no other project; service/test/app and duplicate references are forbidden'
-Add-Check $(if ($D09ForwardRegression) { 'D09-bounded service-owned migrations' } else { 'Empty service-owned migrations' }) $migrationOwnershipValid $(if ($D09ForwardRegression) { 'Exact five-service cohort populated; seven histories remain empty' } else { '12 independent empty migration histories' })
+Add-Check $(if ($D10ForwardRegression) { 'D10-bounded service-owned migrations' } elseif ($D09ForwardRegression) { 'D09-bounded service-owned migrations' } else { 'Empty service-owned migrations' }) $migrationOwnershipValid $(if ($D10ForwardRegression) { 'D09 cohort plus Job Management populated; six histories remain empty' } elseif ($D09ForwardRegression) { 'Exact five-service cohort populated; seven histories remain empty' } else { '12 independent empty migration histories' })
 Add-Check 'Controlled host scope' $healthOnlyValid 'Three true scaffolds remain health/startup-only; exact D03 and D05-D08 governed participants may expose contract surfaces'
 
 $lockFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter 'packages.lock.json' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })

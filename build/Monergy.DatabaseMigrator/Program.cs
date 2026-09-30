@@ -6,7 +6,7 @@ var connection = Required(options, "connection");
 var repositoryRoot = Path.GetFullPath(Required(options, "repository-root"));
 var allowed = new HashSet<string>(StringComparer.Ordinal)
 {
-    "evidence", "financial-profile", "financial-rules", "reporting", "audit",
+    "evidence", "financial-profile", "financial-rules", "reporting", "audit", "job-management",
 };
 if (!allowed.Contains(service))
 {

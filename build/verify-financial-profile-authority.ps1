@@ -2,7 +2,8 @@
 param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
     [switch]$SelfTest,
-    [switch]$D09ForwardRegression
+    [switch]$D09ForwardRegression,
+    [switch]$D10ForwardRegression
 )
 
 $ErrorActionPreference = 'Stop'
@@ -112,13 +113,15 @@ Add-Check 'Customer isolation enforcement' ($applicationText.Contains('SameCusto
 $referenceGuard = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'shared/platform/Monergy.Platform/ReferenceAdapterGuard.cs') -Raw
 Add-Check 'Reference adapter remains LOCAL/CI only' ($referenceGuard.Contains('LOCAL') -and $referenceGuard.Contains('CI_EPHEMERAL') -and $referenceGuard.Contains('InvalidOperationException')) 'UAT and Production fail closed'
 $projectText = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\/](?:bin|obj)[\/]' } | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
-if ($D09ForwardRegression) {
+if ($D09ForwardRegression -or $D10ForwardRegression) {
     Add-Check 'D09-bounded provider dependencies' ($projectText -notmatch 'EntityFrameworkCore|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Google\.Cloud|OpenAI') 'Authorized D09 persistence packages are verified separately'
 } else {
     Add-Check 'No physical provider dependency' ($projectText -notmatch 'EntityFrameworkCore|Npgsql|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Amazon\.|Google\.Cloud|OpenAI') 'No database, broker, cloud, OCR or AI provider SDK'
 }
 $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File | Where-Object { $_.Extension -in @('.sql', '.ddl') })
-if ($D09ForwardRegression) {
+if ($D10ForwardRegression) {
+    Add-Check 'D10-bounded migrations' ($migrationFiles.Count -eq 11 -and @($migrationFiles | Where-Object { $_.FullName -notmatch '[/\\](evidence|financial-profile|financial-rules|reporting|audit|job-management)[/\\]migrations[/\\]' }).Count -eq 0) 'D09 cohort plus D10 Audit inbox and Job Management authority only'
+} elseif ($D09ForwardRegression) {
     Add-Check 'D09-bounded migrations' ($migrationFiles.Count -eq 9 -and @($migrationFiles | Where-Object { $_.FullName -notmatch '[\\/](evidence|financial-profile|financial-rules|reporting|audit)[\\/]migrations[\\/]' }).Count -eq 0) 'Exact five-service D09 cohort only'
 } else {
     Add-Check 'No physical migrations' ($migrationFiles.Count -eq 0) 'Migration homes remain placeholders'

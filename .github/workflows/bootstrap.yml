@@ -12,6 +12,7 @@ on:
       - delivery/mwp03-d07-authorized-search-provenance
       - delivery/mwp03-d08-trusted-financial-summary-export
       - delivery/mwp03-d09-persistent-relational-data-foundation
+      - delivery/mwp03-d10-durable-job-audit-propagation
   pull_request:
   workflow_dispatch:
 
@@ -57,7 +58,7 @@ jobs:
   toolchain:
     needs: d05-lifecycle-probe
     if: always() && (needs.d05-lifecycle-probe.result == 'success' || needs.d05-lifecycle-probe.result == 'skipped')
-    name: Verify D01-D08 controlled implementation
+    name: Verify D01-D10 controlled implementation
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -202,6 +203,16 @@ jobs:
         if: always()
         shell: pwsh
         run: ./build/d09/Invoke-D09Persistence.ps1 -Reset
+
+      - name: Verify durable Job Management and Audit propagation
+        if: always()
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task D10Verification
+
+      - name: Verify D10 PostgreSQL durability and Audit propagation
+        if: always()
+        shell: pwsh
+        run: ./build/d10/Invoke-D10Persistence.ps1 -Reset
 
       - name: Upload raw machine-readable evidence
         if: always()

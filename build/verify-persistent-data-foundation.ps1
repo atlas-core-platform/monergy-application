@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$RepositoryRoot, [switch]$SelfTest)
+param([string]$RepositoryRoot, [switch]$SelfTest, [switch]$D10ForwardRegression)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) { $RepositoryRoot = Split-Path -Parent $PSScriptRoot }
@@ -30,6 +30,10 @@ function Test-Scope($Scope) {
 
 $scopePath = Join-Path $RepositoryRoot 'build/governance/d09-scope-lock.json'
 $scope = Get-Content -LiteralPath $scopePath -Raw | ConvertFrom-Json
+$d10ScopePath = Join-Path $RepositoryRoot 'build/governance/d10-scope-lock.json'
+if ($D10ForwardRegression -and -not (Test-Path -LiteralPath $d10ScopePath)) {
+    throw 'D10 forward regression requires the governed D10 scope lock.'
+}
 if ($SelfTest) {
     $checks = [ordered]@{ 'valid D09 scope' = Test-Scope $scope }
     foreach ($mutation in @(
@@ -77,24 +81,25 @@ $compose = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/d09/compos
 $checks['Pinned PostgreSQL 18.6 digest'] = $compose.Contains('postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722') -and -not $compose.Contains('postgres:latest')
 $checks['Pinned SeaweedFS 4.47 LOCAL CI fixture digest'] = $compose.Contains('seaweedfs:4.47@sha256:ce9e796f1fe6f06968f4c04bdaf8f678dad9c8acdfef3d244133d71bfa6bf882') -and -not $compose.Contains(':latest')
 $cohort = @('evidence','financial-profile','financial-rules','reporting','audit')
-foreach ($service in $cohort) {
+$currentCohort = if ($D10ForwardRegression) { @($cohort + 'job-management') } else { $cohort }
+foreach ($service in $currentCohort) {
     $migrationRoot = Join-Path $RepositoryRoot "services/$service/migrations"
     $checks["$service owns migrations"] = (Test-Path -LiteralPath $migrationRoot) -and @(Get-ChildItem -LiteralPath $migrationRoot -File -Filter '*.sql').Count -ge 1
 }
 $allSql = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
 $checks['No shared or out-of-cohort business migrations'] = @($allSql | Where-Object {
     $relative = $_.FullName.Substring($RepositoryRoot.Length).Replace('\','/')
-    -not ($cohort | Where-Object { $relative.StartsWith("/services/$_/migrations/", [StringComparison]::Ordinal) })
+    -not ($currentCohort | Where-Object { $relative.StartsWith("/services/$_/migrations/", [StringComparison]::Ordinal) })
 }).Count -eq 0
 $allServiceSource = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.cs' |
     Where-Object FullName -NotMatch '[\\/](bin|obj)[\\/]')
 $serviceSourceText = @($allServiceSource | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 $checks['Applications use runtime credentials never migration-owner credentials'] =
-    ([regex]::Matches($serviceSourceText, 'RuntimeConnection')).Count -eq 5 -and
+    ([regex]::Matches($serviceSourceText, 'RuntimeConnection')).Count -eq $(if ($D10ForwardRegression) { 6 } else { 5 }) -and
     -not $serviceSourceText.Contains('OwnerConnection')
-foreach ($service in $cohort) {
+foreach ($service in $currentCohort) {
     $schema = $service.Replace('-', '_')
-    $otherSchemas = @($cohort | Where-Object { $_ -cne $service } | ForEach-Object { $_.Replace('-', '_') })
+    $otherSchemas = @($currentCohort | Where-Object { $_ -cne $service } | ForEach-Object { $_.Replace('-', '_') })
     $ownedFiles = @(
         Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot "services/$service") -Recurse -File |
             Where-Object { $_.Extension -in @('.cs', '.sql') -and $_.FullName -notmatch '[\\/](bin|obj)[\\/]' }
@@ -116,7 +121,8 @@ $checks['AWS SDK isolated to Evidence infrastructure/project'] = @($awsReference
 $checks['S3 bytes excluded from PostgreSQL'] = @($allSql | Select-String -Pattern 'bytea|large object|content_bytes').Count -eq 0
 $evidenceS3 = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/evidence/Infrastructure/PostgresEvidenceAdapters.cs') -Raw
 $checks['Opaque keys and Monergy SHA-256 independent of ETag'] = $evidenceS3.Contains('SHA256.HashData') -and $evidenceS3.Contains('content-') -and -not $evidenceS3.Contains('ETag') -and -not $evidenceS3.Contains('DeleteObject')
-$checks['Transactional outboxes exist for exact producers'] = Test-ExactSet @($allSql | Where-Object Name -ceq '0002_outbox.sql' | ForEach-Object { Split-Path -Leaf (Split-Path -Parent (Split-Path -Parent $_.FullName)) }) @('evidence','financial-profile','financial-rules','reporting')
+$expectedOutboxProducers = if ($D10ForwardRegression) { @('evidence','financial-profile','financial-rules','reporting','job-management') } else { @('evidence','financial-profile','financial-rules','reporting') }
+$checks['Transactional outboxes exist for exact producers'] = Test-ExactSet @($allSql | Where-Object { $_.Name -ceq '0002_outbox.sql' -or ($D10ForwardRegression -and $_.Name -ceq '0001_durable_job_authority.sql') } | Where-Object { (Get-Content -LiteralPath $_.FullName -Raw).Contains('CREATE TABLE') -and (Get-Content -LiteralPath $_.FullName -Raw).Contains('outbox') } | ForEach-Object { Split-Path -Leaf (Split-Path -Parent (Split-Path -Parent $_.FullName)) }) $expectedOutboxProducers
 $bootstrap = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/d09/bootstrap-postgres.sh') -Raw
 foreach ($service in @('evidence','financial_profile','financial_rules','reporting','audit')) {
     $checks["Distinct $service owner/runtime roles"] = $bootstrap.Contains("monergy_`${service}_owner") -and $bootstrap.Contains("monergy_`${service}_runtime")

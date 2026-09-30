@@ -21,6 +21,8 @@ and CI / EPHEMERAL execution.
 - D08 product reference experience: lazy-loaded `/reports`, explicitly labeled `REFERENCE · LOCAL / CI ONLY`; conditional summary, goal/explanation, formal-pack, and notification Features remain excluded
 - MWP-03-D09: Persistent Relational Data Foundation candidate; durable PostgreSQL/S3-compatible persistence for the existing Evidence, Financial Profile, Financial Rules, Reporting, and Audit boundaries; no new business Feature completion
 - D09 execution is restricted to LOCAL / CI_EPHEMERAL. PostgreSQL and S3-compatible storage are technology selections only; Production hosting remains NOT_SELECTED.
+- MWP-03-D10: Durable Job Management & Audit Propagation implementation candidate — exactly four READY Features and the governed 18-contract footprint, with physical evidence restricted to LOCAL / CI_EPHEMERAL.
+- D10 adds service-owned Job Management PostgreSQL persistence and provider-neutral outbox/inbox Audit propagation. OD-15 and Production messaging/provider decisions remain unresolved.
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Backend: .NET SDK 10.0.401, .NET runtime 10.0.12, C# 14, ASP.NET Core and
   Worker Service according to accepted service responsibilities
@@ -28,7 +30,7 @@ and CI / EPHEMERAL execution.
   Vite 8.3.0, Ant Design 6.6.3 and Tailwind CSS 4.3.3
 - Hosted repository: private GitHub repository at
   `https://github.com/atlas-core-platform/monergy-application`
-- Hosted CI: GitHub Actions configured for D01-D09 gates and evidence
+- Hosted CI: GitHub Actions configured for D01-D10 gates and evidence
 - Governance: GitHub Free exception accepted; branch protection is
   `NOT_IMPLEMENTED — GITHUB FREE PLAN LIMITATION`; CODEOWNERS is advisory and CI
   flags direct pushes to `main`

@@ -87,7 +87,7 @@ public sealed class BoundaryTests
     }
 
     [Fact]
-    public void SqlMigrationsRemainOwnedByTheExactD09PersistenceCohort()
+    public void SqlMigrationsRemainOwnedByTheGovernedPhysicalPersistenceCohorts()
     {
         var persistenceCohort = new HashSet<string>(StringComparer.Ordinal)
         {
@@ -96,6 +96,7 @@ public sealed class BoundaryTests
             "financial-profile",
             "financial-rules",
             "reporting",
+            "job-management",
         };
         var authorizedRoots = persistenceCohort
             .Select(serviceId => Path.GetFullPath(Path.Combine(ServicesRoot, serviceId, "migrations")))
@@ -144,6 +145,7 @@ public sealed class BoundaryTests
             "financial-profile",
             "financial-rules",
             "reporting",
+            "job-management",
         };
 
         foreach (var projectPath in Directory.GetFiles(RepositoryRoot, "*.csproj", SearchOption.AllDirectories))
@@ -164,6 +166,7 @@ public sealed class BoundaryTests
                 : null;
             var persistenceBoundary = serviceId is not null && persistenceCohort.Contains(serviceId)
                 || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
+                || relative.StartsWith("tests/job-management/", StringComparison.Ordinal)
                 || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal);
 
             if (packages.Contains("Npgsql", StringComparer.OrdinalIgnoreCase)
@@ -198,6 +201,7 @@ public sealed class BoundaryTests
         Assert.All(persistenceSource, relative => Assert.True(
             persistenceCohort.Any(serviceId => relative.StartsWith($"services/{serviceId}/Infrastructure/", StringComparison.Ordinal))
             || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
+            || relative.StartsWith("tests/job-management/", StringComparison.Ordinal)
             || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal),
             $"Physical persistence source escaped its D09 boundary: {relative}"));
     }

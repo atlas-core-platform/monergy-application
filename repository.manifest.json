@@ -54,6 +54,11 @@
     "audit"
   ],
   "d09EvidenceLevel": "LOCAL_CI_PERSISTENCE_CANDIDATE",
+  "d10Status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "d10FeatureState": "IMPLEMENTATION_CANDIDATE_LOCAL_CI_4_OF_4",
+  "d10ContractState": "FOOTPRINT_18_ADVANCED_2_REALIZED_5_CANDIDATE",
+  "d10EvidenceLevel": "LOCAL_CI_EPHEMERAL_PHYSICAL_CANDIDATE",
+  "d10OutstandingDecision": "OD-15_UNRESOLVED",
   "integrationEvidenceLevel": "SIMULATOR_REFERENCE_ADAPTER",
   "businessFeatureImplementation": "VS02_IMPLEMENTATION_ACCEPTED_SIMULATOR",
   "referenceAdapterExecutionZones": ["LOCAL", "CI_EPHEMERAL"],

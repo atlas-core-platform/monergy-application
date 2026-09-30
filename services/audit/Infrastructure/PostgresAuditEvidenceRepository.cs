@@ -24,25 +24,35 @@ public sealed class PostgresAuditEvidenceRepository : IAuditEvidenceRepository, 
         AuditableEvent source, DateTimeOffset recordedAt, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         var candidate = new AuditEvidenceRecord($"audit-{source.EventId}", source.ContractId,
             source.EventId, source.EventName, source.Producer, source.SubjectType, source.SubjectId,
             source.OccurredAt, source.CorrelationId, source.CausationId, recordedAt);
-        var inserted = await connection.ExecuteAsync(new CommandDefinition("""
-            INSERT INTO audit.evidence
-                (audit_evidence_id, source_contract_id, source_event_id, event_name, producer,
-                 subject_type, subject_id, occurred_at, correlation_id, causation_id, recorded_at)
-            VALUES
-                (@AuditEvidenceId, @SourceContractId, @SourceEventId, @EventName, @Producer,
-                 @SubjectType, @SubjectId, @OccurredAt, @CorrelationId, @CausationId, @RecordedAt)
+        var inboxInserted = await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO audit.inbox(source_event_id, received_at)
+            VALUES (@EventId, @recordedAt)
             ON CONFLICT (source_event_id) DO NOTHING;
-            """, candidate, cancellationToken: cancellationToken));
+            """, new { source.EventId, recordedAt }, transaction, cancellationToken: cancellationToken));
+        var inserted = 0;
+        if (inboxInserted == 1)
+        {
+            inserted = await connection.ExecuteAsync(new CommandDefinition("""
+                INSERT INTO audit.evidence
+                    (audit_evidence_id, source_contract_id, source_event_id, event_name, producer,
+                     subject_type, subject_id, occurred_at, correlation_id, causation_id, recorded_at)
+                VALUES
+                    (@AuditEvidenceId, @SourceContractId, @SourceEventId, @EventName, @Producer,
+                     @SubjectType, @SubjectId, @OccurredAt, @CorrelationId, @CausationId, @RecordedAt);
+                """, candidate, transaction, cancellationToken: cancellationToken));
+        }
         var row = await connection.QuerySingleAsync<AuditRow>(new CommandDefinition("""
             SELECT audit_evidence_id AS AuditEvidenceId, source_contract_id AS SourceContractId,
                    source_event_id AS SourceEventId, event_name AS EventName, producer AS Producer,
                    subject_type AS SubjectType, subject_id AS SubjectId, occurred_at AS OccurredAt,
                    correlation_id AS CorrelationId, causation_id AS CausationId, recorded_at AS RecordedAt
             FROM audit.evidence WHERE source_event_id=@EventId;
-            """, new { source.EventId }, cancellationToken: cancellationToken));
+            """, new { source.EventId }, transaction, cancellationToken: cancellationToken));
+        await transaction.CommitAsync(cancellationToken);
         return (ToRecord(row), inserted == 1);
     }
 

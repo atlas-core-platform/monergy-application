@@ -97,6 +97,11 @@ public sealed class InMemoryReportRepository(IConfiguration configuration) : IRe
 
     public IReadOnlyList<DomainEvent<ReportGeneratedPayload>> Events => PendingEvents();
 
+    public void AcknowledgeEvent(string eventId)
+    {
+        lock (sync) outbox.Remove(eventId);
+    }
+
     public void Dispose() => operationGate.Dispose();
 
     private static bool Ensure(IConfiguration configuration)

@@ -28,15 +28,40 @@ public interface IAuditEvidenceRepository
     Task<IReadOnlyList<AuditEvidenceRecord>> ReadAllAsync(CancellationToken cancellationToken);
 }
 
+public sealed record AuditIngestionResult(AuditEvidenceRecord Record, bool Created);
+
 public sealed class AuditApplication(
     IAuditEvidenceRepository repository,
     ILifecycleTelemetry telemetry,
     TimeProvider timeProvider)
 {
-    private static readonly HashSet<string> AcceptedContracts =
-        new(StringComparer.Ordinal) { "CID-023", "CID-024", "CID-028", "CID-034", "CID-035", "CID-040", "CID-041" };
+    private static readonly Dictionary<string, string> AcceptedContracts =
+        new(StringComparer.Ordinal)
+        {
+            ["CID-005"] = "Customer & Identity Service",
+            ["CID-012"] = "Consent Service",
+            ["CID-013"] = "Consent Service",
+            ["CID-017"] = "Integration Gateway Service",
+            ["CID-023"] = "Evidence Service",
+            ["CID-024"] = "Evidence Service",
+            ["CID-028"] = "Document Intelligence Service",
+            ["CID-034"] = "Financial Profile Service",
+            ["CID-035"] = "Financial Profile Service",
+            ["CID-040"] = "Financial Rules Service",
+            ["CID-041"] = "Financial Rules Service",
+            ["CID-049"] = "AI Intelligence Service",
+            ["CID-053"] = "Reporting Service",
+            ["CID-058"] = "Job Management Service",
+            ["CID-059"] = "Job Management Service",
+            ["CID-060"] = "Job Management Service",
+        };
 
     public async Task<AuditEvidenceRecord> ConsumeAsync(
+        AuditableEvent source,
+        CancellationToken cancellationToken = default) =>
+        (await ConsumeWithDispositionAsync(source, cancellationToken)).Record;
+
+    public async Task<AuditIngestionResult> ConsumeWithDispositionAsync(
         AuditableEvent source,
         CancellationToken cancellationToken = default)
     {
@@ -48,7 +73,8 @@ public sealed class AuditApplication(
         {
             throw new ArgumentException("The calculation event producer, type or version is invalid.", nameof(source));
         }
-        if (!AcceptedContracts.Contains(source.ContractId) ||
+        if (!AcceptedContracts.TryGetValue(source.ContractId, out var producer) ||
+            !string.Equals(source.Producer, producer, StringComparison.Ordinal) ||
             string.IsNullOrWhiteSpace(source.EventId) ||
             string.IsNullOrWhiteSpace(source.CorrelationId) ||
             string.IsNullOrWhiteSpace(source.SubjectId))
@@ -67,7 +93,7 @@ public sealed class AuditApplication(
             source.SubjectType,
             source.SubjectId,
             repository.AdapterKind));
-        return appended.Record;
+        return new(appended.Record, appended.Created);
     }
 
     public Task<IReadOnlyList<AuditEvidenceRecord>> ReadAllAsync(CancellationToken cancellationToken = default) =>
