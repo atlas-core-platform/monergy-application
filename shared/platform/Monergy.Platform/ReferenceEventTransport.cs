@@ -81,6 +81,8 @@ public sealed class ReferenceGovernedEventTransport<TEvent> : IGovernedEventTran
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
+        if (consumers.Length == 0)
+            throw new InvalidOperationException("The reference event transport has no governed consumer.");
         var created = 0;
         try
         {

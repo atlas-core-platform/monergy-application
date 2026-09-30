@@ -406,6 +406,14 @@
           "Npgsql": "[10.0.3, )"
         }
       },
+      "monergy.services.documentintelligence": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Hosting": "[10.0.12, )",
+          "Monergy.Contracts": "[1.0.0, )",
+          "Monergy.Platform": "[1.0.0, )"
+        }
+      },
       "monergy.services.jobmanagement": {
         "type": "Project",
         "dependencies": {

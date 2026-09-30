@@ -33,8 +33,9 @@ public sealed class InMemoryJobRepository : IJobRepository
             var job = new DurableJobRecord(submission.JobId, submission.JobName, submission.ContractVersion,
                 submission.OwnerService, submission.PayloadReference, submission.CustomerId, submission.RequestId,
                 submission.CorrelationId, submission.CausationId, submission.Security, submission.IdempotencyKey,
-                submission.PayloadFingerprint, JobState.Scheduled, 0, 0, submission.RequestedAt,
+                submission.PayloadFingerprint, JobState.Scheduled, 0, 0, 0, submission.RequestedAt,
                 submission.ScheduledAt, submission.ScheduledAt, null, null, null, false, null,
+                null, null, null, false,
                 submission.ScheduledAt);
             jobs.Add(job.JobId, job);
             idempotency.Add(identity, (job.JobId, submission.PayloadFingerprint));
@@ -48,6 +49,60 @@ public sealed class InMemoryJobRepository : IJobRepository
         lock (sync) return Task.FromResult(jobs.GetValueOrDefault(jobId));
     }
 
+    public Task<JobLease?> ClaimAsync(string jobId, string workerId, DateTimeOffset now,
+        TimeSpan leaseDuration, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            if (!jobs.TryGetValue(jobId, out var current)) return Task.FromResult<JobLease?>(null);
+            return Task.FromResult(Claim(current, workerId, now, leaseDuration));
+        }
+    }
+
+    public Task<JobLease?> ClaimNextAsync(string workerId, DateTimeOffset now,
+        TimeSpan leaseDuration, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            var candidate = jobs.Values
+                .Where(job => IsEligible(job, now))
+                .OrderBy(job => job.NextAttemptAt ?? job.ScheduledAt)
+                .ThenBy(job => job.JobId, StringComparer.Ordinal)
+                .FirstOrDefault();
+            return Task.FromResult(candidate is null ? null : Claim(candidate, workerId, now, leaseDuration));
+        }
+    }
+
+    public Task<DurableJobRecord> CompleteClaimAsync(JobLease lease, string? outcomeReference,
+        DateTimeOffset now, CancellationToken cancellationToken) =>
+        ChangeClaim(lease, current => current with
+        {
+            State = JobState.Completed,
+            OutcomeReference = outcomeReference,
+            TerminalAt = now,
+            LeaseOwner = null,
+            LeaseToken = null,
+            LeaseExpiresAt = null,
+            UpdatedAt = now,
+        }, JobEvent.Completed, now, cancellationToken);
+
+    public Task<DurableJobRecord> FailClaimAsync(JobLease lease, string failureCode, bool retryable,
+        DateTimeOffset? nextAttemptAt, DateTimeOffset now, CancellationToken cancellationToken) =>
+        ChangeClaim(lease, current => current with
+        {
+            State = JobState.Failed,
+            FailureCode = failureCode,
+            Retryable = retryable,
+            NextAttemptAt = retryable ? nextAttemptAt : null,
+            TerminalAt = now,
+            LeaseOwner = null,
+            LeaseToken = null,
+            LeaseExpiresAt = null,
+            UpdatedAt = now,
+        }, JobEvent.Failed, now, cancellationToken);
+
     public Task<DurableJobRecord> StartAsync(string jobId, DateTimeOffset now, CancellationToken cancellationToken) =>
         Change(jobId, [JobState.Scheduled], current => current with
         {
@@ -56,6 +111,7 @@ public sealed class InMemoryJobRepository : IJobRepository
             NextAttemptAt = null,
             FailureCode = null,
             Retryable = false,
+            ReconciliationRequired = false,
             UpdatedAt = now,
         }, JobEvent.Started, now, cancellationToken);
 
@@ -68,6 +124,9 @@ public sealed class InMemoryJobRepository : IJobRepository
                 State = JobState.Completed,
                 OutcomeReference = outcomeReference,
                 TerminalAt = now,
+                LeaseOwner = null,
+                LeaseToken = null,
+                LeaseExpiresAt = null,
                 UpdatedAt = now,
             }, JobEvent.Completed, now, cancellationToken, suppressEventWhenCancelled: true);
 
@@ -80,6 +139,9 @@ public sealed class InMemoryJobRepository : IJobRepository
             Retryable = retryable && current.State != JobState.CancellationRequested,
             NextAttemptAt = retryable && current.State != JobState.CancellationRequested ? nextAttemptAt : null,
             TerminalAt = now,
+            LeaseOwner = null,
+            LeaseToken = null,
+            LeaseExpiresAt = null,
             UpdatedAt = now,
         }, JobEvent.Failed, now, cancellationToken, suppressEventWhenCancelled: true);
 
@@ -123,6 +185,7 @@ public sealed class InMemoryJobRepository : IJobRepository
                 ReplayCount = current.ReplayCount + 1,
                 NextAttemptAt = now,
                 TerminalAt = null,
+                ReconciliationRequired = false,
                 UpdatedAt = now
             };
             jobs[jobId] = next;
@@ -135,17 +198,79 @@ public sealed class InMemoryJobRepository : IJobRepository
         cancellationToken.ThrowIfCancellationRequested();
         lock (sync)
         {
-            var interrupted = jobs.Values.Where(job => job.State == JobState.Running).ToArray();
+            var interrupted = jobs.Values.Where(job =>
+                (job.State is JobState.Running or JobState.CancellationRequested) &&
+                job.LeaseExpiresAt is not null && job.LeaseExpiresAt <= now).ToArray();
             foreach (var job in interrupted)
                 jobs[job.JobId] = job with
                 {
-                    State = JobState.Scheduled,
-                    FailureCode = "job.execution.interrupted",
-                    Retryable = true,
-                    NextAttemptAt = now,
+                    State = job.State == JobState.Running ? JobState.Failed : JobState.CancellationRequested,
+                    FailureCode = job.State == JobState.Running
+                        ? "job.execution.outcome-unknown"
+                        : "job.cancellation.outcome-unknown",
+                    Retryable = false,
+                    NextAttemptAt = null,
+                    TerminalAt = job.State == JobState.Running ? now : null,
+                    LeaseOwner = null,
+                    LeaseToken = null,
+                    LeaseExpiresAt = null,
+                    ReconciliationRequired = true,
                     UpdatedAt = now
                 };
             return Task.FromResult(interrupted.Length);
+        }
+    }
+
+    public Task<DurableJobRecord> ReconcileAsync(string jobId, string customerId,
+        JobReconciliationOutcome outcome, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            var current = Required(jobId);
+            if (!current.ReconciliationRequired ||
+                !string.Equals(current.CustomerId, customerId, StringComparison.Ordinal))
+                throw new InvalidOperationException("The job is not eligible for reconciliation.");
+            var next = outcome switch
+            {
+                JobReconciliationOutcome.ConfirmedNoEffect => current with
+                {
+                    State = JobState.Scheduled,
+                    FailureCode = null,
+                    Retryable = false,
+                    NextAttemptAt = now,
+                    TerminalAt = null,
+                    ReconciliationRequired = false,
+                    UpdatedAt = now,
+                },
+                JobReconciliationOutcome.ConfirmedCompleted => current with
+                {
+                    State = JobState.Completed,
+                    FailureCode = null,
+                    Retryable = false,
+                    NextAttemptAt = null,
+                    TerminalAt = now,
+                    ReconciliationRequired = false,
+                    UpdatedAt = now,
+                },
+                JobReconciliationOutcome.ConfirmedCancelled => current with
+                {
+                    State = JobState.Cancelled,
+                    Retryable = false,
+                    NextAttemptAt = null,
+                    TerminalAt = now,
+                    ReconciliationRequired = false,
+                    UpdatedAt = now,
+                },
+                _ => throw new ArgumentOutOfRangeException(nameof(outcome)),
+            };
+            jobs[jobId] = next;
+            if (outcome == JobReconciliationOutcome.ConfirmedCompleted)
+            {
+                var message = JobEvents.Create(next, JobEvent.Completed, now);
+                outbox.TryAdd(message.EventId, new(message, now));
+            }
+            return Task.FromResult(next);
         }
     }
 
@@ -179,11 +304,64 @@ public sealed class InMemoryJobRepository : IJobRepository
                 values.Count(job => job.State == JobState.Completed),
                 values.Count(job => job.State == JobState.Failed),
                 values.Count(job => job.State == JobState.Cancelled),
+                values.Sum(job => job.RetryCount),
                 values.Sum(job => job.ReplayCount),
                 oldestRunnable is null ? null : now - oldestRunnable.Value,
                 outbox.Count,
                 oldestOutbox is null ? null : now - oldestOutbox.Value,
                 dispatchAttempts, 0, 0, 0));
+        }
+    }
+
+    private JobLease? Claim(DurableJobRecord current, string workerId, DateTimeOffset now, TimeSpan leaseDuration)
+    {
+        if (!IsEligible(current, now)) return null;
+        var retry = current.State == JobState.Failed;
+        var token = Guid.NewGuid().ToString("N");
+        var expiresAt = now.Add(leaseDuration);
+        var next = current with
+        {
+            State = JobState.Running,
+            Attempt = current.Attempt + 1,
+            RetryCount = current.RetryCount + (retry ? 1 : 0),
+            NextAttemptAt = null,
+            FailureCode = null,
+            Retryable = false,
+            TerminalAt = null,
+            LeaseOwner = workerId,
+            LeaseToken = token,
+            LeaseExpiresAt = expiresAt,
+            ReconciliationRequired = false,
+            UpdatedAt = now,
+        };
+        jobs[next.JobId] = next;
+        var message = JobEvents.Create(next, JobEvent.Started, now);
+        outbox.TryAdd(message.EventId, new(message, now));
+        return new(next, workerId, token, expiresAt);
+    }
+
+    private static bool IsEligible(DurableJobRecord job, DateTimeOffset now) =>
+        !job.ReconciliationRequired &&
+        ((job.State == JobState.Scheduled && (job.NextAttemptAt is null || job.NextAttemptAt <= now)) ||
+         (job.State == JobState.Failed && job.Retryable && job.NextAttemptAt is not null && job.NextAttemptAt <= now));
+
+    private Task<DurableJobRecord> ChangeClaim(JobLease lease,
+        Func<DurableJobRecord, DurableJobRecord> transition, JobEvent jobEvent, DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            var current = Required(lease.Job.JobId);
+            if (current.State is not (JobState.Running or JobState.CancellationRequested) ||
+                !string.Equals(current.LeaseOwner, lease.WorkerId, StringComparison.Ordinal) ||
+                !string.Equals(current.LeaseToken, lease.LeaseToken, StringComparison.Ordinal))
+                throw new InvalidOperationException("The durable job lease is no longer owned by this worker.");
+            var next = transition(current);
+            jobs[next.JobId] = next;
+            var message = JobEvents.Create(next, jobEvent, now);
+            outbox.TryAdd(message.EventId, new(message, now));
+            return Task.FromResult(next);
         }
     }
 

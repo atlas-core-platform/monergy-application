@@ -261,7 +261,7 @@ if ($D09ForwardRegression -or $D10ForwardRegression) {
 }
 $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
 if ($D10ForwardRegression) {
-    Add-Check 'D10-bounded migrations' ($migrationFiles.Count -eq 11 -and @($migrationFiles | Where-Object { $_.FullName -notmatch '[/\\](evidence|financial-profile|financial-rules|reporting|audit|job-management)[/\\]migrations[/\\]' }).Count -eq 0) 'D09 cohort plus D10 Audit inbox and Job Management authority only'
+    Add-Check 'D10-bounded migrations' ($migrationFiles.Count -eq 12 -and @($migrationFiles | Where-Object { $_.FullName -notmatch '[/\\](evidence|financial-profile|financial-rules|reporting|audit|job-management)[/\\]migrations[/\\]' }).Count -eq 0) 'D09 cohort plus D10 Audit inbox and Job Management authority/lease migrations only'
 } elseif ($D09ForwardRegression) {
     Add-Check 'D09-bounded migrations' ($migrationFiles.Count -eq 9 -and @($migrationFiles | Where-Object { $_.FullName -notmatch '[\\/](evidence|financial-profile|financial-rules|reporting|audit)[\\/]migrations[\\/]' }).Count -eq 0) 'Exact five-service D09 cohort only'
 } else {

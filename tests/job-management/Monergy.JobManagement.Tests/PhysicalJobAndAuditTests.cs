@@ -1,9 +1,12 @@
 using System.Collections.Immutable;
 using Dapper;
+using Microsoft.Extensions.Logging.Abstractions;
 using Monergy.Contracts;
 using Monergy.Platform;
 using Monergy.Services.Audit.Application;
 using Monergy.Services.Audit.Infrastructure;
+using Monergy.Services.DocumentIntelligence.Application;
+using Monergy.Services.DocumentIntelligence.Infrastructure;
 using Monergy.Services.JobManagement.Application;
 using Monergy.Services.JobManagement.Infrastructure;
 using Monergy.Services.Reporting.Application;
@@ -15,6 +18,57 @@ namespace Monergy.JobManagement.Tests;
 
 public sealed class PhysicalJobAndAuditTests
 {
+    [Fact, Trait("Category", "Physical")]
+    public async Task GovernedProcessDocumentJobSurvivesReconstructionExecutesAndDispatchesAuditEvidence()
+    {
+        var configuration = JobTestContext.Configuration();
+        var suffix = Guid.NewGuid().ToString("N");
+        var jobId = $"job-document-{suffix}";
+        var processingId = $"processing-{suffix}";
+        var clock = new MutableTimeProvider(JobTestContext.Now);
+        await using (var initial = new PostgresJobRepository(configuration))
+        {
+            var initialApp = new JobManagementApplication(initial, new CapturingTelemetry(), clock);
+            Assert.Equal(ContractOutcome.Success,
+                (await initialApp.ScheduleJobAsync(JobTestContext.Schedule(jobId, $"key-{suffix}", processingId))).Outcome);
+            Assert.Equal(JobState.Scheduled,
+                (await initialApp.GetJobStatusAsync(JobTestContext.Status(jobId))).Data?.State);
+        }
+
+        await using var jobs = new PostgresJobRepository(configuration);
+        var app = new JobManagementApplication(jobs, new CapturingTelemetry(), clock);
+        var documentRepository = new InMemoryDocumentProcessingRepository();
+        var documentApp = new DocumentProcessingApplication(documentRepository, new FixtureEvidenceContentReader(),
+            new FixtureDocumentExtractor(), new ReferenceExecutionPolicy(), new CapturingTelemetry(), clock);
+        var registry = new ReferenceJobExecutionTargetRegistry();
+        registry.Register("Document Intelligence Service", Vs02ContractNames.ProcessDocument,
+            new DocumentProcessingJobTarget(documentApp));
+        var policy = new ReferenceJobExecutionPolicy(configuration, clock);
+        policy.GrantAuthorization("authorization-d10");
+        policy.SetConsent(new("consent-d10", JobTestContext.CustomerId, "DURABLE_PROCESSING",
+            clock.Now.AddHours(1), false));
+        var worker = new DurableJobExecutionWorker(configuration, jobs, app, policy, policy, registry, clock,
+            NullLogger<DurableJobExecutionWorker>.Instance);
+
+        Assert.True(await worker.RunJobOnceAsync(jobId));
+        Assert.Equal(JobState.Completed, (await jobs.GetAsync(jobId, default))?.State);
+        Assert.Equal(ProcessingState.Completed, (await documentRepository.GetAsync(processingId, default))?.State);
+        Assert.Equal(1, policy.AuthorizationEvaluations);
+        Assert.Equal(1, policy.ConsentEvaluations);
+
+        await using var auditRepository = new PostgresAuditEvidenceRepository(configuration);
+        var audit = new AuditApplication(auditRepository, new CapturingTelemetry(), clock);
+        var deliveryTelemetry = new EventDeliveryTelemetry();
+        var transport = new ReferenceGovernedEventTransport<AuditableEvent>(configuration,
+            [new AuditTransportConsumer(audit)], deliveryTelemetry);
+        var dispatch = new JobOutboxDispatchWorker(configuration,
+            new JobOutboxDispatcher(jobs, transport, deliveryTelemetry, clock), clock,
+            NullLogger<JobOutboxDispatchWorker>.Instance);
+        Assert.True(await dispatch.RunOnceAsync() >= 2);
+        Assert.Contains(await audit.ReadAllAsync(), item => item.SubjectId == jobId &&
+            item.EventName == Vs02ContractNames.JobCompleted);
+    }
+
     [Fact, Trait("Category", "Physical")]
     public async Task PersistedJobSurvivesRepositoryReconstructionAndDatabaseRestart()
     {
@@ -31,26 +85,63 @@ public sealed class PhysicalJobAndAuditTests
     }
 
     [Fact, Trait("Category", "Physical")]
-    public async Task RetryCancellationReplayAndInterruptedRecoveryPersistAcrossRepositories()
+    public async Task RetryStateAndClaimLeaseSurviveRepositoryReconstruction()
     {
         var configuration = JobTestContext.Configuration();
         var suffix = Guid.NewGuid().ToString("N");
         await using var first = new PostgresJobRepository(configuration);
         var app = new JobManagementApplication(first, new CapturingTelemetry(), new MutableTimeProvider(JobTestContext.Now));
         await app.ScheduleJobAsync(JobTestContext.Schedule($"job-{suffix}", $"key-{suffix}"));
-        await app.StartAsync($"job-{suffix}");
+        var policy = new ReferenceJobExecutionPolicy(configuration, new MutableTimeProvider(JobTestContext.Now));
+        policy.GrantAuthorization("authorization-d10");
+        policy.SetConsent(new("consent-d10", JobTestContext.CustomerId, "DURABLE_PROCESSING",
+            JobTestContext.Now.AddHours(1), false));
+        Assert.Equal(ContractOutcome.Failed,
+            (await app.ExecuteAsync($"job-{suffix}", policy, policy,
+                new CountingTarget(JobExecutionResult.Failed("dependency.timeout.unknown", true)))).Outcome);
 
         await using var reconstructed = new PostgresJobRepository(configuration);
-        Assert.Equal(1, await reconstructed.RecoverInterruptedAsync(JobTestContext.Now.AddMinutes(1), default));
-        var recovered = await reconstructed.GetAsync($"job-{suffix}", default);
-        Assert.Equal(JobState.Scheduled, recovered?.State);
-        await reconstructed.StartAsync($"job-{suffix}", JobTestContext.Now.AddMinutes(2), default);
-        await reconstructed.FailAsync($"job-{suffix}", "dependency.timeout.unknown", true,
-            JobTestContext.Now.AddMinutes(3), JobTestContext.Now.AddMinutes(2), default);
-        Assert.Equal(JobState.Scheduled, (await reconstructed.ReplayAsync($"job-{suffix}",
-            JobTestContext.CustomerId, JobTestContext.Now.AddMinutes(3), default)).State);
-        Assert.Equal(JobState.Cancelled, (await reconstructed.CancelAsync($"job-{suffix}",
-            JobTestContext.CustomerId, "customer-requested", JobTestContext.Now.AddMinutes(4), default)).State);
+        var claims = await Task.WhenAll(
+            reconstructed.ClaimAsync($"job-{suffix}", "worker-a", JobTestContext.Now.AddMinutes(2),
+                TimeSpan.FromMinutes(1), default),
+            reconstructed.ClaimAsync($"job-{suffix}", "worker-b", JobTestContext.Now.AddMinutes(2),
+                TimeSpan.FromMinutes(1), default));
+        var lease = Assert.Single(claims, claim => claim is not null)!;
+        Assert.Equal(1, lease.Job.RetryCount);
+        Assert.Equal(0, lease.Job.ReplayCount);
+        Assert.Equal(1, await reconstructed.RecoverInterruptedAsync(JobTestContext.Now.AddMinutes(4), default));
+        var uncertain = await reconstructed.GetAsync($"job-{suffix}", default);
+        Assert.True(uncertain?.ReconciliationRequired);
+        Assert.Equal(JobState.Failed, uncertain?.State);
+        var recovered = await reconstructed.ReconcileAsync($"job-{suffix}", JobTestContext.CustomerId,
+            JobReconciliationOutcome.ConfirmedNoEffect, JobTestContext.Now.AddMinutes(5), default);
+        Assert.Equal(JobState.Scheduled, recovered.State);
+        Assert.Equal(1, recovered.RetryCount);
+        Assert.Equal(0, recovered.ReplayCount);
+    }
+
+    [Fact, Trait("Category", "Physical")]
+    public async Task CancellationRequestedRestartRequiresExplicitReconciliation()
+    {
+        var configuration = JobTestContext.Configuration();
+        var suffix = Guid.NewGuid().ToString("N");
+        var jobId = $"job-cancel-recovery-{suffix}";
+        await using var repository = new PostgresJobRepository(configuration);
+        var app = new JobManagementApplication(repository, new CapturingTelemetry(),
+            new MutableTimeProvider(JobTestContext.Now));
+        await app.ScheduleJobAsync(JobTestContext.Schedule(jobId, $"key-{suffix}"));
+        Assert.NotNull(await repository.ClaimAsync(jobId, "worker-cancel", JobTestContext.Now,
+            TimeSpan.FromMinutes(1), default));
+        Assert.Equal(JobState.CancellationRequested,
+            (await app.CancelJobAsync(JobTestContext.Cancel(jobId))).Data?.State);
+
+        Assert.Equal(1, await repository.RecoverInterruptedAsync(JobTestContext.Now.AddMinutes(2), default));
+        var uncertain = await repository.GetAsync(jobId, default);
+        Assert.Equal(JobState.CancellationRequested, uncertain?.State);
+        Assert.True(uncertain?.ReconciliationRequired);
+        var cancelled = await repository.ReconcileAsync(jobId, JobTestContext.CustomerId,
+            JobReconciliationOutcome.ConfirmedCancelled, JobTestContext.Now.AddMinutes(3), default);
+        Assert.Equal(JobState.Cancelled, cancelled.State);
     }
 
     [Fact, Trait("Category", "Physical")]

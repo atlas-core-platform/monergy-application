@@ -38,6 +38,7 @@ public sealed record DurableJobRecord(
     string PayloadFingerprint,
     JobState State,
     int Attempt,
+    int RetryCount,
     int ReplayCount,
     DateTimeOffset RequestedAt,
     DateTimeOffset ScheduledAt,
@@ -47,10 +48,27 @@ public sealed record DurableJobRecord(
     string? FailureCode,
     bool Retryable,
     string? OutcomeReference,
+    string? LeaseOwner,
+    string? LeaseToken,
+    DateTimeOffset? LeaseExpiresAt,
+    bool ReconciliationRequired,
     DateTimeOffset UpdatedAt)
 {
     public ScheduledJob ToStatus() => new(JobId, JobName, OwnerService, PayloadReference, CustomerId,
         State, Attempt, FailureCode, Retryable, UpdatedAt);
+}
+
+public sealed record JobLease(
+    DurableJobRecord Job,
+    string WorkerId,
+    string LeaseToken,
+    DateTimeOffset ExpiresAt);
+
+public enum JobReconciliationOutcome
+{
+    ConfirmedNoEffect,
+    ConfirmedCompleted,
+    ConfirmedCancelled,
 }
 
 public sealed record JobOperationalSnapshot(
@@ -60,6 +78,7 @@ public sealed record JobOperationalSnapshot(
     int Failed,
     int Cancelled,
     int RetryCount,
+    int ReplayCount,
     TimeSpan? OldestRunnableAge,
     int OutboxBacklog,
     TimeSpan? OldestOutboxAge,
@@ -73,6 +92,14 @@ public interface IJobRepository
     string AdapterKind { get; }
     Task<(DurableJobRecord Job, bool Created)> ScheduleAsync(JobSubmission submission, CancellationToken cancellationToken);
     Task<DurableJobRecord?> GetAsync(string jobId, CancellationToken cancellationToken);
+    Task<JobLease?> ClaimAsync(string jobId, string workerId, DateTimeOffset now, TimeSpan leaseDuration,
+        CancellationToken cancellationToken);
+    Task<JobLease?> ClaimNextAsync(string workerId, DateTimeOffset now, TimeSpan leaseDuration,
+        CancellationToken cancellationToken);
+    Task<DurableJobRecord> CompleteClaimAsync(JobLease lease, string? outcomeReference,
+        DateTimeOffset now, CancellationToken cancellationToken);
+    Task<DurableJobRecord> FailClaimAsync(JobLease lease, string failureCode, bool retryable,
+        DateTimeOffset? nextAttemptAt, DateTimeOffset now, CancellationToken cancellationToken);
     Task<DurableJobRecord> StartAsync(string jobId, DateTimeOffset now, CancellationToken cancellationToken);
     Task<DurableJobRecord> CompleteAsync(string jobId, string? outcomeReference, DateTimeOffset now, CancellationToken cancellationToken);
     Task<DurableJobRecord> FailAsync(string jobId, string failureCode, bool retryable,
@@ -81,6 +108,8 @@ public interface IJobRepository
         DateTimeOffset now, CancellationToken cancellationToken);
     Task<DurableJobRecord> ReplayAsync(string jobId, string customerId, DateTimeOffset now, CancellationToken cancellationToken);
     Task<int> RecoverInterruptedAsync(DateTimeOffset now, CancellationToken cancellationToken);
+    Task<DurableJobRecord> ReconcileAsync(string jobId, string customerId, JobReconciliationOutcome outcome,
+        DateTimeOffset now, CancellationToken cancellationToken);
     Task<IReadOnlyList<AuditableEvent>> PendingEventsAsync(CancellationToken cancellationToken);
     Task MarkDispatchedAsync(string eventId, DateTimeOffset dispatchedAt, CancellationToken cancellationToken);
     Task<JobOperationalSnapshot> GetOperationalSnapshotAsync(DateTimeOffset now, CancellationToken cancellationToken);
@@ -217,6 +246,14 @@ public sealed class JobManagementApplication(
     {
         var contextError = ContractGuard.Validate(request, Vs02ContractNames.GetJobStatus);
         if (contextError is not null) return Reject<ScheduledJob, GetJobStatus>(request, contextError);
+        var persisted = await repository.GetAsync(request.Payload.JobId, cancellationToken);
+        if (persisted is null ||
+            !string.Equals(persisted.CustomerId, request.Payload.CustomerId, StringComparison.Ordinal) ||
+            !string.Equals(persisted.CustomerId, request.Security.Access.CustomerId, StringComparison.Ordinal))
+        {
+            return ContractResult<ScheduledJob>.Rejected(request, "job.replay.denied",
+                ContractErrorCategory.AccessDenied, "The job is not available to the trusted customer context.");
+        }
         try
         {
             var job = await repository.ReplayAsync(request.Payload.JobId, request.Payload.CustomerId,
@@ -234,11 +271,23 @@ public sealed class JobManagementApplication(
         IJobAuthorizationPolicy authorization, IJobConsentDecisionPort consent,
         IJobExecutionTarget target, CancellationToken cancellationToken = default)
     {
-        var job = await repository.GetAsync(jobId, cancellationToken)
-            ?? throw new InvalidOperationException("The scheduled job does not exist.");
+        var lease = await repository.ClaimAsync(jobId, $"direct-{Guid.NewGuid():N}",
+            timeProvider.GetUtcNow(), TimeSpan.FromMinutes(2), cancellationToken)
+            ?? throw new InvalidOperationException("The job is not eligible for execution.");
+        return await ExecuteClaimedAsync(lease, authorization, consent, target, cancellationToken);
+    }
+
+    public async Task<ContractResult<ScheduledJob>> ExecuteClaimedAsync(JobLease lease,
+        IJobAuthorizationPolicy authorization, IJobConsentDecisionPort consent,
+        IJobExecutionTarget target, CancellationToken cancellationToken = default)
+    {
+        var job = lease.Job;
         var executionRequest = new ContractRequest<object?>(job.JobName, job.JobVersion, job.RequestId,
             job.CorrelationId, job.CausationId, job.Security, job.IdempotencyKey, null);
-        var securityError = ContractGuard.Validate(executionRequest, job.JobName);
+        var securityError = !string.Equals(job.CustomerId, job.Security.Access.CustomerId, StringComparison.Ordinal)
+            ? new ContractError("job.security.customer-mismatch", ContractErrorCategory.AccessDenied,
+                "The persisted job and trusted customer context do not match.", false, job.CorrelationId)
+            : ContractGuard.Validate(executionRequest, job.JobName);
         var authorizationError = securityError ?? await authorization.AuthorizeAsync(
             job.Security, job, job.CorrelationId, cancellationToken);
         var consentError = authorizationError is null && job.Security.Access.ConsentReferenceId is not null
@@ -247,18 +296,17 @@ public sealed class JobManagementApplication(
         var decisionError = authorizationError ?? consentError;
         if (decisionError is not null)
         {
-            var denied = await repository.FailAsync(jobId, decisionError.Code, false, null,
+            var denied = await repository.FailClaimAsync(lease, decisionError.Code, false, null,
                 timeProvider.GetUtcNow(), cancellationToken);
             return FailedResult(denied, decisionError);
         }
 
-        var running = await repository.StartAsync(jobId, timeProvider.GetUtcNow(), cancellationToken);
-        var outcome = await target.ExecuteAsync(running, cancellationToken);
+        var outcome = await target.ExecuteAsync(job, cancellationToken);
         var now = timeProvider.GetUtcNow();
         var terminal = outcome.Succeeded
-            ? await repository.CompleteAsync(jobId, outcome.OutcomeReference, now, cancellationToken)
-            : await repository.FailAsync(jobId, outcome.FailureCode ?? "job.execution.failed", outcome.Retryable,
-                outcome.Retryable ? now : null, now, cancellationToken);
+            ? await repository.CompleteClaimAsync(lease, outcome.OutcomeReference, now, cancellationToken)
+            : await repository.FailClaimAsync(lease, outcome.FailureCode ?? "job.execution.failed", outcome.Retryable,
+                outcome.Retryable ? now.AddMinutes(1) : null, now, cancellationToken);
         return outcome.Succeeded
             ? SuccessResult(terminal)
             : FailedResult(terminal, new(outcome.FailureCode ?? "job.execution.failed",
@@ -279,6 +327,10 @@ public sealed class JobManagementApplication(
 
     public Task<int> RecoverInterruptedAsync(CancellationToken cancellationToken = default) =>
         repository.RecoverInterruptedAsync(timeProvider.GetUtcNow(), cancellationToken);
+
+    public Task<DurableJobRecord> ReconcileAsync(string jobId, string customerId,
+        JobReconciliationOutcome outcome, CancellationToken cancellationToken = default) =>
+        repository.ReconcileAsync(jobId, customerId, outcome, timeProvider.GetUtcNow(), cancellationToken);
 
     private void Record(string operation, string outcome, string requestId, string correlationId,
         string? causationId, string jobId) => telemetry.Record(new("Job Management Service", operation, outcome,

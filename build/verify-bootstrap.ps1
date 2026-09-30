@@ -182,7 +182,7 @@ Add-Check 'Service-owned migration scaffolds' $migrationFoldersValid 'All 12 ser
 $sqlFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
 if ($D10ForwardRegression) {
     $authorized = @($sqlFiles | Where-Object { $_.FullName -match '[/\\](evidence|financial-profile|financial-rules|reporting|audit|job-management)[/\\]migrations[/\\]' })
-    Add-Check 'D10-authorized service migrations only' ($sqlFiles.Count -eq 11 -and $authorized.Count -eq 11) 'Exact D09 cohort plus D10 Audit inbox and Job Management authority migrations'
+    Add-Check 'D10-authorized service migrations only' ($sqlFiles.Count -eq 12 -and $authorized.Count -eq 12) 'Exact D09 cohort plus D10 Audit inbox and Job Management authority/lease migrations'
 } elseif ($D09ForwardRegression) {
     $authorized = @($sqlFiles | Where-Object { $_.FullName -match '[\\/](evidence|financial-profile|financial-rules|reporting|audit)[\\/]migrations[\\/]' })
     Add-Check 'D09-authorized service migrations only' ($sqlFiles.Count -eq 9 -and $authorized.Count -eq 9) 'Exact five-service D09 cohort; historical default remains zero migrations'

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Monergy.Contracts;
 using Monergy.Platform;
 using Monergy.Services.JobManagement.Application;
+using Monergy.Services.DocumentIntelligence.Application;
 
 namespace Monergy.JobManagement.Tests;
 
@@ -65,5 +66,47 @@ internal sealed class CountingTarget(JobExecutionResult result) : IJobExecutionT
         cancellationToken.ThrowIfCancellationRequested();
         Calls++;
         return Task.FromResult(result);
+    }
+}
+
+internal sealed class SequenceTarget(params JobExecutionResult[] results) : IJobExecutionTarget
+{
+    private readonly Queue<JobExecutionResult> pending = new(results);
+    public int Calls { get; private set; }
+
+    public Task<JobExecutionResult> ExecuteAsync(DurableJobRecord job, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        Calls++;
+        return Task.FromResult(pending.Dequeue());
+    }
+}
+
+internal sealed class FixtureEvidenceContentReader : IEvidenceContentReader
+{
+    public Task<EvidenceContent?> ReadAsync(string documentVersionId, string customerId,
+        TrustedSecurityContext security, string correlationId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var reference = new EvidenceReference("evidence-d10", "document-d10", documentVersionId, customerId,
+            "fixture://d10", new string('A', 64), "text/plain");
+        return Task.FromResult<EvidenceContent?>(new(reference,
+            "INCOME|Salary|1000.00|INR|2026-09-30|page-1|1.0"));
+    }
+}
+
+internal sealed class DocumentProcessingJobTarget(DocumentProcessingApplication application) : IJobExecutionTarget
+{
+    public async Task<JobExecutionResult> ExecuteAsync(DurableJobRecord job, CancellationToken cancellationToken)
+    {
+        var payload = new ProcessDocument(job.PayloadReference, "document-version-d10", "evidence-d10",
+            job.CustomerId, job.RequestedAt);
+        var request = new ContractRequest<ProcessDocument>(Vs02ContractNames.ProcessDocument,
+            ContractGuard.CurrentVersion, job.RequestId, job.CorrelationId, job.CausationId, job.Security,
+            $"{job.IdempotencyKey}-document", payload);
+        var result = await application.ProcessDocumentAsync(request, cancellationToken);
+        return result.Outcome == ContractOutcome.Success
+            ? JobExecutionResult.Completed(result.Data?.ProcessingId)
+            : JobExecutionResult.Failed(result.Error?.Code ?? "processing.failed", result.Error?.Retryable ?? false);
     }
 }

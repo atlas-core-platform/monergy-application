@@ -50,8 +50,9 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         var job = new DurableJobRecord(submission.JobId, submission.JobName, submission.ContractVersion,
             submission.OwnerService, submission.PayloadReference, submission.CustomerId, submission.RequestId,
             submission.CorrelationId, submission.CausationId, submission.Security, submission.IdempotencyKey,
-            submission.PayloadFingerprint, JobState.Scheduled, 0, 0, submission.RequestedAt,
+            submission.PayloadFingerprint, JobState.Scheduled, 0, 0, 0, submission.RequestedAt,
             submission.ScheduledAt, submission.ScheduledAt, null, null, null, false, null,
+            null, null, null, false,
             submission.ScheduledAt);
         try
         {
@@ -117,6 +118,58 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         return await FindAsync(connection, null, jobId, cancellationToken);
     }
 
+    public async Task<JobLease?> ClaimAsync(string jobId, string workerId, DateTimeOffset now,
+        TimeSpan leaseDuration, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var current = await FindAsync(connection, transaction, jobId, cancellationToken, true);
+        if (current is null || !IsEligible(current, now))
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return null;
+        }
+        var lease = await ClaimLockedAsync(connection, transaction, current, workerId, now, leaseDuration,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return lease;
+    }
+
+    public async Task<JobLease?> ClaimNextAsync(string workerId, DateTimeOffset now,
+        TimeSpan leaseDuration, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var jobId = await connection.QuerySingleOrDefaultAsync<string>(new CommandDefinition("""
+            SELECT job_id FROM job_management.jobs
+            WHERE reconciliation_required=false AND
+                 ((state='Scheduled' AND COALESCE(next_attempt_at, scheduled_at)<=@now) OR
+                  (state='Failed' AND retryable=true AND next_attempt_at<=@now))
+            ORDER BY COALESCE(next_attempt_at, scheduled_at), job_id
+            FOR UPDATE SKIP LOCKED LIMIT 1;
+            """, new { now }, transaction, cancellationToken: cancellationToken));
+        if (jobId is null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+            return null;
+        }
+        var current = await LockedAsync(connection, transaction, jobId, cancellationToken);
+        var lease = await ClaimLockedAsync(connection, transaction, current, workerId, now, leaseDuration,
+            cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return lease;
+    }
+
+    public Task<DurableJobRecord> CompleteClaimAsync(JobLease lease, string? outcomeReference,
+        DateTimeOffset now, CancellationToken cancellationToken) =>
+        TransitionClaimAsync(lease, JobState.Completed, null, false, null, outcomeReference, now,
+            JobEvent.Completed, cancellationToken);
+
+    public Task<DurableJobRecord> FailClaimAsync(JobLease lease, string failureCode, bool retryable,
+        DateTimeOffset? nextAttemptAt, DateTimeOffset now, CancellationToken cancellationToken) =>
+        TransitionClaimAsync(lease, JobState.Failed, failureCode, retryable, nextAttemptAt, null, now,
+            JobEvent.Failed, cancellationToken);
+
     public Task<DurableJobRecord> StartAsync(string jobId, DateTimeOffset now,
         CancellationToken cancellationToken) => TransitionAsync(jobId, [JobState.Scheduled], JobState.Running,
         null, false, null, null, now, JobEvent.Started, cancellationToken);
@@ -157,7 +210,7 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var changed = await connection.ExecuteAsync(new CommandDefinition("""
             UPDATE job_management.jobs SET state='Scheduled', replay_count=replay_count+1,
-                next_attempt_at=@now, terminal_at=NULL, updated_at=@now
+                next_attempt_at=@now, terminal_at=NULL, reconciliation_required=false, updated_at=@now
             WHERE job_id=@jobId AND customer_id=@customerId AND state='Failed' AND retryable=true;
             """, new { jobId, customerId, now }, cancellationToken: cancellationToken));
         if (changed != 1) throw new InvalidOperationException("Job is not replayable.");
@@ -168,9 +221,50 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return await connection.ExecuteAsync(new CommandDefinition("""
-            UPDATE job_management.jobs SET state='Scheduled', failure_code='job.execution.interrupted',
-                retryable=true, next_attempt_at=@now, updated_at=@now WHERE state='Running';
+            UPDATE job_management.jobs SET
+                state=CASE WHEN state='Running' THEN 'Failed' ELSE state END,
+                failure_code=CASE WHEN state='Running' THEN 'job.execution.outcome-unknown'
+                                  ELSE 'job.cancellation.outcome-unknown' END,
+                retryable=false, next_attempt_at=NULL,
+                terminal_at=CASE WHEN state='Running' THEN @now ELSE terminal_at END,
+                lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL,
+                reconciliation_required=true, updated_at=@now
+            WHERE state IN ('Running','CancellationRequested') AND lease_expires_at<=@now;
             """, new { now }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<DurableJobRecord> ReconcileAsync(string jobId, string customerId,
+        JobReconciliationOutcome outcome, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var current = await LockedAsync(connection, transaction, jobId, cancellationToken);
+        if (!current.ReconciliationRequired || current.CustomerId != customerId)
+            throw new InvalidOperationException("The job is not eligible for reconciliation.");
+        var state = outcome switch
+        {
+            JobReconciliationOutcome.ConfirmedNoEffect => JobState.Scheduled,
+            JobReconciliationOutcome.ConfirmedCompleted => JobState.Completed,
+            JobReconciliationOutcome.ConfirmedCancelled => JobState.Cancelled,
+            _ => throw new ArgumentOutOfRangeException(nameof(outcome)),
+        };
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE job_management.jobs SET state=@state, failure_code=NULL, retryable=false,
+                next_attempt_at=CASE WHEN @state='Scheduled' THEN @now ELSE NULL END,
+                terminal_at=CASE WHEN @state IN ('Completed','Cancelled') THEN @now ELSE NULL END,
+                reconciliation_required=false, updated_at=@now WHERE job_id=@jobId;
+            """, new { state = state.ToString(), now, jobId }, transaction,
+            cancellationToken: cancellationToken));
+        var updated = await FindAsync(connection, transaction, jobId, cancellationToken)
+            ?? throw new InvalidOperationException("Reconciled job is unavailable.");
+        if (outcome == JobReconciliationOutcome.ConfirmedCompleted)
+        {
+            var message = JobEvents.Create(updated, JobEvent.Completed, now);
+            await InsertOutboxAsync(connection, transaction, message, updated, JobEvent.Completed, now,
+                cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
+        return updated;
     }
 
     public async Task<IReadOnlyList<AuditableEvent>> PendingEventsAsync(CancellationToken cancellationToken)
@@ -205,18 +299,100 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
                    count(*) FILTER (WHERE state='Completed')::int AS Completed,
                    count(*) FILTER (WHERE state='Failed')::int AS Failed,
                    count(*) FILTER (WHERE state='Cancelled')::int AS Cancelled,
-                   coalesce(sum(replay_count),0)::int AS RetryCount,
+                   coalesce(sum(retry_count),0)::int AS RetryCount,
+                   coalesce(sum(replay_count),0)::int AS ReplayCount,
                    min(scheduled_at) FILTER (WHERE state='Scheduled') AS OldestRunnable,
                    (SELECT count(*)::int FROM job_management.outbox WHERE dispatched_at IS NULL) AS OutboxBacklog,
                    (SELECT min(created_at) FROM job_management.outbox WHERE dispatched_at IS NULL) AS OldestOutbox
             FROM job_management.jobs;
             """, cancellationToken: cancellationToken));
         return new(row.Queued, row.Running, row.Completed, row.Failed, row.Cancelled, row.RetryCount,
+            row.ReplayCount,
             row.OldestRunnable is null ? null : now - Utc(row.OldestRunnable.Value), row.OutboxBacklog,
             row.OldestOutbox is null ? null : now - Utc(row.OldestOutbox.Value), 0, 0, 0, 0);
     }
 
     public ValueTask DisposeAsync() => dataSource.DisposeAsync();
+
+    private static bool IsEligible(DurableJobRecord job, DateTimeOffset now) =>
+        !job.ReconciliationRequired &&
+        ((job.State == JobState.Scheduled && (job.NextAttemptAt is null || job.NextAttemptAt <= now)) ||
+         (job.State == JobState.Failed && job.Retryable && job.NextAttemptAt is not null && job.NextAttemptAt <= now));
+
+    private static async Task<JobLease> ClaimLockedAsync(NpgsqlConnection connection,
+        NpgsqlTransaction transaction, DurableJobRecord current, string workerId, DateTimeOffset now,
+        TimeSpan leaseDuration, CancellationToken cancellationToken)
+    {
+        var leaseToken = Guid.NewGuid().ToString("N");
+        var leaseExpiresAt = now.Add(leaseDuration);
+        var retryIncrement = current.State == JobState.Failed ? 1 : 0;
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE job_management.jobs SET state='Running', attempt=attempt+1,
+                retry_count=retry_count+@retryIncrement, failure_code=NULL, retryable=false,
+                next_attempt_at=NULL, terminal_at=NULL, lease_owner=@workerId,
+                lease_token=@leaseToken, lease_expires_at=@leaseExpiresAt,
+                reconciliation_required=false, updated_at=@now WHERE job_id=@jobId;
+            """, new { retryIncrement, workerId, leaseToken, leaseExpiresAt, now, current.JobId }, transaction,
+            cancellationToken: cancellationToken));
+        var updated = await FindAsync(connection, transaction, current.JobId, cancellationToken)
+            ?? throw new InvalidOperationException("Claimed job is unavailable.");
+        await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO job_management.execution_attempts(job_id, attempt, started_at)
+            VALUES (@JobId, @Attempt, @now);
+            """, new { updated.JobId, updated.Attempt, now }, transaction,
+            cancellationToken: cancellationToken));
+        var message = JobEvents.Create(updated, JobEvent.Started, now);
+        await InsertOutboxAsync(connection, transaction, message, updated, JobEvent.Started, now,
+            cancellationToken);
+        return new(updated, workerId, leaseToken, leaseExpiresAt);
+    }
+
+    private async Task<DurableJobRecord> TransitionClaimAsync(JobLease lease, JobState target,
+        string? failureCode, bool retryable, DateTimeOffset? nextAttemptAt, string? outcomeReference,
+        DateTimeOffset now, JobEvent kind, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var current = await LockedAsync(connection, transaction, lease.Job.JobId, cancellationToken);
+        if (current.State is not (JobState.Running or JobState.CancellationRequested) ||
+            current.LeaseOwner != lease.WorkerId || current.LeaseToken != lease.LeaseToken)
+            throw new InvalidOperationException("The durable job lease is no longer owned by this worker.");
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE job_management.jobs SET state=@state, failure_code=@failureCode,
+                retryable=@retryable, next_attempt_at=@nextAttemptAt,
+                outcome_reference=@outcomeReference, terminal_at=@now,
+                lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=@now
+            WHERE job_id=@jobId;
+            """, new
+        {
+            state = target.ToString(),
+            failureCode,
+            retryable,
+            nextAttemptAt,
+            outcomeReference,
+            now,
+            jobId = current.JobId
+        }, transaction, cancellationToken: cancellationToken));
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE job_management.execution_attempts SET ended_at=@now, outcome=@outcome,
+                failure_code=@failureCode, retryable=@retryable
+            WHERE job_id=@jobId AND attempt=@attempt;
+            """, new
+        {
+            now,
+            outcome = target.ToString(),
+            failureCode,
+            retryable,
+            jobId = current.JobId,
+            attempt = current.Attempt
+        }, transaction, cancellationToken: cancellationToken));
+        var updated = await FindAsync(connection, transaction, current.JobId, cancellationToken)
+            ?? throw new InvalidOperationException("Updated job is unavailable.");
+        var message = JobEvents.Create(updated, kind, now);
+        await InsertOutboxAsync(connection, transaction, message, updated, kind, now, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+        return updated;
+    }
 
     private async Task<DurableJobRecord> TransitionAsync(string jobId, JobState[] expected, JobState target,
         string? failureCode, bool retryable, DateTimeOffset? nextAttemptAt, string? outcomeReference,
@@ -232,7 +408,9 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         await connection.ExecuteAsync(new CommandDefinition("""
             UPDATE job_management.jobs SET state=@State, attempt=@attempt, failure_code=@failureCode,
                 retryable=@retryable, next_attempt_at=@nextAttemptAt, outcome_reference=@outcomeReference,
-                terminal_at=CASE WHEN @Terminal THEN @now ELSE NULL END, updated_at=@now
+                terminal_at=CASE WHEN @Terminal THEN @now ELSE NULL END,
+                lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL,
+                reconciliation_required=false, updated_at=@now
             WHERE job_id=@jobId;
             """, new
         {
@@ -333,11 +511,14 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
                    customer_id AS CustomerId, request_id AS RequestId, correlation_id AS CorrelationId,
                    causation_id AS CausationId, security_context::text AS SecurityJson,
                    idempotency_key AS IdempotencyKey, payload_fingerprint AS PayloadFingerprint,
-                   state AS State, attempt AS Attempt, replay_count AS ReplayCount,
+                   state AS State, attempt AS Attempt, retry_count AS RetryCount,
+                   replay_count AS ReplayCount,
                    requested_at AS RequestedAt, scheduled_at AS ScheduledAt,
                    next_attempt_at AS NextAttemptAt, cancellation_requested_at AS CancellationRequestedAt,
                    terminal_at AS TerminalAt, failure_code AS FailureCode, retryable AS Retryable,
-                   outcome_reference AS OutcomeReference, updated_at AS UpdatedAt
+                   outcome_reference AS OutcomeReference, lease_owner AS LeaseOwner,
+                   lease_token AS LeaseToken, lease_expires_at AS LeaseExpiresAt,
+                   reconciliation_required AS ReconciliationRequired, updated_at AS UpdatedAt
             FROM job_management.jobs WHERE job_id=@jobId{suffix};
             """, new { jobId }, transaction, cancellationToken: cancellationToken));
         return row is null ? null : row.ToRecord();
@@ -365,6 +546,7 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         public string PayloadFingerprint { get; set; } = string.Empty;
         public string State { get; set; } = string.Empty;
         public int Attempt { get; set; }
+        public int RetryCount { get; set; }
         public int ReplayCount { get; set; }
         public DateTime RequestedAt { get; set; }
         public DateTime ScheduledAt { get; set; }
@@ -374,14 +556,19 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         public string? FailureCode { get; set; }
         public bool Retryable { get; set; }
         public string? OutcomeReference { get; set; }
+        public string? LeaseOwner { get; set; }
+        public string? LeaseToken { get; set; }
+        public DateTime? LeaseExpiresAt { get; set; }
+        public bool ReconciliationRequired { get; set; }
         public DateTime UpdatedAt { get; set; }
         public DurableJobRecord ToRecord() => new(JobId, JobName, JobVersion, OwnerService, PayloadReference,
             CustomerId, RequestId, CorrelationId, CausationId,
             JsonSerializer.Deserialize<TrustedSecurityContext>(SecurityJson, ContractJson.Options)!,
-            IdempotencyKey, PayloadFingerprint, Enum.Parse<JobState>(State), Attempt, ReplayCount,
+            IdempotencyKey, PayloadFingerprint, Enum.Parse<JobState>(State), Attempt, RetryCount, ReplayCount,
             Utc(RequestedAt), Utc(ScheduledAt), NextAttemptAt is null ? null : Utc(NextAttemptAt.Value),
             CancellationRequestedAt is null ? null : Utc(CancellationRequestedAt.Value),
             TerminalAt is null ? null : Utc(TerminalAt.Value), FailureCode, Retryable, OutcomeReference,
+            LeaseOwner, LeaseToken, LeaseExpiresAt is null ? null : Utc(LeaseExpiresAt.Value), ReconciliationRequired,
             Utc(UpdatedAt));
     }
     private sealed class OutboxRow
@@ -405,6 +592,7 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         public int Failed { get; set; }
         public int Cancelled { get; set; }
         public int RetryCount { get; set; }
+        public int ReplayCount { get; set; }
         public DateTime? OldestRunnable { get; set; }
         public int OutboxBacklog { get; set; }
         public DateTime? OldestOutbox { get; set; }
