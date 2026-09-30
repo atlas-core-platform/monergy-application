@@ -72,6 +72,10 @@ public sealed class DurableJobBehaviorTests
         var unchanged = await repository.GetAsync("job-replay-boundary", default);
         Assert.Equal(JobState.Failed, unchanged?.State);
         Assert.Equal(0, unchanged?.ReplayCount);
+        var replayed = await app.ReplayAsync(JobTestContext.Status("job-replay-boundary"));
+        Assert.Equal(JobState.Scheduled, replayed.Data?.State);
+        Assert.Equal(1, (await repository.GetAsync("job-replay-boundary", default))?.ReplayCount);
+        Assert.Equal(0, (await repository.GetAsync("job-replay-boundary", default))?.RetryCount);
     }
 
     [Fact]
@@ -86,9 +90,78 @@ public sealed class DurableJobBehaviorTests
         await app.StartAsync("job-during");
         Assert.Equal(JobState.CancellationRequested,
             (await app.CancelJobAsync(JobTestContext.Cancel("job-during"))).Data?.State);
-        Assert.Equal(JobState.Cancelled, (await app.CompleteAsync("job-during")).State);
+        Assert.Equal(JobState.Completed, (await app.CompleteAsync("job-during")).State);
         Assert.Equal(ContractErrorCategory.Conflict,
             (await app.CancelJobAsync(JobTestContext.Cancel("job-during"))).Error?.Category);
+    }
+
+    [Fact]
+    public async Task PendingAutomaticRetryCanBeCancelledAndNeverClaimedOrReplayed()
+    {
+        var repository = new InMemoryJobRepository();
+        var app = App(repository);
+        await app.ScheduleJobAsync(JobTestContext.Schedule("job-pending-retry", "key-pending-retry"));
+        await app.ExecuteAsync("job-pending-retry", Policy(new MutableTimeProvider(JobTestContext.Now)),
+            Policy(new MutableTimeProvider(JobTestContext.Now)),
+            new CountingTarget(JobExecutionResult.Failed("dependency.timeout", true)));
+
+        var cancelled = await app.CancelJobAsync(JobTestContext.Cancel("job-pending-retry"));
+
+        Assert.Equal(JobState.Cancelled, cancelled.Data?.State);
+        Assert.False(cancelled.Data?.Retryable);
+        var durable = await repository.GetAsync("job-pending-retry", default);
+        Assert.Null(durable?.NextAttemptAt);
+        Assert.Null(await repository.ClaimAsync("job-pending-retry", "worker", JobTestContext.Now.AddHours(1),
+            TimeSpan.FromMinutes(1), default));
+        Assert.Equal(ContractErrorCategory.Conflict,
+            (await app.ReplayAsync(JobTestContext.Status("job-pending-retry"))).Error?.Category);
+    }
+
+    [Fact]
+    public async Task CancellationDuringClaimedFailureRequiresReconciliationAndDoesNotRetry()
+    {
+        var repository = new InMemoryJobRepository();
+        var app = App(repository);
+        await app.ScheduleJobAsync(JobTestContext.Schedule("job-cancel-failure", "key-cancel-failure"));
+        var lease = await repository.ClaimAsync("job-cancel-failure", "worker", JobTestContext.Now,
+            TimeSpan.FromMinutes(1), default);
+        Assert.NotNull(lease);
+        await app.CancelJobAsync(JobTestContext.Cancel("job-cancel-failure"));
+
+        var uncertain = await repository.FailClaimAsync(lease!, "dependency.timeout", true,
+            JobTestContext.Now.AddMinutes(1), JobTestContext.Now, default);
+
+        Assert.Equal(JobState.CancellationRequested, uncertain.State);
+        Assert.False(uncertain.Retryable);
+        Assert.Null(uncertain.NextAttemptAt);
+        Assert.True(uncertain.ReconciliationRequired);
+        Assert.Null(await repository.ClaimAsync(uncertain.JobId, "other-worker", JobTestContext.Now.AddHours(1),
+            TimeSpan.FromMinutes(1), default));
+        var attemptBefore = Assert.Single(await repository.GetAttemptsAsync(uncertain.JobId, default));
+        Assert.Equal("CANCELLATION_OUTCOME_UNKNOWN", attemptBefore.Outcome);
+        Assert.NotNull(attemptBefore.EndedAt);
+        await repository.ReconcileAsync(uncertain.JobId, JobTestContext.CustomerId,
+            JobReconciliationOutcome.ConfirmedNoEffect, JobTestContext.Now.AddMinutes(2), default);
+        Assert.Equal(attemptBefore, Assert.Single(await repository.GetAttemptsAsync(uncertain.JobId, default)));
+    }
+
+    [Fact]
+    public async Task DefinitiveSuccessAfterCancellationRequestedCompletesKnownOwnerEffect()
+    {
+        var repository = new InMemoryJobRepository();
+        var app = App(repository);
+        await app.ScheduleJobAsync(JobTestContext.Schedule("job-cancel-success", "key-cancel-success"));
+        var lease = await repository.ClaimAsync("job-cancel-success", "worker", JobTestContext.Now,
+            TimeSpan.FromMinutes(1), default);
+        Assert.NotNull(lease);
+        await app.CancelJobAsync(JobTestContext.Cancel("job-cancel-success"));
+
+        var completed = await repository.CompleteClaimAsync(lease!, "known-domain-effect",
+            JobTestContext.Now.AddSeconds(1), default);
+
+        Assert.Equal(JobState.Completed, completed.State);
+        Assert.Equal("known-domain-effect", completed.OutcomeReference);
+        Assert.False(completed.ReconciliationRequired);
     }
 
     [Fact]
@@ -108,10 +181,16 @@ public sealed class DurableJobBehaviorTests
         Assert.True(recovered?.ReconciliationRequired);
         Assert.False(recovered?.Retryable);
         Assert.Equal("job.execution.outcome-unknown", recovered?.FailureCode);
+        var attemptBefore = Assert.Single(await repository.GetAttemptsAsync("job-interrupted", default));
+        Assert.Equal("OUTCOME_UNKNOWN", attemptBefore.Outcome);
+        Assert.Equal("job.execution.outcome-unknown", attemptBefore.FailureCode);
+        Assert.NotNull(attemptBefore.EndedAt);
         var reconciled = await repository.ReconcileAsync("job-interrupted", JobTestContext.CustomerId,
             JobReconciliationOutcome.ConfirmedNoEffect, JobTestContext.Now.AddMinutes(3), default);
         Assert.Equal(JobState.Scheduled, reconciled.State);
         Assert.False(reconciled.ReconciliationRequired);
+        Assert.Equal(attemptBefore,
+            Assert.Single(await repository.GetAttemptsAsync("job-interrupted", default)));
     }
 
     [Fact]
@@ -129,9 +208,15 @@ public sealed class DurableJobBehaviorTests
         Assert.Equal(JobState.CancellationRequested, uncertain?.State);
         Assert.True(uncertain?.ReconciliationRequired);
         Assert.Equal("job.cancellation.outcome-unknown", uncertain?.FailureCode);
+        var attemptBefore = Assert.Single(await repository.GetAttemptsAsync("job-cancellation-recovery", default));
+        Assert.Equal("CANCELLATION_OUTCOME_UNKNOWN", attemptBefore.Outcome);
+        Assert.Equal("job.cancellation.outcome-unknown", attemptBefore.FailureCode);
+        Assert.NotNull(attemptBefore.EndedAt);
         var reconciled = await app.ReconcileAsync("job-cancellation-recovery", JobTestContext.CustomerId,
             JobReconciliationOutcome.ConfirmedCancelled);
         Assert.Equal(JobState.Cancelled, reconciled.State);
+        Assert.Equal(attemptBefore,
+            Assert.Single(await repository.GetAttemptsAsync("job-cancellation-recovery", default)));
     }
 
     [Fact]

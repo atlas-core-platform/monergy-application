@@ -191,11 +191,17 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         var current = await LockedAsync(connection, transaction, jobId, cancellationToken);
-        if (current.CustomerId != customerId || current.State is JobState.Completed or JobState.Failed or JobState.Cancelled)
+        var pendingRetry = current.State == JobState.Failed && current.Retryable &&
+            !current.ReconciliationRequired && current.LeaseToken is null;
+        if (current.CustomerId != customerId || current.State is JobState.Completed or JobState.Cancelled ||
+            (current.State == JobState.Failed && !pendingRetry))
             throw new InvalidOperationException("Invalid cancellation state.");
-        var state = current.State == JobState.Scheduled ? JobState.Cancelled : JobState.CancellationRequested;
+        var state = current.State == JobState.Scheduled || pendingRetry
+            ? JobState.Cancelled
+            : JobState.CancellationRequested;
         await connection.ExecuteAsync(new CommandDefinition("""
             UPDATE job_management.jobs SET state=@State, failure_code=@reason,
+                retryable=false, next_attempt_at=NULL,
                 cancellation_requested_at=@now, terminal_at=CASE WHEN @State='Cancelled' THEN @now ELSE NULL END,
                 updated_at=@now WHERE job_id=@jobId;
             """, new { State = state.ToString(), reason, now, jobId }, transaction,
@@ -220,7 +226,32 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
     public async Task<int> RecoverInterruptedAsync(DateTimeOffset now, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        return await connection.ExecuteAsync(new CommandDefinition("""
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var rows = (await connection.QueryAsync<InterruptedAttemptRow>(new CommandDefinition("""
+            SELECT job_id AS JobId, attempt AS Attempt, state AS State
+            FROM job_management.jobs
+            WHERE state IN ('Running','CancellationRequested') AND lease_expires_at<=@now
+            ORDER BY job_id FOR UPDATE;
+            """, new { now }, transaction, cancellationToken: cancellationToken))).ToArray();
+        foreach (var row in rows)
+        {
+            var cancellationUnknown = row.State == JobState.CancellationRequested.ToString();
+            await connection.ExecuteAsync(new CommandDefinition("""
+                UPDATE job_management.execution_attempts SET ended_at=@now, outcome=@outcome,
+                    failure_code=@failureCode, retryable=false
+                WHERE job_id=@JobId AND attempt=@Attempt AND ended_at IS NULL;
+                """, new
+            {
+                now,
+                outcome = cancellationUnknown ? "CANCELLATION_OUTCOME_UNKNOWN" : "OUTCOME_UNKNOWN",
+                failureCode = cancellationUnknown
+                    ? "job.cancellation.outcome-unknown"
+                    : "job.execution.outcome-unknown",
+                row.JobId,
+                row.Attempt,
+            }, transaction, cancellationToken: cancellationToken));
+        }
+        var recovered = await connection.ExecuteAsync(new CommandDefinition("""
             UPDATE job_management.jobs SET
                 state=CASE WHEN state='Running' THEN 'Failed' ELSE state END,
                 failure_code=CASE WHEN state='Running' THEN 'job.execution.outcome-unknown'
@@ -230,7 +261,9 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
                 lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL,
                 reconciliation_required=true, updated_at=@now
             WHERE state IN ('Running','CancellationRequested') AND lease_expires_at<=@now;
-            """, new { now }, cancellationToken: cancellationToken));
+            """, new { now }, transaction, cancellationToken: cancellationToken));
+        await transaction.CommitAsync(cancellationToken);
+        return recovered;
     }
 
     public async Task<DurableJobRecord> ReconcileAsync(string jobId, string customerId,
@@ -265,6 +298,19 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         }
         await transaction.CommitAsync(cancellationToken);
         return updated;
+    }
+
+    public async Task<IReadOnlyList<JobExecutionAttemptRecord>> GetAttemptsAsync(string jobId,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<AttemptRow>(new CommandDefinition("""
+            SELECT job_id AS JobId, attempt AS Attempt, started_at AS StartedAt,
+                   ended_at AS EndedAt, outcome AS Outcome, failure_code AS FailureCode,
+                   retryable AS Retryable
+            FROM job_management.execution_attempts WHERE job_id=@jobId ORDER BY attempt;
+            """, new { jobId }, cancellationToken: cancellationToken));
+        return rows.Select(row => row.ToRecord()).ToArray();
     }
 
     public async Task<IReadOnlyList<AuditableEvent>> PendingEventsAsync(CancellationToken cancellationToken)
@@ -357,19 +403,27 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         if (current.State is not (JobState.Running or JobState.CancellationRequested) ||
             current.LeaseOwner != lease.WorkerId || current.LeaseToken != lease.LeaseToken)
             throw new InvalidOperationException("The durable job lease is no longer owned by this worker.");
+        var cancellationUnknown = current.State == JobState.CancellationRequested && target == JobState.Failed;
+        var finalState = cancellationUnknown ? JobState.CancellationRequested : target;
+        var finalFailureCode = cancellationUnknown ? "job.cancellation.outcome-unknown" : failureCode;
+        var finalRetryable = retryable && !cancellationUnknown;
+        var finalNextAttemptAt = cancellationUnknown ? null : nextAttemptAt;
         await connection.ExecuteAsync(new CommandDefinition("""
             UPDATE job_management.jobs SET state=@state, failure_code=@failureCode,
                 retryable=@retryable, next_attempt_at=@nextAttemptAt,
-                outcome_reference=@outcomeReference, terminal_at=@now,
-                lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL, updated_at=@now
+                outcome_reference=@outcomeReference,
+                terminal_at=CASE WHEN @reconciliationRequired THEN NULL ELSE @now END,
+                lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL,
+                reconciliation_required=@reconciliationRequired, updated_at=@now
             WHERE job_id=@jobId;
             """, new
         {
-            state = target.ToString(),
-            failureCode,
-            retryable,
-            nextAttemptAt,
+            state = finalState.ToString(),
+            failureCode = finalFailureCode,
+            retryable = finalRetryable,
+            nextAttemptAt = finalNextAttemptAt,
             outcomeReference,
+            reconciliationRequired = cancellationUnknown,
             now,
             jobId = current.JobId
         }, transaction, cancellationToken: cancellationToken));
@@ -380,9 +434,9 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
             """, new
         {
             now,
-            outcome = target.ToString(),
-            failureCode,
-            retryable,
+            outcome = cancellationUnknown ? "CANCELLATION_OUTCOME_UNKNOWN" : finalState.ToString(),
+            failureCode = finalFailureCode,
+            retryable = finalRetryable,
             jobId = current.JobId,
             attempt = current.Attempt
         }, transaction, cancellationToken: cancellationToken));
@@ -402,25 +456,26 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         var current = await LockedAsync(connection, transaction, jobId, cancellationToken);
         if (!expected.Contains(current.State)) throw new InvalidOperationException("Invalid job state transition.");
-        var cancellation = current.State == JobState.CancellationRequested;
-        var finalState = cancellation ? JobState.Cancelled : target;
+        var cancellationUnknown = current.State == JobState.CancellationRequested && target == JobState.Failed;
+        var finalState = cancellationUnknown ? JobState.CancellationRequested : target;
         var attempt = target == JobState.Running ? current.Attempt + 1 : current.Attempt;
         await connection.ExecuteAsync(new CommandDefinition("""
             UPDATE job_management.jobs SET state=@State, attempt=@attempt, failure_code=@failureCode,
                 retryable=@retryable, next_attempt_at=@nextAttemptAt, outcome_reference=@outcomeReference,
                 terminal_at=CASE WHEN @Terminal THEN @now ELSE NULL END,
                 lease_owner=NULL, lease_token=NULL, lease_expires_at=NULL,
-                reconciliation_required=false, updated_at=@now
+                reconciliation_required=@reconciliationRequired, updated_at=@now
             WHERE job_id=@jobId;
             """, new
         {
             State = finalState.ToString(),
             attempt,
-            failureCode,
-            retryable = retryable && !cancellation,
-            nextAttemptAt = cancellation ? null : nextAttemptAt,
+            failureCode = cancellationUnknown ? "job.cancellation.outcome-unknown" : failureCode,
+            retryable = retryable && !cancellationUnknown,
+            nextAttemptAt = cancellationUnknown ? null : nextAttemptAt,
             outcomeReference,
             Terminal = finalState is JobState.Completed or JobState.Failed or JobState.Cancelled,
+            reconciliationRequired = cancellationUnknown,
             now,
             jobId
         }, transaction, cancellationToken: cancellationToken));
@@ -442,18 +497,15 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
                 jobId,
                 attempt = current.Attempt,
                 now,
-                outcome = finalState.ToString(),
-                failureCode,
-                retryable = retryable && !cancellation
+                outcome = cancellationUnknown ? "CANCELLATION_OUTCOME_UNKNOWN" : finalState.ToString(),
+                failureCode = cancellationUnknown ? "job.cancellation.outcome-unknown" : failureCode,
+                retryable = retryable && !cancellationUnknown
             }, transaction, cancellationToken: cancellationToken));
         }
         var updated = await FindAsync(connection, transaction, jobId, cancellationToken)
             ?? throw new InvalidOperationException("Updated job is unavailable.");
-        if (!cancellation)
-        {
-            var message = JobEvents.Create(updated, kind, now);
-            await InsertOutboxAsync(connection, transaction, message, updated, kind, now, cancellationToken);
-        }
+        var message = JobEvents.Create(updated, kind, now);
+        await InsertOutboxAsync(connection, transaction, message, updated, kind, now, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return updated;
     }
@@ -583,6 +635,24 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         public string Producer { get; set; } = string.Empty;
         public string SubjectType { get; set; } = string.Empty;
         public string SubjectId { get; set; } = string.Empty;
+    }
+    private sealed class InterruptedAttemptRow
+    {
+        public string JobId { get; set; } = string.Empty;
+        public int Attempt { get; set; }
+        public string State { get; set; } = string.Empty;
+    }
+    private sealed class AttemptRow
+    {
+        public string JobId { get; set; } = string.Empty;
+        public int Attempt { get; set; }
+        public DateTime StartedAt { get; set; }
+        public DateTime? EndedAt { get; set; }
+        public string? Outcome { get; set; }
+        public string? FailureCode { get; set; }
+        public bool Retryable { get; set; }
+        public JobExecutionAttemptRecord ToRecord() => new(JobId, Attempt, Utc(StartedAt),
+            EndedAt is null ? null : Utc(EndedAt.Value), Outcome, FailureCode, Retryable);
     }
     private sealed class MetricsRow
     {

@@ -64,6 +64,15 @@ public sealed record JobLease(
     string LeaseToken,
     DateTimeOffset ExpiresAt);
 
+public sealed record JobExecutionAttemptRecord(
+    string JobId,
+    int Attempt,
+    DateTimeOffset StartedAt,
+    DateTimeOffset? EndedAt,
+    string? Outcome,
+    string? FailureCode,
+    bool Retryable);
+
 public enum JobReconciliationOutcome
 {
     ConfirmedNoEffect,
@@ -110,6 +119,8 @@ public interface IJobRepository
     Task<int> RecoverInterruptedAsync(DateTimeOffset now, CancellationToken cancellationToken);
     Task<DurableJobRecord> ReconcileAsync(string jobId, string customerId, JobReconciliationOutcome outcome,
         DateTimeOffset now, CancellationToken cancellationToken);
+    Task<IReadOnlyList<JobExecutionAttemptRecord>> GetAttemptsAsync(string jobId,
+        CancellationToken cancellationToken);
     Task<IReadOnlyList<AuditableEvent>> PendingEventsAsync(CancellationToken cancellationToken);
     Task MarkDispatchedAsync(string eventId, DateTimeOffset dispatchedAt, CancellationToken cancellationToken);
     Task<JobOperationalSnapshot> GetOperationalSnapshotAsync(DateTimeOffset now, CancellationToken cancellationToken);

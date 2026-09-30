@@ -19,6 +19,72 @@ namespace Monergy.JobManagement.Tests;
 public sealed class PhysicalJobAndAuditTests
 {
     [Fact, Trait("Category", "Physical")]
+    public async Task PendingPostgresRetryCanBeCancelledAndCannotBeClaimed()
+    {
+        var configuration = JobTestContext.Configuration();
+        var suffix = Guid.NewGuid().ToString("N");
+        var jobId = $"job-pending-retry-{suffix}";
+        await using var repository = new PostgresJobRepository(configuration);
+        var app = new JobManagementApplication(repository, new CapturingTelemetry(),
+            new MutableTimeProvider(JobTestContext.Now));
+        await app.ScheduleJobAsync(JobTestContext.Schedule(jobId, $"key-{suffix}"));
+        var lease = await repository.ClaimAsync(jobId, "worker", JobTestContext.Now,
+            TimeSpan.FromMinutes(1), default);
+        Assert.NotNull(lease);
+        await repository.FailClaimAsync(lease!, "dependency.timeout", true,
+            JobTestContext.Now.AddMinutes(1), JobTestContext.Now, default);
+
+        var cancelled = await app.CancelJobAsync(JobTestContext.Cancel(jobId));
+
+        Assert.Equal(JobState.Cancelled, cancelled.Data?.State);
+        Assert.False(cancelled.Data?.Retryable);
+        Assert.Null((await repository.GetAsync(jobId, default))?.NextAttemptAt);
+        Assert.Null(await repository.ClaimAsync(jobId, "other-worker", JobTestContext.Now.AddHours(1),
+            TimeSpan.FromMinutes(1), default));
+    }
+
+    [Fact, Trait("Category", "Physical")]
+    public async Task ClaimedPostgresCancellationFailureRequiresReconciliationWhileSuccessCompletes()
+    {
+        var configuration = JobTestContext.Configuration();
+        var suffix = Guid.NewGuid().ToString("N");
+        await using var repository = new PostgresJobRepository(configuration);
+        var app = new JobManagementApplication(repository, new CapturingTelemetry(),
+            new MutableTimeProvider(JobTestContext.Now));
+
+        var failedJobId = $"job-cancel-failure-{suffix}";
+        await app.ScheduleJobAsync(JobTestContext.Schedule(failedJobId, $"failure-key-{suffix}"));
+        var failedLease = await repository.ClaimAsync(failedJobId, "worker-failure", JobTestContext.Now,
+            TimeSpan.FromMinutes(1), default);
+        Assert.NotNull(failedLease);
+        await app.CancelJobAsync(JobTestContext.Cancel(failedJobId));
+        var uncertain = await repository.FailClaimAsync(failedLease!, "dependency.timeout", true,
+            JobTestContext.Now.AddMinutes(1), JobTestContext.Now, default);
+        Assert.Equal(JobState.CancellationRequested, uncertain.State);
+        Assert.False(uncertain.Retryable);
+        Assert.Null(uncertain.NextAttemptAt);
+        Assert.True(uncertain.ReconciliationRequired);
+        Assert.Null(await repository.ClaimAsync(failedJobId, "other-worker", JobTestContext.Now.AddHours(1),
+            TimeSpan.FromMinutes(1), default));
+        var attemptBefore = Assert.Single(await repository.GetAttemptsAsync(failedJobId, default));
+        Assert.Equal("CANCELLATION_OUTCOME_UNKNOWN", attemptBefore.Outcome);
+        await repository.ReconcileAsync(failedJobId, JobTestContext.CustomerId,
+            JobReconciliationOutcome.ConfirmedNoEffect, JobTestContext.Now.AddMinutes(2), default);
+        Assert.Equal(attemptBefore, Assert.Single(await repository.GetAttemptsAsync(failedJobId, default)));
+
+        var completedJobId = $"job-cancel-success-{suffix}";
+        await app.ScheduleJobAsync(JobTestContext.Schedule(completedJobId, $"success-key-{suffix}"));
+        var completedLease = await repository.ClaimAsync(completedJobId, "worker-success", JobTestContext.Now,
+            TimeSpan.FromMinutes(1), default);
+        Assert.NotNull(completedLease);
+        await app.CancelJobAsync(JobTestContext.Cancel(completedJobId));
+        var completed = await repository.CompleteClaimAsync(completedLease!, "known-domain-effect",
+            JobTestContext.Now.AddSeconds(1), default);
+        Assert.Equal(JobState.Completed, completed.State);
+        Assert.Equal("known-domain-effect", completed.OutcomeReference);
+    }
+
+    [Fact, Trait("Category", "Physical")]
     public async Task GovernedProcessDocumentJobSurvivesReconstructionExecutesAndDispatchesAuditEvidence()
     {
         var configuration = JobTestContext.Configuration();
@@ -113,11 +179,20 @@ public sealed class PhysicalJobAndAuditTests
         var uncertain = await reconstructed.GetAsync($"job-{suffix}", default);
         Assert.True(uncertain?.ReconciliationRequired);
         Assert.Equal(JobState.Failed, uncertain?.State);
+        var attemptsBefore = await reconstructed.GetAttemptsAsync($"job-{suffix}", default);
+        Assert.Equal(2, attemptsBefore.Count);
+        var attemptBefore = attemptsBefore[1];
+        Assert.Equal("OUTCOME_UNKNOWN", attemptBefore.Outcome);
+        Assert.Equal("job.execution.outcome-unknown", attemptBefore.FailureCode);
+        Assert.NotNull(attemptBefore.EndedAt);
         var recovered = await reconstructed.ReconcileAsync($"job-{suffix}", JobTestContext.CustomerId,
             JobReconciliationOutcome.ConfirmedNoEffect, JobTestContext.Now.AddMinutes(5), default);
         Assert.Equal(JobState.Scheduled, recovered.State);
         Assert.Equal(1, recovered.RetryCount);
         Assert.Equal(0, recovered.ReplayCount);
+        var attemptsAfter = await reconstructed.GetAttemptsAsync($"job-{suffix}", default);
+        Assert.Equal(2, attemptsAfter.Count);
+        Assert.Equal(attemptBefore, attemptsAfter[1]);
     }
 
     [Fact, Trait("Category", "Physical")]
@@ -139,9 +214,14 @@ public sealed class PhysicalJobAndAuditTests
         var uncertain = await repository.GetAsync(jobId, default);
         Assert.Equal(JobState.CancellationRequested, uncertain?.State);
         Assert.True(uncertain?.ReconciliationRequired);
+        var attemptBefore = Assert.Single(await repository.GetAttemptsAsync(jobId, default));
+        Assert.Equal("CANCELLATION_OUTCOME_UNKNOWN", attemptBefore.Outcome);
+        Assert.Equal("job.cancellation.outcome-unknown", attemptBefore.FailureCode);
+        Assert.NotNull(attemptBefore.EndedAt);
         var cancelled = await repository.ReconcileAsync(jobId, JobTestContext.CustomerId,
             JobReconciliationOutcome.ConfirmedCancelled, JobTestContext.Now.AddMinutes(3), default);
         Assert.Equal(JobState.Cancelled, cancelled.State);
+        Assert.Equal(attemptBefore, Assert.Single(await repository.GetAttemptsAsync(jobId, default)));
     }
 
     [Fact, Trait("Category", "Physical")]
