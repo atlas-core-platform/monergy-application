@@ -10,15 +10,37 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   downloadReferenceExport,
   generateReferenceReport,
+  getReferenceReport,
+  getReportingDispatchStatus,
   ReferenceReportingError,
+  reportingExperienceMode,
 } from './referenceReportsApi';
+import type { ReportingDispatchStatus } from './referenceReportsApi';
 import type { TrustedFinancialReport } from './types';
 
 const { Paragraph, Text, Title } = Typography;
+const lastPersistedReportKey = 'monergy.d11.lastReportId';
+
+interface ReportsExperienceApi {
+  generate: typeof generateReferenceReport;
+  get: typeof getReferenceReport;
+  status: typeof getReportingDispatchStatus;
+}
+
+interface ReportsExperienceProps {
+  experienceMode?: typeof reportingExperienceMode;
+  api?: ReportsExperienceApi;
+}
+
+const defaultApi: ReportsExperienceApi = {
+  generate: generateReferenceReport,
+  get: getReferenceReport,
+  status: getReportingDispatchStatus,
+};
 
 function formatValue(value: number, unit: string) {
   if (unit === 'INR')
@@ -31,16 +53,102 @@ function formatValue(value: number, unit: string) {
   return `${String(value)} ${unit}`;
 }
 
-export default function ReportsExperience() {
+export default function ReportsExperience({
+  experienceMode = reportingExperienceMode,
+  api = defaultApi,
+}: ReportsExperienceProps = {}) {
   const [report, setReport] = useState<TrustedFinancialReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
+  const [dispatch, setDispatch] = useState<ReportingDispatchStatus | null>(null);
+
+  const refreshDispatch = useCallback(
+    async (signal?: AbortSignal) => {
+      if (experienceMode !== 'PERSISTED_REPORTING') return;
+      try {
+        setDispatch(await api.status(signal));
+      } catch {
+        if (!signal?.aborted) {
+          setDispatch({
+            state: 'UNKNOWN',
+            pendingEvents: -1,
+            lastFailureCode: 'audit.status.unknown',
+          });
+        }
+      }
+    },
+    [api, experienceMode],
+  );
+
+  const reopen = useCallback(async () => {
+    const reportId = globalThis.localStorage.getItem(lastPersistedReportKey);
+    if (!reportId) {
+      setFailure(
+        'report.local.previous-unavailable: No persisted report has been generated in this browser.',
+      );
+      return;
+    }
+    setLoading(true);
+    setFailure(null);
+    try {
+      const recovered = await api.get(reportId);
+      setReport(recovered);
+      void refreshDispatch();
+    } catch (error) {
+      setReport(null);
+      setFailure(
+        error instanceof ReferenceReportingError
+          ? `${error.failure.code}: ${error.message}`
+          : 'Persisted report retrieval failed safely.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [api, refreshDispatch]);
+
+  useEffect(() => {
+    if (
+      experienceMode === 'PERSISTED_REPORTING' &&
+      globalThis.localStorage.getItem(lastPersistedReportKey)
+    ) {
+      const timer = globalThis.setTimeout(() => {
+        void reopen();
+      }, 0);
+      return () => {
+        globalThis.clearTimeout(timer);
+      };
+    }
+    return undefined;
+  }, [experienceMode, reopen]);
+
+  useEffect(() => {
+    if (
+      experienceMode !== 'PERSISTED_REPORTING' ||
+      dispatch === null ||
+      dispatch.state === 'DELIVERED'
+    ) {
+      return undefined;
+    }
+    const controller = new AbortController();
+    const timer = globalThis.setTimeout(() => {
+      void refreshDispatch(controller.signal);
+    }, 500);
+    return () => {
+      controller.abort();
+      globalThis.clearTimeout(timer);
+    };
+  }, [dispatch, experienceMode, refreshDispatch]);
 
   async function generate() {
     setLoading(true);
     setFailure(null);
     try {
-      setReport(await generateReferenceReport());
+      const generated = await api.generate();
+      setReport(generated);
+      if (experienceMode === 'PERSISTED_REPORTING') {
+        globalThis.localStorage.setItem(lastPersistedReportKey, generated.reportId);
+        void refreshDispatch();
+      }
     } catch (error) {
       setReport(null);
       setFailure(
@@ -58,21 +166,37 @@ export default function ReportsExperience() {
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="rounded-panel bg-surface p-6 shadow-panel sm:p-8">
           <Space wrap>
-            <Tag color="blue">REFERENCE · LOCAL / CI ONLY</Tag>
-            <Tag color="purple">MWP-03-D08 · SIMULATOR</Tag>
+            <Tag color="blue">
+              {experienceMode === 'PERSISTED_REPORTING'
+                ? 'SERVICE-OWNED SOURCES · LOCAL ONLY'
+                : 'REFERENCE · LOCAL / CI ONLY'}
+            </Tag>
+            <Tag color="purple">
+              {experienceMode === 'PERSISTED_REPORTING'
+                ? 'MWP-03-D11 · SYNTHETIC'
+                : 'MWP-03-D08 · SIMULATOR'}
+            </Tag>
           </Space>
           <Title level={1} className="mt-4">
             Trusted financial report
           </Title>
           <Paragraph className="max-w-3xl text-base text-muted">
             Generate a basic authorized report, inspect its authoritative source references, and
-            export the same deterministic content. This reference capability is not a formal report
-            pack or financial advice.
+            export the same deterministic content.{' '}
+            {experienceMode === 'PERSISTED_REPORTING'
+              ? 'This LOCAL profile reads persisted service-owned synthetic facts and engineering calculation results.'
+              : 'This reference capability uses bounded simulator sources.'}{' '}
+            It is not a formal report pack or financial advice.
           </Paragraph>
           <Space wrap>
             <Button type="primary" size="large" loading={loading} onClick={() => void generate()}>
               {report ? 'Refresh basic report' : 'Generate basic report'}
             </Button>
+            {experienceMode === 'PERSISTED_REPORTING' && (
+              <Button size="large" disabled={loading} onClick={() => void reopen()}>
+                Reopen persisted report
+              </Button>
+            )}
             <Button href="/">Back to foundation</Button>
           </Space>
         </header>
@@ -151,6 +275,19 @@ export default function ReportsExperience() {
                     {report.aiResponseTraceReference ?? 'Not applicable — no AI execution'}
                   </Descriptions.Item>
                 </Descriptions>
+                {experienceMode === 'PERSISTED_REPORTING' && dispatch && (
+                  <Alert
+                    className="mt-4"
+                    type={dispatch.state === 'DELIVERED' ? 'success' : 'warning'}
+                    showIcon
+                    title={`Audit delivery: ${dispatch.state}`}
+                    description={
+                      dispatch.state === 'DELIVERED'
+                        ? 'The Reporting outbox has no pending CID-053 event.'
+                        : `${String(dispatch.pendingEvents)} event(s) remain pending. ${dispatch.lastFailureCode ?? ''}`
+                    }
+                  />
+                )}
                 <Button
                   className="mt-4"
                   onClick={() => {

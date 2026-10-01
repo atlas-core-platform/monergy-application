@@ -16,6 +16,12 @@ var app = builder.Build();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
 app.MapHealthChecks("/health/ready");
 if (referenceAdapters || physicalPersistence) app.MapReportingContracts();
+if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Profile"], "persisted-reporting",
+    StringComparison.Ordinal))
+{
+    app.MapLocalReportingOperations();
+    app.MapD11LocalShutdown(builder.Configuration);
+}
 await app.RunAsync();
 
 public partial class Program;

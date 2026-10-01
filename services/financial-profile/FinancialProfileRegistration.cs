@@ -7,6 +7,21 @@ namespace Monergy.Services.FinancialProfile;
 
 public static class FinancialProfileRegistration
 {
+    public static IEndpointRouteBuilder MapD11LocalShutdown(this IEndpointRouteBuilder endpoints,
+        IConfiguration configuration)
+    {
+        var token = PhysicalPersistenceGuard.Require(configuration, "Monergy:D11:ControllerToken");
+        endpoints.MapPost("/operations/local/control/stop", (HttpRequest request,
+            IHostApplicationLifetime lifetime) =>
+        {
+            if (!LocalControlToken.IsValid(request.Headers["X-Monergy-Local-Control"].ToString(), token))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            lifetime.StopApplication();
+            return Results.Accepted();
+        });
+        return endpoints;
+    }
+
     public static IServiceCollection AddFinancialProfileReferenceAdapters(
         this IServiceCollection services,
         IConfiguration configuration)
