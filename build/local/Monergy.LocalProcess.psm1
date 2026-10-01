@@ -122,7 +122,7 @@ function Get-StringSha256([string]$Value) {
 function Get-CanonicalFileSetIdentity {
     param(
         [Parameter(Mandatory)][string]$RepositoryRoot,
-        [Parameter(Mandatory)][string[]]$RelativePaths
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$RelativePaths
     )
     $root = [IO.Path]::GetFullPath($RepositoryRoot).TrimEnd([IO.Path]::DirectorySeparatorChar)
     $paths = [string[]]@($RelativePaths | ForEach-Object { ([string]$_).Replace('\', '/') } | Select-Object -Unique)
@@ -144,7 +144,8 @@ function Get-CanonicalFileSetIdentity {
             sha256 = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant()
         }
     }
-    $material = (@($records | ForEach-Object { "$($_.path)`t$($_.bytes)`t$($_.sha256)" }) -join "`n") + "`n"
+    $material = if ($records.Count -eq 0) { '' }
+        else { (@($records | ForEach-Object { "$($_.path)`t$($_.bytes)`t$($_.sha256)" }) -join "`n") + "`n" }
     $algorithm = [Security.Cryptography.SHA256]::Create()
     try {
         $digest = ([BitConverter]::ToString($algorithm.ComputeHash(
@@ -156,7 +157,7 @@ function Get-CanonicalFileSetIdentity {
         definition = 'repository-relative / paths; ordinal case-sensitive ordering; decimal byte length; lowercase raw-file SHA-256; UTF-8 without BOM; LF records including final LF'
         fileCount = $records.Count
         digest = $digest
-        files = $records
+        files = @($records)
     }
 }
 
