@@ -44,7 +44,7 @@ $result = [ordered]@{
     $bootstrapProbe = Join-Path $scratch 'bootstrap-probe.sh'
     $bootstrapProbeOutput = Join-Path $scratch 'bootstrap-probe-output'
     New-Item -ItemType Directory -Path $bootstrapProbeOutput | Out-Null
-    [IO.File]::WriteAllText($bootstrapProbe, @'
+    $bootstrapProbeContent = @'
 #!/usr/bin/env bash
 set -euo pipefail
 probe_dir="${D11_PSQL_PROBE_DIR:?}"
@@ -58,7 +58,15 @@ psql() {
     "${D11_BOOTSTRAP_RUNTIME_PASSWORD-}" > "$probe_dir/environment-$count.txt"
 }
 source "${D11_BOOTSTRAP_SCRIPT:?}"
-'@, [Text.UTF8Encoding]::new($false))
+'@
+    $bootstrapProbeContent = $bootstrapProbeContent.Replace("`r`n", "`n").Replace("`r", "`n")
+    [IO.File]::WriteAllText($bootstrapProbe, $bootstrapProbeContent, [Text.UTF8Encoding]::new($false))
+    $bootstrapProbeBytes = [IO.File]::ReadAllBytes($bootstrapProbe)
+    if ($bootstrapProbeBytes -contains 13) { throw 'The D11 bootstrap probe contains a carriage-return byte.' }
+    if ($bootstrapProbeBytes.Length -ge 3 -and $bootstrapProbeBytes[0] -eq 0xEF -and
+        $bootstrapProbeBytes[1] -eq 0xBB -and $bootstrapProbeBytes[2] -eq 0xBF) {
+        throw 'The D11 bootstrap probe contains a UTF-8 BOM.'
+    }
     $bootstrapSecrets = @{
         'POSTGRES_USER' = 'd11_admin'
         'D11_PSQL_PROBE_DIR' = $bootstrapProbeOutput.Replace('\','/')

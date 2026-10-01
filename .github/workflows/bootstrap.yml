@@ -287,6 +287,7 @@ jobs:
   d11-linux-runtime:
     name: D11 persisted-reporting Linux integration
     needs: toolchain
+    if: ${{ always() && (github.ref == 'refs/heads/delivery/mwp03-d11-local-runtime-reporting-integration' || github.head_ref == 'delivery/mwp03-d11-local-runtime-reporting-integration') }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
