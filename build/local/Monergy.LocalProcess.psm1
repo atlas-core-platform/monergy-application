@@ -135,13 +135,23 @@ function Get-CanonicalFileSetIdentity {
         }
         $fullPath = [IO.Path]::GetFullPath((Join-Path $root $relative))
         if (-not $fullPath.StartsWith($root + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -or
-            -not (Test-Path -LiteralPath $fullPath -PathType Leaf)) {
+            -not [IO.File]::Exists($fullPath)) {
             throw "Canonical identity source '$relative' is unavailable."
         }
+        $stream = [IO.File]::Open($fullPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+        try {
+            $bytes = $stream.Length
+            $algorithm = [Security.Cryptography.SHA256]::Create()
+            try {
+                $sha256 = ([BitConverter]::ToString($algorithm.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
+            }
+            finally { $algorithm.Dispose() }
+        }
+        finally { $stream.Dispose() }
         $records += [ordered]@{
             path = $relative
-            bytes = (Get-Item -LiteralPath $fullPath).Length
-            sha256 = (Get-FileHash -LiteralPath $fullPath -Algorithm SHA256).Hash.ToLowerInvariant()
+            bytes = $bytes
+            sha256 = $sha256
         }
     }
     $material = if ($records.Count -eq 0) { '' }

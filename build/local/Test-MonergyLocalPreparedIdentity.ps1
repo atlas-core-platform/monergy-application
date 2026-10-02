@@ -34,6 +34,25 @@ try {
         $dirty.dirtyDigest -ceq $clean.dirtyDigest -or @($dirty.files).Count -ne 1){
         throw 'Dirty source was not distinguished from the canonical clean identity.'
     }
+
+    & $git -C $identityScratch checkout --quiet -- tracked.txt
+    if($LASTEXITCODE -ne 0){throw 'Unable to restore the tracked clean-identity fixture.'}
+    $hiddenName='.d11-hidden-probe'
+    $hiddenText='hidden-probe'
+    $hiddenPath=Join-Path $identityScratch $hiddenName
+    [IO.File]::WriteAllText($hiddenPath,$hiddenText,[Text.UTF8Encoding]::new($false))
+    $hidden=Get-CanonicalDirtySourceIdentity -RepositoryRoot $identityScratch
+    $hiddenBytes=[Text.UTF8Encoding]::new($false).GetBytes($hiddenText)
+    $hiddenAlgorithm=[Security.Cryptography.SHA256]::Create()
+    try {
+        $expectedHiddenSha=([BitConverter]::ToString($hiddenAlgorithm.ComputeHash($hiddenBytes))).Replace('-','').ToLowerInvariant()
+    }
+    finally { $hiddenAlgorithm.Dispose() }
+    if($hidden.head -cne $clean.head -or $hidden.dirtyFileCount -ne 1 -or @($hidden.files).Count -ne 1 -or
+        $hidden.files[0].path -cne $hiddenName -or [long]$hidden.files[0].bytes -ne [long]$hiddenBytes.Length -or
+        $hidden.files[0].sha256 -cne $expectedHiddenSha){
+        throw 'An untracked hidden dotfile did not produce the expected canonical identity.'
+    }
 }
 finally {
     $resolvedScratch=[IO.Path]::GetFullPath($identityScratch)
