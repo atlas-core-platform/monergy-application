@@ -136,6 +136,27 @@ function Wait-Http([string]$Uri, [int]$Seconds = 45) {
     throw "Runtime dependency '$Uri' did not become ready within $Seconds seconds."
 }
 
+function Wait-HttpTransport([string]$Uri, [int]$Seconds = 45, [int]$ConsecutiveResponses = 3) {
+    $deadline = [DateTimeOffset]::UtcNow.AddSeconds($Seconds)
+    $consecutive = 0
+    while ([DateTimeOffset]::UtcNow -lt $deadline) {
+        $client = [Net.Http.HttpClient]::new()
+        $client.Timeout = [TimeSpan]::FromSeconds(2)
+        try {
+            $response = $client.GetAsync($Uri).GetAwaiter().GetResult()
+            try {
+                $consecutive++
+                if ($consecutive -ge $ConsecutiveResponses) { return }
+            }
+            finally { $response.Dispose() }
+        }
+        catch { $consecutive = 0 }
+        finally { $client.Dispose() }
+        Start-Sleep -Milliseconds 500
+    }
+    throw "Runtime transport '$Uri' did not remain ready for $ConsecutiveResponses consecutive probes within $Seconds seconds."
+}
+
 function New-ComposeEnvironment([object]$State) {
     $environment = @{
         'D11_POSTGRES_ADMIN_USER' = [string]$State.adminUser
@@ -148,7 +169,7 @@ function New-ComposeEnvironment([object]$State) {
     }
     $s3ConfigPath = Join-Path $stateRoot 'seaweed-s3.json'
     $s3Config = @{ identities = @(@{ name = 'd11-persisted-reporting'; credentials = @(@{
-        accessKey = $State.s3AccessKey; secretKey = $State.s3SecretKey }); actions = @('Admin', 'Read', 'Write') }) }
+        accessKey = $State.s3AccessKey; secretKey = $State.s3SecretKey }); actions = @('Admin', 'Read', 'List', 'Write') }) }
     Save-Json $s3ConfigPath $s3Config -Secret
     $environment['D11_S3_CONFIG_PATH'] = $s3ConfigPath.Replace('\', '/')
     return $environment
@@ -256,6 +277,7 @@ function Invoke-Prepare {
     if ((Invoke-ControlledProcess $pnpm @('--version') $RepositoryRoot).StandardOutput.Trim() -cne '12.4.1') { throw 'pnpm 12.4.1 is required.' }
     $state = Get-RuntimeSecrets
     [void](Invoke-Compose @('up','-d','--wait') $state)
+    Wait-HttpTransport "http://127.0.0.1:$($ports.s3)/"
     foreach ($name in @('evidence', 'financial_profile', 'financial_rules', 'reporting', 'audit')) {
         $servicePath = $name.Replace('_', '-')
         $owner = Connection $state.services.$name owner
@@ -339,11 +361,13 @@ function Start-OwnedProcess([string]$Name, [string]$FilePath, [string[]]$Argumen
     [string]$WorkingDirectory, [hashtable]$Environment) {
     $process = Start-ControlledProcess $FilePath $Arguments $WorkingDirectory $Environment
     try {
+        $actualExecutable = try { $process.Path } catch { $null }
+        if ([string]::IsNullOrWhiteSpace($actualExecutable)) { $actualExecutable = $FilePath }
         return [ordered]@{
             name = $Name; pid = $process.Id; state = 'RUNNING'
             startTimeUtc = $process.StartTime.ToUniversalTime().ToString('O')
             startTimeTicks = $process.StartTime.ToUniversalTime().Ticks
-            executable = [IO.Path]::GetFullPath($FilePath)
+            executable = [IO.Path]::GetFullPath($actualExecutable)
             arguments = @($Arguments)
             argumentIdentity = Get-StringSha256 ((@($Arguments) -join "`n") + "`n")
         }
@@ -388,6 +412,7 @@ function Invoke-Start {
         throw 'One or more prepared D11 PostgreSQL/object-store volumes are unavailable; refusing implicit reprovisioning.'
     }
     [void](Invoke-Compose @('up','-d','--wait') $state)
+    Wait-HttpTransport "http://127.0.0.1:$($ports.s3)/"
 
     if (Test-Path -LiteralPath $processPath) {
         $existing = Read-Json $processPath
