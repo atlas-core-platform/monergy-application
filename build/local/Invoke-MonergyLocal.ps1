@@ -136,25 +136,18 @@ function Wait-Http([string]$Uri, [int]$Seconds = 45) {
     throw "Runtime dependency '$Uri' did not become ready within $Seconds seconds."
 }
 
-function Wait-HttpTransport([string]$Uri, [int]$Seconds = 45, [int]$ConsecutiveResponses = 3) {
+function Wait-TcpPort([int]$Port, [int]$Seconds = 45, [int]$ConsecutiveConnections = 3) {
     $deadline = [DateTimeOffset]::UtcNow.AddSeconds($Seconds)
     $consecutive = 0
     while ([DateTimeOffset]::UtcNow -lt $deadline) {
-        $client = [Net.Http.HttpClient]::new()
-        $client.Timeout = [TimeSpan]::FromSeconds(2)
-        try {
-            $response = $client.GetAsync($Uri).GetAwaiter().GetResult()
-            try {
-                $consecutive++
-                if ($consecutive -ge $ConsecutiveResponses) { return }
-            }
-            finally { $response.Dispose() }
+        if (Test-Port $Port) {
+            $consecutive++
+            if ($consecutive -ge $ConsecutiveConnections) { return }
         }
-        catch { $consecutive = 0 }
-        finally { $client.Dispose() }
+        else { $consecutive = 0 }
         Start-Sleep -Milliseconds 500
     }
-    throw "Runtime transport '$Uri' did not remain ready for $ConsecutiveResponses consecutive probes within $Seconds seconds."
+    throw "Runtime TCP port '$Port' did not accept $ConsecutiveConnections consecutive loopback connections within $Seconds seconds."
 }
 
 function New-ComposeEnvironment([object]$State) {
@@ -277,7 +270,7 @@ function Invoke-Prepare {
     if ((Invoke-ControlledProcess $pnpm @('--version') $RepositoryRoot).StandardOutput.Trim() -cne '12.4.1') { throw 'pnpm 12.4.1 is required.' }
     $state = Get-RuntimeSecrets
     [void](Invoke-Compose @('up','-d','--wait') $state)
-    Wait-HttpTransport "http://127.0.0.1:$($ports.s3)/"
+    Wait-TcpPort $ports.s3
     foreach ($name in @('evidence', 'financial_profile', 'financial_rules', 'reporting', 'audit')) {
         $servicePath = $name.Replace('_', '-')
         $owner = Connection $state.services.$name owner
@@ -412,7 +405,7 @@ function Invoke-Start {
         throw 'One or more prepared D11 PostgreSQL/object-store volumes are unavailable; refusing implicit reprovisioning.'
     }
     [void](Invoke-Compose @('up','-d','--wait') $state)
-    Wait-HttpTransport "http://127.0.0.1:$($ports.s3)/"
+    Wait-TcpPort $ports.s3
 
     if (Test-Path -LiteralPath $processPath) {
         $existing = Read-Json $processPath
