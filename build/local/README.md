@@ -28,8 +28,10 @@ The first run is `Prepare` → `Start` → `Seed` → `Verify`. Later sessions n
 The `/reports` experience is available at <http://127.0.0.1:5173/reports> while running.
 
 State and per-user secrets are under the ignored `.artifacts/d11/persisted-reporting` directory. The directory is
-restricted before secret creation. On Windows secret ACL application is checked for success; on Unix secret files
-receive mode `0600`. No credential is written to the committed profile descriptor, normal command result, runtime
+restricted before secret creation. On Windows secret ACL application is checked for success; on Unix authoritative
+secret files remain mode `0600`. The generated SeaweedFS IAM file is the one exception: it is mode `0644` inside
+the owner-only mode `0700` D11 state directory so the non-root SeaweedFS container can read the bind-mounted file
+without making that path traversable to other host users. No credential is written to the committed profile descriptor, normal command result, runtime
 URL, report export or browser diagnostics. Ownership journals are written atomically as each process is launched;
 unresolved or mismatched identities are retained and block a false `STOPPED` result.
 

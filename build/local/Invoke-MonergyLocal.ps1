@@ -79,6 +79,12 @@ function Protect-SecretFile([string]$Path) {
     }
 }
 
+function Make-ContainerSecretReadable([string]$Path) {
+    if ($runningOnWindows) { return }
+    & chmod 644 -- $Path
+    if ($LASTEXITCODE -ne 0) { throw "Unable to make D11 container secret '$Path' readable by the non-root provider." }
+}
+
 function Save-Json([string]$Path, [object]$Value, [switch]$Secret) {
     $parent = Split-Path -Parent $Path
     if ($Secret) { Initialize-RestrictedDirectory $parent }
@@ -164,6 +170,7 @@ function New-ComposeEnvironment([object]$State) {
     $s3Config = @{ identities = @(@{ name = 'd11-persisted-reporting'; credentials = @(@{
         accessKey = $State.s3AccessKey; secretKey = $State.s3SecretKey }); actions = @('Admin', 'Read', 'List', 'Write') }) }
     Save-Json $s3ConfigPath $s3Config -Secret
+    Make-ContainerSecretReadable $s3ConfigPath
     $environment['D11_S3_CONFIG_PATH'] = $s3ConfigPath.Replace('\', '/')
     return $environment
 }
