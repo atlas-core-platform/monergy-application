@@ -280,7 +280,7 @@ function Get-ControlledProcessStartIdentity {
         if ([string]::IsNullOrWhiteSpace($bootId)) {
             throw 'Linux boot identity is unavailable.'
         }
-        return "linux-proc-v1:$bootId:$($fields[19])"
+        return "linux-proc-v1:${bootId}:$($fields[19])"
     }
 
     return "unix-start-time-ticks:$($Process.StartTime.ToUniversalTime().Ticks)"
