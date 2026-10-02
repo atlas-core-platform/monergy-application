@@ -328,6 +328,67 @@ jobs:
       - name: Verify restart, Audit outage, timeout and lost-acknowledgement recovery
         shell: pwsh
         run: ./build/local/Invoke-D11RuntimeEvidence.ps1
+      - name: Capture D11 provider diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          set +e
+          echo '=== D11 provider containers ==='
+          docker ps -a --filter 'name=monergy-d11-persisted-reporting-' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+
+          seaweed_id="$(docker ps -aq --filter 'name=^/monergy-d11-persisted-reporting-seaweedfs-1
+      - name: Capture allowlisted D11 controller status
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path .artifacts/d11/hosted | Out-Null
+          try {
+            ./build/local/Invoke-MonergyLocal.ps1 -Action Status -Json |
+              Select-Object -Last 1 |
+              Set-Content -LiteralPath .artifacts/d11/hosted/controller-status.json -Encoding utf8NoBOM
+          }
+          catch {
+            '{"profile":"persisted-reporting","state":"STATUS_UNAVAILABLE"}' |
+              Set-Content -LiteralPath .artifacts/d11/hosted/controller-status.json -Encoding utf8NoBOM
+          }
+      - name: Upload reviewed non-secret D11 evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: d11-persisted-reporting-${{ github.run_id }}
+          path: |
+            .artifacts/d11/remediation-r2/linux/*.json
+            .artifacts/d11/persisted-reporting/verification-latest.json
+            .artifacts/d11/hosted/controller-status.json
+            .artifacts/d11/playwright/results.json
+            .artifacts/d11/playwright/test-results/**/trace.zip
+            .artifacts/d11/playwright/test-results/**/*.png
+          if-no-files-found: warn
+          retention-days: 14
+ | head -n 1)"
+          if [ -z "$seaweed_id" ]; then
+            echo 'SeaweedFS container was not found.'
+            exit 0
+          fi
+
+          echo '=== SeaweedFS effective command ==='
+          docker inspect --format '{{json .Config.Cmd}}' "$seaweed_id"
+
+          echo '=== SeaweedFS state ==='
+          docker inspect --format 'status={{.State.Status}} exitCode={{.State.ExitCode}} startedAt={{.State.StartedAt}} finishedAt={{.State.FinishedAt}}' "$seaweed_id"
+
+          echo '=== SeaweedFS published ports ==='
+          docker port "$seaweed_id"
+
+          echo '=== Host listeners for D11 provider ports ==='
+          ss -lntp | grep -E ':(55434|58334)\\b' || true
+
+          echo '=== SeaweedFS container TCP listeners (/proc/net/tcp) ==='
+          docker exec "$seaweed_id" sh -c 'cat /proc/net/tcp; echo ---; cat /proc/net/tcp6' || true
+
+          echo '=== SeaweedFS logs ==='
+          docker logs --timestamps --tail 300 "$seaweed_id" || true
+
       - name: Stop only the owned D11 application runtime
         if: always()
         shell: pwsh
