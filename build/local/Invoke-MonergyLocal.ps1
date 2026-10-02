@@ -367,6 +367,7 @@ function Start-OwnedProcess([string]$Name, [string]$FilePath, [string[]]$Argumen
             name = $Name; pid = $process.Id; state = 'RUNNING'
             startTimeUtc = $process.StartTime.ToUniversalTime().ToString('O')
             startTimeTicks = $process.StartTime.ToUniversalTime().Ticks
+            startIdentity = Get-ControlledProcessStartIdentity $process
             executable = [IO.Path]::GetFullPath($actualExecutable)
             arguments = @($Arguments)
             argumentIdentity = Get-StringSha256 ((@($Arguments) -join "`n") + "`n")

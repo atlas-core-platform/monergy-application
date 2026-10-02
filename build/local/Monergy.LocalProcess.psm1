@@ -257,15 +257,50 @@ function Resolve-D11StopJournalState {
     return $(if ($HasUnresolvedIdentity) { 'BLOCKED' } else { 'STOPPED' })
 }
 
+function Get-ControlledProcessStartIdentity {
+    param([Parameter(Mandatory)][Diagnostics.Process]$Process)
+
+    if ($env:OS -eq 'Windows_NT') {
+        return "windows-start-time-ticks:$($Process.StartTime.ToUniversalTime().Ticks)"
+    }
+
+    $statPath = "/proc/$($Process.Id)/stat"
+    $bootIdPath = '/proc/sys/kernel/random/boot_id'
+    if ([IO.File]::Exists($statPath) -and [IO.File]::Exists($bootIdPath)) {
+        $stat = [IO.File]::ReadAllText($statPath)
+        $closingParen = $stat.LastIndexOf(')')
+        if ($closingParen -lt 0 -or $closingParen + 2 -ge $stat.Length) {
+            throw "Unable to parse Linux process identity for PID $($Process.Id)."
+        }
+        $fields = $stat.Substring($closingParen + 2).Split(' ', [StringSplitOptions]::RemoveEmptyEntries)
+        if ($fields.Length -lt 20 -or $fields[19] -notmatch '^\d+$') {
+            throw "Unable to read Linux process start identity for PID $($Process.Id)."
+        }
+        $bootId = [IO.File]::ReadAllText($bootIdPath).Trim().ToLowerInvariant()
+        if ([string]::IsNullOrWhiteSpace($bootId)) {
+            throw 'Linux boot identity is unavailable.'
+        }
+        return "linux-proc-v1:$bootId:$($fields[19])"
+    }
+
+    return "unix-start-time-ticks:$($Process.StartTime.ToUniversalTime().Ticks)"
+}
+
 function Get-ControlledProcessOwnership([object]$Entry) {
     if ($null -eq $Entry.pid) { return 'UNRESOLVED_LAUNCH' }
     $process = Get-Process -Id $Entry.pid -ErrorAction SilentlyContinue
     if ($null -eq $process) { return 'NOT_RUNNING' }
-    $sameStart = $process.StartTime.ToUniversalTime().Ticks -eq [long]$Entry.startTimeTicks
+    $sameStart = if ($Entry.PSObject.Properties.Name -contains 'startIdentity' -and
+        -not [string]::IsNullOrWhiteSpace([string]$Entry.startIdentity)) {
+        (Get-ControlledProcessStartIdentity $process) -ceq [string]$Entry.startIdentity
+    }
+    else {
+        $process.StartTime.ToUniversalTime().Ticks -eq [long]$Entry.startTimeTicks
+    }
     $actualPath = try { $process.Path } catch { $null }
     $samePath = -not [string]::IsNullOrWhiteSpace($actualPath) -and
         [IO.Path]::GetFullPath($actualPath) -eq [IO.Path]::GetFullPath([string]$Entry.executable)
     return $(if ($sameStart -and $samePath) { 'VERIFIED_RUNNING' } else { 'IDENTITY_MISMATCH' })
 }
 
-Export-ModuleMember -Function Get-ControlledBaseEnvironment,New-ControlledProcessStartInfo,Invoke-ControlledProcess,Start-ControlledProcess,Get-StringSha256,Get-ControlledProcessOwnership,Get-CanonicalFileSetIdentity,Get-CanonicalDirtySourceIdentity,Resolve-D11RetainedState,Test-D11RetainedServiceCredentials,Resolve-D11StartJournalState,Resolve-D11ObservedRuntimeState,Resolve-D11StopJournalState
+Export-ModuleMember -Function Get-ControlledBaseEnvironment,New-ControlledProcessStartInfo,Invoke-ControlledProcess,Start-ControlledProcess,Get-StringSha256,Get-ControlledProcessStartIdentity,Get-ControlledProcessOwnership,Get-CanonicalFileSetIdentity,Get-CanonicalDirtySourceIdentity,Resolve-D11RetainedState,Test-D11RetainedServiceCredentials,Resolve-D11StartJournalState,Resolve-D11ObservedRuntimeState,Resolve-D11StopJournalState

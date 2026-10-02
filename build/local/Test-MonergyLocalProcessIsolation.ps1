@@ -134,11 +134,27 @@ source "${D11_BOOTSTRAP_SCRIPT:?}"
 
     $sleeper = Start-ControlledProcess $shell @('-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 30') $scratch @{}
     try {
-        $entry = [pscustomobject]@{pid=$sleeper.Id;startTimeTicks=$sleeper.StartTime.ToUniversalTime().Ticks;executable=$shell}
-        if ((Get-ControlledProcessOwnership $entry) -ne 'VERIFIED_RUNNING') { throw 'Exact process ownership was not recognized.' }
-        $stale = [pscustomobject]@{pid=$entry.pid;startTimeTicks=$entry.startTimeTicks+1;executable=$entry.executable}
-        if ((Get-ControlledProcessOwnership $stale) -ne 'IDENTITY_MISMATCH') { throw 'Stale start identity was not rejected.' }
-        $unrelated = [pscustomobject]@{pid=$entry.pid;startTimeTicks=$entry.startTimeTicks;executable=(Join-Path $scratch 'unrelated.exe')}
+        $entry = [pscustomobject]@{
+            pid=$sleeper.Id
+            startTimeTicks=$sleeper.StartTime.ToUniversalTime().Ticks
+            startIdentity=(Get-ControlledProcessStartIdentity $sleeper)
+            executable=$sleeper.Path
+        }
+        Start-Sleep -Milliseconds 1500
+        if ((Get-ControlledProcessOwnership $entry) -ne 'VERIFIED_RUNNING') { throw 'Exact process ownership was not recognized across a fresh delayed process lookup.' }
+        $stale = [pscustomobject]@{
+            pid=$entry.pid
+            startTimeTicks=$entry.startTimeTicks
+            startIdentity="$($entry.startIdentity)-stale"
+            executable=$entry.executable
+        }
+        if ((Get-ControlledProcessOwnership $stale) -ne 'IDENTITY_MISMATCH') { throw 'Stale process-generation identity was not rejected.' }
+        $unrelated = [pscustomobject]@{
+            pid=$entry.pid
+            startTimeTicks=$entry.startTimeTicks
+            startIdentity=$entry.startIdentity
+            executable=(Join-Path $scratch 'unrelated.exe')
+        }
         if ((Get-ControlledProcessOwnership $unrelated) -ne 'IDENTITY_MISMATCH') { throw 'Unrelated executable identity was not rejected.' }
     }
     finally {
