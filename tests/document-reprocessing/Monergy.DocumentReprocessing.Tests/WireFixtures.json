@@ -81,9 +81,22 @@
         "requestId": "request-d12",
         "correlationId": "correlation-d12",
         "security": {
-          "actor": { "actorId": "actor-d12", "actorType": "CUSTOMER", "authenticatedAt": "2026-10-02T08:00:00+00:00", "authenticationContextId": "authentication-d12" },
-          "workload": { "workloadId": "document-intelligence", "workloadIdentityId": "workload-d12" },
-          "access": { "purpose": "DOCUMENT_REPROCESSING", "consentReferenceId": "consent-d12", "authorizationContextId": "authorization-d12", "customerId": "customer-d12" }
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
         },
         "idempotencyKey": "key-d12",
         "payload": {
@@ -106,9 +119,22 @@
         "requestId": "request-d12",
         "correlationId": "correlation-d12",
         "security": {
-          "actor": { "actorId": "actor-d12", "actorType": "CUSTOMER", "authenticatedAt": "2026-10-02T08:00:00+00:00", "authenticationContextId": "authentication-d12" },
-          "workload": { "workloadId": "document-intelligence", "workloadIdentityId": "workload-d12" },
-          "access": { "purpose": "DOCUMENT_REPROCESSING", "consentReferenceId": "consent-d12", "authorizationContextId": "authorization-d12", "customerId": "customer-d12" }
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
         },
         "idempotencyKey": "key-d12",
         "payload": {
@@ -132,9 +158,22 @@
         "requestId": "request-d12",
         "correlationId": "correlation-d12",
         "security": {
-          "actor": { "actorId": "actor-d12", "actorType": "CUSTOMER", "authenticatedAt": "2026-10-02T08:00:00+00:00", "authenticationContextId": "authentication-d12" },
-          "workload": { "workloadId": "document-intelligence", "workloadIdentityId": "workload-d12" },
-          "access": { "purpose": "DOCUMENT_REPROCESSING", "consentReferenceId": "consent-d12", "authorizationContextId": "authorization-d12", "customerId": "customer-d12" }
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
         },
         "idempotencyKey": "key-d12",
         "payload": {
@@ -158,9 +197,22 @@
         "requestId": "request-d12",
         "correlationId": "correlation-d12",
         "security": {
-          "actor": { "actorId": "actor-d12", "actorType": "CUSTOMER", "authenticatedAt": "2026-10-02T08:00:00+00:00", "authenticationContextId": "authentication-d12" },
-          "workload": { "workloadId": "document-intelligence", "workloadIdentityId": "workload-d12" },
-          "access": { "purpose": "DOCUMENT_REPROCESSING", "consentReferenceId": "consent-d12", "authorizationContextId": "authorization-d12", "customerId": "customer-d12" }
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
         },
         "payload": {
           "processingId": "processing-d12",
@@ -205,9 +257,22 @@
         "requestId": "request-d12",
         "correlationId": "correlation-d12",
         "security": {
-          "actor": { "actorId": "actor-d12", "actorType": "CUSTOMER", "authenticatedAt": "2026-10-02T08:00:00+00:00", "authenticationContextId": "authentication-d12" },
-          "workload": { "workloadId": "document-intelligence", "workloadIdentityId": "workload-d12" },
-          "access": { "purpose": "DOCUMENT_REPROCESSING", "consentReferenceId": "consent-d12", "authorizationContextId": "authorization-d12", "customerId": "customer-d12" }
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
         },
         "idempotencyKey": "key-d12",
         "payload": {
@@ -230,9 +295,22 @@
         "requestId": "request-d12",
         "correlationId": "correlation-d12",
         "security": {
-          "actor": { "actorId": "actor-d12", "actorType": "CUSTOMER", "authenticatedAt": "2026-10-02T08:00:00+00:00", "authenticationContextId": "authentication-d12" },
-          "workload": { "workloadId": "document-intelligence", "workloadIdentityId": "workload-d12" },
-          "access": { "purpose": "DOCUMENT_REPROCESSING", "consentReferenceId": "consent-d12", "authorizationContextId": "authorization-d12", "customerId": "customer-d12" }
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
         },
         "idempotencyKey": "key-d12",
         "payload": null
@@ -277,7 +355,10 @@
             "authenticationContextId": "authentication-d12",
             "unexpected": true
           },
-          "workload": { "workloadId": "document-intelligence", "workloadIdentityId": "workload-d12" },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
           "access": {
             "purpose": "DOCUMENT_REPROCESSING",
             "consentReferenceId": "consent-d12",
