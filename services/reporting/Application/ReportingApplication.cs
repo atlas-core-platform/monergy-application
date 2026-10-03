@@ -30,32 +30,47 @@ public sealed class ReportingApplication(
 
         var identity = new ReportOperationIdentity(request.ContractName, request.ContractVersion,
             request.Payload.CustomerId, request.IdempotencyKey);
-        var operation = await repository.GetOrCreateAsync(identity, async operationCancellationToken =>
+        ReportOperationResult operation;
+        try
         {
-            var snapshot = await sourceReader.ReadAsync(request.Payload.CustomerId, operationCancellationToken)
-                .ConfigureAwait(false);
-            if (snapshot is null)
+            operation = await repository.GetOrCreateAsync(identity, async operationCancellationToken =>
             {
-                return ReportGenerationAttempt.Rejected(new("report.source.not-found",
-                    ContractErrorCategory.NotFound, "No authorized report source is available.", false,
-                    request.CorrelationId));
-            }
-            if (!string.Equals(snapshot.CustomerId, request.Payload.CustomerId, StringComparison.Ordinal))
-            {
-                return ReportGenerationAttempt.Rejected(new("report.source.boundary-invalid",
-                    ContractErrorCategory.AccessDenied, "The report source is outside the current customer boundary.",
-                    false, request.CorrelationId));
-            }
-
-            return ReportGenerationAttempt.Succeeded(BuildReport(snapshot, identity, timeProvider.GetUtcNow()));
-        }, report => new("CID-053", $"report-generated-{report.ReportId}",
-            ReportingContractNames.ReportGenerated, ContractGuard.CurrentVersion, report.GeneratedAt,
-            request.CorrelationId, request.CausationId, ReportingAuthority.ReportingService, "Report",
-            report.ReportId, new(report.ReportId, report.CustomerId, report.State,
-                report.SourceFinancialReferences, report.EvidenceReferences,
-                report.FinancialProvenanceReferences, report.CalculationLineageReferences,
-                report.AiResponseTraceReference, report.AuditCompatibilityReferenceId,
-                report.Export.Sha256)), cancellationToken).ConfigureAwait(false);
+                var sourceContext = new ReportSourceReadContext(request.Payload.CustomerId, request.Security,
+                    request.RequestId, request.CorrelationId, request.CausationId);
+                var snapshot = await sourceReader.ReadAsync(sourceContext, operationCancellationToken)
+                    .ConfigureAwait(false);
+                if (snapshot is null)
+                {
+                    return ReportGenerationAttempt.Rejected(new("report.source.not-found",
+                        ContractErrorCategory.NotFound, "No authorized report source is available.", false,
+                        request.CorrelationId));
+                }
+                if (!string.Equals(snapshot.CustomerId, request.Payload.CustomerId, StringComparison.Ordinal))
+                {
+                    return ReportGenerationAttempt.Rejected(new("report.source.boundary-invalid",
+                        ContractErrorCategory.AccessDenied, "The report source is outside the current customer boundary.",
+                        false, request.CorrelationId));
+                }
+                return ReportGenerationAttempt.Succeeded(BuildReport(snapshot, identity, timeProvider.GetUtcNow()));
+            }, report => new("CID-053", $"report-generated-{report.ReportId}",
+                ReportingContractNames.ReportGenerated, ContractGuard.CurrentVersion, report.GeneratedAt,
+                request.CorrelationId, request.CausationId, ReportingAuthority.ReportingService, "Report",
+                report.ReportId, new(report.ReportId, report.CustomerId, report.State,
+                    report.SourceFinancialReferences, report.EvidenceReferences,
+                    report.FinancialProvenanceReferences, report.CalculationLineageReferences,
+                    report.AiResponseTraceReference, report.AuditCompatibilityReferenceId,
+                    report.Export.Sha256)), cancellationToken).ConfigureAwait(false);
+        }
+        catch (ReportSourceException exception)
+        {
+            return Rejected<GenerateReport>(request, exception.Error with { CorrelationId = request.CorrelationId });
+        }
+        catch (HttpRequestException)
+        {
+            return ContractResult<TrustedFinancialReport>.Failed(request, "report.source.unavailable",
+                ContractErrorCategory.DependencyFailure,
+                "An authoritative report source is unavailable.", true);
+        }
 
         if (operation.Error is not null) return Rejected<GenerateReport>(request, operation.Error);
 

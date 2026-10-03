@@ -25,6 +25,10 @@ if (referenceAdapters || physicalPersistence)
 {
     app.MapFinancialRulesContracts();
 }
+if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Profile"], "persisted-reporting", StringComparison.Ordinal))
+{
+    app.MapD11LocalShutdown(builder.Configuration);
+}
 
 await app.RunAsync();
 

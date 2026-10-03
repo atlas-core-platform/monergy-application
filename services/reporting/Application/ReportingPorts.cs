@@ -11,7 +11,19 @@ public interface IReportingAuthorizationPolicy
 
 public interface IReportSourceReader
 {
-    Task<ReportSourceSnapshot?> ReadAsync(string customerId, CancellationToken cancellationToken);
+    Task<ReportSourceSnapshot?> ReadAsync(ReportSourceReadContext context, CancellationToken cancellationToken);
+}
+
+public sealed record ReportSourceReadContext(
+    string CustomerId,
+    TrustedSecurityContext Security,
+    string RequestId,
+    string CorrelationId,
+    string? CausationId);
+
+public sealed class ReportSourceException(ContractError error) : Exception(error.Message)
+{
+    public ContractError Error { get; } = error;
 }
 
 public interface IReportRepository

@@ -370,6 +370,14 @@
       "monergy.contracts": {
         "type": "Project"
       },
+      "monergy.localaudithost": {
+        "type": "Project",
+        "dependencies": {
+          "Monergy.Contracts": "[1.0.0, )",
+          "Monergy.Platform": "[1.0.0, )",
+          "Monergy.Services.Audit": "[1.0.0, )"
+        }
+      },
       "monergy.platform": {
         "type": "Project",
         "dependencies": {
@@ -379,6 +387,16 @@
           "OpenTelemetry.Instrumentation.AspNetCore": "[1.18.0, )",
           "OpenTelemetry.Instrumentation.Http": "[1.18.0, )",
           "OpenTelemetry.Instrumentation.Runtime": "[1.18.0, )"
+        }
+      },
+      "monergy.services.audit": {
+        "type": "Project",
+        "dependencies": {
+          "Dapper": "[2.1.89, )",
+          "Microsoft.Extensions.Hosting": "[10.0.12, )",
+          "Monergy.Contracts": "[1.0.0, )",
+          "Monergy.Platform": "[1.0.0, )",
+          "Npgsql": "[10.0.3, )"
         }
       },
       "monergy.services.reporting": {

@@ -1,0 +1,66 @@
+{
+  "deliverable": "MWP-03-D11",
+  "title": "Local Runtime & Service-Owned Reporting Integration",
+  "status": "CANDIDATE_PENDING_MANUAL_REVIEW",
+  "evidenceLevel": "LOCAL_CI_EPHEMERAL_SYNTHETIC",
+  "primaryFeature": "M2-WS01-E01-F03",
+  "advancedFeatures": ["M2-WS08-E01-F02", "M2-WS08-E02-F01", "M2-WS08-E02-F03"],
+  "contractFootprint": [
+    "CID-007",
+    "CID-020",
+    "CID-021",
+    "CID-022",
+    "CID-023",
+    "CID-024",
+    "CID-030",
+    "CID-031",
+    "CID-032",
+    "CID-033",
+    "CID-034",
+    "CID-035",
+    "CID-036",
+    "CID-037",
+    "CID-038",
+    "CID-039",
+    "CID-040",
+    "CID-041",
+    "CID-051",
+    "CID-052",
+    "CID-053",
+    "CID-061"
+  ],
+  "runtimeProfile": "persisted-reporting",
+  "sourceReadTransport": "HTTP_EXISTING_CONTRACTS",
+  "reportPersistence": "REPORTING_OWNED_POSTGRESQL",
+  "auditTransport": "LOCAL_ONLY_PROVIDER_NEUTRAL_HTTP",
+  "syntheticCustomers": 2,
+  "prohibitedFallback": "ReferenceReportSourceReader.DefaultSnapshots",
+  "excludedContracts": ["CID-019", "CID-048", "CID-054"],
+  "conditionalPlatformFeatures": {
+    "M2-WS01-E03-F01": "NOT_ACCEPTED_BY_D11",
+    "M2-WS01-E03-F02": "NOT_ACCEPTED_BY_D11"
+  },
+  "outstandingDecisions": {
+    "C-10": "UNRESOLVED",
+    "C-11": "UNRESOLVED",
+    "C-14": "UNRESOLVED",
+    "OD-08": "UNRESOLVED",
+    "OD-12": "UNRESOLVED",
+    "OD-13": "UNRESOLVED",
+    "OD-14": "UNRESOLVED",
+    "OD-15": "UNRESOLVED"
+  },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  },
+  "architectureIntegrity": {
+    "R1-R7": "FROZEN_UNCHANGED",
+    "R8": "ABSENT",
+    "systemExpertAuthority": "UNCHANGED"
+  },
+  "providerSelections": "NONE",
+  "deploymentState": "NOT_DEPLOYED"
+}

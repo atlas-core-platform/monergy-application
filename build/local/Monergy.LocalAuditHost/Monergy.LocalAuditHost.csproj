@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>Monergy.LocalAuditHost</AssemblyName>
+    <RootNamespace>Monergy.LocalAuditHost</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
+    <ProjectReference Include="../../../services/audit/Monergy.Services.Audit.csproj" />
+    <ProjectReference Include="../../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+  </ItemGroup>
+</Project>

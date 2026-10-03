@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import ReportsExperience from '../src/reports/ReportsExperience';
+import { parseReportingDispatchStatus } from '../src/reports/referenceReportsApi';
 
 const report = {
   reportId: 'report-reference-1',
@@ -54,6 +55,7 @@ const report = {
 
 afterEach(() => {
   cleanup();
+  globalThis.localStorage.clear();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -180,5 +182,46 @@ describe('D08 trusted reporting experience', () => {
     expect(await screen.findByText('Report failed safely')).toBeVisible();
     expect(screen.getByText(/report\.authorization\.denied/)).toBeVisible();
     expect(screen.queryByText('Financial snapshot')).not.toBeInTheDocument();
+  });
+
+  it('preserves a valid persisted report and export while Audit diagnostics fail and recover', async () => {
+    const user = userEvent.setup();
+    const status = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('connection failed'))
+      .mockResolvedValue({ state: 'DELIVERED', pendingEvents: 0, lastFailureCode: null });
+    const generate = vi.fn().mockResolvedValue(report);
+    const get = vi.fn().mockResolvedValue(report);
+    const createObjectURL = vi.fn().mockReturnValue('blob:persisted-report');
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    render(
+      <FoundationProvider>
+        <ReportsExperience experienceMode="PERSISTED_REPORTING" api={{ generate, get, status }} />
+      </FoundationProvider>,
+    );
+    await user.click(screen.getByRole('button', { name: 'Generate basic report' }));
+
+    expect(await screen.findByText('Financial snapshot')).toBeVisible();
+    expect(screen.getByText('report-reference-1')).toBeVisible();
+    expect(await screen.findByText('Audit delivery: UNKNOWN')).toBeVisible();
+    expect(screen.queryByText('Report failed safely')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Export basic report' }));
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(screen.getByText('Audit delivery: DELIVERED')).toBeVisible(), {
+      timeout: 2_000,
+    });
+    expect(generate).toHaveBeenCalledOnce();
+  });
+
+  it('rejects malformed Audit status without treating it as report data', () => {
+    expect(() => parseReportingDispatchStatus({ state: 'DELIVERED' })).toThrow(
+      'Malformed Audit dispatch status.',
+    );
+    expect(() => parseReportingDispatchStatus({ state: 'OTHER', pendingEvents: 0 })).toThrow(
+      'Malformed Audit dispatch status.',
+    );
   });
 });
