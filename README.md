@@ -122,6 +122,17 @@ lifecycle, output metadata, and source association. It selects no provider,
 database, object store, broker, AI/model, formal report format, delivery channel,
 or deployment target; C-10, C-11, C-14, and OD-08 remain unresolved.
 
+The D12 candidate realizes exactly `M2-WS03-E02-F03` at `SIMULATOR` through
+CID-026 `ReprocessDocument` and CID-029 `DocumentProcessingFailed`. A new
+operation is linked to a terminal predecessor and exact Evidence-owned immutable
+version. Customer-scoped semantic idempotency prevents duplicate extraction and
+terminal intent; CID-025 retry remains separate. State and terminal event intent
+commit atomically in the in-memory reference adapter. Run the isolated D12 test
+project and `build/verify-document-reprocessing.ps1`; this is not acceptance,
+durable persistence, provider compatibility, financial reconciliation, or a
+deployment claim. D11 remains frozen with acceptance deferred and its security
+failure retained.
+
 ```powershell
 ./build/Invoke-Toolchain.ps1 -Task Verify
 ```

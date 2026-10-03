@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D10 Durable Job and Audit Candidate
+# Monergy Application Repository Structure — D12 Document Reprocessing Candidate
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -122,6 +122,31 @@ D09 introduces only the approved PostgreSQL and S3-compatible physical persisten
 - `tests/job-management/Monergy.JobManagement.Tests/`: deterministic lifecycle, restart, retry, cancellation, replay, least-privilege and Audit propagation evidence.
 
 D10 does not select a Production broker, hosting provider, identity provider, orchestration platform or monitoring product. The reference transport is not Production messaging evidence; OD-15 remains unresolved and stage gates are unchanged.
+
+## D12 document reprocessing candidate
+
+- `contracts/Monergy.Contracts/D12DocumentReprocessingContracts.cs` and
+  `D12ContractCatalog.cs`: additive CID-026/CID-029 types and the exact
+  twelve-family direct verification catalog; the D03 catalog is unchanged.
+- `contracts/schemas/document-reprocessing.schema.json`: closed version-1.0.0
+  request/event schema.
+- `services/document-intelligence/Application/DocumentProcessingApplication.cs`:
+  owner-controlled intentional reprocessing, current-policy evaluation, exact
+  Evidence identity/version checks, immutable predecessor snapshots, and typed
+  success/failure terminal intent.
+- `services/document-intelligence/Infrastructure/ReferenceDocumentProcessingAdapters.cs`:
+  customer-scoped semantic idempotency, attempt identity, stale-attempt
+  protection, and atomic in-memory state/outbox behavior for `LOCAL` and
+  `CI_EPHEMERAL` only.
+- `tests/document-reprocessing/Monergy.DocumentReprocessing.Tests/`: isolated
+  executable evidence for D12-T01 through D12-T12.
+- `build/governance/d12-scope-lock.json`, `d12-scenario-matrix.json`, and
+  `build/verify-document-reprocessing.ps1`: candidate scope and deterministic
+  positive/negative governance checks.
+
+D12 adds no frontend, migration, database, provider, OCR/AI integration,
+production transport, deployment claim, or D11 source dependency. D11 remains
+frozen with acceptance deferred and its recorded security failure retained.
 
 See the catalogs and README files in each responsibility area for the maintained
 boundary inventory.

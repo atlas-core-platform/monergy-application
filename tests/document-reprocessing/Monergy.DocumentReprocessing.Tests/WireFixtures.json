@@ -1,0 +1,408 @@
+{
+  "schemaVersion": "1.0.0",
+  "schemaDraft": "2020-12",
+  "status": "EXPECTED_OUTCOMES_FOR_MANUAL_SCHEMA_VALIDATION",
+  "fixtures": [
+    {
+      "id": "cid026-valid",
+      "expectedSchemaOutcome": "VALID",
+      "expectedRuntimeOutcome": "ACCEPTED",
+      "instance": {
+        "contractName": "ReprocessDocument",
+        "contractVersion": "1.0.0",
+        "requestId": "request-processing-d12-reprocess",
+        "correlationId": "correlation-d12",
+        "causationId": "causation-d12",
+        "security": {
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
+        },
+        "idempotencyKey": "key-reprocess-d12",
+        "payload": {
+          "processingId": "processing-d12-reprocess",
+          "previousProcessingId": "processing-d12-previous",
+          "customerId": "customer-d12",
+          "evidenceReferenceId": "evidence-d12",
+          "documentVersionId": "document-version-d12-1",
+          "reason": "FAILED_PROCESSING",
+          "requestedAt": "2026-10-02T08:00:00+00:00"
+        }
+      }
+    },
+    {
+      "id": "cid029-valid",
+      "expectedSchemaOutcome": "VALID",
+      "expectedRuntimeOutcome": "DESERIALIZED",
+      "instance": {
+        "contractId": "CID-029",
+        "eventId": "event-d12",
+        "eventName": "DocumentProcessingFailed",
+        "eventVersion": "1.0.0",
+        "occurredAt": "2026-10-02T08:00:00+00:00",
+        "correlationId": "correlation-d12",
+        "causationId": "request-d12",
+        "producer": "Document Intelligence Service",
+        "subjectType": "document-processing",
+        "subjectId": "processing-d12-reprocess",
+        "payload": {
+          "processingId": "processing-d12-reprocess",
+          "customerId": "customer-d12",
+          "evidenceId": "evidence-d12",
+          "documentVersionId": "document-version-d12-1",
+          "failureCode": "processing.no-valid-facts",
+          "errorCategory": "ProcessingFailed",
+          "retryable": false,
+          "previousProcessingId": "processing-d12-previous",
+          "attemptId": "processing-d12-reprocess:attempt:1"
+        }
+      }
+    },
+    {
+      "id": "cid026-missing-reason",
+      "expectedSchemaOutcome": "INVALID",
+      "expectedRuntimeOutcome": "DESERIALIZATION_REJECTED",
+      "instance": {
+        "contractName": "ReprocessDocument",
+        "contractVersion": "1.0.0",
+        "requestId": "request-d12",
+        "correlationId": "correlation-d12",
+        "security": {
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
+        },
+        "idempotencyKey": "key-d12",
+        "payload": {
+          "processingId": "processing-d12",
+          "previousProcessingId": "previous-d12",
+          "customerId": "customer-d12",
+          "evidenceReferenceId": "evidence-d12",
+          "documentVersionId": "version-d12",
+          "requestedAt": "2026-10-02T08:00:00+00:00"
+        }
+      }
+    },
+    {
+      "id": "cid026-numeric-reason",
+      "expectedSchemaOutcome": "INVALID",
+      "expectedRuntimeOutcome": "DESERIALIZATION_REJECTED",
+      "instance": {
+        "contractName": "ReprocessDocument",
+        "contractVersion": "1.0.0",
+        "requestId": "request-d12",
+        "correlationId": "correlation-d12",
+        "security": {
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
+        },
+        "idempotencyKey": "key-d12",
+        "payload": {
+          "processingId": "processing-d12",
+          "previousProcessingId": "previous-d12",
+          "customerId": "customer-d12",
+          "evidenceReferenceId": "evidence-d12",
+          "documentVersionId": "version-d12",
+          "reason": 999,
+          "requestedAt": "2026-10-02T08:00:00+00:00"
+        }
+      }
+    },
+    {
+      "id": "cid026-unsupported-reason",
+      "expectedSchemaOutcome": "INVALID",
+      "expectedRuntimeOutcome": "DESERIALIZATION_REJECTED",
+      "instance": {
+        "contractName": "ReprocessDocument",
+        "contractVersion": "1.0.0",
+        "requestId": "request-d12",
+        "correlationId": "correlation-d12",
+        "security": {
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
+        },
+        "idempotencyKey": "key-d12",
+        "payload": {
+          "processingId": "processing-d12",
+          "previousProcessingId": "previous-d12",
+          "customerId": "customer-d12",
+          "evidenceReferenceId": "evidence-d12",
+          "documentVersionId": "version-d12",
+          "reason": "INVENTED_REASON",
+          "requestedAt": "2026-10-02T08:00:00+00:00"
+        }
+      }
+    },
+    {
+      "id": "cid026-missing-idempotency-key",
+      "expectedSchemaOutcome": "INVALID",
+      "expectedRuntimeOutcome": "VALIDATION_ERROR",
+      "instance": {
+        "contractName": "ReprocessDocument",
+        "contractVersion": "1.0.0",
+        "requestId": "request-d12",
+        "correlationId": "correlation-d12",
+        "security": {
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
+        },
+        "payload": {
+          "processingId": "processing-d12",
+          "previousProcessingId": "previous-d12",
+          "customerId": "customer-d12",
+          "evidenceReferenceId": "evidence-d12",
+          "documentVersionId": "version-d12",
+          "reason": "FAILED_PROCESSING",
+          "requestedAt": "2026-10-02T08:00:00+00:00"
+        }
+      }
+    },
+    {
+      "id": "cid026-null-security",
+      "expectedSchemaOutcome": "INVALID",
+      "expectedRuntimeOutcome": "AUTHENTICATION_REQUIRED",
+      "instance": {
+        "contractName": "ReprocessDocument",
+        "contractVersion": "1.0.0",
+        "requestId": "request-d12",
+        "correlationId": "correlation-d12",
+        "security": null,
+        "idempotencyKey": "key-d12",
+        "payload": {
+          "processingId": "processing-d12",
+          "previousProcessingId": "previous-d12",
+          "customerId": "customer-d12",
+          "evidenceReferenceId": "evidence-d12",
+          "documentVersionId": "version-d12",
+          "reason": "FAILED_PROCESSING",
+          "requestedAt": "2026-10-02T08:00:00+00:00"
+        }
+      }
+    },
+    {
+      "id": "cid026-missing-processing-identity",
+      "expectedSchemaOutcome": "INVALID",
+      "expectedRuntimeOutcome": "VALIDATION_ERROR",
+      "instance": {
+        "contractName": "ReprocessDocument",
+        "contractVersion": "1.0.0",
+        "requestId": "request-d12",
+        "correlationId": "correlation-d12",
+        "security": {
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
+        },
+        "idempotencyKey": "key-d12",
+        "payload": {
+          "previousProcessingId": "previous-d12",
+          "customerId": "customer-d12",
+          "evidenceReferenceId": "evidence-d12",
+          "documentVersionId": "version-d12",
+          "reason": "FAILED_PROCESSING",
+          "requestedAt": "2026-10-02T08:00:00+00:00"
+        }
+      }
+    },
+    {
+      "id": "cid026-null-payload",
+      "expectedSchemaOutcome": "INVALID",
+      "expectedRuntimeOutcome": "VALIDATION_ERROR",
+      "instance": {
+        "contractName": "ReprocessDocument",
+        "contractVersion": "1.0.0",
+        "requestId": "request-d12",
+        "correlationId": "correlation-d12",
+        "security": {
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12"
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
+        },
+        "idempotencyKey": "key-d12",
+        "payload": null
+      }
+    },
+    {
+      "id": "cid026-empty-security-objects",
+      "expectedSchemaOutcome": "INVALID",
+      "expectedRuntimeOutcome": "AUTHENTICATION_REQUIRED",
+      "instance": {
+        "contractName": "ReprocessDocument",
+        "contractVersion": "1.0.0",
+        "requestId": "request-d12",
+        "correlationId": "correlation-d12",
+        "security": { "actor": {}, "workload": {}, "access": {} },
+        "idempotencyKey": "key-d12",
+        "payload": {
+          "processingId": "processing-d12",
+          "previousProcessingId": "previous-d12",
+          "customerId": "customer-d12",
+          "evidenceReferenceId": "evidence-d12",
+          "documentVersionId": "version-d12",
+          "reason": "FAILED_PROCESSING",
+          "requestedAt": "2026-10-02T08:00:00+00:00"
+        }
+      }
+    },
+    {
+      "id": "cid026-unexpected-actor-member",
+      "expectedSchemaOutcome": "INVALID",
+      "expectedRuntimeOutcome": "DESERIALIZATION_REJECTED",
+      "instance": {
+        "contractName": "ReprocessDocument",
+        "contractVersion": "1.0.0",
+        "requestId": "request-d12",
+        "correlationId": "correlation-d12",
+        "security": {
+          "actor": {
+            "actorId": "actor-d12",
+            "actorType": "CUSTOMER",
+            "authenticatedAt": "2026-10-02T08:00:00+00:00",
+            "authenticationContextId": "authentication-d12",
+            "unexpected": true
+          },
+          "workload": {
+            "workloadId": "document-intelligence",
+            "workloadIdentityId": "workload-d12"
+          },
+          "access": {
+            "purpose": "DOCUMENT_REPROCESSING",
+            "consentReferenceId": "consent-d12",
+            "authorizationContextId": "authorization-d12",
+            "customerId": "customer-d12"
+          }
+        },
+        "idempotencyKey": "key-d12",
+        "payload": {
+          "processingId": "processing-d12",
+          "previousProcessingId": "previous-d12",
+          "customerId": "customer-d12",
+          "evidenceReferenceId": "evidence-d12",
+          "documentVersionId": "version-d12",
+          "reason": "FAILED_PROCESSING",
+          "requestedAt": "2026-10-02T08:00:00+00:00"
+        }
+      }
+    },
+    {
+      "id": "cid029-invented-error-category",
+      "expectedSchemaOutcome": "INVALID",
+      "expectedRuntimeOutcome": "DESERIALIZATION_REJECTED",
+      "instance": {
+        "contractId": "CID-029",
+        "eventId": "event-d12",
+        "eventName": "DocumentProcessingFailed",
+        "eventVersion": "1.0.0",
+        "occurredAt": "2026-10-02T08:00:00+00:00",
+        "correlationId": "correlation-d12",
+        "producer": "Document Intelligence Service",
+        "subjectType": "document-processing",
+        "subjectId": "processing-d12",
+        "payload": {
+          "processingId": "processing-d12",
+          "customerId": "customer-d12",
+          "evidenceId": "evidence-d12",
+          "documentVersionId": "version-d12",
+          "failureCode": "processing.failed",
+          "errorCategory": "InventedFailure",
+          "retryable": false,
+          "attemptId": "processing-d12:attempt:1"
+        }
+      }
+    }
+  ]
+}

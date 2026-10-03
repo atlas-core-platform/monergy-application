@@ -171,7 +171,7 @@ public static class ContractGuard
         }
 
         var security = request.Security;
-        if (security.Actor is null || security.Workload is null || security.Access is null ||
+        if (security is null || security.Actor is null || security.Workload is null || security.Access is null ||
             string.IsNullOrWhiteSpace(security.Actor.ActorId) ||
             string.IsNullOrWhiteSpace(security.Actor.AuthenticationContextId) ||
             string.IsNullOrWhiteSpace(security.Workload.WorkloadIdentityId))
