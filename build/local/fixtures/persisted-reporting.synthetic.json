@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "1.0.0",
+  "classification": "SYNTHETIC_ENGINEERING_FIXTURE",
+  "customers": [
+    {
+      "customerId": "d11-customer-a",
+      "documentId": "d11-document-a",
+      "documentVersionId": "d11-document-version-a-v1",
+      "evidenceId": "d11-evidence-a",
+      "financialProfileId": "d11-profile-a",
+      "content": "Synthetic Monergy D11 statement for customer A. No Production or client data.",
+      "facts": [
+        {
+          "sourceFactId": "d11-source-a-income",
+          "factType": "INCOME",
+          "label": "Synthetic monthly income",
+          "value": 125000,
+          "currency": "INR",
+          "role": "left"
+        },
+        {
+          "sourceFactId": "d11-source-a-expense",
+          "factType": "EXPENSE",
+          "label": "Synthetic monthly expense",
+          "value": 80000,
+          "currency": "INR",
+          "role": "right"
+        }
+      ]
+    },
+    {
+      "customerId": "d11-customer-b",
+      "documentId": "d11-document-b",
+      "documentVersionId": "d11-document-version-b-v1",
+      "evidenceId": "d11-evidence-b",
+      "financialProfileId": "d11-profile-b",
+      "content": "Synthetic Monergy D11 statement for customer B. No Production or client data.",
+      "facts": [
+        {
+          "sourceFactId": "d11-source-b-income",
+          "factType": "INCOME",
+          "label": "Synthetic monthly income",
+          "value": 98000,
+          "currency": "INR",
+          "role": "left"
+        },
+        {
+          "sourceFactId": "d11-source-b-expense",
+          "factType": "EXPENSE",
+          "label": "Synthetic monthly expense",
+          "value": 61000,
+          "currency": "INR",
+          "role": "right"
+        }
+      ]
+    }
+  ]
+}

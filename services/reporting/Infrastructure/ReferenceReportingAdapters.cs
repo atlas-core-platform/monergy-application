@@ -17,10 +17,10 @@ public sealed class ReferenceReportSourceReader : IReportSourceReader
         snapshots = (values ?? DefaultSnapshots()).ToImmutableDictionary(item => item.CustomerId, StringComparer.Ordinal);
     }
 
-    public Task<ReportSourceSnapshot?> ReadAsync(string customerId, CancellationToken cancellationToken)
+    public Task<ReportSourceSnapshot?> ReadAsync(ReportSourceReadContext context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        snapshots.TryGetValue(customerId, out var snapshot);
+        snapshots.TryGetValue(context.CustomerId, out var snapshot);
         return Task.FromResult(snapshot);
     }
 

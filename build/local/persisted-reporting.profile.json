@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "1.0.0",
+  "profile": "persisted-reporting",
+  "evidenceLevel": "LOCAL_CI_EPHEMERAL_SYNTHETIC",
+  "actions": ["Prepare", "Start", "Seed", "Status", "Verify", "Stop"],
+  "binding": "LOOPBACK_ONLY",
+  "participatingBoundaries": [
+    "Customer Web",
+    "Evidence Service",
+    "Financial Profile Service",
+    "Financial Rules Service",
+    "Reporting Service",
+    "Audit Service LOCAL composition"
+  ],
+  "ports": {
+    "customerWeb": 5173,
+    "evidence": 5190,
+    "financialProfile": 5191,
+    "financialRules": 5192,
+    "reporting": 5189,
+    "audit": 5193,
+    "postgres": 55434,
+    "s3": 58334
+  },
+  "readinessChecks": [
+    "provider health",
+    "service health",
+    "owner contract reads",
+    "report generation and replay",
+    "Reporting outbox to duplicate-safe Audit ingestion"
+  ],
+  "sourceIdentityKinds": [
+    "document/version/evidence",
+    "financial profile/fact/provenance",
+    "calculation result/lineage",
+    "report/export hash",
+    "audit source event"
+  ],
+  "limitations": [
+    "synthetic data only",
+    "reference security grants only",
+    "LOCAL-only HTTP event transport",
+    "no AI execution",
+    "no Production broker, identity provider, infrastructure or deployment claim"
+  ],
+  "prerequisites": [
+    "Windows PowerShell 7+",
+    ".NET SDK 10.0.401",
+    "Node.js 24.21.0",
+    "pnpm 12.4.1",
+    "Docker Compose"
+  ]
+}

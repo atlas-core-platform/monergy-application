@@ -19,6 +19,7 @@
   </Folder>
   <Folder Name="/Build/">
     <Project Path="build/Monergy.DatabaseMigrator/Monergy.DatabaseMigrator.csproj" />
+    <Project Path="build/local/Monergy.LocalAuditHost/Monergy.LocalAuditHost.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj" />
