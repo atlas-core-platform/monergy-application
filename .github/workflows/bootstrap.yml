@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - delivery/mwp03-*
   pull_request:
   workflow_dispatch:
 
