@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contracts.monergy.invalid/document-reprocessing.schema.json",
+  "title": "MWP-03-D12 document reprocessing contracts",
+  "oneOf": [
+    { "$ref": "#/$defs/reprocessDocument" },
+    { "$ref": "#/$defs/documentProcessingFailed" }
+  ],
+  "$defs": {
+    "security": {
+      "type": "object",
+      "required": ["actor", "workload", "access"],
+      "properties": {
+        "actor": {
+          "type": "object",
+          "required": ["actorId", "actorType", "authenticatedAt", "authenticationContextId"],
+          "properties": {
+            "actorId": { "type": "string", "minLength": 1 },
+            "actorType": { "type": "string", "minLength": 1 },
+            "authenticatedAt": { "type": "string", "format": "date-time" },
+            "authenticationContextId": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "workload": {
+          "type": "object",
+          "required": ["workloadId", "workloadIdentityId"],
+          "properties": {
+            "workloadId": { "type": "string", "minLength": 1 },
+            "workloadIdentityId": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "access": {
+          "type": "object",
+          "required": ["purpose", "consentReferenceId", "authorizationContextId", "customerId"],
+          "properties": {
+            "purpose": { "type": "string", "minLength": 1 },
+            "consentReferenceId": { "type": ["string", "null"], "minLength": 1 },
+            "authorizationContextId": { "type": "string", "minLength": 1 },
+            "customerId": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "reprocessDocument": {
+      "type": "object",
+      "required": [
+        "contractName",
+        "contractVersion",
+        "requestId",
+        "correlationId",
+        "security",
+        "idempotencyKey",
+        "payload"
+      ],
+      "properties": {
+        "contractName": { "const": "ReprocessDocument" },
+        "contractVersion": { "const": "1.0.0" },
+        "requestId": { "type": "string", "minLength": 1 },
+        "correlationId": { "type": "string", "minLength": 1 },
+        "causationId": { "type": ["string", "null"] },
+        "security": { "$ref": "#/$defs/security" },
+        "idempotencyKey": { "type": "string", "minLength": 1 },
+        "payload": {
+          "type": "object",
+          "required": [
+            "processingId",
+            "previousProcessingId",
+            "customerId",
+            "evidenceReferenceId",
+            "documentVersionId",
+            "reason",
+            "requestedAt"
+          ],
+          "properties": {
+            "processingId": { "type": "string", "minLength": 1 },
+            "previousProcessingId": { "type": "string", "minLength": 1 },
+            "customerId": { "type": "string", "minLength": 1 },
+            "evidenceReferenceId": { "type": "string", "minLength": 1 },
+            "documentVersionId": { "type": "string", "minLength": 1 },
+            "reason": { "enum": ["FAILED_PROCESSING", "UPDATED_EVIDENCE"] },
+            "requestedAt": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "documentProcessingFailed": {
+      "type": "object",
+      "required": [
+        "contractId",
+        "eventId",
+        "eventName",
+        "eventVersion",
+        "occurredAt",
+        "correlationId",
+        "producer",
+        "subjectType",
+        "subjectId",
+        "payload"
+      ],
+      "properties": {
+        "contractId": { "const": "CID-029" },
+        "eventId": { "type": "string", "minLength": 1 },
+        "eventName": { "const": "DocumentProcessingFailed" },
+        "eventVersion": { "const": "1.0.0" },
+        "occurredAt": { "type": "string", "format": "date-time" },
+        "correlationId": { "type": "string", "minLength": 1 },
+        "causationId": { "type": ["string", "null"] },
+        "producer": { "const": "Document Intelligence Service" },
+        "subjectType": { "const": "document-processing" },
+        "subjectId": { "type": "string", "minLength": 1 },
+        "payload": {
+          "type": "object",
+          "required": [
+            "processingId",
+            "customerId",
+            "evidenceId",
+            "documentVersionId",
+            "failureCode",
+            "errorCategory",
+            "retryable",
+            "attemptId"
+          ],
+          "properties": {
+            "processingId": { "type": "string", "minLength": 1 },
+            "customerId": { "type": "string", "minLength": 1 },
+            "evidenceId": { "type": "string", "minLength": 1 },
+            "documentVersionId": { "type": "string", "minLength": 1 },
+            "failureCode": { "type": "string", "minLength": 1 },
+            "errorCategory": {
+              "enum": [
+                "AccessDenied",
+                "ConsentRequired",
+                "ConsentExpired",
+                "ConsentRevoked",
+                "DependencyFailure",
+                "ProcessingFailed"
+              ]
+            },
+            "retryable": { "type": "boolean" },
+            "previousProcessingId": { "type": ["string", "null"] },
+            "attemptId": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

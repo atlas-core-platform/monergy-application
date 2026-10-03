@@ -18,3 +18,11 @@ MWP-03-D04 adds a separate `D04ContractCatalog` and
 CID-036. Contract version remains `1.0.0`. The accepted fourteen-contract D03
 catalog/schema is intentionally unchanged so D03 remains independently
 regression-verifiable.
+
+MWP-03-D12 adds a separate `D12ContractCatalog` and
+`schemas/document-reprocessing.schema.json`. Its direct verification scope has
+exactly twelve existing logical families; only CID-026 `ReprocessDocument` and
+CID-029 `DocumentProcessingFailed` are newly realized. The accepted D03
+fourteen-contract catalog and schema remain unchanged. Contract version remains
+`1.0.0`, and the D12 reason vocabulary is bounded to `FAILED_PROCESSING` and
+`UPDATED_EVIDENCE`.

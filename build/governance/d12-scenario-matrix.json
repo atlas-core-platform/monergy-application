@@ -1,0 +1,73 @@
+{
+  "schemaVersion": "1.1.0",
+  "deliverable": "MWP-03-D12",
+  "status": "CANDIDATE_EVIDENCE_RECONCILED",
+  "evidenceClassification": {
+    "STRUCTURAL": "Static contract, schema, catalog, scope or source assertion.",
+    "BEHAVIORAL": "Executed .NET behavior with deterministic reference adapters.",
+    "OWNER_INTEGRATION_REFERENCE": "Interaction with an existing owner application or repository using LOCAL/CI_EPHEMERAL reference adapters.",
+    "MANUAL_SCHEMA_INSTANCE": "Draft 2020-12 fixture validation using external review tooling; not represented as a .NET runtime test."
+  },
+  "scenarios": [
+    {
+      "id": "D12-T01",
+      "evidenceTypes": ["STRUCTURAL", "BEHAVIORAL", "MANUAL_SCHEMA_INSTANCE"],
+      "tests": ["D12CatalogHasExactTwelveFamilyScopeAndTwoNewRealizations", "ReprocessingRequestAndFailureEventRoundTripStrictly", "WrongContractVersionNullPayloadContextAndUnsupportedReasonFailSafely", "D12SchemaIsClosedAndContainsOnlyCid026AndCid029", "SerializedCid026WireRejectsMissingNumericUnsupportedAndMalformedMembers", "SerializedCid029WireRejectsInventedOrNumericFailureCategories", "MachineReadableSchemaFixturesMatchActualDotNetSerialization"]
+    },
+    {
+      "id": "D12-T02",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["FailedSameVersionReprocessingPreservesPredecessorAndCapturesImmutableLinkage", "FailedSameVersionRecoveryUsesUnchangedEvidenceOwnedBytesAfterControlledDependencyFailure", "LaterLegacyRetryCannotRewriteCapturedPredecessorOutcome", "ChangedPredecessorDuringEvidencePreflightIsRejectedAtAtomicAdmission"]
+    },
+    {
+      "id": "D12-T03",
+      "evidenceTypes": ["BEHAVIORAL", "OWNER_INTEGRATION_REFERENCE"],
+      "tests": ["UpdatedEvidenceUsesExactDifferentImmutableVersionOfSameEvidence", "UpdatedEvidenceRejectsSameVersionUnrelatedEvidenceAndCrossCustomerSource", "EvidenceOwnerContractsSupplyExactVersionForUpdatedEvidenceReprocessing"]
+    },
+    {
+      "id": "D12-T04",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["ConcurrentIdenticalDeliveryBeforeAndAfterTerminalCompletionDoesNotExtractOrEmitTwice", "TerminalFailureReplayDoesNotExtractOrEmitAnotherFailure"]
+    },
+    {
+      "id": "D12-T05",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["SemanticPayloadAndOperationIdentityConflictsAreRejectedWhileCrossCustomerKeysAreScoped", "DistinctScopedKeyTuplesCannotCollideThroughDelimiterContent"]
+    },
+    {
+      "id": "D12-T06",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["UnknownNonterminalAndOtherCustomerPredecessorsFailWithoutFabricatedEvents", "CancellationBeforeAdmissionCreatesNoOperationOrTerminalIntent"]
+    },
+    {
+      "id": "D12-T07",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["ExecutionTimePolicyIsRecheckedAndClassifiedWithoutExtraction", "SameCustomerReplayAndStatusRequireCurrentAccessWithoutMintingFailureFacts", "ConsentRevokedDuringEvidenceReadFailsBeforeExtraction"]
+    },
+    {
+      "id": "D12-T08",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["DependencyMissingSourceEmptyFactsAndExtractorFailureHaveDistinctSafeEvents"]
+    },
+    {
+      "id": "D12-T09",
+      "evidenceTypes": ["BEHAVIORAL", "OWNER_INTEGRATION_REFERENCE"],
+      "tests": ["TerminalStateAndEventIntentCommitAtomicallyAndStaleAttemptsCannotContradictOutcome", "FailureEventIsAuditCompatibleButAuditAvailabilityDoesNotControlOwnerCommit", "CommittedFactsAndTerminalEventsAreImmutableOwnerSnapshots"]
+    },
+    {
+      "id": "D12-T10",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["SuccessfulFactsRetainExactSourceAndProcessingLineageWithoutFinancialAuthority"]
+    },
+    {
+      "id": "D12-T11",
+      "evidenceTypes": ["OWNER_INTEGRATION_REFERENCE"],
+      "tests": ["GovernedJobSchedulingDeliveryAndStatusInvokeReprocessingOwnerBehavior", "MechanicalJobOutcomeDoesNotMisrepresentDocumentBusinessFailure", "CancellationAfterAdmissionLeavesTruthfulQueryableStateAndNoBlindNewOperation", "TimedOutClaimWithCancellationRequiresBoundedSameIdentityReconciliation"]
+    },
+    {
+      "id": "D12-T12",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["ExistingProcessDocumentFailureNowCommitsOneTypedFailureIntentAndRetryRemainsDistinct", "StatusVisibilityRemainsCustomerScopedForReprocessingOperations", "MalformedOrNullStatusPayloadFailsSafelyBeforeOwnerLookup", "SameCustomerReplayAndStatusRequireCurrentAccessWithoutMintingFailureFacts"]
+    }
+  ]
+}

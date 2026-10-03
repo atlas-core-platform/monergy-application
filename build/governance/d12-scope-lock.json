@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D12",
+  "title": "Document Reprocessing & Explicit Failure Handling",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "evidenceLevel": "SIMULATOR",
+  "startingCommits": {
+    "application": "6fcc2fd784346a65e2f9fffa2a6e089e9d3a041c",
+    "architecture": "11680d08544092e49773bce2f1fd68292f64bf3c"
+  },
+  "features": [
+    {
+      "id": "M2-WS03-E02-F03",
+      "name": "Reprocessing & explicit failure handling",
+      "owner": "Document Intelligence Service",
+      "readiness": "READY"
+    }
+  ],
+  "newlyRealizedContracts": ["CID-026", "CID-029"],
+  "compatibilityContracts": ["CID-025", "CID-027", "CID-028"],
+  "consumedContracts": ["CID-007", "CID-021", "CID-022"],
+  "referenceScenarioContracts": ["CID-020", "CID-055", "CID-057", "CID-061"],
+  "directVerificationContractCount": 12,
+  "changedDomainServiceBoundaries": ["Document Intelligence Service"],
+  "executionZones": ["LOCAL", "CI_EPHEMERAL"],
+  "persistence": "REFERENCE_IN_MEMORY_ONLY",
+  "providerSelection": "NONE",
+  "frontendChange": "NONE",
+  "d11": {
+    "sourceDependency": "NONE",
+    "status": "FROZEN_ACCEPTANCE_DEFERRED",
+    "securityFailure": "RETAINED"
+  },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  },
+  "architectureIntegrity": {
+    "baseline": "11680d08544092e49773bce2f1fd68292f64bf3c",
+    "R1-R7": "FROZEN_UNCHANGED",
+    "R8": "ABSENT"
+  }
+}

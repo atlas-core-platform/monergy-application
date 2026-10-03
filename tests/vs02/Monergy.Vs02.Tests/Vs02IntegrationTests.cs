@@ -150,7 +150,9 @@ public sealed class Vs02IntegrationTests
         Assert.Equal(ContractOutcome.Failed, result.Outcome);
         Assert.Equal(ContractErrorCategory.DependencyFailure, result.Error?.Category);
         Assert.True(result.Error?.Retryable);
-        Assert.Empty(repository.DrainOutbox());
+        var failed = Assert.IsType<DomainEvent<DocumentProcessingFailedPayload>>(Assert.Single(repository.DrainOutbox()));
+        Assert.Equal("CID-029", failed.ContractId);
+        Assert.Equal("processing.evidence.unavailable", failed.Payload.FailureCode);
     }
 
     [Fact]
@@ -179,7 +181,8 @@ public sealed class Vs02IntegrationTests
         var failed = await processing.ProcessDocumentAsync(request);
         Assert.Equal(ContractOutcome.Failed, failed.Outcome);
         Assert.True(failed.Error?.Retryable);
-        Assert.Empty(repository.DrainOutbox());
+        var failedEvent = Assert.IsType<DomainEvent<DocumentProcessingFailedPayload>>(Assert.Single(repository.DrainOutbox()));
+        Assert.Equal("processing-retry:attempt:1", failedEvent.Payload.AttemptId);
 
         var completed = await processing.ProcessDocumentAsync(request);
         Assert.Equal(ContractOutcome.Success, completed.Outcome);
