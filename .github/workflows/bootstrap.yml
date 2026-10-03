@@ -4,16 +4,7 @@ on:
   push:
     branches:
       - main
-      - delivery/mwp03-d02-product-technology-toolchain
-      - delivery/mwp03-d03-vs02-evidence-financial-truth
-      - delivery/mwp03-d04-financial-profile-authority-expansion
-      - delivery/mwp03-d05-financial-rules-calculation-lineage
-      - delivery/mwp03-d06-integration-gateway-core
-      - delivery/mwp03-d07-authorized-search-provenance
-      - delivery/mwp03-d08-trusted-financial-summary-export
-      - delivery/mwp03-d09-persistent-relational-data-foundation
-      - delivery/mwp03-d10-durable-job-audit-propagation
-      - delivery/mwp03-d12-document-reprocessing
+      - "delivery/mwp03-*"
   pull_request:
   workflow_dispatch:
 
