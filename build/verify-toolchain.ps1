@@ -327,7 +327,7 @@ Add-Check 'Honest scanner semantics' ($supplyPolicy.scannerFailureSemantics -ceq
 
 $workflow = Get-Content -LiteralPath (Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml') -Raw
 $toolchainScriptText = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/Invoke-Toolchain.ps1') -Raw
-Add-Check 'Technology-specific CI workflow' ($workflow.Contains('10.0.401') -and $workflow.Contains('24.21.0') -and $workflow.Contains('HostedOciEvidence') -and $workflow.Contains('delivery/mwp03-d02-product-technology-toolchain') -and $toolchainScriptText.Contains('--frozen-lockfile')) 'Pinned .NET/Node, locked install, hosted 12-image evidence and full D02 gates'
+Add-Check 'Technology-specific CI workflow' ($workflow.Contains('10.0.401') -and $workflow.Contains('24.21.0') -and $workflow.Contains('HostedOciEvidence') -and $workflow.Contains('delivery/mwp03-*') -and $toolchainScriptText.Contains('--frozen-lockfile')) 'Pinned .NET/Node, locked install, hosted 12-image evidence and full D02 gates'
 Add-Check 'GitHub Free exception preserved' ($workflow.Contains('Direct push to main detected') -and $workflow.Contains('/commits/$env:MONERGY_COMMIT_SHA/pulls')) 'Detection remains warning, not claimed prevention'
 
 $invokeToolchain = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/Invoke-Toolchain.ps1') -Raw
