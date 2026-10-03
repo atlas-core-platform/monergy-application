@@ -21,7 +21,7 @@ RUN dotnet publish "services/audit/Monergy.Services.Audit.csproj" \
     --output /app/publish \
     /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled AS final
+FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled@sha256:cef1854a63da04795952a34c970591693d1f31c8e8f42ec14892d6198a49774b AS final
 WORKDIR /app
 COPY --from=build --chown=$APP_UID:$APP_UID /app/publish .
 USER $APP_UID
