@@ -21,7 +21,7 @@ RUN dotnet publish "services/search-retrieval/Monergy.Services.SearchRetrieval.c
     --output /app/publish \
     /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0.12-noble-chiseled@sha256:9651fa59abcdf177c30392cb44a820605ca5d618429ab37acbf6e7c644510b02 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled AS final
 WORKDIR /app
 COPY --from=build --chown=$APP_UID:$APP_UID /app/publish .
 USER $APP_UID

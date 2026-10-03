@@ -13,6 +13,7 @@ on:
       - delivery/mwp03-d08-trusted-financial-summary-export
       - delivery/mwp03-d09-persistent-relational-data-foundation
       - delivery/mwp03-d10-durable-job-audit-propagation
+      - delivery/mwp03-d12-document-reprocessing
   pull_request:
   workflow_dispatch:
 
