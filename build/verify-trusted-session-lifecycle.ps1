@@ -218,12 +218,22 @@ $checks['Canonical D14 source identity uses exact baseline ordinal order and una
     $sourceIdentity.Contains('big-endian Int32 path-byte-length + file-byte-length') -and
     $sourceIdentity.Contains('Select-Object -Unique')
 
-$d13EvidenceChanges = @(git -C $RepositoryRoot diff --name-only '698f4b8f8ac180f2eeea1ead9dc0bb2a38b56346' -- 'build/d13')
-$workflowChanges = @(git -C $RepositoryRoot diff --name-only '698f4b8f8ac180f2eeea1ead9dc0bb2a38b56346' -- '.github/workflows')
+$comparisonBase = '698f4b8f8ac180f2eeea1ead9dc0bb2a38b56346'
+$headLine = [string](git -C $RepositoryRoot rev-list --parents -n 1 HEAD)
+$headParts = @($headLine -split '\s+' | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+if ($headParts.Count -ge 3) {
+    # GitHub pull_request and the governed main merge are evaluated against the
+    # first parent so separately accepted base maintenance is not misclassified
+    # as part of the bounded D14 source delta.
+    $comparisonBase = $headParts[1]
+}
+
+$d13EvidenceChanges = @(git -C $RepositoryRoot diff --name-only $comparisonBase -- 'build/d13')
+$workflowChanges = @(git -C $RepositoryRoot diff --name-only $comparisonBase -- '.github/workflows')
 $checks['D13 source identity and hosted workflow policy are unchanged'] =
     $d13EvidenceChanges.Count -eq 0 -and $workflowChanges.Count -eq 0
 
-$changed = @(git -C $RepositoryRoot diff --name-only '698f4b8f8ac180f2eeea1ead9dc0bb2a38b56346' --)
+$changed = @(git -C $RepositoryRoot diff --name-only $comparisonBase --)
 $untracked = @(git -C $RepositoryRoot ls-files --others --exclude-standard)
 $inventory = @($changed + $untracked | Select-Object -Unique)
 $allowed = '^(contracts/Monergy\.Contracts/D14|services/customer-identity/|tests/customer-identity/|build/d14/|build/governance/d14-|build/verify-trusted-session-lifecycle\.ps1$|repository\.manifest\.json$)'
