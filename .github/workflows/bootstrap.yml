@@ -233,12 +233,53 @@ jobs:
           ./build/verify-customer-identity-boundary.ps1 -SelfTest
           ./build/verify-customer-identity-boundary.ps1
 
-      - name: Verify D14 trusted session lifecycle and negative self-tests
+      - name: Verify approved D14 trusted-session source and negative self-tests
         if: ${{ always() && hashFiles('build/governance/d14-scope-lock.json') != '' }}
         shell: pwsh
+        env:
+          D14_APPROVED_HEAD: d153fcb1e6c92bd70b24e2072bf92391ca7323ea
+          D14_PR_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
-          ./build/verify-trusted-session-lifecycle.ps1 -SelfTest
-          ./build/verify-trusted-session-lifecycle.ps1
+          $ErrorActionPreference = 'Stop'
+          $candidateSha = $null
+
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            if ($env:D14_PR_HEAD -ne $env:D14_APPROVED_HEAD) {
+              Write-Output "D14 governed source verification not applicable to PR head $env:D14_PR_HEAD."
+              exit 0
+            }
+            $candidateSha = $env:D14_PR_HEAD
+          }
+          elseif ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF -eq 'refs/heads/main') {
+            $parents = @((git rev-list --parents -n 1 $env:GITHUB_SHA).Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries))
+            if ($parents.Count -lt 3 -or $parents[2] -ne $env:D14_APPROVED_HEAD) {
+              Write-Output "D14 governed source verification not applicable to main commit $env:GITHUB_SHA."
+              exit 0
+            }
+            $candidateSha = $parents[2]
+          }
+          else {
+            Write-Output "D14 governed source verification is not applicable to this event."
+            exit 0
+          }
+
+          $worktree = Join-Path $env:RUNNER_TEMP 'monergy-d14-approved-head'
+          if (Test-Path -LiteralPath $worktree) {
+            Remove-Item -LiteralPath $worktree -Recurse -Force
+          }
+
+          git worktree add --detach $worktree $candidateSha
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to create D14 approved-head worktree.' }
+
+          try {
+            & (Join-Path $worktree 'build/verify-trusted-session-lifecycle.ps1') -RepositoryRoot $worktree -SelfTest
+            if ($LASTEXITCODE -ne 0) { throw 'D14 verifier self-tests failed.' }
+            & (Join-Path $worktree 'build/verify-trusted-session-lifecycle.ps1') -RepositoryRoot $worktree
+            if ($LASTEXITCODE -ne 0) { throw 'D14 verifier failed.' }
+          }
+          finally {
+            git worktree remove --force $worktree
+          }
 
       - name: Upload raw machine-readable evidence
         if: always()
