@@ -21,6 +21,14 @@ public static class CustomerIdentityRegistration
         services.AddSingleton<InMemoryCustomerIdentityTelemetry>();
         services.AddSingleton<ICustomerIdentityTelemetry>(provider =>
             provider.GetRequiredService<InMemoryCustomerIdentityTelemetry>());
+        services.AddSingleton(TrustedSessionPolicy.ReferenceDefault);
+        services.AddSingleton<InMemoryTrustedSessionRepository>();
+        services.AddSingleton<ITrustedSessionRepository>(provider =>
+            provider.GetRequiredService<InMemoryTrustedSessionRepository>());
+        services.AddSingleton<InMemoryCustomerIdentityEventSink>();
+        services.AddSingleton<ICustomerIdentityEventSink>(provider =>
+            provider.GetRequiredService<InMemoryCustomerIdentityEventSink>());
+        services.AddSingleton<TrustedSessionLifecycle>();
         services.AddSingleton<CustomerIdentityApplication>();
         return services;
     }

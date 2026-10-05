@@ -38,6 +38,9 @@ internal sealed class D13Harness
     public ReferenceCustomerAuthenticationProvider Provider { get; }
     public InMemoryCustomerIdentityRepository Repository { get; }
     public InMemoryCustomerIdentityTelemetry Telemetry { get; }
+    public InMemoryTrustedSessionRepository Sessions { get; }
+    public InMemoryCustomerIdentityEventSink Events { get; }
+    public TrustedSessionLifecycle SessionLifecycle { get; }
     public CustomerIdentityApplication App { get; }
 
     public D13Harness()
@@ -46,7 +49,10 @@ internal sealed class D13Harness
         Provider = new(configuration);
         Repository = new(configuration);
         Telemetry = new(configuration);
-        App = new(Provider, Repository, Telemetry, Clock);
+        Sessions = new(configuration);
+        Events = new(configuration);
+        SessionLifecycle = new(Sessions, Events, TrustedSessionPolicy.ReferenceDefault, Clock);
+        App = new(Provider, Repository, Telemetry, Clock, SessionLifecycle);
     }
 
     public static IConfiguration Configuration(string zone = "LOCAL") =>

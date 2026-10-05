@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D14",
+  "title": "Trusted Session Lifecycle",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "evidenceLevel": "SIMULATOR_LOCAL_CI_EPHEMERAL",
+  "startingCommits": {
+    "application": "698f4b8f8ac180f2eeea1ead9dc0bb2a38b56346",
+    "architecture": "c9aaada1940008a8f7bf6841628cdb22c60c9bcc",
+    "systemExpert": "d5d58e9ea82badb6f8ef9335cf3ae2dd0caa2768"
+  },
+  "systemExpertVersion": "0.3.2",
+  "systemExpertSourceContext": {
+    "d13AcceptedStateCommit": "cb512b48d867b8d5cda703f623f9e7850563216c",
+    "d14AuthoritativeMain": "d5d58e9ea82badb6f8ef9335cf3ae2dd0caa2768",
+    "maintenanceCharacter": "V0_3_2_HYGIENE_ONLY_NO_ACCEPTED_MONERGY_SEMANTIC_CHANGE"
+  },
+  "features": [
+    {
+      "id": "M2-WS02-E01-F02",
+      "name": "Trusted session lifecycle",
+      "owner": "Customer & Identity Service",
+      "readiness": "READY",
+      "dependency": "M2-WS02-E01-F01"
+    }
+  ],
+  "contractTreatment": {
+    "preserved": ["CID-001"],
+    "advanced": ["CID-002"],
+    "newlyRealizedProducer": ["CID-005"],
+    "notNewlyRealized": ["CID-006", "CID-007"]
+  },
+  "changedDomainServiceBoundaries": ["Customer & Identity Service"],
+  "executionZones": ["LOCAL", "CI_EPHEMERAL"],
+  "persistence": "OWNER_REFERENCE_IN_MEMORY_ONLY",
+  "referenceSessionLifetime": "INJECTED_SIMULATOR_POLICY_30_MINUTES_NOT_ARCHITECTURE_POLICY",
+  "revocationControl": "OWNER_INTERNAL_REFERENCE_CONTROL_NOT_PUBLIC_CONTRACT",
+  "eventTransport": "OWNER_LOCAL_REFERENCE_SINK_NO_DURABILITY_CLAIM",
+  "providerSelection": "NONE",
+  "frontendChange": "NONE",
+  "physicalMigration": "NONE",
+  "authorizationImplementation": "NONE",
+  "consentImplementation": "NONE",
+  "mfaImplementation": "NONE",
+  "d13": {
+    "status": "ACCEPTED_COMPLETE",
+    "behaviorPreserved": true,
+    "sourceIdentityEvidenceChanged": false
+  },
+  "hostedVerification": {
+    "ordinaryBranchPushFullRun": false,
+    "preMergeAuthority": "PULL_REQUEST_EXACT_HEAD_AFTER_CTO_SOURCE_APPROVAL",
+    "postMergeAuthority": "MERGED_MAIN"
+  },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  },
+  "customerIdentityOciBaseImages": {
+    "sdk": "mcr.microsoft.com/dotnet/sdk:10.0.401-noble@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d",
+    "runtime": "mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:48e51f2f6798897be7ac4e775c049ed8fe60d3190f637e1f9c9dc7513efa659c"
+  }
+}

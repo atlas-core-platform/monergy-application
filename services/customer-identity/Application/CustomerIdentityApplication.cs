@@ -8,7 +8,8 @@ public sealed class CustomerIdentityApplication(
     ICustomerAuthenticationProvider authenticationProvider,
     ICustomerIdentityRepository repository,
     ICustomerIdentityTelemetry telemetry,
-    TimeProvider clock)
+    TimeProvider clock,
+    TrustedSessionLifecycle trustedSessions)
 {
     public Task<ContractResult<CustomerProjection>> GetCustomerAsync(
         ContractRequest<GetCustomer> request,
@@ -130,7 +131,29 @@ public sealed class CustomerIdentityApplication(
         }
         else
         {
-            result = ContractResult<ActorContext>.Succeeded(request, resolved.Actor);
+            TrustedSessionEvaluation session;
+            try
+            {
+                session = trustedSessions.EstablishOrEvaluate(resolved.CustomerId, resolved.Actor,
+                    request.RequestId, request.CorrelationId);
+            }
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
+            {
+                session = new(TrustedSessionEvaluationStatus.DependencyFailure, null, false);
+            }
+
+            result = session.Status switch
+            {
+                TrustedSessionEvaluationStatus.Current when session.Session is not null =>
+                    ContractResult<ActorContext>.Succeeded(request, session.Session.Actor),
+                TrustedSessionEvaluationStatus.DependencyFailure =>
+                    ContractResult<ActorContext>.Failed(request, "identity.session.unavailable",
+                        ContractErrorCategory.DependencyFailure,
+                        "The current trusted authentication context is temporarily unavailable.", true),
+                _ => ContractResult<ActorContext>.Rejected(request, "identity.session.not-current",
+                    ContractErrorCategory.AuthenticationRequired,
+                    "A current trusted authentication context is required."),
+            };
         }
 
         return Complete(request, customerId, result);

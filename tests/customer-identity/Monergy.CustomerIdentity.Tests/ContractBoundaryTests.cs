@@ -8,6 +8,21 @@ namespace Monergy.CustomerIdentity.Tests;
 public sealed class ContractBoundaryTests
 {
     [Fact]
+    public void D14CatalogPreservesCid001AdvancesCid002AndRealizesOnlyCid005Producer()
+    {
+        Assert.Equal(["CID-001", "CID-002", "CID-005"],
+            D14ContractCatalog.All.Select(item => item.Id).ToArray());
+        Assert.Equal("PRESERVED_D13", D14ContractCatalog.All[0].Treatment);
+        Assert.Equal("ADVANCED_CURRENT_SESSION_TRUST", D14ContractCatalog.All[1].Treatment);
+        Assert.Equal("NEWLY_REALIZED_PRODUCER", D14ContractCatalog.All[2].Treatment);
+        Assert.All(D14ContractCatalog.All, item => Assert.Equal("Customer & Identity Service", item.Owner));
+        Assert.DoesNotContain(D14ContractCatalog.All, item => item.Id is "CID-006" or "CID-007");
+        Assert.Equal(D13ContractNames.GetCustomer, D14ContractCatalog.All[0].Name);
+        Assert.Equal(D13ContractNames.GetTrustedActorContext, D14ContractCatalog.All[1].Name);
+        Assert.Equal("CustomerIdentityChanged", D14ContractNames.CustomerIdentityChanged);
+    }
+
+    [Fact]
     public void D13CatalogHasExactlyCid001ThroughCid004AndLeavesD03CatalogIsolated()
     {
         Assert.Equal(["CID-001", "CID-002", "CID-003", "CID-004"],

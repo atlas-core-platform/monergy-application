@@ -106,7 +106,7 @@ public sealed class AuthenticationBoundaryTests
         {
             var harness = new D13Harness();
             var app = new CustomerIdentityApplication(new StubCustomerAuthenticationProvider(resolution),
-                harness.Repository, harness.Telemetry, harness.Clock);
+                harness.Repository, harness.Telemetry, harness.Clock, harness.SessionLifecycle);
 
             var result = await app.GetTrustedActorContextAsync(harness.GetActor());
 
@@ -130,7 +130,7 @@ public sealed class AuthenticationBoundaryTests
             var app = new CustomerIdentityApplication(
                 new StubCustomerAuthenticationProvider(
                     AuthenticationResolution.Succeeded(actor, D13Harness.Customer)),
-                harness.Repository, harness.Telemetry, harness.Clock);
+                harness.Repository, harness.Telemetry, harness.Clock, harness.SessionLifecycle);
 
             var result = await app.GetTrustedActorContextAsync(harness.GetActor());
 
@@ -146,7 +146,7 @@ public sealed class AuthenticationBoundaryTests
         var resolution = AuthenticationResolution.Failed("provider-native-sensitive-code",
             ContractErrorCategory.DependencyFailure, retryable: true);
         var app = new CustomerIdentityApplication(new StubCustomerAuthenticationProvider(resolution),
-            harness.Repository, harness.Telemetry, harness.Clock);
+            harness.Repository, harness.Telemetry, harness.Clock, harness.SessionLifecycle);
 
         var result = await app.GetTrustedActorContextAsync(harness.GetActor());
 

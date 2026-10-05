@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D14",
+  "status": "CANDIDATE_EVIDENCE_IMPLEMENTED",
+  "evidenceClassification": {
+    "STRUCTURAL": "Static contract, scope, route, source, or governance assertion.",
+    "BEHAVIORAL": "Executed .NET behavior with deterministic LOCAL/CI_EPHEMERAL reference adapters.",
+    "REGRESSION": "Existing repository regression or quality command executed without weakening its gate."
+  },
+  "scenarios": [
+    {
+      "id": "D14-T01",
+      "evidenceTypes": ["STRUCTURAL", "BEHAVIORAL"],
+      "tests": [
+        "D14CatalogPreservesCid001AdvancesCid002AndRealizesOnlyCid005Producer",
+        "D13CatalogHasExactlyCid001ThroughCid004AndLeavesD03CatalogIsolated",
+        "Cid001ThroughCid004RequestsRoundTripStrictlyAtCurrentVersion"
+      ]
+    },
+    {
+      "id": "D14-T02",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": [
+        "SuccessfulAuthenticationEstablishesCurrentTimeBoundedSessionWithoutAuthorizationOrConsent",
+        "ReferenceProviderResolvesCanonicalActorWithoutLeakingProviderSchema",
+        "TrustedActorResultDoesNotGrantAuthorizationOrConsentAndWorkloadRemainsDistinct"
+      ]
+    },
+    {
+      "id": "D14-T03",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["ExactExpiryBoundaryFailsClosedWithoutFallingBackToProviderResult"]
+    },
+    {
+      "id": "D14-T04",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["RevocationIsIrreversibleIdempotentAndNewAuthenticationUsesNewContext"]
+    },
+    {
+      "id": "D14-T05",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": [
+        "CustomerActorUnknownAndMalformedContextPathsFailClosedWithoutExistenceDetail",
+        "UnknownMalformedAndCustomerMismatchedAuthenticationReferencesFailClosed"
+      ]
+    },
+    {
+      "id": "D14-T06",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": ["ConcurrentCreationAndRevocationCannotResurrectSessionAndSnapshotsAreDetached"]
+    },
+    {
+      "id": "D14-T07",
+      "evidenceTypes": ["STRUCTURAL", "BEHAVIORAL"],
+      "tests": ["Cid005ProducerEmitsMinimalImmutableReplaySafeAuditCompatibleFacts"]
+    },
+    {
+      "id": "D14-T08",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": [
+        "SessionDependencyFailureAndUnverifiableTimeFailClosedWithSafeTelemetry",
+        "ExactExpiryBoundaryFailsClosedWithoutFallingBackToProviderResult",
+        "RevocationIsIrreversibleIdempotentAndNewAuthenticationUsesNewContext",
+        "CustomerActorUnknownAndMalformedContextPathsFailClosedWithoutExistenceDetail"
+      ]
+    },
+    {
+      "id": "D14-T09",
+      "evidenceTypes": ["STRUCTURAL", "BEHAVIORAL"],
+      "tests": [
+        "Cid005ProducerEmitsMinimalImmutableReplaySafeAuditCompatibleFacts",
+        "SessionDependencyFailureAndUnverifiableTimeFailClosedWithSafeTelemetry",
+        "UnsafeLifecycleMetadataAndMalformedFactsCannotEnterCid005Sink",
+        "CorrelationTelemetryContainsOnlyBoundedIdentifiersAndOutcomes"
+      ]
+    },
+    {
+      "id": "D14-T10",
+      "evidenceTypes": ["REGRESSION"],
+      "commands": [
+        "dotnet test tests/customer-identity/Monergy.CustomerIdentity.Tests/Monergy.CustomerIdentity.Tests.csproj --configuration Release"
+      ]
+    },
+    {
+      "id": "D14-T11",
+      "evidenceTypes": ["REGRESSION"],
+      "commands": [
+        "./build/verify-customer-identity-boundary.ps1 -SelfTest",
+        "./build/verify-customer-identity-boundary.ps1",
+        "./build/verify-trusted-session-lifecycle.ps1 -SelfTest",
+        "./build/verify-trusted-session-lifecycle.ps1",
+        "dotnet test tests/vs02/Monergy.Vs02.Tests/Monergy.Vs02.Tests.csproj --configuration Release",
+        "dotnet test tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj --configuration Release",
+        "dotnet build Monergy.Application.slnx --configuration Release",
+        "./build/Invoke-Toolchain.ps1 -Task FormatCheck",
+        "git diff --check"
+      ]
+    }
+  ]
+}

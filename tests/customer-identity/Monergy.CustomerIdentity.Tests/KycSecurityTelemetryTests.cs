@@ -213,6 +213,8 @@ public sealed class KycSecurityTelemetryTests
         Assert.Throws<InvalidOperationException>(() => new ReferenceCustomerAuthenticationProvider(blocked));
         Assert.Throws<InvalidOperationException>(() => new InMemoryCustomerIdentityRepository(blocked));
         Assert.Throws<InvalidOperationException>(() => new InMemoryCustomerIdentityTelemetry(blocked));
+        Assert.Throws<InvalidOperationException>(() => new InMemoryTrustedSessionRepository(blocked));
+        Assert.Throws<InvalidOperationException>(() => new InMemoryCustomerIdentityEventSink(blocked));
         _ = new ReferenceCustomerAuthenticationProvider(D13Harness.Configuration("CI_EPHEMERAL"));
     }
 }
