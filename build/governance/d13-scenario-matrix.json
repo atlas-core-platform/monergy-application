@@ -1,0 +1,113 @@
+{
+  "schemaVersion": "1.2.0",
+  "deliverable": "MWP-03-D13",
+  "status": "CANDIDATE_EVIDENCE_IMPLEMENTED",
+  "evidenceClassification": {
+    "STRUCTURAL": "Static contract, catalog, scope, route, source, or governance assertion.",
+    "BEHAVIORAL": "Executed .NET behavior with deterministic LOCAL/CI_EPHEMERAL reference adapters.",
+    "REGRESSION": "Existing repository regression or quality command executed without weakening its gate."
+  },
+  "scenarios": [
+    {
+      "id": "D13-T01",
+      "evidenceTypes": ["STRUCTURAL", "BEHAVIORAL"],
+      "tests": [
+        "D13CatalogHasExactlyCid001ThroughCid004AndLeavesD03CatalogIsolated",
+        "Cid001ThroughCid004RequestsRoundTripStrictlyAtCurrentVersion",
+        "MissingContextNullSecurityInvalidVersionAndNullPayloadFailClosed",
+        "UnknownJsonMembersAndProviderNativeKycShapesAreRejected"
+      ]
+    },
+    {
+      "id": "D13-T02",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": [
+        "ReferenceProviderResolvesCanonicalActorWithoutLeakingProviderSchema",
+        "UnknownMalformedAndCustomerMismatchedAuthenticationReferencesFailClosed",
+        "ProviderFailureMapsToExistingMonergyCategoryWithoutNativeDetail",
+        "ReferenceProviderRejectsMalformedCanonicalRecordsAtRegistration",
+        "ApplicationRejectsMalformedCanonicalProviderResolutionsWithoutNativeLeakage",
+        "ApplicationAcceptsOnlyExistingCanonicalActorTypeVocabulary",
+        "ProviderFailureCodeIsCanonicalizedWithoutNativeLeakage",
+        "ReferenceAdaptersAreGuardedToLocalAndCiEphemeralExecution"
+      ]
+    },
+    {
+      "id": "D13-T03",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": [
+        "FirstCustomerCreateAndIdenticalRedeliveryReconcileOneAuthoritativeEffect",
+        "CustomerIdempotencyKeyReuseWithChangedSemanticPayloadIsRejected"
+      ]
+    },
+    {
+      "id": "D13-T04",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": [
+        "ConcurrentIdenticalCustomerMutationHasOneWinnerAndImmutableSnapshots",
+        "CustomerUpdateRequiresExactRevisionAndCannotSilentlyOverwrite"
+      ]
+    },
+    {
+      "id": "D13-T05",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": [
+        "SameCustomerReadSucceedsCrossCustomerFailsClosedAndMissingIsNotFound",
+        "CustomerReadDependencyFailureRemainsDistinctFromAbsenceDenialAndInvalidInput"
+      ]
+    },
+    {
+      "id": "D13-T06",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": [
+        "ReferenceProviderResolvesCanonicalActorWithoutLeakingProviderSchema",
+        "UnknownMalformedAndCustomerMismatchedAuthenticationReferencesFailClosed",
+        "TrustedActorResultDoesNotGrantAuthorizationOrConsentAndWorkloadRemainsDistinct"
+      ]
+    },
+    {
+      "id": "D13-T07",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": [
+        "CanonicalKycDeliveryIsIdempotentAndLaterResultsPreserveHistory",
+        "KycSemanticKeyReuseAndCrossCustomerAttemptAreRejected",
+        "UnknownJsonMembersAndProviderNativeKycShapesAreRejected"
+      ]
+    },
+    {
+      "id": "D13-T08",
+      "evidenceTypes": ["STRUCTURAL", "BEHAVIORAL"],
+      "tests": [
+        "CustomerIdentityWireDtosExposeOnlyCanonicalProviderNeutralFields",
+        "NullAndMalformedTrustedContextsFailClosedBeforeOwnerStateAccess",
+        "SameCustomerReadSucceedsCrossCustomerFailsClosedAndMissingIsNotFound",
+        "ApplicationRejectsMalformedCanonicalProviderResolutionsWithoutNativeLeakage"
+      ]
+    },
+    {
+      "id": "D13-T09",
+      "evidenceTypes": ["BEHAVIORAL"],
+      "tests": [
+        "CorrelationTelemetryContainsOnlyBoundedIdentifiersAndOutcomes",
+        "KycSemanticKeyReuseAndCrossCustomerAttemptAreRejected",
+        "ProviderFailureMapsToExistingMonergyCategoryWithoutNativeDetail",
+        "UnsafeTelemetryIdentifiersAreRejectedWithoutTelemetryContamination",
+        "TelemetrySinkDefensivelyDropsUnsafeIdentifiers",
+        "TelemetrySinkDropsControlCharacterAndUnknownOperations",
+        "TelemetrySinkDropsInvalidOutcomes",
+        "UnsafeOrUnknownRequestContractNameIsRejectedWithoutTelemetryContamination"
+      ]
+    },
+    {
+      "id": "D13-T10",
+      "evidenceTypes": ["REGRESSION"],
+      "commands": [
+        "dotnet test tests/vs02/Monergy.Vs02.Tests/Monergy.Vs02.Tests.csproj",
+        "dotnet test tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj",
+        "dotnet build Monergy.Application.slnx --configuration Release",
+        "pnpm format:check",
+        "git diff --check"
+      ]
+    }
+  ]
+}

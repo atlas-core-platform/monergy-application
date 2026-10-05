@@ -23,6 +23,8 @@ and CI / EPHEMERAL execution.
 - D09 execution is restricted to LOCAL / CI_EPHEMERAL. PostgreSQL and S3-compatible storage are technology selections only; Production hosting remains NOT_SELECTED.
 - MWP-03-D10: Durable Job Management & Audit Propagation implementation candidate — exactly four READY Features and the governed 18-contract footprint, with physical evidence restricted to LOCAL / CI_EPHEMERAL.
 - D10 adds service-owned Job Management PostgreSQL persistence and provider-neutral outbox/inbox Audit propagation. OD-15 and Production messaging/provider decisions remain unresolved.
+- MWP-03-D13: Provider-Neutral Customer Identity Boundary implementation candidate — exactly `M2-WS02-E01-F01`, realizing CID-001 through CID-004 with guarded LOCAL / CI_EPHEMERAL reference adapters.
+- D13 owns canonical Customer and KYC reference state plus trusted actor translation without selecting a Production identity provider, changing CID-007, implementing session lifecycle, or adding physical persistence/frontend scope.
 - Required architecture publication: `193667fc7ad4d7f919f213f9a96260afa0f09fb9`
 - Backend: .NET SDK 10.0.401, .NET runtime 10.0.12, C# 14, ASP.NET Core and
   Worker Service according to accepted service responsibilities
@@ -130,8 +132,19 @@ terminal intent; CID-025 retry remains separate. State and terminal event intent
 commit atomically in the in-memory reference adapter. Run the isolated D12 test
 project and `build/verify-document-reprocessing.ps1`; this is not acceptance,
 durable persistence, provider compatibility, financial reconciliation, or a
-deployment claim. D11 remains frozen with acceptance deferred and its security
-failure retained.
+deployment claim. At D12 acceptance time, D11 remained frozen with acceptance
+deferred and its security failure retained. Current governance records D11 as
+Accepted / Complete after post-D12 reconciliation; this does not rewrite the
+D12-era evidence statement.
+
+The D13 candidate realizes exactly `M2-WS02-E01-F01` at
+`SIMULATOR / LOCAL / CI_EPHEMERAL` through CID-001 through CID-004. It adds a
+replaceable provider-neutral authentication port, deterministic guarded adapter,
+owner-local Customer/KYC authority, typed semantic idempotency, strict wire
+tests, customer isolation, and safe correlation telemetry. Run the isolated D13
+test project plus `build/verify-customer-identity-boundary.ps1`. This is not
+Trusted Session Lifecycle, Production provider compatibility, physical
+persistence, frontend login, event realization, deployment, or acceptance.
 
 ```powershell
 ./build/Invoke-Toolchain.ps1 -Task Verify

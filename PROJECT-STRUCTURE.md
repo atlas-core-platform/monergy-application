@@ -1,4 +1,4 @@
-# Monergy Application Repository Structure — D12 Document Reprocessing Candidate
+# Monergy Application Repository Structure — D13 Customer Identity Candidate
 
 The D05 application root has exactly six governed responsibility areas:
 
@@ -145,8 +145,34 @@ D10 does not select a Production broker, hosting provider, identity provider, or
   positive/negative governance checks.
 
 D12 adds no frontend, migration, database, provider, OCR/AI integration,
-production transport, deployment claim, or D11 source dependency. D11 remains
-frozen with acceptance deferred and its recorded security failure retained.
+production transport, deployment claim, or D11 source dependency. At D12
+acceptance time, D11 remained frozen with acceptance deferred and its recorded
+security failure retained. Current governance records D11 as Accepted / Complete
+after post-D12 reconciliation; this does not rewrite the D12-era evidence
+statement.
+
+## D13 provider-neutral Customer & Identity candidate
+
+- `contracts/Monergy.Contracts/D13CustomerIdentityContracts.cs` and
+  `D13ContractCatalog.cs`: additive CID-001 through CID-004 canonical DTOs and
+  exact four-family catalog; the accepted D03 catalog remains isolated.
+- `services/customer-identity/Application/`: provider port, authoritative
+  Customer/KYC repository port, typed idempotency identities, safe telemetry,
+  fail-closed owner application, and optimistic Customer revision semantics.
+- `services/customer-identity/Infrastructure/ReferenceCustomerIdentityAdapters.cs`:
+  deterministic guarded authentication adapter plus immutable owner-local
+  in-memory Customer and KYC history for `LOCAL` / `CI_EPHEMERAL` only.
+- `tests/customer-identity/Monergy.CustomerIdentity.Tests/`: executable D13-T01
+  through D13-T09 behavior and structural evidence; D13-T10 is retained
+  repository regression and quality evidence.
+- `build/governance/d13-scope-lock.json`, `d13-scenario-matrix.json`,
+  `build/verify-customer-identity-boundary.ps1`, and
+  `build/d13/Get-D13SourceIdentity.ps1`: exact scope, negative self-tests, and
+  reproducible `StringComparer.Ordinal` candidate identity.
+
+D13 adds no physical Customer & Identity persistence, Production provider,
+session lifecycle, CID-005/CID-006 event realization, CID-007 semantic change,
+frontend, deployment, D11/D12 source change, or architecture acceptance claim.
 
 See the catalogs and README files in each responsibility area for the maintained
 boundary inventory.
