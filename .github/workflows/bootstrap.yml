@@ -234,11 +234,34 @@ jobs:
           ./build/verify-customer-identity-boundary.ps1
 
       - name: Verify D14 trusted session lifecycle and negative self-tests
-        if: ${{ always() && hashFiles('build/governance/d14-scope-lock.json') != '' }}
+        if: ${{ always() && ((github.event_name == 'pull_request' && github.head_ref == 'delivery/mwp03-d14-trusted-session-lifecycle') || (github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, 'MWP-03-D14'))) }}
         shell: pwsh
+        env:
+          D14_PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          ./build/verify-trusted-session-lifecycle.ps1 -SelfTest
-          ./build/verify-trusted-session-lifecycle.ps1
+          $ErrorActionPreference = 'Stop'
+          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
+            $candidateSha = $env:D14_PR_HEAD_SHA
+          }
+          elseif ($env:GITHUB_EVENT_NAME -eq 'push') {
+            $parents = @((git rev-list --parents -n 1 $env:GITHUB_SHA) -split '\s+')
+            if ($parents.Count -ne 3) {
+              throw 'The D14 merged-main verifier requires an ordinary two-parent merge commit.'
+            }
+            $candidateSha = $parents[2]
+          }
+          else {
+            throw 'Unsupported event for D14 hosted verification.'
+          }
+
+          $worktree = Join-Path $env:RUNNER_TEMP "monergy-d14-verifier-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          git worktree add --detach $worktree $candidateSha
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to materialize the exact D14 candidate worktree.' }
+
+          & (Join-Path $worktree 'build/verify-trusted-session-lifecycle.ps1') -RepositoryRoot $worktree -SelfTest
+          if ($LASTEXITCODE -ne 0) { throw 'D14 verifier self-tests failed.' }
+          & (Join-Path $worktree 'build/verify-trusted-session-lifecycle.ps1') -RepositoryRoot $worktree
+          if ($LASTEXITCODE -ne 0) { throw 'D14 verifier failed.' }
 
       - name: Upload raw machine-readable evidence
         if: always()
