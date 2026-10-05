@@ -23,6 +23,7 @@
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj" />
+    <Project Path="tests/customer-identity/Monergy.CustomerIdentity.Tests/Monergy.CustomerIdentity.Tests.csproj" />
     <Project Path="tests/financial-profile/Monergy.FinancialProfile.Tests/Monergy.FinancialProfile.Tests.csproj" />
     <Project Path="tests/financial-rules/Monergy.FinancialRules.Tests/Monergy.FinancialRules.Tests.csproj" />
     <Project Path="tests/integration-gateway/Monergy.IntegrationGateway.Tests/Monergy.IntegrationGateway.Tests.csproj" />

@@ -49,7 +49,7 @@ jobs:
   toolchain:
     needs: d05-lifecycle-probe
     if: always() && (needs.d05-lifecycle-probe.result == 'success' || needs.d05-lifecycle-probe.result == 'skipped')
-    name: Verify D01-D11 controlled implementation
+    name: Verify D01-D13 controlled implementation
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -218,6 +218,20 @@ jobs:
         run: |
           ./build/local/Test-MonergyLocalProcessIsolation.ps1
           ./build/local/Test-MonergyLocalRecovery.ps1
+
+      - name: Verify D12 document reprocessing and negative self-tests
+        if: always()
+        shell: pwsh
+        run: |
+          ./build/verify-document-reprocessing.ps1 -SelfTest
+          ./build/verify-document-reprocessing.ps1
+
+      - name: Verify D13 Customer Identity boundary and negative self-tests
+        if: always()
+        shell: pwsh
+        run: |
+          ./build/verify-customer-identity-boundary.ps1 -SelfTest
+          ./build/verify-customer-identity-boundary.ps1
 
       - name: Upload raw machine-readable evidence
         if: always()

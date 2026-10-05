@@ -4,12 +4,15 @@ WORKDIR /src
 COPY ["Directory.Build.props", "."]
 COPY ["Directory.Packages.props", "."]
 COPY ["NuGet.Config", "."]
+COPY ["contracts/Monergy.Contracts/Monergy.Contracts.csproj", "contracts/Monergy.Contracts/"]
+COPY ["contracts/Monergy.Contracts/packages.lock.json", "contracts/Monergy.Contracts/"]
 COPY ["shared/platform/Monergy.Platform/Monergy.Platform.csproj", "shared/platform/Monergy.Platform/"]
 COPY ["shared/platform/Monergy.Platform/packages.lock.json", "shared/platform/Monergy.Platform/"]
 COPY ["services/customer-identity/Monergy.Services.CustomerIdentity.csproj", "services/customer-identity/"]
 COPY ["services/customer-identity/packages.lock.json", "services/customer-identity/"]
 RUN dotnet restore "services/customer-identity/Monergy.Services.CustomerIdentity.csproj" --locked-mode
 
+COPY ["contracts/Monergy.Contracts/", "contracts/Monergy.Contracts/"]
 COPY ["shared/platform/Monergy.Platform/", "shared/platform/Monergy.Platform/"]
 COPY ["services/customer-identity/", "services/customer-identity/"]
 RUN dotnet publish "services/customer-identity/Monergy.Services.CustomerIdentity.csproj" \

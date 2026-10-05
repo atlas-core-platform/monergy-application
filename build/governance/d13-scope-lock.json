@@ -1,0 +1,51 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D13",
+  "title": "Provider-Neutral Customer Identity Boundary",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "evidenceLevel": "SIMULATOR_LOCAL_CI_EPHEMERAL",
+  "startingCommits": {
+    "application": "930eb47eb172b6551b0b3d70d49b33a07337fb98",
+    "architecture": "b1edc68f29987b9aa9dc3125c3e77140de975f8f"
+  },
+  "features": [
+    {
+      "id": "M2-WS02-E01-F01",
+      "name": "Authentication-provider boundary",
+      "owner": "Customer & Identity Service",
+      "readiness": "READY"
+    }
+  ],
+  "newlyRealizedContracts": ["CID-001", "CID-002", "CID-003", "CID-004"],
+  "excludedContracts": ["CID-005", "CID-006", "CID-007"],
+  "changedDomainServiceBoundaries": ["Customer & Identity Service"],
+  "executionZones": ["LOCAL", "CI_EPHEMERAL"],
+  "persistence": "OWNER_REFERENCE_IN_MEMORY_ONLY",
+  "providerSelection": "NONE",
+  "frontendChange": "NONE",
+  "physicalMigration": "NONE",
+  "eventRealization": "NONE",
+  "d11": {
+    "status": "ACCEPTED_COMPLETE",
+    "sourceChange": "NONE"
+  },
+  "d12": {
+    "status": "ACCEPTED_COMPLETE",
+    "sourceChange": "NONE"
+  },
+  "hostedVerification": {
+    "ordinaryBranchPushFullRun": false,
+    "preMergeAuthority": "PULL_REQUEST",
+    "postMergeAuthority": "MAIN"
+  },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  },
+  "customerIdentityOciBaseImages": {
+    "sdk": "mcr.microsoft.com/dotnet/sdk:10.0.401-noble@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d",
+    "runtime": "mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:48e51f2f6798897be7ac4e775c049ed8fe60d3190f637e1f9c9dc7513efa659c"
+  }
+}
