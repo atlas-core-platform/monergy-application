@@ -233,6 +233,13 @@ jobs:
           ./build/verify-customer-identity-boundary.ps1 -SelfTest
           ./build/verify-customer-identity-boundary.ps1
 
+      - name: Verify D14 trusted session lifecycle and negative self-tests
+        if: ${{ always() && hashFiles('build/governance/d14-scope-lock.json') != '' }}
+        shell: pwsh
+        run: |
+          ./build/verify-trusted-session-lifecycle.ps1 -SelfTest
+          ./build/verify-trusted-session-lifecycle.ps1
+
       - name: Upload raw machine-readable evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
