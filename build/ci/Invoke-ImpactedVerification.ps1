@@ -50,11 +50,12 @@ $taskByVerifier = [ordered]@{
     D12 = 'D12Verification'
     D13 = 'D13Verification'
     D14 = 'D14Verification'
+    D16 = 'D16Verification'
 }
 $selected = @($impact.verifiers | ForEach-Object { [string]$_ })
 foreach ($entry in $taskByVerifier.GetEnumerator()) {
     if ($selected -notcontains $entry.Key) { continue }
-    Write-Output "=== Impacted historical verifier: $($entry.Key) ==="
+    Write-Output "=== Impacted governed verifier: $($entry.Key) ==="
     & (Join-Path $RepositoryRoot 'build/Invoke-Toolchain.ps1') -Task $entry.Value -RepositoryRoot $RepositoryRoot
     if ($LASTEXITCODE -ne 0) { throw "Impacted verifier '$($entry.Key)' failed." }
 }
@@ -62,4 +63,4 @@ foreach ($entry in $taskByVerifier.GetEnumerator()) {
 if ($selected -contains 'D15') {
     Write-Output 'D15 is executed by the universal policy gate and is not duplicated by the impacted runner.'
 }
-Write-Output "Impacted verification passed: $(@($impact.testProjects).Count) test projects, $(@($selected | Where-Object { $_ -cne 'D15' }).Count) historical verifiers."
+Write-Output "Impacted verification passed: $(@($impact.testProjects).Count) test projects, $(@($selected | Where-Object { $_ -cne 'D15' }).Count) governed verifiers."

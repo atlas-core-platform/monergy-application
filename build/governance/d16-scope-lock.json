@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D16",
+  "title": "Immutable Artifact & Promotion Flow",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "feature": {
+    "id": "M2-WS01-E02-F02",
+    "name": "Immutable artifact & promotion flow",
+    "readiness": "READY"
+  },
+  "startingCommits": {
+    "application": "ac6407c3595f255fd5482ae759e9b7946e6e830d",
+    "architecture": "41cbd8178884d3f478e027c8d636e50a053edcc7"
+  },
+  "contractTrace": "INTERNAL_ONLY",
+  "changedDomainServices": [],
+  "newOrChangedContracts": [],
+  "businessObjectChanges": "NONE",
+  "databaseSchemaChanges": "NONE",
+  "frontendProductBehaviorChanges": "NONE",
+  "sharedPlatformRuntimeChanges": "NONE",
+  "productionTechnologySelection": "NONE",
+  "dependencyChange": "NONE",
+  "runtimePinChange": "NONE",
+  "containerDefinitionChange": "NONE",
+  "evidenceBoundary": "LOCAL_CI_EPHEMERAL_REFERENCE_ONLY",
+  "promotionMode": "BUILD_ONCE_PROMOTE_BY_DIGEST_WITHOUT_REBUILD",
+  "configurationTreatment": "SEPARATE_VERSIONED_REFERENCE",
+  "allowedReferenceTargets": ["DEV", "QA", "UAT"],
+  "productionPromotion": "NOT_IMPLEMENTED",
+  "publication": "NOT_IMPLEMENTED",
+  "deployment": "NOT_IMPLEMENTED",
+  "historicalSemantics": "D01_THROUGH_D15_PRESERVED",
+  "d05HistoricalFiles": {
+    "build/governance/d05-acceptance.json": "c1af9c16555c66622016c49c946bce7eaf091882f12271e9af0e9cb36fe725c8",
+    "build/release/New-CandidateManifest.ps1": "48baba8c04fc0f6cb8a8c466379c43371f82d18346ed3067baad9340b2113bbf",
+    "build/release/verify-candidate-manifest.ps1": "52892862609738ab417a938b058f779e3ffd4c26bde67bdae7ef3ca3edb779c1",
+    "build/release/product-release-manifest.template.json": "5a59cdec158139068591bcc9af6b46b213bcaa6147cea101e70a549f6cc7ac0f"
+  },
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  }
+}

@@ -115,6 +115,8 @@ if ($SelfTest) {
     $merge = Get-Impact @('services/customer-identity/Application/CustomerIdentityApplication.cs') 'MergeIntegrity'
     $d13Verifier = Get-Impact @('build/verify-customer-identity-boundary.ps1')
     $d14Verifier = Get-Impact @('build/verify-trusted-session-lifecycle.ps1')
+    $d16Release = Get-Impact @('build/release/New-ImmutableArtifact.ps1')
+    $d05Release = Get-Impact @('build/release/New-CandidateManifest.ps1')
     $d13Text = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/verify-customer-identity-boundary.ps1') -Raw -Encoding utf8
     $d14Text = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/verify-trusted-session-lifecycle.ps1') -Raw -Encoding utf8
     $verifierText = Get-Content -LiteralPath $PSCommandPath -Raw -Encoding utf8
@@ -167,7 +169,7 @@ if ($SelfTest) {
         '20 Unmapped runtime path fails safe to full regression' =
             $unmapped.fullRegression -and $unmapped.unmappedPaths -contains 'runtime/new-host/Program.cs'
         '21 FULL_REGRESSION selects all historical and systemic gates' =
-            $full.fullRegression -and @($full.services).Count -eq 12 -and @($full.verifiers).Count -eq 15 -and @($full.ociServices).Count -eq 12 -and
+            $full.fullRegression -and @($full.services).Count -eq 12 -and @($full.verifiers).Count -eq 16 -and @($full.ociServices).Count -eq 12 -and
             $full.gates.browser -and $full.gates.persistence -and $full.gates.jobAudit -and $full.gates.d11
         '22 Ordinary CI-only PR is not selected by deliverable number' =
             $workflowOnly.effectiveMode -ceq 'PullRequest' -and -not $workflowOnly.fullRegression -and (Test-NoBusinessVerifier $workflowOnly)
@@ -185,6 +187,11 @@ if ($SelfTest) {
             (Test-NoCandidateInventoryCoupling $verifierText)
         '28 Provider and stage-gate changes are rejected' =
             (Test-Scope $scope) -and -not (Test-Scope $mutatedScope) -and -not (Test-Scope $advancedScope)
+        '29 D16 release paths select D01 D02 D15 and D16 without heavy product lanes' =
+            (Test-ExactSet @($d16Release.verifiers) @('D01','D02','D15','D16')) -and
+            @($d16Release.services).Count -eq 0 -and -not $d16Release.gates.browser -and -not $d16Release.gates.persistence -and -not $d16Release.gates.oci
+        '30 D05 historical manifest changes still select D05 verification' =
+            (Test-ExactSet @($d05Release.verifiers) @('D01','D02','D05','D15'))
     }
     foreach ($entry in $checks.GetEnumerator()) {
         Write-Output "SELF-TEST $(if ($entry.Value) { 'PASS' } else { 'FAIL' }): $($entry.Key)"
@@ -200,8 +207,8 @@ $checks['Bounded D15 scope preserves governance and non-claims'] = Test-Scope $s
 $checks['Impact map has twelve exact service boundaries and fail-safe policy'] =
     $map.unmappedProductionPolicy -ceq 'FULL_REGRESSION' -and
     (Test-ExactSet @($map.services.id) @('customer-identity','consent','integration-gateway','evidence','document-intelligence','financial-profile','financial-rules','search-retrieval','ai-intelligence','reporting','job-management','audit'))
-$checks['Full regression preserves D01 through D15 and all twelve OCI services'] =
-    (Test-ExactSet @($map.fullRegression.verifiers) @(1..15 | ForEach-Object { 'D{0:D2}' -f $_ })) -and
+$checks['Full regression preserves D01 through D16 and all twelve OCI services'] =
+    (Test-ExactSet @($map.fullRegression.verifiers) @(1..16 | ForEach-Object { 'D{0:D2}' -f $_ })) -and
     @($map.fullRegression.testProjects).Count -ge 10
 $checks['Workflow exposes only impacted or governed manual full-regression modes'] =
     $workflow.Contains('verification_mode:') -and $workflow.Contains('full_regression') -and
