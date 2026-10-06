@@ -13,6 +13,7 @@ $testArtifactPath = Join-Path $RepositoryRoot 'build/release/Test-ImmutableArtif
 $promotePath = Join-Path $RepositoryRoot 'build/release/Invoke-ReferencePromotion.ps1'
 $testPromotionPath = Join-Path $RepositoryRoot 'build/release/Test-ReferencePromotion.ps1'
 $modulePath = Join-Path $RepositoryRoot 'build/release/ImmutableArtifact.Common.psm1'
+Import-Module $modulePath -Force
 $scope = Get-Content -LiteralPath $scopePath -Raw -Encoding utf8 | ConvertFrom-Json
 
 function Test-ExactSet([object[]]$Actual, [object[]]$Expected) {
@@ -149,9 +150,31 @@ if ($SelfTest) {
             -ArtifactStoreRoot $candidateRoot)
         $candidateManifestPath = [string]$candidateOutput[-1]
         $candidate = & $testArtifactPath -ManifestPath $candidateManifestPath -PassThru
+        $normalizedIsoTimestamp = ConvertTo-D16UtcTimestamp '2026-10-06T00:00:00Z' 'Self-test ISO timestamp'
+        $utcDateTimeTimestamp = [DateTime]::new(2026, 10, 6, 0, 0, 0, [DateTimeKind]::Utc)
+        $normalizedUtcDateTime = ConvertTo-D16UtcTimestamp $utcDateTimeTimestamp 'Self-test UTC DateTime'
+        $zeroOffsetTimestamp = [DateTimeOffset]::new(2026, 10, 6, 0, 0, 0, [TimeSpan]::Zero)
+        $normalizedZeroOffset = ConvertTo-D16UtcTimestamp $zeroOffsetTimestamp 'Self-test zero-offset DateTimeOffset'
+        $localDateTimeTimestamp = [DateTime]::SpecifyKind($utcDateTimeTimestamp, [DateTimeKind]::Local)
+        $nonZeroOffsetTimestamp = [DateTimeOffset]::new(2026, 10, 6, 0, 0, 0, [TimeSpan]::FromHours(1))
         $payloadHashBefore = (Get-FileHash -LiteralPath $candidate.ArtifactPath -Algorithm SHA256).Hash
         $payloadWriteBefore = (Get-Item -LiteralPath $candidate.ArtifactPath).LastWriteTimeUtc.Ticks
         $candidateHashBefore = (Get-FileHash -LiteralPath $candidateManifestPath -Algorithm SHA256).Hash
+        $reuseOutput = @(& $newArtifactPath `
+            -ReleaseIdentity 'mwp03-d16-self-test' `
+            -Component 'monergy-application' `
+            -Version '16.0.0-candidate.1' `
+            -SourceRevision $sourceRevision `
+            -SourceTree $sourceTree `
+            -PipelineIdentity 'd16-local-self-test' `
+            -BuildInvocationIdentity 'd16-self-test-001' `
+            -BuiltAtUtc '2026-10-06T00:00:00Z' `
+            -ArtifactPath $payloadPath `
+            -SbomPath $sbomPath `
+            -VulnerabilityEvidencePath $vulnerabilityPath `
+            -ArtifactStoreRoot $candidateRoot)
+        $reuseManifestPath = [string]$reuseOutput[-1]
+        $candidateHashAfterReuse = (Get-FileHash -LiteralPath $candidateManifestPath -Algorithm SHA256).Hash
 
         $promotionRoot = Join-Path $caseRoot 'promotions'
         $promotionOutput = @(& $promotePath `
@@ -232,6 +255,10 @@ if ($SelfTest) {
             param($provenance)
             $provenance.build.builtAtUtc = '2026-10-06T00:00:01Z'
         }
+        $provenanceNormalizedBuildTimeMismatch = New-ProvenanceMismatchCandidate $candidateManifestPath (Join-Path $caseRoot 'provenance-normalized-build-time-mismatch') {
+            param($provenance)
+            $provenance.build.builtAtUtc = '2026-10-06T00:00:00.0000001Z'
+        }
 
         $promotionReleaseMismatch = New-PromotionMismatchRecord $promotionPath (Join-Path $caseRoot 'promotion-release-mismatch.json') {
             param($record)
@@ -304,6 +331,24 @@ if ($SelfTest) {
                 (Test-Throws { & $testPromotionPath -PromotionPath $promotionComponentMismatch -CandidateManifestPath $candidateManifestPath })
             '24 Contradictory promotion version is rejected' =
                 (Test-Throws { & $testPromotionPath -PromotionPath $promotionVersionMismatch -CandidateManifestPath $candidateManifestPath })
+            '25 Governed ISO UTC string timestamp is accepted' =
+                $normalizedIsoTimestamp -ceq '2026-10-06T00:00:00.0000000Z'
+            '26 UTC DateTime timestamp is accepted and normalized deterministically' =
+                $normalizedUtcDateTime -ceq '2026-10-06T00:00:00.0000000Z'
+            '27 Equivalent string DateTime and zero-offset DateTimeOffset values normalize identically' =
+                $normalizedIsoTimestamp -ceq $normalizedUtcDateTime -and
+                $normalizedIsoTimestamp -ceq $normalizedZeroOffset
+            '28 Local DateTime and non-zero DateTimeOffset values fail closed' =
+                (Test-Throws { ConvertTo-D16UtcTimestamp $localDateTimeTimestamp 'Self-test local DateTime' }) -and
+                (Test-Throws { ConvertTo-D16UtcTimestamp $nonZeroOffsetTimestamp 'Self-test non-zero DateTimeOffset' })
+            '29 Malformed and non-Z string timestamps fail closed' =
+                (Test-Throws { ConvertTo-D16UtcTimestamp 'not-a-timestamp' 'Self-test malformed timestamp' }) -and
+                (Test-Throws { ConvertTo-D16UtcTimestamp '2026-10-06T00:00:00+00:00' 'Self-test non-Z timestamp' })
+            '30 Contradictory normalized manifest and provenance UTC times fail closed' =
+                (Test-Throws { & $testArtifactPath -ManifestPath $provenanceNormalizedBuildTimeMismatch })
+            '31 Existing digest-keyed capsule accepts the equivalent caller UTC string' =
+                $reuseManifestPath -ceq $candidateManifestPath -and
+                $candidateHashAfterReuse -ceq $candidateHashBefore
         }
         foreach ($entry in $checks.GetEnumerator()) {
             Write-Output "SELF-TEST $(if ($entry.Value) { 'PASS' } else { 'FAIL' }): $($entry.Key)"

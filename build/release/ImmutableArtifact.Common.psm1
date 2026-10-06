@@ -48,6 +48,59 @@ function Get-D16Property {
     return $property.Value
 }
 
+function ConvertTo-D16UtcTimestamp {
+    param(
+        [Parameter(Mandatory)][object]$Value,
+        [Parameter(Mandatory)][string]$Context
+    )
+
+    $utcValue = $null
+    if ($Value -is [string]) {
+        if ($Value -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$') {
+            throw "$Context must be a governed UTC ISO timestamp ending in 'Z'."
+        }
+        $formats = [string[]]@(
+            "yyyy-MM-dd'T'HH:mm:ss'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.f'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.ff'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.fff'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.ffff'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.fffff'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.ffffff'Z'",
+            "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'"
+        )
+        $parsed = [DateTimeOffset]::MinValue
+        $styles = [Globalization.DateTimeStyles]::AssumeUniversal -bor [Globalization.DateTimeStyles]::AdjustToUniversal
+        if (-not [DateTimeOffset]::TryParseExact(
+                $Value,
+                $formats,
+                [Globalization.CultureInfo]::InvariantCulture,
+                $styles,
+                [ref]$parsed
+            ) -or $parsed.Offset -ne [TimeSpan]::Zero) {
+            throw "$Context must be a valid governed UTC ISO timestamp ending in 'Z'."
+        }
+        $utcValue = $parsed.UtcDateTime
+    }
+    elseif ($Value -is [DateTime]) {
+        if ($Value.Kind -ne [DateTimeKind]::Utc) {
+            throw "$Context must be a UTC DateTime value."
+        }
+        $utcValue = $Value
+    }
+    elseif ($Value -is [DateTimeOffset]) {
+        if ($Value.Offset -ne [TimeSpan]::Zero) {
+            throw "$Context must be a zero-offset DateTimeOffset value."
+        }
+        $utcValue = $Value.UtcDateTime
+    }
+    else {
+        throw "$Context must be a governed UTC string, UTC DateTime, or zero-offset DateTimeOffset value."
+    }
+
+    return $utcValue.ToString('yyyy-MM-ddTHH:mm:ss.fffffffZ', [Globalization.CultureInfo]::InvariantCulture)
+}
+
 function Resolve-D16ContainedFile {
     param(
         [Parameter(Mandatory)][string]$Root,
@@ -146,9 +199,9 @@ function Assert-D16Candidate {
     }
 
     $build = Get-D16Property $manifest 'build' 'Artifact manifest'
+    $buildBuiltAtUtc = ConvertTo-D16UtcTimestamp (Get-D16Property $build 'builtAtUtc' 'Artifact build') 'Artifact build UTC timestamp'
     if ([string]::IsNullOrWhiteSpace([string](Get-D16Property $build 'pipelineIdentity' 'Artifact build')) -or
-        [string]::IsNullOrWhiteSpace([string](Get-D16Property $build 'invocationIdentity' 'Artifact build')) -or
-        [string](Get-D16Property $build 'builtAtUtc' 'Artifact build') -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$') {
+        [string]::IsNullOrWhiteSpace([string](Get-D16Property $build 'invocationIdentity' 'Artifact build'))) {
         throw 'Artifact build provenance metadata is incomplete.'
     }
 
@@ -192,6 +245,8 @@ function Assert-D16Candidate {
     if ($vulnerability.result -cne 'PASS') {
         throw 'Artifact vulnerability evidence is absent or not passing.'
     }
+    $provenanceBuild = Get-D16Property $provenance 'build' 'Artifact provenance'
+    $provenanceBuiltAtUtc = ConvertTo-D16UtcTimestamp (Get-D16Property $provenanceBuild 'builtAtUtc' 'Artifact provenance build') 'Artifact provenance build UTC timestamp'
     if ($provenance.schemaVersion -cne '1.0.0' -or
         $provenance.predicateType -cne 'MONERGY_D16_BUILD_PROVENANCE' -or
         $provenance.candidateIdentity -cne $candidateIdentity -or
@@ -201,9 +256,9 @@ function Assert-D16Candidate {
         $provenance.source.repository -cne $source.repository -or
         $provenance.source.revision -cne $sourceRevision -or
         $provenance.source.tree -cne $sourceTree -or
-        $provenance.build.pipelineIdentity -cne $build.pipelineIdentity -or
-        $provenance.build.invocationIdentity -cne $build.invocationIdentity -or
-        $provenance.build.builtAtUtc -cne $build.builtAtUtc -or
+        $provenanceBuild.pipelineIdentity -cne $build.pipelineIdentity -or
+        $provenanceBuild.invocationIdentity -cne $build.invocationIdentity -or
+        $provenanceBuiltAtUtc -cne $buildBuiltAtUtc -or
         $provenance.evidence.sbomSha256 -cne $sbomReference.sha256 -or
         $provenance.evidence.vulnerabilitySha256 -cne $vulnerabilityReference.sha256) {
         throw 'Artifact provenance does not match the artifact, source, build, or security evidence identity.'
@@ -231,6 +286,7 @@ function Assert-D16Candidate {
         ManifestSha256 = Get-D16Sha256 $manifestPath
         ArtifactPath = $artifactPath
         ArtifactDigest = $artifactDigest
+        BuiltAtUtc = $buildBuiltAtUtc
         SbomPath = $sbomPath
         VulnerabilityPath = $vulnerabilityPath
         ProvenancePath = $provenancePath
@@ -326,4 +382,4 @@ function Assert-D16Promotion {
     }
 }
 
-Export-ModuleMember -Function Get-D16Sha256, Get-D16TextSha256, Write-D16Json, Assert-D16Candidate, Assert-D16Promotion
+Export-ModuleMember -Function Get-D16Sha256, Get-D16TextSha256, Write-D16Json, ConvertTo-D16UtcTimestamp, Assert-D16Candidate, Assert-D16Promotion

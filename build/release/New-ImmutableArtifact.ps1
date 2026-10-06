@@ -73,9 +73,9 @@ if ($commitExitCode -ne 0 -or $null -eq $resolvedCommit -or $resolvedCommit -cne
 if ($treeExitCode -ne 0 -or $null -eq $resolvedTree -or $resolvedTree -cne $SourceTree) {
     throw 'Supplied source tree does not equal the exact Git tree resolved for the supplied source revision.'
 }
+$normalizedBuiltAtUtc = ConvertTo-D16UtcTimestamp $BuiltAtUtc 'Requested build UTC timestamp'
 if ([string]::IsNullOrWhiteSpace($PipelineIdentity) -or
     [string]::IsNullOrWhiteSpace($BuildInvocationIdentity) -or
-    $BuiltAtUtc -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$' -or
     [string]::IsNullOrWhiteSpace($ArtifactMediaType)) {
     throw 'Build identity, invocation, UTC build time, and artifact media type are mandatory.'
 }
@@ -110,7 +110,7 @@ if (Test-Path -LiteralPath $capsuleRoot) {
         $existing.Manifest.source.tree -cne $SourceTree -or
         $existing.Manifest.build.pipelineIdentity -cne $PipelineIdentity -or
         $existing.Manifest.build.invocationIdentity -cne $BuildInvocationIdentity -or
-        $existing.Manifest.build.builtAtUtc -cne $BuiltAtUtc -or
+        $existing.BuiltAtUtc -cne $normalizedBuiltAtUtc -or
         $existing.Manifest.artifact.mediaType -cne $ArtifactMediaType -or
         $existing.Manifest.evidence.sbom.sha256 -cne $sbomHash -or
         $existing.Manifest.evidence.vulnerability.sha256 -cne $vulnerabilityHash) {
