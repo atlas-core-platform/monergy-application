@@ -1,0 +1,518 @@
+{
+  "schemaVersion": "1.0.0",
+  "unmappedProductionPolicy": "FULL_REGRESSION",
+  "documentationPatterns": ["*.md", "**/*.md", "docs/**"],
+  "productionRoots": [
+    ".github/",
+    "apps/",
+    "build/",
+    "contracts/",
+    "services/",
+    "shared/",
+    "tests/"
+  ],
+  "services": [
+    {
+      "id": "customer-identity",
+      "sourcePatterns": ["services/customer-identity/**"],
+      "testPatterns": ["tests/customer-identity/**"],
+      "testProjects": [
+        "tests/customer-identity/Monergy.CustomerIdentity.Tests/Monergy.CustomerIdentity.Tests.csproj"
+      ],
+      "verifiers": ["D13", "D14"]
+    },
+    {
+      "id": "consent",
+      "sourcePatterns": ["services/consent/**"],
+      "testPatterns": [],
+      "testProjects": [],
+      "verifiers": []
+    },
+    {
+      "id": "integration-gateway",
+      "sourcePatterns": ["services/integration-gateway/**"],
+      "testPatterns": ["tests/integration-gateway/**"],
+      "testProjects": [
+        "tests/integration-gateway/Monergy.IntegrationGateway.Tests/Monergy.IntegrationGateway.Tests.csproj"
+      ],
+      "verifiers": ["D06"]
+    },
+    {
+      "id": "evidence",
+      "sourcePatterns": ["services/evidence/**"],
+      "testPatterns": ["tests/vs02/**", "tests/document-reprocessing/**"],
+      "testProjects": [
+        "tests/vs02/Monergy.Vs02.Tests/Monergy.Vs02.Tests.csproj",
+        "tests/document-reprocessing/Monergy.DocumentReprocessing.Tests/Monergy.DocumentReprocessing.Tests.csproj"
+      ],
+      "verifiers": ["D03", "D12"]
+    },
+    {
+      "id": "document-intelligence",
+      "sourcePatterns": ["services/document-intelligence/**"],
+      "testPatterns": ["tests/vs02/**", "tests/document-reprocessing/**"],
+      "testProjects": [
+        "tests/vs02/Monergy.Vs02.Tests/Monergy.Vs02.Tests.csproj",
+        "tests/document-reprocessing/Monergy.DocumentReprocessing.Tests/Monergy.DocumentReprocessing.Tests.csproj"
+      ],
+      "verifiers": ["D03", "D12"]
+    },
+    {
+      "id": "financial-profile",
+      "sourcePatterns": ["services/financial-profile/**"],
+      "testPatterns": ["tests/financial-profile/**", "tests/vs02/**"],
+      "testProjects": [
+        "tests/financial-profile/Monergy.FinancialProfile.Tests/Monergy.FinancialProfile.Tests.csproj",
+        "tests/vs02/Monergy.Vs02.Tests/Monergy.Vs02.Tests.csproj"
+      ],
+      "verifiers": ["D03", "D04"]
+    },
+    {
+      "id": "financial-rules",
+      "sourcePatterns": ["services/financial-rules/**"],
+      "testPatterns": ["tests/financial-rules/**"],
+      "testProjects": [
+        "tests/financial-rules/Monergy.FinancialRules.Tests/Monergy.FinancialRules.Tests.csproj"
+      ],
+      "verifiers": ["D05"]
+    },
+    {
+      "id": "search-retrieval",
+      "sourcePatterns": ["services/search-retrieval/**"],
+      "testPatterns": ["tests/search-retrieval/**"],
+      "testProjects": [
+        "tests/search-retrieval/Monergy.SearchRetrieval.Tests/Monergy.SearchRetrieval.Tests.csproj"
+      ],
+      "verifiers": ["D07"]
+    },
+    {
+      "id": "ai-intelligence",
+      "sourcePatterns": ["services/ai-intelligence/**"],
+      "testPatterns": [],
+      "testProjects": [],
+      "verifiers": []
+    },
+    {
+      "id": "reporting",
+      "sourcePatterns": ["services/reporting/**"],
+      "testPatterns": ["tests/reporting/**"],
+      "testProjects": ["tests/reporting/Monergy.Reporting.Tests/Monergy.Reporting.Tests.csproj"],
+      "verifiers": ["D08", "D11"],
+      "flags": ["d11"]
+    },
+    {
+      "id": "job-management",
+      "sourcePatterns": ["services/job-management/**"],
+      "testPatterns": ["tests/job-management/**"],
+      "testProjects": [
+        "tests/job-management/Monergy.JobManagement.Tests/Monergy.JobManagement.Tests.csproj"
+      ],
+      "verifiers": ["D10"]
+    },
+    {
+      "id": "audit",
+      "sourcePatterns": ["services/audit/**"],
+      "testPatterns": [],
+      "testProjects": [],
+      "verifiers": ["D10"]
+    }
+  ],
+  "rules": [
+    {
+      "id": "workflow-policy",
+      "patterns": [
+        ".github/workflows/**",
+        ".github/CODEOWNERS",
+        "build/ci/**",
+        "build/governance/ci-impact-map.json",
+        "build/governance/d15-scope-lock.json",
+        "build/verify-impact-aware-ci.ps1"
+      ],
+      "verifiers": ["D01", "D02", "D15"],
+      "flags": ["ciPolicy"]
+    },
+    {
+      "id": "toolchain-entrypoint",
+      "patterns": [
+        "build/Invoke-Toolchain.ps1",
+        "build/Invoke-Bootstrap.ps1",
+        "build/config/**",
+        "build/release/**"
+      ],
+      "verifiers": ["D01", "D02", "D15"],
+      "flags": ["ciPolicy"]
+    },
+    {
+      "id": "d01-verifier",
+      "patterns": ["build/verify-bootstrap.ps1", "tests/bootstrap/**"],
+      "verifiers": ["D01"]
+    },
+    {
+      "id": "d02-verifier-and-packaging",
+      "patterns": ["build/verify-toolchain.ps1", "build/hosted-oci-evidence.ps1"],
+      "verifiers": ["D02", "D15"],
+      "flags": ["ciPolicy"]
+    },
+    {
+      "id": "historical-verifiers",
+      "patterns": ["build/verify-vs02.ps1", "build/governance/vs02-**"],
+      "verifiers": ["D03"]
+    },
+    {
+      "id": "d04-verifier",
+      "patterns": ["build/verify-financial-profile-authority.ps1", "build/governance/d04-**"],
+      "verifiers": ["D04"]
+    },
+    {
+      "id": "d05-verifier",
+      "patterns": [
+        "build/verify-financial-rules.ps1",
+        "build/governance/d05-**",
+        "build/probe-frontend-lifecycle.mjs",
+        "build/frontend-lifecycle-reporter.mjs"
+      ],
+      "verifiers": ["D05"]
+    },
+    {
+      "id": "d06-verifier",
+      "patterns": ["build/verify-integration-gateway-core.ps1", "build/governance/d06-**"],
+      "verifiers": ["D06"]
+    },
+    {
+      "id": "d07-verifier",
+      "patterns": ["build/verify-authorized-search.ps1", "build/governance/d07-**"],
+      "verifiers": ["D07"]
+    },
+    {
+      "id": "d08-verifier",
+      "patterns": ["build/verify-trusted-reporting.ps1", "build/governance/d08-**"],
+      "verifiers": ["D08"]
+    },
+    {
+      "id": "d09-persistence",
+      "patterns": [
+        "build/verify-persistent-data-foundation.ps1",
+        "build/governance/d09-**",
+        "build/d09/**",
+        "build/Monergy.DatabaseMigrator/**",
+        "tests/persistence/**",
+        "services/*/migrations/**",
+        "services/**/*Postgres*.cs"
+      ],
+      "verifiers": ["D09"],
+      "testProjects": [
+        "tests/persistence/Monergy.Persistence.Tests/Monergy.Persistence.Tests.csproj"
+      ],
+      "flags": ["persistence"]
+    },
+    {
+      "id": "d10-job-audit",
+      "patterns": [
+        "build/verify-durable-job-audit-propagation.ps1",
+        "build/governance/d10-**",
+        "build/d10/**",
+        "services/job-management/**",
+        "services/audit/**",
+        "tests/job-management/**"
+      ],
+      "services": ["job-management", "audit"],
+      "verifiers": ["D10"],
+      "flags": ["jobAudit"]
+    },
+    {
+      "id": "d11-persisted-reporting",
+      "patterns": [
+        "build/verify-local-runtime-reporting.ps1",
+        "build/governance/d11-**",
+        "build/local/**",
+        "apps/customer-web/e2e/d11-**",
+        "services/reporting/**",
+        "tests/reporting/**"
+      ],
+      "services": ["reporting"],
+      "verifiers": ["D11"],
+      "flags": ["d11"]
+    },
+    {
+      "id": "d12-verifier",
+      "patterns": [
+        "build/verify-document-reprocessing.ps1",
+        "build/governance/d12-**",
+        "tests/document-reprocessing/**"
+      ],
+      "verifiers": ["D12"]
+    },
+    {
+      "id": "d13-verifier",
+      "patterns": [
+        "build/verify-customer-identity-boundary.ps1",
+        "build/governance/d13-**",
+        "build/d13/**"
+      ],
+      "verifiers": ["D13"]
+    },
+    {
+      "id": "d14-verifier",
+      "patterns": [
+        "build/verify-trusted-session-lifecycle.ps1",
+        "build/governance/d14-**",
+        "build/d14/**"
+      ],
+      "verifiers": ["D14"]
+    },
+    {
+      "id": "frontend-browser",
+      "patterns": [
+        "apps/**",
+        "shared/platform/frontend-ui/**",
+        "playwright.config.ts",
+        "tsconfig.base.json"
+      ],
+      "verifiers": ["D03", "D07", "D08"],
+      "flags": ["frontendTests", "browser"]
+    },
+    {
+      "id": "customer-contracts",
+      "patterns": ["contracts/Monergy.Contracts/D13**", "contracts/Monergy.Contracts/D14**"],
+      "services": [
+        "customer-identity",
+        "consent",
+        "reporting",
+        "financial-profile",
+        "integration-gateway",
+        "audit"
+      ],
+      "verifiers": ["D13", "D14", "D06", "D10"],
+      "flags": ["contract"]
+    },
+    {
+      "id": "financial-profile-contracts",
+      "patterns": [
+        "contracts/Monergy.Contracts/D04**",
+        "contracts/schemas/financial-profile-authority.schema.json"
+      ],
+      "services": [
+        "financial-profile",
+        "document-intelligence",
+        "integration-gateway",
+        "financial-rules",
+        "search-retrieval",
+        "reporting",
+        "audit"
+      ],
+      "verifiers": ["D04", "D05", "D07", "D08", "D10"],
+      "flags": ["contract"]
+    },
+    {
+      "id": "financial-rules-contracts",
+      "patterns": [
+        "contracts/Monergy.Contracts/FinancialRulesContracts.cs",
+        "contracts/schemas/financial-rules.schema.json"
+      ],
+      "services": ["financial-rules", "reporting", "ai-intelligence", "search-retrieval", "audit"],
+      "verifiers": ["D05", "D07", "D08", "D10"],
+      "flags": ["contract"]
+    },
+    {
+      "id": "integration-contracts",
+      "patterns": [
+        "contracts/Monergy.Contracts/D06**",
+        "contracts/schemas/integration-gateway-core.schema.json"
+      ],
+      "services": [
+        "integration-gateway",
+        "customer-identity",
+        "evidence",
+        "financial-profile",
+        "document-intelligence",
+        "job-management",
+        "audit"
+      ],
+      "verifiers": ["D06", "D10"],
+      "flags": ["contract"]
+    },
+    {
+      "id": "search-contracts",
+      "patterns": [
+        "contracts/Monergy.Contracts/D07**",
+        "contracts/schemas/authorized-search.schema.json"
+      ],
+      "services": ["search-retrieval", "ai-intelligence", "reporting", "job-management"],
+      "verifiers": ["D07"],
+      "flags": ["contract"]
+    },
+    {
+      "id": "reporting-contracts",
+      "patterns": [
+        "contracts/Monergy.Contracts/D08**",
+        "contracts/schemas/trusted-reporting.schema.json"
+      ],
+      "services": ["reporting", "job-management", "audit"],
+      "verifiers": ["D08", "D10", "D11"],
+      "flags": ["contract", "d11"]
+    },
+    {
+      "id": "job-audit-contracts",
+      "patterns": [
+        "contracts/Monergy.Contracts/D10**",
+        "contracts/schemas/durable-job-audit-propagation.schema.json"
+      ],
+      "allServices": true,
+      "verifiers": ["D10", "D11"],
+      "flags": ["contract", "jobAudit"]
+    },
+    {
+      "id": "document-reprocessing-contracts",
+      "patterns": [
+        "contracts/Monergy.Contracts/D12DocumentReprocessingContracts.cs",
+        "contracts/schemas/document-reprocessing.schema.json"
+      ],
+      "services": ["document-intelligence", "evidence", "job-management", "audit"],
+      "verifiers": ["D03", "D10", "D12"],
+      "flags": ["contract"]
+    },
+    {
+      "id": "document-contract-catalog",
+      "patterns": ["contracts/Monergy.Contracts/D12ContractCatalog.cs"],
+      "allServices": true,
+      "verifiers": ["D03", "D10", "D12"],
+      "flags": ["contract"]
+    },
+    {
+      "id": "shared-contract-primitives",
+      "patterns": [
+        "contracts/Monergy.Contracts/ContractPrimitives.cs",
+        "contracts/Monergy.Contracts/Vs02**",
+        "contracts/schemas/vs02-contracts.schema.json"
+      ],
+      "allServices": true,
+      "allVerifiers": true,
+      "flags": ["contract", "sharedPlatform"]
+    },
+    {
+      "id": "shared-platform",
+      "patterns": [
+        "shared/platform/Monergy.Platform/**",
+        "shared/platform/observability.contract.json"
+      ],
+      "allServices": true,
+      "allVerifiers": true,
+      "flags": ["sharedPlatform", "persistence", "jobAudit", "d11"]
+    },
+    {
+      "id": "service-container",
+      "patterns": ["services/*/Dockerfile"],
+      "flags": ["affectedServiceOci"]
+    },
+    {
+      "id": "common-container",
+      "patterns": [".dockerignore", "build/package-services.ps1"],
+      "allOci": true,
+      "verifiers": ["D02", "D15"],
+      "flags": ["ciPolicy"]
+    },
+    {
+      "id": "service-dependencies",
+      "patterns": ["services/*/packages.lock.json"],
+      "flags": ["dependencySecurity", "affectedServiceOci"]
+    },
+    {
+      "id": "shared-backend-dependencies",
+      "patterns": [
+        "Directory.Packages.props",
+        "NuGet.Config",
+        "contracts/Monergy.Contracts/packages.lock.json",
+        "shared/platform/Monergy.Platform/packages.lock.json"
+      ],
+      "allServices": true,
+      "allVerifiers": true,
+      "allOci": true,
+      "flags": ["dependencySecurity", "sharedPlatform"]
+    },
+    {
+      "id": "runtime-pins",
+      "patterns": ["global.json", "build/toolchain/**"],
+      "allServices": true,
+      "allVerifiers": true,
+      "allOci": true,
+      "flags": ["dependencySecurity", "runtimePin", "ciPolicy"]
+    },
+    {
+      "id": "frontend-dependencies",
+      "patterns": [
+        "package.json",
+        "pnpm-lock.yaml",
+        "pnpm-workspace.yaml",
+        "apps/*/package.json",
+        "shared/platform/frontend-ui/package.json"
+      ],
+      "verifiers": ["D02", "D03", "D07", "D08"],
+      "flags": ["dependencySecurity", "frontendTests", "browser"]
+    },
+    {
+      "id": "solution-wide-source-policy",
+      "patterns": ["Directory.Build.props", "Monergy.Application.slnx"],
+      "allServices": true,
+      "allVerifiers": true,
+      "flags": ["sharedPlatform"]
+    },
+    {
+      "id": "source-quality-policy",
+      "patterns": [
+        "eslint.config.mjs",
+        ".prettierrc.json",
+        ".prettierignore",
+        ".gitleaks.toml",
+        ".editorconfig",
+        ".gitattributes",
+        ".gitignore"
+      ],
+      "verifiers": ["D01", "D02", "D15"],
+      "flags": ["ciPolicy"]
+    },
+    {
+      "id": "supply-chain-policy",
+      "patterns": ["build/supply-chain/**"],
+      "verifiers": ["D02", "D15"],
+      "flags": ["dependencySecurity", "ciPolicy"]
+    },
+    {
+      "id": "repository-governance",
+      "patterns": ["repository.manifest.json", "services/catalog.json", "apps/catalog.json"],
+      "allVerifiers": true,
+      "flags": ["ciPolicy"]
+    }
+  ],
+  "fullRegression": {
+    "testProjects": [
+      "tests/customer-identity/Monergy.CustomerIdentity.Tests/Monergy.CustomerIdentity.Tests.csproj",
+      "tests/document-reprocessing/Monergy.DocumentReprocessing.Tests/Monergy.DocumentReprocessing.Tests.csproj",
+      "tests/financial-profile/Monergy.FinancialProfile.Tests/Monergy.FinancialProfile.Tests.csproj",
+      "tests/financial-rules/Monergy.FinancialRules.Tests/Monergy.FinancialRules.Tests.csproj",
+      "tests/integration-gateway/Monergy.IntegrationGateway.Tests/Monergy.IntegrationGateway.Tests.csproj",
+      "tests/job-management/Monergy.JobManagement.Tests/Monergy.JobManagement.Tests.csproj",
+      "tests/persistence/Monergy.Persistence.Tests/Monergy.Persistence.Tests.csproj",
+      "tests/reporting/Monergy.Reporting.Tests/Monergy.Reporting.Tests.csproj",
+      "tests/search-retrieval/Monergy.SearchRetrieval.Tests/Monergy.SearchRetrieval.Tests.csproj",
+      "tests/vs02/Monergy.Vs02.Tests/Monergy.Vs02.Tests.csproj"
+    ],
+    "verifiers": [
+      "D01",
+      "D02",
+      "D03",
+      "D04",
+      "D05",
+      "D06",
+      "D07",
+      "D08",
+      "D09",
+      "D10",
+      "D11",
+      "D12",
+      "D13",
+      "D14",
+      "D15"
+    ],
+    "flags": ["frontendTests", "browser", "persistence", "jobAudit", "d11", "dependencySecurity"]
+  }
+}

@@ -82,6 +82,17 @@ if ($SelfTest) {
     exit 0
 }
 
+# Omitted forward-state switches verify the current accepted repository state.
+# Explicit $false remains available only for historical-baseline evidence replay.
+if (-not $PSBoundParameters.ContainsKey('D09ForwardRegression') -and
+    (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d09-scope-lock.json'))) {
+    $D09ForwardRegression = $true
+}
+if (-not $PSBoundParameters.ContainsKey('D10ForwardRegression') -and
+    (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d10-scope-lock.json'))) {
+    $D10ForwardRegression = $true
+}
+
 $checks = [System.Collections.Generic.List[object]]::new()
 function Add-Check {
     param([string]$Name, [bool]$Passed, [string]$Evidence)
@@ -315,11 +326,12 @@ $hostedOciContract = $hostedOciText.Contains('docker save') -and
     $hostedOciText.Contains('published = $false')
 Add-Check 'Hosted OCI evidence pipeline' $hostedOciContract 'Archive, digest, image SBOM, Grype scan, fail-closed result and no publication'
 $hostedMatrixPath = Join-Path $RepositoryRoot '.artifacts/oci/evidence-matrix.json'
-$hostedMatrixValid = if ($env:GITHUB_ACTIONS -ceq 'true') {
+$fullOciEvidenceRequired = $env:MONERGY_REQUIRE_FULL_OCI_EVIDENCE -ceq 'true'
+$hostedMatrixValid = if ($fullOciEvidenceRequired) {
     (Test-Path -LiteralPath $hostedMatrixPath) -and
         (Test-HostedOciMatrix (Get-Content -LiteralPath $hostedMatrixPath -Raw | ConvertFrom-Json))
 } else { $true }
-Add-Check 'Hosted OCI evidence matrix' $hostedMatrixValid 'Required in GitHub Actions: builds, SBOMs, scans and digests 12/12'
+Add-Check 'Governed full OCI evidence matrix' $hostedMatrixValid 'Required only when explicit full OCI evidence is requested; complete 12-image capability remains available'
 
 $supplyPolicy = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/supply-chain/policy.json') -Raw | ConvertFrom-Json
 Add-Check 'Pinned supply-chain scanners' ($supplyPolicy.tools.syft -ceq '1.51.1' -and $supplyPolicy.tools.grype -ceq '0.118.0' -and $supplyPolicy.tools.gitleaks -ceq '8.30.1') 'Syft, Grype, and Gitleaks exact'
@@ -327,11 +339,11 @@ Add-Check 'Honest scanner semantics' ($supplyPolicy.scannerFailureSemantics -ceq
 
 $workflow = Get-Content -LiteralPath (Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml') -Raw
 $toolchainScriptText = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/Invoke-Toolchain.ps1') -Raw
-Add-Check 'Technology-specific CI workflow' ($workflow.Contains('10.0.401') -and $workflow.Contains('24.21.0') -and $workflow.Contains('HostedOciEvidence') -and $workflow.Contains('pull_request:') -and $workflow.Contains('- main') -and -not $workflow.Contains('delivery/mwp03-*') -and $toolchainScriptText.Contains('--frozen-lockfile')) 'Pinned .NET/Node, locked install, PR + main hosted 12-image evidence and full D02 gates'
+Add-Check 'Technology-specific impact-aware CI workflow' ($workflow.Contains('10.0.401') -and $workflow.Contains('24.21.0') -and $workflow.Contains('hosted-oci-evidence.ps1') -and $workflow.Contains('oci_services') -and $workflow.Contains('full_regression') -and $workflow.Contains('Get-CiImpact.ps1') -and $workflow.Contains('pull_request:') -and $workflow.Contains('- main') -and -not $workflow.Contains('delivery/mwp03-*') -and $toolchainScriptText.Contains('--frozen-lockfile')) 'Pinned toolchains, impacted OCI evidence, and governed complete 12-image capability'
 Add-Check 'GitHub Free exception preserved' ($workflow.Contains('Direct push to main detected') -and $workflow.Contains('/commits/$env:MONERGY_COMMIT_SHA/pulls')) 'Detection remains warning, not claimed prevention'
 
 $invokeToolchain = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/Invoke-Toolchain.ps1') -Raw
-$requiredTasks = @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'Verify')
+$requiredTasks = @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D12Verification', 'D13Verification', 'D14Verification', 'D15Verification', 'Verify')
 Add-Check 'Reproducible root task surface' (@($requiredTasks | Where-Object { -not $invokeToolchain.Contains("'$_'") }).Count -eq 0) 'All D02 root command responsibilities exposed'
 $repositoryManifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
 $gateCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/ci/gates.json') -Raw | ConvertFrom-Json

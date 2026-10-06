@@ -56,17 +56,6 @@ function Test-ContainsAll([string]$Text, [string[]]$Values) {
     @($Values | Where-Object { -not $Text.Contains($_) }).Count -eq 0
 }
 
-function Test-HostedWorkflow([string]$Text) {
-    $normalized = $Text.Replace("`r`n", "`n")
-    $trigger = "on:`n  push:`n    branches:`n      - main`n  pull_request:`n  workflow_dispatch:`n`npermissions:"
-    $normalized.Contains($trigger) -and
-    $normalized.Contains('name: Verify D01-D13 controlled implementation') -and
-    [regex]::Matches($normalized, '(?m)^\s+\./build/verify-document-reprocessing\.ps1 -SelfTest\s*$').Count -eq 1 -and
-    [regex]::Matches($normalized, '(?m)^\s+\./build/verify-document-reprocessing\.ps1\s*$').Count -eq 1 -and
-    [regex]::Matches($normalized, '(?m)^\s+\./build/verify-customer-identity-boundary\.ps1 -SelfTest\s*$').Count -eq 1 -and
-    [regex]::Matches($normalized, '(?m)^\s+\./build/verify-customer-identity-boundary\.ps1\s*$').Count -eq 1
-}
-
 function Test-RemediationSource(
     [string]$Application,
     [string]$Ports,
@@ -106,7 +95,6 @@ $scopePath = Join-Path $RepositoryRoot 'build/governance/d13-scope-lock.json'
 $scope = Get-Content -LiteralPath $scopePath -Raw -Encoding utf8 | ConvertFrom-Json
 
 if ($SelfTest) {
-    $workflow = Get-Content -LiteralPath (Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml') -Raw -Encoding utf8
     $applicationSource = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity/Application/CustomerIdentityApplication.cs') -Raw -Encoding utf8
     $portsSource = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity/Application/CustomerIdentityPorts.cs') -Raw -Encoding utf8
     $repositorySource = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity/Infrastructure/ReferenceCustomerIdentityAdapters.cs') -Raw -Encoding utf8
@@ -114,7 +102,6 @@ if ($SelfTest) {
         ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw -Encoding utf8 }) -join "`n"
     $checks = [ordered]@{
         'valid D13 scope' = Test-Scope $scope
-        'valid hosted D12 and D13 structural verification' = Test-HostedWorkflow $workflow
         'valid R1 and R2 remediation source' = Test-RemediationSource $applicationSource $portsSource $repositorySource $focusedTests
     }
     foreach ($mutation in @(
@@ -142,12 +129,6 @@ if ($SelfTest) {
         }
         $checks[$mutation.name] = -not (Test-Scope $copy)
     }
-    $checks['missing D12 hosted self-test rejected'] = -not (Test-HostedWorkflow (
-        $workflow.Replace('./build/verify-document-reprocessing.ps1 -SelfTest',
-            './build/verify-document-reprocessing.ps1')))
-    $checks['missing D13 hosted self-test rejected'] = -not (Test-HostedWorkflow (
-        $workflow.Replace('./build/verify-customer-identity-boundary.ps1 -SelfTest',
-            './build/verify-customer-identity-boundary.ps1')))
     $checks['unsafe telemetry mutation rejected'] = -not (Test-RemediationSource $applicationSource (
         $portsSource.Replace('!value.Any(char.IsControl)', 'true')) $repositorySource $focusedTests)
     $checks['missing application canonical-resolution guard rejected'] = -not (Test-RemediationSource (
@@ -161,7 +142,7 @@ if ($SelfTest) {
         Write-Output "SELF-TEST $(if ($entry.Value) { 'PASS' } else { 'FAIL' }): $($entry.Key)"
     }
     if (@($checks.Values | Where-Object { -not $_ }).Count) { throw 'D13 negative self-tests failed.' }
-    Write-Output "D13 self-tests passed: $($checks.Count)/$($checks.Count) (positive controls: 3; negative mutations: 19)."
+    Write-Output "D13 self-tests passed: $($checks.Count)/$($checks.Count) (positive controls: 2; negative mutations: 17)."
     exit 0
 }
 
@@ -263,10 +244,6 @@ $checks['Every scenario-matrix test is present in focused source'] =
     @($namedTests | Where-Object { -not $testText.Contains([string]$_) }).Count -eq 0
 $checks['R1 and R2 executable negative evidence is governed'] =
     Test-RemediationSource $application $ports $repository $testText
-
-$workflow = Get-Content -LiteralPath (Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml') -Raw -Encoding utf8
-$checks['Hosted full job preserves triggers and runs D12 and D13 verifier self-tests'] =
-    Test-HostedWorkflow $workflow
 
 $manifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw -Encoding utf8 | ConvertFrom-Json
 $checks['Repository manifest records bounded D13 candidate'] =

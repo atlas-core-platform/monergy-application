@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0.0",
+  "deliverable": "MWP-03-D15",
+  "title": "Impact-Aware Continuous Verification & Quality Gates",
+  "status": "CANDIDATE_PENDING_CTO_REVIEW",
+  "feature": {
+    "id": "M2-WS01-E02-F01",
+    "name": "Continuous build and quality gates",
+    "readiness": "READY"
+  },
+  "startingCommits": {
+    "application": "18936b7a3c271cfc3dc4fe9d18d5bb15ad54e9e7",
+    "architecture": "a9ce12ecd76a1dfd4bdca6aaea0fa46a064546b7",
+    "systemExpert": "8a2f01ec68f9bcc2b35d45c59e9d6f8a478b8eed"
+  },
+  "contractTrace": "INTERNAL_ONLY",
+  "changedDomainServices": [],
+  "newOrChangedContracts": [],
+  "businessObjectChanges": "NONE",
+  "databaseSchemaChanges": "NONE",
+  "frontendProductBehaviorChanges": "NONE",
+  "productionProviderSelection": "NONE",
+  "runtimeHostingSelection": "NONE",
+  "dependencyChange": "NONE",
+  "containerBaseImageChange": "NONE",
+  "fullRegressionTrigger": "GOVERNED_MANUAL_WORKFLOW_DISPATCH",
+  "recurringSchedule": "NONE",
+  "historicalSemantics": "D01_THROUGH_D14_PRESERVED",
+  "stageGates": {
+    "SG-01": "READY",
+    "SG-02": "CONDITIONALLY_READY",
+    "SG-03": "BLOCKED",
+    "SG-04": "BLOCKED"
+  }
+}

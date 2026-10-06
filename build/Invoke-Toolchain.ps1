@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'D09Verification', 'D10Verification', 'D11Verification', 'Verify')]
+    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'D09Verification', 'D10Verification', 'D11Verification', 'D12Verification', 'D13Verification', 'D14Verification', 'D15Verification', 'Verify')]
     [string]$Task = 'Verify',
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot)
 )
@@ -126,6 +126,7 @@ function Invoke-Task {
             & (Join-Path $RepositoryRoot 'build/release/verify-candidate-manifest.ps1') -RepositoryRoot $RepositoryRoot
         }
         'D01Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-bootstrap.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
             & (Join-Path $RepositoryRoot 'build/verify-bootstrap.ps1') -RepositoryRoot $RepositoryRoot @d09ForwardArguments @d10ForwardArguments
         }
         'D02Verification' {
@@ -174,11 +175,27 @@ function Invoke-Task {
             & (Join-Path $RepositoryRoot 'build/local/Test-MonergyLocalProcessIsolation.ps1') -RepositoryRoot $RepositoryRoot
             & (Join-Path $RepositoryRoot 'build/local/Test-MonergyLocalRecovery.ps1') -RepositoryRoot $RepositoryRoot
         }
+        'D12Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-document-reprocessing.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+            & (Join-Path $RepositoryRoot 'build/verify-document-reprocessing.ps1') -RepositoryRoot $RepositoryRoot
+        }
+        'D13Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-customer-identity-boundary.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+            & (Join-Path $RepositoryRoot 'build/verify-customer-identity-boundary.ps1') -RepositoryRoot $RepositoryRoot
+        }
+        'D14Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-trusted-session-lifecycle.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+            & (Join-Path $RepositoryRoot 'build/verify-trusted-session-lifecycle.ps1') -RepositoryRoot $RepositoryRoot
+        }
+        'D15Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-impact-aware-ci.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+            & (Join-Path $RepositoryRoot 'build/verify-impact-aware-ci.ps1') -RepositoryRoot $RepositoryRoot
+        }
     }
 }
 
 $taskOrder = if ($Task -ceq 'Verify') {
-    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'D09Verification', 'D10Verification', 'D11Verification')
+    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'D09Verification', 'D10Verification', 'D11Verification', 'D12Verification', 'D13Verification', 'D14Verification', 'D15Verification')
 } else { @($Task) }
 
 foreach ($current in $taskOrder) { Invoke-Task $current }

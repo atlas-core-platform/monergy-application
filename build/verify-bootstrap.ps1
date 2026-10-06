@@ -44,6 +44,17 @@ if ($SelfTest) {
     exit 0
 }
 
+# Omitted forward-state switches verify the current accepted repository state.
+# Explicit $false remains available only for historical-baseline evidence replay.
+if (-not $PSBoundParameters.ContainsKey('D09ForwardRegression') -and
+    (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d09-scope-lock.json'))) {
+    $D09ForwardRegression = $true
+}
+if (-not $PSBoundParameters.ContainsKey('D10ForwardRegression') -and
+    (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d10-scope-lock.json'))) {
+    $D10ForwardRegression = $true
+}
+
 $checks = New-Object System.Collections.Generic.List[object]
 function Add-Check {
     param([string]$Name, [bool]$Passed, [string]$Evidence)
@@ -221,13 +232,18 @@ Add-Check 'CI gate stage coverage' (Test-ExactSet $pipelineGateIds $expectedGate
 $workflowPath = Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml'
 $workflowText = if (Test-Path -LiteralPath $workflowPath) { Get-Content -LiteralPath $workflowPath -Raw } else { '' }
 $workflowValid = $workflowText -match 'Invoke-Toolchain\.ps1 -Task Restore' -and
-    $workflowText -match 'Invoke-Toolchain\.ps1 -Task D02Verification' -and
+    $workflowText -match 'Invoke-Toolchain\.ps1 -Task D15Verification' -and
+    $workflowText -match 'Get-CiImpact\.ps1' -and
+    $workflowText -match 'Invoke-ImpactedVerification\.ps1' -and
+    $workflowText -match 'verification_mode:' -and
+    $workflowText -match 'full_regression' -and
+    $workflowText -notmatch '(?m)^\s*schedule:\s*$' -and
     $workflowText -match 'actions/checkout@[0-9a-f]{40}' -and
     $workflowText -match '(?m)^\s*contents:\s*read\s*$' -and
     $workflowText -match '(?m)^\s*pull-requests:\s*read\s*$' -and
     $workflowText.Contains('Direct push to main detected') -and
     $workflowText.Contains('/commits/$env:MONERGY_COMMIT_SHA/pulls')
-Add-Check 'Hosted bootstrap workflow' $workflowValid 'Commit-pinned checkout, least privilege, complete bootstrap, and direct-push detection'
+Add-Check 'Hosted bootstrap workflow' $workflowValid 'Commit-pinned checkout, least privilege, impact-aware bootstrap, governed full regression, and direct-push detection'
 
 $codeOwnersPath = Join-Path $RepositoryRoot '.github/CODEOWNERS'
 $codeOwners = if (Test-Path -LiteralPath $codeOwnersPath) { (Get-Content -LiteralPath $codeOwnersPath -Raw).Trim() } else { '' }

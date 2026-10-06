@@ -6,8 +6,10 @@ MWP-03-D02 retains the D01 compatibility task while adding the approved pinned
 `Invoke-Toolchain.ps1` exposes locked restore/install, format verification,
 lint/type checking, build, unit/component/architecture/browser tests, independent
 OCI packaging, SBOM, vulnerability and secret scans, candidate release-manifest
-generation, and D01/D02 verification. `Invoke-Bootstrap.ps1` is a compatibility
-facade for accepted D01 tasks.
+generation, and D01-D15 verifier tasks. `Invoke-Bootstrap.ps1` is a compatibility
+facade for accepted D01 tasks. `ci/Get-CiImpact.ps1` and
+`ci/Invoke-ImpactedVerification.ps1` provide the deterministic D15 selection and
+focused execution boundary used by hosted CI.
 
 D03 and D04 add their independent deterministic verifier tasks. D04 reads
 `governance/d04-scope-lock.json`, checks exact Feature/contract/control IDs,
@@ -17,11 +19,12 @@ negative self-tests. `governance/d04-acceptance.json` pins the approved
 candidate, hosted evidence, actual security findings and exact D03/D04 contract
 overlap without claiming publication or deployment.
 
-`hosted-oci-evidence.ps1` is the non-publishing Linux evidence path. For each
-of the twelve service artifacts it creates a Docker archive, records the
-content-addressed image identity and archive hash, generates a CycloneDX image
-SBOM, performs a high-severity fail-closed Grype scan, and writes a deterministic
-12-row matrix consumed by the candidate Product Release Manifest.
+`hosted-oci-evidence.ps1` is the non-publishing Linux evidence path. It accepts
+an explicit impacted service set, while an omitted set retains the complete
+twelve-image capability. For every selected artifact it creates a Docker
+archive, records the content-addressed image identity and archive hash,
+generates a CycloneDX image SBOM, performs a high-severity fail-closed Grype
+scan, and writes a deterministic evidence matrix.
 
 Generated evidence is local and ignored. The candidate Product Release Manifest
 is not a release. Packaging requires a Linux Docker engine and reports `BLOCKED`
