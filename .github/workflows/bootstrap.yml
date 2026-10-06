@@ -1,4 +1,4 @@
-name: Product technology toolchain
+name: Impact-aware continuous verification
 
 on:
   push:
@@ -6,50 +6,101 @@ on:
       - main
   pull_request:
   workflow_dispatch:
+    inputs:
+      verification_mode:
+        description: Select impacted verification or the governed complete regression.
+        required: true
+        default: impacted
+        type: choice
+        options:
+          - impacted
+          - full_regression
 
 permissions:
   contents: read
   pull-requests: read
 
 concurrency:
-  group: toolchain-${{ github.workflow }}-${{ github.ref }}
+  group: impact-aware-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  d05-lifecycle-probe:
-    name: D05 bounded frontend lifecycle probe
-    if: github.ref == 'refs/heads/delivery/mwp03-d05-financial-rules-calculation-lineage' || github.head_ref == 'delivery/mwp03-d05-financial-rules-calculation-lineage'
+  classify:
+    name: Classify changed-file and architecture impact
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 10
+    outputs:
+      base_sha: ${{ steps.range.outputs.base_sha }}
+      head_sha: ${{ steps.range.outputs.head_sha }}
+      requested_mode: ${{ steps.range.outputs.requested_mode }}
+      effective_mode: ${{ steps.impact.outputs.effective_mode }}
+      full_regression: ${{ steps.impact.outputs.full_regression }}
+      documentation_only: ${{ steps.impact.outputs.documentation_only }}
+      run_service_tests: ${{ steps.impact.outputs.run_service_tests }}
+      run_frontend_tests: ${{ steps.impact.outputs.run_frontend_tests }}
+      run_browser: ${{ steps.impact.outputs.run_browser }}
+      run_persistence: ${{ steps.impact.outputs.run_persistence }}
+      run_job_audit: ${{ steps.impact.outputs.run_job_audit }}
+      run_d11: ${{ steps.impact.outputs.run_d11 }}
+      run_oci: ${{ steps.impact.outputs.run_oci }}
+      run_dependency_security: ${{ steps.impact.outputs.run_dependency_security }}
+      oci_services: ${{ steps.impact.outputs.oci_services }}
     steps:
-      - name: Check out remediation head
+      - name: Check out repository with governed ancestry
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-      - name: Set up pinned Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
-          node-version: 24.21.0
-      - name: Restore pinned frontend dependencies
-        run: |
-          corepack enable
-          corepack install --global pnpm@12.4.1
-          pnpm install --frozen-lockfile
-      - name: Run isolated lifecycle reproduction
-        run: pnpm --filter @monergy/customer-web exec vitest run --config tests/lifecycle.config.ts
-      - name: Run twenty consecutive executions without retry
-        run: node build/probe-frontend-lifecycle.mjs
-      - name: Preserve probe evidence even on failure
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: d05-frontend-lifecycle-probe-${{ github.run_id }}
-          path: .artifacts/d05-lifecycle-probe/
-          if-no-files-found: error
-          retention-days: 30
+          fetch-depth: 0
 
-  toolchain:
-    needs: d05-lifecycle-probe
-    if: always() && (needs.d05-lifecycle-probe.result == 'success' || needs.d05-lifecycle-probe.result == 'skipped')
-    name: Verify D01-D13 controlled implementation
+      - name: Resolve deterministic comparison range
+        id: range
+        shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          REQUESTED_DISPATCH_MODE: ${{ inputs.verification_mode }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $head = $env:HEAD_SHA
+          $base = $env:PR_BASE_SHA
+          $mode = 'PullRequest'
+
+          if ($env:EVENT_NAME -eq 'push') {
+            $base = $env:EVENT_BEFORE
+            $mode = 'MergeIntegrity'
+          }
+          elseif ($env:EVENT_NAME -eq 'workflow_dispatch') {
+            $base = [string](git rev-parse "$head^")
+            $mode = if ($env:REQUESTED_DISPATCH_MODE -eq 'full_regression') { 'FullRegression' } else { 'PullRequest' }
+          }
+
+          if ([string]::IsNullOrWhiteSpace($base) -or $base -match '^0{40}$') {
+            $base = [string](git rev-parse "$head^")
+          }
+          git cat-file -e "$base^{commit}"
+          if ($LASTEXITCODE -ne 0) { throw "Comparison base $base is unavailable." }
+
+          "base_sha=$base" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "head_sha=$head" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "requested_mode=$mode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Produce machine-readable impact classification
+        id: impact
+        shell: pwsh
+        run: |
+          ./build/ci/Get-CiImpact.ps1 `
+            -BaseSha '${{ steps.range.outputs.base_sha }}' `
+            -HeadSha '${{ steps.range.outputs.head_sha }}' `
+            -Mode '${{ steps.range.outputs.requested_mode }}' `
+            -OutputPath .artifacts/ci/impact.json `
+            -EmitGitHubOutputs
+          Get-Content -LiteralPath .artifacts/ci/impact.json -Raw |
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+
+  universal:
+    name: Universal clean quality and security baseline
+    needs: classify
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -75,39 +126,7 @@ jobs:
           corepack install --global pnpm@12.4.1
           pnpm --version
 
-      - name: Restore locked dependencies
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task Restore
-
-      - name: Verify formatting
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task FormatCheck
-
-      - name: Lint and source security analysis
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task Lint
-
-      - name: Compile and bundle
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task Build
-
-      - name: Run unit and component tests
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task Test
-
-      - name: Run architecture-boundary tests
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task ArchitectureTest
-
-      - name: Install Chromium for browser evidence
-        shell: bash
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Run browser smoke test
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task BrowserTest
-
-      - name: Install pinned supply-chain tools
+      - name: Install pinned security tools
         shell: bash
         run: |
           mkdir -p .toolcache/security
@@ -129,176 +148,56 @@ jobs:
           chmod +x .toolcache/security/syft .toolcache/security/grype .toolcache/security/gitleaks
           echo "$GITHUB_WORKSPACE/.toolcache/security" >> "$GITHUB_PATH"
 
-      - name: Build, identify, SBOM and scan twelve OCI images
+      - name: Restore pinned dependencies
         shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task HostedOciEvidence
+        run: ./build/Invoke-Toolchain.ps1 -Task Restore
 
-      - name: Generate CycloneDX SBOM
+      - name: Verify formatting
         shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task Sbom
+        run: ./build/Invoke-Toolchain.ps1 -Task FormatCheck
 
-      - name: Run dependency and artifact vulnerability checks
+      - name: Lint and source security analysis
         shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task VulnerabilityScan
+        run: ./build/Invoke-Toolchain.ps1 -Task Lint
+
+      - name: Compile and bundle
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Build
+
+      - name: Run architecture-boundary tests
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task ArchitectureTest
 
       - name: Scan repository history and candidate content for secrets
         shell: pwsh
         run: ./build/Invoke-Toolchain.ps1 -Task SecretScan
 
-      - name: Generate and verify candidate release manifest
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task ReleaseManifest
-
-      - name: Verify D01 regression
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D01Verification
-
-      - name: Verify D02 realization and negative self-tests
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D02Verification
-
-      - name: Verify VS-02 implementation and negative self-tests
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D03Verification
-
-      - name: Verify Financial Profile authority and negative self-tests
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D04Verification
-
-      - name: Verify Financial Rules forward regression and preserve raw machine-readable evidence
-        if: always()
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D05Regression
-
-      - name: Verify Integration Gateway core and negative self-tests
-        if: always()
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D06Verification
-
-      - name: Verify authorized search and provenance retrieval
-        if: always()
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D07Verification
-
-      - name: Verify trusted financial summary, drill-down and export
-        if: always()
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D08Verification
-
-      - name: Verify persistent relational data foundation
-        if: always()
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D09Verification
-
-      - name: Verify D09 PostgreSQL and S3-compatible persistence
-        if: always()
-        shell: pwsh
-        run: ./build/d09/Invoke-D09Persistence.ps1 -Reset
-
-      - name: Verify durable Job Management and Audit propagation
-        if: always()
-        shell: pwsh
-        run: ./build/Invoke-Toolchain.ps1 -Task D10Verification
-
-      - name: Verify D10 PostgreSQL durability and Audit propagation
-        if: always()
-        shell: pwsh
-        run: ./build/d10/Invoke-D10Persistence.ps1 -Reset
-
-      - name: Verify D11 scope and negative self-tests
-        if: always()
+      - name: Reproduce the governed impact classification
         shell: pwsh
         run: |
-          ./build/verify-local-runtime-reporting.ps1 -SelfTest
-          ./build/verify-local-runtime-reporting.ps1
+          ./build/ci/Get-CiImpact.ps1 `
+            -BaseSha '${{ needs.classify.outputs.base_sha }}' `
+            -HeadSha '${{ needs.classify.outputs.head_sha }}' `
+            -Mode '${{ needs.classify.outputs.requested_mode }}' `
+            -OutputPath .artifacts/ci/impact.json
 
-      - name: Verify D11 controlled child environments on Linux
-        if: always()
+      - name: Verify D15 impact policy and negative self-tests
         shell: pwsh
-        run: |
-          ./build/local/Test-MonergyLocalProcessIsolation.ps1
-          ./build/local/Test-MonergyLocalRecovery.ps1
+        run: ./build/Invoke-Toolchain.ps1 -Task D15Verification
 
-      - name: Verify D12 document reprocessing and negative self-tests
-        if: always()
+      - name: Run impacted service contract and historical verification
         shell: pwsh
-        run: |
-          ./build/verify-document-reprocessing.ps1 -SelfTest
-          ./build/verify-document-reprocessing.ps1
+        run: ./build/ci/Invoke-ImpactedVerification.ps1 -ClassificationPath .artifacts/ci/impact.json
 
-      - name: Verify D13 Customer Identity boundary and negative self-tests
-        if: always()
+      - name: Generate repository CycloneDX SBOM
+        if: needs.classify.outputs.run_dependency_security == 'true'
         shell: pwsh
-        run: |
-          ./build/verify-customer-identity-boundary.ps1 -SelfTest
-          ./build/verify-customer-identity-boundary.ps1
+        run: ./build/Invoke-Toolchain.ps1 -Task Sbom
 
-      - name: Verify approved D14 trusted-session source and negative self-tests
-        if: ${{ always() && hashFiles('build/governance/d14-scope-lock.json') != '' }}
+      - name: Run dependency and composition vulnerability checks
+        if: needs.classify.outputs.run_dependency_security == 'true'
         shell: pwsh
-        env:
-          D14_APPROVED_HEAD: d153fcb1e6c92bd70b24e2072bf92391ca7323ea
-          D14_PR_HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $candidateSha = $null
-
-          if ($env:GITHUB_EVENT_NAME -eq 'pull_request') {
-            if ($env:D14_PR_HEAD -ne $env:D14_APPROVED_HEAD) {
-              Write-Output "D14 governed source verification not applicable to PR head $env:D14_PR_HEAD."
-              exit 0
-            }
-            $candidateSha = $env:D14_PR_HEAD
-          }
-          elseif ($env:GITHUB_EVENT_NAME -eq 'push' -and $env:GITHUB_REF -eq 'refs/heads/main') {
-            $parents = @((git rev-list --parents -n 1 $env:GITHUB_SHA).Split(' ', [System.StringSplitOptions]::RemoveEmptyEntries))
-            if ($parents.Count -lt 3 -or $parents[2] -ne $env:D14_APPROVED_HEAD) {
-              Write-Output "D14 governed source verification not applicable to main commit $env:GITHUB_SHA."
-              exit 0
-            }
-            $candidateSha = $parents[2]
-          }
-          else {
-            Write-Output "D14 governed source verification is not applicable to this event."
-            exit 0
-          }
-
-          $worktree = Join-Path $env:RUNNER_TEMP 'monergy-d14-approved-head'
-          if (Test-Path -LiteralPath $worktree) {
-            Remove-Item -LiteralPath $worktree -Recurse -Force
-          }
-
-          git worktree add --detach $worktree $candidateSha
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to create D14 approved-head worktree.' }
-
-          try {
-            & (Join-Path $worktree 'build/verify-trusted-session-lifecycle.ps1') -RepositoryRoot $worktree -SelfTest
-            if ($LASTEXITCODE -ne 0) { throw 'D14 verifier self-tests failed.' }
-            & (Join-Path $worktree 'build/verify-trusted-session-lifecycle.ps1') -RepositoryRoot $worktree
-            if ($LASTEXITCODE -ne 0) { throw 'D14 verifier failed.' }
-          }
-          finally {
-            git worktree remove --force $worktree
-          }
-
-      - name: Upload raw machine-readable evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: d05-financial-rules-lineage-evidence-${{ github.run_id }}
-          path: |
-            .artifacts/components/
-            .artifacts/provenance/
-            .artifacts/release/
-            .artifacts/security/
-            .artifacts/tests/
-            .artifacts/d05/
-            .artifacts/oci/images.json
-            .artifacts/oci/evidence-matrix.json
-            .artifacts/oci/sboms/
-            .artifacts/oci/scans/
-          if-no-files-found: warn
-          retention-days: 14
+        run: ./build/Invoke-Toolchain.ps1 -Task VulnerabilityScan
 
       - name: Detect direct push to main
         if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -316,18 +215,14 @@ jobs:
           }
           $uri = "https://api.github.com/repos/$env:MONERGY_REPOSITORY/commits/$env:MONERGY_COMMIT_SHA/pulls"
           $pullRequests = @(Invoke-RestMethod -Method Get -Uri $uri -Headers $headers)
-          $mergedToMain = @($pullRequests | Where-Object {
-            $_.merged_at -and $_.base.ref -eq 'main'
-          })
+          $mergedToMain = @($pullRequests | Where-Object { $_.merged_at -and $_.base.ref -eq 'main' })
           if ($mergedToMain.Count -eq 0) {
             Write-Output '::warning title=Direct push to main detected::GitHub Free cannot prevent this push. Review it under the MWP-03-D01 governance exception.'
             Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Direct push detection: FLAGGED'
-            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value ''
-            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Commit ``$env:MONERGY_COMMIT_SHA`` was pushed directly to ``main`` without an associated merged pull request. Detection does not imply prevention."
+            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Commit ``$env:MONERGY_COMMIT_SHA`` has no associated merged pull request. Detection does not imply prevention."
           }
           else {
             Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Direct push detection: PR-associated'
-            Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value ''
             Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "Commit ``$env:MONERGY_COMMIT_SHA`` is associated with merged pull request #$($mergedToMain[0].number)."
           }
 
@@ -336,23 +231,109 @@ jobs:
         shell: pwsh
         run: git diff --check
 
+      - name: Upload universal machine-readable evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: impact-aware-universal-${{ github.run_id }}
+          path: |
+            .artifacts/ci/impact.json
+            .artifacts/security/*.json
+            .artifacts/tests/*.trx
+          if-no-files-found: warn
+          retention-days: 14
+
+  browser:
+    name: Impacted browser evidence
+    needs: [classify, universal]
+    if: needs.classify.outputs.run_browser == 'true' && needs.universal.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.401
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+      - name: Restore and build browser target
+        shell: pwsh
+        run: |
+          corepack enable
+          corepack install --global pnpm@12.4.1
+          ./build/Invoke-Toolchain.ps1 -Task Restore
+          ./build/Invoke-Toolchain.ps1 -Task Build
+      - name: Install Chromium
+        shell: bash
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run browser verification
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task BrowserTest
+
+  persistence:
+    name: Impacted D09 physical persistence
+    needs: [classify, universal]
+    if: needs.classify.outputs.run_persistence == 'true' && needs.universal.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.401
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+      - name: Restore locked dependencies
+        shell: pwsh
+        run: |
+          corepack enable
+          corepack install --global pnpm@12.4.1
+          ./build/Invoke-Toolchain.ps1 -Task Restore
+      - name: Verify PostgreSQL and S3-compatible persistence
+        shell: pwsh
+        run: ./build/d09/Invoke-D09Persistence.ps1 -Reset
+
+  job-audit:
+    name: Impacted D10 physical Job Management and Audit
+    needs: [classify, universal]
+    if: needs.classify.outputs.run_job_audit == 'true' && needs.universal.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.401
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+      - name: Restore locked dependencies
+        shell: pwsh
+        run: |
+          corepack enable
+          corepack install --global pnpm@12.4.1
+          ./build/Invoke-Toolchain.ps1 -Task Restore
+      - name: Verify durable Job Management and Audit propagation
+        shell: pwsh
+        run: ./build/d10/Invoke-D10Persistence.ps1 -Reset
+
   d11-linux-runtime:
-    name: D11 persisted-reporting Linux integration
-    needs: toolchain
-    if: ${{ always() && (github.ref == 'refs/heads/delivery/mwp03-d11-current-baseline-reconciliation' || github.head_ref == 'delivery/mwp03-d11-current-baseline-reconciliation') }}
+    name: Impacted D11 persisted-reporting Linux integration
+    needs: [classify, universal]
+    if: needs.classify.outputs.run_d11 == 'true' && needs.universal.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
-      - name: Check out repository with governed ancestry
+      - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
-      - name: Set up .NET 10
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: 10.0.401
-      - name: Set up Node 24
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24.21.0
       - name: Enable pinned pnpm
@@ -365,72 +346,26 @@ jobs:
         run: |
           ./build/local/Invoke-MonergyLocal.ps1 -Action Prepare
           ./build/local/Test-MonergyLocalPreparedIdentity.ps1
-      - name: Install Chromium for real D11 browser evidence
+      - name: Install Chromium
         shell: bash
         run: pnpm exec playwright install --with-deps chromium
-      - name: Start and verify the clean pinned D11 profile
+      - name: Start seed and verify the clean D11 profile
         shell: pwsh
         run: |
           ./build/local/Invoke-MonergyLocal.ps1 -Action Start
           ./build/local/Invoke-MonergyLocal.ps1 -Action Seed
           ./build/local/Invoke-MonergyLocal.ps1 -Action Verify
-      - name: Run real D11 persisted-reporting browser flow
+      - name: Run persisted-reporting browser flow
         shell: bash
         run: pnpm exec playwright test --config build/local/playwright.d11.config.ts
-      - name: Verify restart, Audit outage, timeout and lost-acknowledgement recovery
+      - name: Verify restart outage timeout and lost-acknowledgement recovery
         shell: pwsh
         run: ./build/local/Invoke-D11RuntimeEvidence.ps1
-      - name: Capture D11 provider diagnostics on failure
-        if: failure()
-        shell: bash
-        run: |
-          set +e
-          echo '=== D11 provider containers ==='
-          docker ps -a --filter 'name=monergy-d11-persisted-reporting-' --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
-
-          seaweed_id="$(docker ps -aq --filter 'name=monergy-d11-persisted-reporting-seaweedfs-1' | head -n 1)"
-          if [ -z "$seaweed_id" ]; then
-            echo 'SeaweedFS container was not found.'
-            exit 0
-          fi
-
-          echo '=== SeaweedFS effective command ==='
-          docker inspect --format '{{json .Config.Cmd}}' "$seaweed_id"
-
-          echo '=== SeaweedFS state ==='
-          docker inspect --format 'status={{.State.Status}} exitCode={{.State.ExitCode}} startedAt={{.State.StartedAt}} finishedAt={{.State.FinishedAt}}' "$seaweed_id"
-
-          echo '=== SeaweedFS published ports ==='
-          docker port "$seaweed_id" || true
-
-          echo '=== Host listeners for D11 provider ports ==='
-          ss -lntp | grep -E ':(55434|58334)\\b' || true
-
-          echo '=== SeaweedFS container TCP listeners (/proc/net/tcp) ==='
-          docker exec "$seaweed_id" sh -c 'cat /proc/net/tcp; echo ---; cat /proc/net/tcp6' || true
-
-          echo '=== SeaweedFS logs ==='
-          docker logs --timestamps --tail 300 "$seaweed_id" || true
-
       - name: Stop only the owned D11 application runtime
         if: always()
         shell: pwsh
         run: ./build/local/Invoke-MonergyLocal.ps1 -Action Stop
-      - name: Capture allowlisted D11 controller status
-        if: always()
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path .artifacts/d11/hosted | Out-Null
-          try {
-            ./build/local/Invoke-MonergyLocal.ps1 -Action Status -Json |
-              Select-Object -Last 1 |
-              Set-Content -LiteralPath .artifacts/d11/hosted/controller-status.json -Encoding utf8NoBOM
-          }
-          catch {
-            '{"profile":"persisted-reporting","state":"STATUS_UNAVAILABLE"}' |
-              Set-Content -LiteralPath .artifacts/d11/hosted/controller-status.json -Encoding utf8NoBOM
-          }
-      - name: Upload reviewed non-secret D11 evidence
+      - name: Upload reviewed D11 evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -438,9 +373,58 @@ jobs:
           path: |
             .artifacts/d11/remediation-r2/linux/*.json
             .artifacts/d11/persisted-reporting/verification-latest.json
-            .artifacts/d11/hosted/controller-status.json
             .artifacts/d11/playwright/results.json
             .artifacts/d11/playwright/test-results/**/trace.zip
             .artifacts/d11/playwright/test-results/**/*.png
           if-no-files-found: warn
+          retention-days: 14
+
+  oci:
+    name: Impacted OCI build SBOM and vulnerability evidence
+    needs: [classify, universal]
+    if: needs.classify.outputs.run_oci == 'true' && needs.universal.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Install pinned image security tools
+        shell: bash
+        run: |
+          mkdir -p .toolcache/security
+          curl --fail --location --silent --show-error \
+            --output .toolcache/security/syft.tar.gz \
+            https://github.com/anchore/syft/releases/download/v1.51.1/syft_1.51.1_linux_amd64.tar.gz
+          echo '8fcb33017a0dc1058298c923c436d19dfa68ae93968e0b423248542e3afb9fc3  .toolcache/security/syft.tar.gz' | sha256sum --check
+          tar -xzf .toolcache/security/syft.tar.gz -C .toolcache/security syft
+          curl --fail --location --silent --show-error \
+            --output .toolcache/security/grype.tar.gz \
+            https://github.com/anchore/grype/releases/download/v0.118.0/grype_0.118.0_linux_amd64.tar.gz
+          echo '1d444c5e7360471815f7158f71935fcecc68a3c417d85c7344f770854300bba2  .toolcache/security/grype.tar.gz' | sha256sum --check
+          tar -xzf .toolcache/security/grype.tar.gz -C .toolcache/security grype
+          chmod +x .toolcache/security/syft .toolcache/security/grype
+          echo "$GITHUB_WORKSPACE/.toolcache/security" >> "$GITHUB_PATH"
+      - name: Build scan and identify only selected images
+        shell: pwsh
+        env:
+          OCI_SERVICES_JSON: ${{ needs.classify.outputs.oci_services }}
+        run: |
+          $serviceIds = @($env:OCI_SERVICES_JSON | ConvertFrom-Json)
+          ./build/hosted-oci-evidence.ps1 -ServiceId $serviceIds
+      - name: Verify complete D02 OCI evidence matrix
+        if: needs.classify.outputs.full_regression == 'true'
+        shell: pwsh
+        env:
+          MONERGY_REQUIRE_FULL_OCI_EVIDENCE: 'true'
+        run: ./build/verify-toolchain.ps1 -D09ForwardRegression -D10ForwardRegression
+      - name: Upload OCI evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: impact-aware-oci-${{ github.run_id }}
+          path: |
+            .artifacts/oci/images.json
+            .artifacts/oci/evidence-matrix.json
+            .artifacts/oci/sboms/*.json
+            .artifacts/oci/scans/*.json
+          if-no-files-found: error
           retention-days: 14
