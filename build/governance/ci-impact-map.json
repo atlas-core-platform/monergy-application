@@ -133,13 +133,36 @@
     },
     {
       "id": "toolchain-entrypoint",
-      "patterns": [
-        "build/Invoke-Toolchain.ps1",
-        "build/Invoke-Bootstrap.ps1",
-        "build/config/**",
-        "build/release/**"
-      ],
+      "patterns": ["build/Invoke-Toolchain.ps1", "build/Invoke-Bootstrap.ps1", "build/config/**"],
       "verifiers": ["D01", "D02", "D15"],
+      "flags": ["ciPolicy"]
+    },
+    {
+      "id": "d05-release-manifest",
+      "patterns": [
+        "build/release/New-CandidateManifest.ps1",
+        "build/release/verify-candidate-manifest.ps1",
+        "build/release/product-release-manifest.template.json"
+      ],
+      "verifiers": ["D01", "D02", "D05", "D15"],
+      "flags": ["ciPolicy"]
+    },
+    {
+      "id": "d16-immutable-promotion",
+      "patterns": [
+        "build/release/ImmutableArtifact.Common.psm1",
+        "build/release/New-ImmutableArtifact.ps1",
+        "build/release/Test-ImmutableArtifact.ps1",
+        "build/release/Invoke-ReferencePromotion.ps1",
+        "build/release/Test-ReferencePromotion.ps1",
+        "build/governance/d16-scope-lock.json",
+        "build/verify-immutable-artifact-promotion.ps1",
+        "build/Invoke-Toolchain.ps1",
+        "build/ci/Invoke-ImpactedVerification.ps1",
+        "build/governance/ci-impact-map.json",
+        "build/verify-impact-aware-ci.ps1"
+      ],
+      "verifiers": ["D01", "D02", "D15", "D16"],
       "flags": ["ciPolicy"]
     },
     {
@@ -511,7 +534,8 @@
       "D12",
       "D13",
       "D14",
-      "D15"
+      "D15",
+      "D16"
     ],
     "flags": ["frontendTests", "browser", "persistence", "jobAudit", "d11", "dependencySecurity"]
   }

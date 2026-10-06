@@ -238,6 +238,7 @@ jobs:
           name: impact-aware-universal-${{ github.run_id }}
           path: |
             .artifacts/ci/impact.json
+            .artifacts/d16/*.json
             .artifacts/security/*.json
             .artifacts/tests/*.trx
           if-no-files-found: warn

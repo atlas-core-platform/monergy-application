@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'D09Verification', 'D10Verification', 'D11Verification', 'D12Verification', 'D13Verification', 'D14Verification', 'D15Verification', 'Verify')]
+    [ValidateSet('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'D09Verification', 'D10Verification', 'D11Verification', 'D12Verification', 'D13Verification', 'D14Verification', 'D15Verification', 'D16Verification', 'Verify')]
     [string]$Task = 'Verify',
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot)
 )
@@ -191,11 +191,15 @@ function Invoke-Task {
             & (Join-Path $RepositoryRoot 'build/verify-impact-aware-ci.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
             & (Join-Path $RepositoryRoot 'build/verify-impact-aware-ci.ps1') -RepositoryRoot $RepositoryRoot
         }
+        'D16Verification' {
+            & (Join-Path $RepositoryRoot 'build/verify-immutable-artifact-promotion.ps1') -RepositoryRoot $RepositoryRoot -SelfTest
+            & (Join-Path $RepositoryRoot 'build/verify-immutable-artifact-promotion.ps1') -RepositoryRoot $RepositoryRoot
+        }
     }
 }
 
 $taskOrder = if ($Task -ceq 'Verify') {
-    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'D09Verification', 'D10Verification', 'D11Verification', 'D12Verification', 'D13Verification', 'D14Verification', 'D15Verification')
+    @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D01Verification', 'D02Verification', 'D03Verification', 'D04Verification', 'D05Regression', 'D06Verification', 'D07Verification', 'D08Verification', 'D09Verification', 'D10Verification', 'D11Verification', 'D12Verification', 'D13Verification', 'D14Verification', 'D15Verification', 'D16Verification')
 } else { @($Task) }
 
 foreach ($current in $taskOrder) { Invoke-Task $current }

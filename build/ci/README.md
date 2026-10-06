@@ -21,9 +21,14 @@ dependency-security and OCI work is then selected from the classifier output.
 Only rebuilt images receive image SBOM and vulnerability evidence.
 
 Manual workflow dispatch exposes `impacted` and `full_regression` modes. Full
-regression selects D01 through D15, all focused test projects, browser and
+regression selects D01 through D16, all focused test projects, browser and
 physical integration lanes, all twelve images, and repository/image security
 analysis. D15 defines no recurring schedule.
+
+D16 release-path changes select D01, D02, D15 and D16 without enabling browser,
+physical persistence, D11 runtime or complete OCI lanes. The older D05
+acceptance-manifest paths remain separately classified to D05 so their historical
+semantics cannot be changed without rerunning that verifier.
 
 On each push to `main`, the workflow checks whether the commit is associated
 with a merged pull request. A direct push is surfaced as a GitHub Actions warning
