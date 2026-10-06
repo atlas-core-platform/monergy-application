@@ -28,6 +28,67 @@ public interface ICustomerAuthenticationProvider
         CancellationToken cancellationToken);
 }
 
+public sealed record TrustedSessionPolicy(TimeSpan Lifetime)
+{
+    public static TrustedSessionPolicy ReferenceDefault { get; } = new(TimeSpan.FromMinutes(30));
+}
+
+public sealed record TrustedSessionSnapshot(
+    string CustomerId,
+    ActorContext Actor,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset ExpiresAt,
+    bool Revoked,
+    DateTimeOffset? RevokedAt,
+    int Revision);
+
+public enum TrustedSessionEvaluationStatus
+{
+    Current,
+    Expired,
+    Revoked,
+    Mismatch,
+    Unverifiable,
+    DependencyFailure,
+}
+
+public sealed record TrustedSessionEvaluation(
+    TrustedSessionEvaluationStatus Status,
+    TrustedSessionSnapshot? Session,
+    bool Created);
+
+public enum TrustedSessionRevocationStatus
+{
+    Revoked,
+    AlreadyRevoked,
+    NotCurrent,
+    DependencyFailure,
+}
+
+public sealed record TrustedSessionRevocation(
+    TrustedSessionRevocationStatus Status,
+    TrustedSessionSnapshot? Session);
+
+public interface ITrustedSessionRepository
+{
+    TrustedSessionEvaluation EstablishOrEvaluate(
+        string customerId,
+        ActorContext actor,
+        DateTimeOffset now,
+        TimeSpan lifetime);
+
+    TrustedSessionRevocation Revoke(
+        string authenticationContextId,
+        string customerId,
+        string actorId,
+        DateTimeOffset now);
+}
+
+public interface ICustomerIdentityEventSink
+{
+    void Publish(DomainEvent<CustomerIdentityChangedPayload> message);
+}
+
 public sealed record CustomerMutationIdentity(
     string ContractName,
     string ContractVersion,
