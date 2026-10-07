@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-  pull_request:
   workflow_dispatch:
     inputs:
       verification_mode:
@@ -57,20 +56,15 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_BEFORE: ${{ github.event.before }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           REQUESTED_DISPATCH_MODE: ${{ inputs.verification_mode }}
           HEAD_SHA: ${{ github.sha }}
         run: |
           $ErrorActionPreference = 'Stop'
           $head = $env:HEAD_SHA
-          $base = $env:PR_BASE_SHA
-          $mode = 'PullRequest'
+          $base = $env:EVENT_BEFORE
+          $mode = 'MergeIntegrity'
 
-          if ($env:EVENT_NAME -eq 'push') {
-            $base = $env:EVENT_BEFORE
-            $mode = 'MergeIntegrity'
-          }
-          elseif ($env:EVENT_NAME -eq 'workflow_dispatch') {
+          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
             $base = [string](git rev-parse "$head^")
             $mode = if ($env:REQUESTED_DISPATCH_MODE -eq 'full_regression') { 'FullRegression' } else { 'PullRequest' }
           }
