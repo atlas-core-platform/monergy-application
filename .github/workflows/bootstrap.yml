@@ -367,7 +367,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path .artifacts/d11/hosted -Force | Out-Null
-          ./build/local/Invoke-MonergyLocal.ps1 -Action Status | Set-Content -LiteralPath .artifacts/d11/hosted/controller-status.json -Encoding utf8
+          ./build/local/Invoke-MonergyLocal.ps1 -Action Status -Json | Set-Content -LiteralPath .artifacts/d11/hosted/controller-status.json -Encoding utf8
+          Get-Content -LiteralPath .artifacts/d11/hosted/controller-status.json -Raw | ConvertFrom-Json -ErrorAction Stop | Out-Null
       - name: Stop only the owned D11 application runtime
         if: always()
         shell: pwsh
