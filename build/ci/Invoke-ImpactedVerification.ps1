@@ -22,6 +22,15 @@ $localPnpm = Join-Path $RepositoryRoot '.toolcache/node-v24.21.0-win-x64/node_mo
 $pnpm = if (Test-Path -LiteralPath $localPnpm) { $localPnpm } else { (Get-Command pnpm -ErrorAction Stop).Source }
 
 foreach ($project in @($impact.testProjects)) {
+    # D09's historical physical tests predate Category=Physical. Their mandatory
+    # databases are provisioned by the dedicated persistence job, never universal.
+    if ([string]$project -ceq 'tests/persistence/Monergy.Persistence.Tests/Monergy.Persistence.Tests.csproj') {
+        if (-not $impact.gates.persistence) {
+            throw 'The D09 physical test project requires the dedicated persistence gate.'
+        }
+        Write-Output 'D09 physical test project is assigned to the mandatory dedicated persistence job.'
+        continue
+    }
     $projectPath = Join-Path $RepositoryRoot ([string]$project)
     if (-not (Test-Path -LiteralPath $projectPath)) { throw "Selected test project '$project' does not exist." }
     Write-Output "=== Impacted test: $project ==="
@@ -64,3 +73,4 @@ if ($selected -contains 'D15') {
     Write-Output 'D15 is executed by the universal policy gate and is not duplicated by the impacted runner.'
 }
 Write-Output "Impacted verification passed: $(@($impact.testProjects).Count) test projects, $(@($selected | Where-Object { $_ -cne 'D15' }).Count) governed verifiers."
+
