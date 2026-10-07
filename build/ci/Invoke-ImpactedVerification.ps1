@@ -49,7 +49,9 @@ $taskByVerifier = [ordered]@{
     D02 = 'D02Verification'
     D03 = 'D03Verification'
     D04 = 'D04Verification'
-    D05 = 'D05Verification'
+    # Match the full Verify task: later changes use D05's existing forward
+    # regression checks, not its original exact-tree acceptance ceremony.
+    D05 = 'D05Regression'
     D06 = 'D06Verification'
     D07 = 'D07Verification'
     D08 = 'D08Verification'
@@ -73,4 +75,3 @@ if ($selected -contains 'D15') {
     Write-Output 'D15 is executed by the universal policy gate and is not duplicated by the impacted runner.'
 }
 Write-Output "Impacted verification passed: $(@($impact.testProjects).Count) test projects, $(@($selected | Where-Object { $_ -cne 'D15' }).Count) governed verifiers."
-
