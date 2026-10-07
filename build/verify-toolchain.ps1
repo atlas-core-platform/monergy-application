@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$am05Migrations = @(& (Join-Path $RepositoryRoot 'build/am05/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot)
 
 function Test-ExactSet {
     param([object[]]$Actual, [object[]]$Expected)
@@ -238,7 +239,7 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
         $references.Count -eq $allowedReferences.Count -and
         @($referenceText | Select-Object -Unique).Count -eq $referenceText.Count -and
         @($referenceText | Where-Object { $_ -match '[\\/](?:services|tests|apps)[\\/]' }).Count -eq 0
-    $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $serviceRoot 'migrations') -File | Where-Object Name -cne '.gitkeep')
+    $migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $serviceRoot 'migrations') -File | Where-Object Name -cne '.gitkeep' | Where-Object { $_.FullName -cnotin $am05Migrations })
     if ($D10ForwardRegression -and $entry.Key -in @('evidence','financial-profile','financial-rules','reporting','audit','job-management')) {
         $migrationOwnershipValid = $migrationOwnershipValid -and $migrationFiles.Count -ge 1
     } elseif ($D09ForwardRegression -and $entry.Key -in @('evidence','financial-profile','financial-rules','reporting','audit')) {
@@ -362,3 +363,4 @@ if ($failures.Count -gt 0) {
     throw "D02 verification failed: $($checks.Count - $failures.Count)/$($checks.Count); failed: $($failures.Name -join ', ')."
 }
 Write-Output "D02 verification passed: $($checks.Count)/$($checks.Count)."
+

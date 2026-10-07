@@ -38,6 +38,9 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           dotnet-version: 10.0.401
+      - name: Verify additive migration scope and negative cases
+        shell: pwsh
+        run: ./build/am05/Get-MigrationOverlay.ps1 -SelfTest
       - name: Restore verified external AM source
         run: python3 build/am05/restore-verification-source.py
       - name: Locked restore and analyzer builds

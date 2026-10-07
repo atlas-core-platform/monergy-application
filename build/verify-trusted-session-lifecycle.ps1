@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$am05Migrations = @(& (Join-Path $RepositoryRoot 'build/am05/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot)
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = Split-Path -Parent $PSScriptRoot
 }
@@ -179,7 +180,7 @@ $checks['CID-005 payload is minimal provider-neutral and Audit-envelope compatib
 
 $checks['D14 reference adapters remain LOCAL/CI without physical store; AM-05 owns its additive migration'] =
     @([regex]::Matches($adapters, 'ReferenceAdapterGuard.EnsureAllowed\(configuration\)')).Count -ge 5 -and
-    @((Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity') -Recurse -File -Filter '*.sql' | Where-Object { $_.Name -cne '0001_tenant_access_sessions.sql' })).Count -eq 0 -and
+    @((Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity') -Recurse -File -Filter '*.sql' | Where-Object { $_.FullName -cnotin $am05Migrations })).Count -eq 0 -and
     ($application + $ports + $lifecycle + $adapters) -notmatch '(?i)EntityFrameworkCore|SqlConnection|Npgsql|MongoClient|Redis|Kafka|RabbitMQ|ServiceBus|EventBridge'
 
 $matrix = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d14-scenario-matrix.json') -Raw -Encoding utf8 | ConvertFrom-Json

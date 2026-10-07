@@ -3,6 +3,7 @@ param([string]$RepositoryRoot, [switch]$SelfTest)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$am05Migrations = @(& (Join-Path $RepositoryRoot 'build/am05/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot)
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) { $RepositoryRoot = Split-Path -Parent $PSScriptRoot }
 
 function Get-OrdinalSorted([object[]]$Values) {
@@ -192,7 +193,7 @@ $checks['Customer and KYC authority use typed scoped idempotency and immutable s
 $checks['Historical D13 sources introduce no provider database broker or event; only the governed AM-05 migration is additive'] =
     (Test-ForbiddenImplementation ($application + "`n" + $ports + "`n" + $repository)) -and
     -not $application.Contains('DomainEvent<') -and
-    @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity') -Recurse -File -Filter '*.sql' | Where-Object { $_.Name -cne '0001_tenant_access_sessions.sql' }).Count -eq 0
+    @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity') -Recurse -File -Filter '*.sql' | Where-Object { $_.FullName -cnotin $am05Migrations }).Count -eq 0
 $telemetryShape = [regex]::Match($ports,
     'public sealed record CustomerIdentityTelemetrySignal\((?<shape>[\s\S]*?)\);').Groups['shape'].Value
 $checks['Telemetry signals use exact operation outcome and safe identifier vocabularies'] =
