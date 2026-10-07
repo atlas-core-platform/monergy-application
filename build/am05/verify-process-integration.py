@@ -187,6 +187,9 @@ try:
     onboarding = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(onboarding)
     onboarding.verify(call, admin, database, stop, start, token, owner)
+    # The onboarding checks restart C&I. A signed-out session stays revoked
+    # across owner reconstruction; the current administrator remains usable.
+    admin(ending, "GET", "members", expected=401)
     role["policyVersion"] = admin(owner, "GET", "roles")["policyVersion"]
     assigned = admin(owner, "PUT", "members/A100", {"expectedPolicyVersion": role["policyVersion"], "businessRoleId": role["id"], "active": True, "tenantAdmin": False})
     current = login("T001", "A100")
