@@ -84,6 +84,25 @@ public sealed class ProtocolAndSessionTests
         Assert.Equal(0, membership.Calls);
     }
 
+    [Fact]
+    public async Task SignOutRevokesOnlyTheSuppliedSessionAndIsIdempotentWithoutMembershipAvailability()
+    {
+        var repository = new Sessions();
+        var membership = new Membership();
+        var authority = Authority(repository, membership);
+        var session = await authority.EstablishAsync("T001", new string('a', 64), default);
+        membership.Read = _ => throw new TenantAccessException("MEMBERSHIP_UNAVAILABLE", 503);
+        Assert.True(await authority.EndAsync(new("T002", session.AuthenticationContextId), default));
+        Assert.False(repository.Revoked);
+        Assert.True(await authority.EndAsync(new("T001", "different-session"), default));
+        Assert.False(repository.Revoked);
+        Assert.True(await authority.EndAsync(new("T001", session.AuthenticationContextId), default));
+        Assert.True(await authority.EndAsync(new("T001", session.AuthenticationContextId), default));
+        Assert.True(repository.Revoked);
+        Assert.Equal(2, membership.Calls);
+        await Assert.ThrowsAsync<TenantAccessException>(() => authority.EndAsync(new("T001", ""), default));
+    }
+
     private static TenantSessionAuthority Authority(Sessions repository, Membership membership)
     {
         var values = new Dictionary<string, string?>
@@ -115,7 +134,7 @@ public sealed class ProtocolAndSessionTests
         }
         public Task<TenantSessionContext?> ReadCurrentAsync(string tenantId, string sessionId, CancellationToken cancellationToken) =>
             Task.FromResult(!Revoked && Current?.TenantId == tenantId && Current.AuthenticationContextId == sessionId ? Current : null);
-        public Task RevokeAsync(string tenantId, string sessionId, CancellationToken cancellationToken) { Revoked = true; return Task.CompletedTask; }
+        public Task RevokeAsync(string tenantId, string sessionId, CancellationToken cancellationToken) { if (Current?.TenantId == tenantId && Current.AuthenticationContextId == sessionId) Revoked = true; return Task.CompletedTask; }
         public Task<AccessManagementReceipt> ConsumeAsync(string trustedTenant, string destination, AccessManagementEvent message, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
         public Task<bool> ReadyAsync(CancellationToken cancellationToken) => Task.FromResult(true);

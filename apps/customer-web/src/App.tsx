@@ -1,9 +1,15 @@
 import { Button, Card, Descriptions, Modal, Space, Tag, Typography } from 'antd';
 import { lazy, Suspense, useState } from 'react';
+import { WorkspaceShell } from '@monergy/ui-foundation';
+
+import { destinations } from './workspace/destinations';
+import WorkspaceHome from './workspace/WorkspaceHome';
+import './workspace/workspace-home.css';
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const SearchExperience = lazy(() => import('./search/SearchExperience'));
 const ReportsExperience = lazy(() => import('./reports/ReportsExperience'));
+const AccessExperience = lazy(() => import('./access/AccessExperience'));
 const { Paragraph, Text, Title } = Typography;
 
 function ToolchainFoundation() {
@@ -92,7 +98,14 @@ function ToolchainFoundation() {
   );
 }
 
-export function App() {
+function RouteContent() {
+  if (window.location.pathname === '/') return <WorkspaceHome />;
+  if (window.location.pathname === '/access')
+    return (
+      <Suspense fallback={<main aria-busy="true">Loading access management…</main>}>
+        <AccessExperience />
+      </Suspense>
+    );
   if (window.location.pathname === '/reports') {
     return (
       <Suspense
@@ -136,4 +149,19 @@ export function App() {
   }
 
   return <ToolchainFoundation />;
+}
+
+export function App() {
+  const current =
+    destinations.find((destination) => destination.href === window.location.pathname) ??
+    destinations[0];
+  return (
+    <WorkspaceShell
+      destinations={destinations}
+      active={current?.id ?? 'home'}
+      area={current?.label ?? 'Overview'}
+    >
+      <RouteContent />
+    </WorkspaceShell>
+  );
 }

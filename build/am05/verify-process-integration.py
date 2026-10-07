@@ -161,6 +161,18 @@ try:
     for tenant, administrator in administrators.items():
         revision = admin(administrator, "GET", "members")["policyVersion"]
         admin(administrator, "POST", "members", {"expectedPolicyVersion": revision, "actorId": "A100"})
+    # UI-01: sign-out can revoke only the supplied tenant-scoped session;
+    # repeated sign-out succeeds without revoking another session.
+    ending = login("T001", "A900")
+    end_request = {"tenantId": "T002", "authenticationContextId": ending["authenticationContextId"]}
+    call("ci", "POST", "/local/v1/tenant-sessions/revoke", end_request)
+    admin(ending, "GET", "members")
+    end_request["tenantId"] = "T001"
+    call("ci", "POST", "/local/v1/tenant-sessions/revoke", end_request)
+    call("ci", "POST", "/local/v1/tenant-sessions/revoke", end_request)
+    admin(ending, "GET", "members", expected=401)
+    admin(administrators["T001"], "GET", "members")
+    call("ci", "POST", "/local/v1/tenant-sessions/revoke", {**end_request, "actorId": "A100"}, expected=400)
     first = login("T001", "A100")
     admin(first, "GET", "members", expected=403)
     call("am", "GET", "/v1/administration/members", headers=session_headers(administrators["T001"], "T002"), expected=401)

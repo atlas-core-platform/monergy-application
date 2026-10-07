@@ -48,6 +48,8 @@ public static class TenantSessionEndpoints
             await repository.ReadyAsync(ct).ConfigureAwait(false) ? Results.Ok() : (IResult)Results.StatusCode(503));
         app.MapPost("/local/v1/tenant-sessions", (TenantSessionEstablishment request, HttpContext http, TenantSessionAuthority authority) =>
             InvokeAsync(() => authority.EstablishAsync(request.TenantId, http.Request.Headers["X-Monergy-Reference-Authentication"].ToString(), http.RequestAborted)));
+        app.MapPost("/local/v1/tenant-sessions/revoke", (TenantSessionLookup request, HttpContext http, TenantSessionAuthority authority) =>
+            InvokeAsync(() => authority.EndAsync(request, http.RequestAborted)));
         app.MapPost("/internal/v1/tenant-sessions/validate", (TenantSessionLookup request, HttpContext http, TenantSessionAuthority authority) =>
             TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Owner-Token"].ToString(), token)
                 ? InvokeAsync(() => authority.ValidateAsync(request, http.RequestAborted))
