@@ -13,8 +13,14 @@ orders them into the five D05 logical stages. GitHub Actions is the approved
 hosted execution platform for this repository; the gate semantics remain
 portable and vendor-neutral.
 
-`.github/workflows/bootstrap.yml` keeps a universal clean baseline for pull
-requests and `main`: locked restore, format, lint/source security, build,
+Automatic Actions run only on pushes to `main` after merge; opening or updating
+a pull request does not start verification. This policy applies to both
+`bootstrap.yml` and `access-owner-integration.yml`. Manual dispatch remains
+available for targeted verification. Passing post-merge runs provide the hosted
+verification evidence for the merged revision.
+
+`.github/workflows/bootstrap.yml` keeps a universal clean baseline: locked
+restore, format, lint/source security, build,
 architecture boundaries, candidate secret scanning, impact validation and the
 D15 verifier. Service, contract, browser, physical persistence, D11 runtime,
 dependency-security and OCI work is then selected from the classifier output.
