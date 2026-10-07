@@ -35,6 +35,7 @@ function Assert-Overlay {
 }
 
 Assert-Overlay $scope
+$am06Migrations = @(& (Join-Path $RepositoryRoot 'build/am06/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
 if ($SelfTest) {
     $mutations = @(
         @{ field='revision'; value='OTHER' },
@@ -62,3 +63,4 @@ if ($SelfTest) {
 # Historical verifiers retain their exact original cohorts/counts. Only these
 # reviewed additive owner migrations are accounted for by AM-05's separate gate.
 foreach ($entry in $scope.migrations) { [IO.Path]::GetFullPath((Join-Path $RepositoryRoot ([string]$entry.path))) }
+foreach ($path in $am06Migrations) { $path }

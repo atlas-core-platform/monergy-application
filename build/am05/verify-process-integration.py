@@ -1,5 +1,6 @@
 """Exercise real AM, C&I and Audit binaries with separate runtime credentials."""
 import hashlib
+import importlib.util
 import json
 import os
 import pathlib
@@ -48,6 +49,7 @@ def environment(kind):
                     "Monergy__AccessManagement__TrustedContext": "customer-identity-reference",
                     "Monergy__AccessManagement__CustomerIdentityUrl": urls["ci"] + "/",
                     "Monergy__AccessManagement__CustomerIdentityToken": token("CI_CONTEXT"),
+                    "Monergy__AccessManagement__IdentityProvisioningToken": token("CI_PROVISIONING"),
                     "Monergy__AccessManagement__MembershipToken": token("MEMBERSHIP")})
         for tenant in ("T001", "T002"):
             env["Monergy__AccessManagement__TenantDatabases__" + tenant] = os.environ["MONERGY_AM_" + tenant + "_RUNTIME"]
@@ -55,6 +57,7 @@ def environment(kind):
         env.update({"Monergy__AccessIntegration__AccessManagementUrl": urls["am"] + "/",
                     "Monergy__AccessIntegration__MembershipToken": token("MEMBERSHIP"),
                     "Monergy__AccessIntegration__CustomerIdentityToken": token("CI_CONTEXT"),
+                    "Monergy__AccessIntegration__IdentityProvisioningToken": token("CI_PROVISIONING"),
                     "Monergy__AccessIntegration__CustomerIdentityEventToken": token("CI_EVENT")})
         index = 0
         for tenant in ("T001", "T002"):
@@ -84,10 +87,12 @@ def call(kind, method, path, body=None, headers=None, expected=200):
     return json.loads(raw) if raw and response.headers.get("Content-Type", "").startswith("application/json") else None
 
 
-def start(kind, lost_receipt=False):
+def start(kind, lost_receipt=False, lost_provision=False):
     env = environment(kind)
     if lost_receipt:
         env["Monergy__AccessIntegration__VerificationLoseReceiptOnce"] = "true"
+    if lost_provision:
+        env["Monergy__AccessIntegration__VerificationLoseProvisioningReceiptOnce"] = "true"
     output = (evidence / (kind + "-process-" + str(len(logs)) + ".log")).open("w")
     logs.append(output)
     processes[kind] = subprocess.Popen(["dotnet", str(binaries[kind]), "--urls", urls[kind]], cwd=root, env=env, stdout=output, stderr=subprocess.STDOUT)
@@ -147,7 +152,7 @@ try:
         database("ci", tenant, "TRUNCATE customer_identity.trusted_sessions,customer_identity.access_event_inbox,customer_identity.access_subject_versions; UPDATE customer_identity.access_policy_version SET version=0;")
         database("audit", tenant, "TRUNCATE audit.access_event_inbox,audit.inbox,audit.evidence CASCADE;")
     start("am")
-    start("ci")
+    start("ci", lost_provision=True)
     start("audit", lost_receipt=True)
     call("am", "GET", "/internal/v1/access-subjects/A900", headers={"X-Monergy-Tenant": "T001"}, expected=403)
     call("ci", "POST", "/local/v1/tenant-sessions", {"tenantId": "T001"}, expected=401)
@@ -166,6 +171,11 @@ try:
     permission = admin(owner, "POST", "permissions", {"expectedPolicyVersion": revision, "code": "owner-read", "label": "Read profile",
                          "grants": [{"capabilityId": "financial-profile.profile.read", "scope": "Tenant"}]})
     role = admin(owner, "POST", "roles", {"expectedPolicyVersion": permission["policyVersion"], "code": "owner-reader", "label": "Reader", "permissionIds": [permission["id"]]})
+    spec = importlib.util.spec_from_file_location("am06_onboarding", root / "build/am06/verify-onboarding.py")
+    onboarding = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(onboarding)
+    onboarding.verify(call, admin, database, stop, start, token, owner)
+    role["policyVersion"] = admin(owner, "GET", "roles")["policyVersion"]
     assigned = admin(owner, "PUT", "members/A100", {"expectedPolicyVersion": role["policyVersion"], "businessRoleId": role["id"], "active": True, "tenantAdmin": False})
     current = login("T001", "A100")
     unused = login("T001", "A100")
