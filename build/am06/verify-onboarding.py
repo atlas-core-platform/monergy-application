@@ -30,7 +30,9 @@ def verify(call, admin, database, stop, start, token, owner):
     assert database("am", "T001", "SELECT count(*) FROM am.access_subjects WHERE normalized_email='second@onboarding.test' AND business_role_id IS NULL;") == "1"
     replay = process("am06-batch")
     assert replay["activatedPolicyVersion"] == complete["activatedPolicyVersion"]
-    assert stage("am06-batch", csv)["status"] == "Activated"
+    revision = admin(owner, "GET", "members")["policyVersion"]
+    assert admin(owner, "POST", "imports/am06-batch/commit", {
+        "expectedPolicyVersion": revision, "csv": csv, "contentHash": complete["contentHash"]})["status"] == "Activated"
 
     headers = {"X-Monergy-Owner-Token": token("CI_PROVISIONING"), "X-Monergy-Tenant": "T001"}
     key = database("ci", "T001", "SELECT idempotency_key FROM customer_identity.provisioning_receipts WHERE import_id='am06-batch' AND row_number=1;")
