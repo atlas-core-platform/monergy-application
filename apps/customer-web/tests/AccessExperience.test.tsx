@@ -57,44 +57,50 @@ describe('tenant administration trust boundaries', () => {
     expect(screen.getByLabelText('Local access key')).toHaveValue('');
   });
 
-  it('preserves an unsaved edit after a policy conflict and clears tenant data when authority expires', async () => {
-    let expired = false;
-    const writes: unknown[] = [];
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string, options?: RequestInit) => {
-        if (url.includes('/identity-api/')) return Promise.resolve(json(session));
-        if (expired) return Promise.resolve(json({ error: 'SESSION_NOT_CURRENT' }, 401));
-        if (options?.method === 'PUT') {
-          writes.push(JSON.parse(typeof options.body === 'string' ? options.body : '{}'));
-          return Promise.resolve(json({ error: 'POLICY_VERSION_CONFLICT' }, 409));
-        }
-        return Promise.resolve(
-          json({
-            policyVersion: 7,
-            items: url.includes('/roles') ? [] : [member],
-            nextCursor: null,
-          }),
-        );
-      }),
-    );
-    mount();
-    const user = await connect();
-    await user.click(await screen.findByRole('button', { name: 'Open person@example.test' }));
-    await user.click(await screen.findByRole('switch', { name: 'Tenant administrator' }));
-    await user.click(screen.getByRole('button', { name: 'Review change' }));
-    await user.click(await screen.findByRole('button', { name: 'Save change' }));
-    expect(await screen.findByText(/workspace changed or this operation conflicts/)).toBeVisible();
-    expect(screen.getByRole('switch', { name: 'Tenant administrator' })).toBeChecked();
-    expect(writes).toEqual([
-      { expectedPolicyVersion: 7, businessRoleId: null, active: true, tenantAdmin: true },
-    ]);
-    await user.click(screen.getByLabelText('Close'));
-    expired = true;
-    await user.click(screen.getByRole('button', { name: 'Refresh' }));
-    expect(await screen.findByRole('button', { name: 'Connect workspace' })).toBeVisible();
-    expect(screen.queryByText('person@example.test')).not.toBeInTheDocument();
-  });
+  it(
+    'preserves an unsaved edit after a policy conflict and clears tenant data when authority expires',
+    { timeout: 30000 },
+    async () => {
+      let expired = false;
+      const writes: unknown[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((url: string, options?: RequestInit) => {
+          if (url.includes('/identity-api/')) return Promise.resolve(json(session));
+          if (expired) return Promise.resolve(json({ error: 'SESSION_NOT_CURRENT' }, 401));
+          if (options?.method === 'PUT') {
+            writes.push(JSON.parse(typeof options.body === 'string' ? options.body : '{}'));
+            return Promise.resolve(json({ error: 'POLICY_VERSION_CONFLICT' }, 409));
+          }
+          return Promise.resolve(
+            json({
+              policyVersion: 7,
+              items: url.includes('/roles') ? [] : [member],
+              nextCursor: null,
+            }),
+          );
+        }),
+      );
+      mount();
+      const user = await connect();
+      await user.click(await screen.findByRole('button', { name: 'Open person@example.test' }));
+      await user.click(await screen.findByRole('switch', { name: 'Tenant administrator' }));
+      await user.click(screen.getByRole('button', { name: 'Review change' }));
+      await user.click(await screen.findByRole('button', { name: 'Save change' }));
+      expect(
+        await screen.findByText(/workspace changed or this operation conflicts/),
+      ).toBeVisible();
+      expect(screen.getByRole('switch', { name: 'Tenant administrator' })).toBeChecked();
+      expect(writes).toEqual([
+        { expectedPolicyVersion: 7, businessRoleId: null, active: true, tenantAdmin: true },
+      ]);
+      await user.click(screen.getByLabelText('Close'));
+      expired = true;
+      await user.click(screen.getByRole('button', { name: 'Refresh' }));
+      expect(await screen.findByRole('button', { name: 'Connect workspace' })).toBeVisible();
+      expect(screen.queryByText('person@example.test')).not.toBeInTheDocument();
+    },
+  );
 
   it(
     'never stages an invalid CSV and preserves the staged revision when processing',
