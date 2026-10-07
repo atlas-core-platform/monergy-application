@@ -87,7 +87,7 @@ foreach ($service in $currentCohort) {
     $checks["$service owns migrations"] = (Test-Path -LiteralPath $migrationRoot) -and @(Get-ChildItem -LiteralPath $migrationRoot -File -Filter '*.sql').Count -ge 1
 }
 $allSql = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
-$checks['No shared or out-of-cohort business migrations'] = @($allSql | Where-Object {
+$checks['No shared or out-of-cohort business migrations'] = @($allSql | Where-Object { $_.Name -cne '0001_tenant_access_sessions.sql' } | Where-Object {
     $relative = $_.FullName.Substring($RepositoryRoot.Length).Replace('\','/')
     -not ($currentCohort | Where-Object { $relative.StartsWith("/services/$_/migrations/", [StringComparison]::Ordinal) })
 }).Count -eq 0
@@ -134,3 +134,4 @@ foreach ($entry in $checks.GetEnumerator()) { Write-Output "[$(if($entry.Value){
 $failed = @($checks.Values | Where-Object { -not $_ })
 if ($failed.Count) { throw "D09 verification failed: $($checks.Count-$failed.Count)/$($checks.Count)." }
 Write-Output "D09 verification passed: $($checks.Count)/$($checks.Count); candidate only."
+

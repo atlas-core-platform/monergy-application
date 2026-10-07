@@ -97,6 +97,7 @@ public sealed class BoundaryTests
             "financial-rules",
             "reporting",
             "job-management",
+            "customer-identity", // AR-001 / AM-05 owner-local tenant sessions.
         };
         var authorizedRoots = persistenceCohort
             .Select(serviceId => Path.GetFullPath(Path.Combine(ServicesRoot, serviceId, "migrations")))
@@ -126,7 +127,7 @@ public sealed class BoundaryTests
     }
 
     [Fact]
-    public void PhysicalPersistenceDependenciesRemainInsideAuthorizedD09Boundaries()
+    public void PhysicalPersistenceDependenciesRemainInsideGovernedServiceBoundaries()
     {
         var forbidden = new[]
         {
@@ -146,6 +147,7 @@ public sealed class BoundaryTests
             "financial-rules",
             "reporting",
             "job-management",
+            "customer-identity", // AR-001 / AM-05 owner-local tenant sessions.
         };
 
         foreach (var projectPath in Directory.GetFiles(RepositoryRoot, "*.csproj", SearchOption.AllDirectories))
@@ -311,3 +313,4 @@ public sealed class BoundaryTests
         }
     }
 }
+

@@ -189,10 +189,10 @@ $checks['Customer and KYC authority use typed scoped idempotency and immutable s
     $repository.Contains('Dictionary<KycMutationIdentity') -and
     $repository.Contains('MutationDisposition.Replayed') -and
     $repository.Contains('ToImmutableArray') -and $repository.Contains('with { }')
-$checks['No provider database broker migration or event realization is introduced'] =
+$checks['Historical D13 sources introduce no provider database broker or event; only the governed AM-05 migration is additive'] =
     (Test-ForbiddenImplementation ($application + "`n" + $ports + "`n" + $repository)) -and
     -not $application.Contains('DomainEvent<') -and
-    @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity') -Recurse -File -Filter '*.sql').Count -eq 0
+    @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity') -Recurse -File -Filter '*.sql' | Where-Object { $_.Name -cne '0001_tenant_access_sessions.sql' }).Count -eq 0
 $telemetryShape = [regex]::Match($ports,
     'public sealed record CustomerIdentityTelemetrySignal\((?<shape>[\s\S]*?)\);').Groups['shape'].Value
 $checks['Telemetry signals use exact operation outcome and safe identifier vocabularies'] =
@@ -269,3 +269,4 @@ foreach ($entry in $checks.GetEnumerator()) {
 $failed = @($checks.Values | Where-Object { -not $_ })
 if ($failed.Count) { throw "D13 verification failed: $($checks.Count - $failed.Count)/$($checks.Count)." }
 Write-Output "D13 verification passed: $($checks.Count)/$($checks.Count); candidate only."
+
