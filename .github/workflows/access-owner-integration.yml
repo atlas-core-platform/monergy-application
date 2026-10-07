@@ -1,0 +1,89 @@
+name: Tenant Access owner integration
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: access-owner-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  owner-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: am-ci-disposable-admin
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Set up pinned .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.401
+      - name: Verify additive migration scope and negative cases
+        shell: pwsh
+        run: ./build/am05/Get-MigrationOverlay.ps1 -SelfTest
+      - name: Restore verified external AM source
+        run: python3 build/am05/restore-verification-source.py
+      - name: Locked restore and analyzer builds
+        shell: bash
+        run: |
+          for project in tests/persistence/Monergy.AccessIntegration.Tests build/local/Monergy.LocalAccessAuditHost build/Monergy.DatabaseMigrator .artifacts/am05/access-management/tools/Monergy.AccessManagement.Migrations .artifacts/am05/access-management/tools/Monergy.AccessManagement.DeliveryReference; do
+            dotnet restore "$project" --locked-mode
+            dotnet build "$project" --configuration Release --no-restore
+          done
+      - name: Verify owner formatting
+        run: |
+          for project in contracts/Monergy.Contracts shared/platform/Monergy.Platform services/customer-identity services/audit tests/persistence/Monergy.AccessIntegration.Tests build/local/Monergy.LocalAccessAuditHost; do
+            dotnet format "$project" --verify-no-changes --no-restore
+          done
+      - name: Create isolated databases and scoped credentials
+        run: |
+          bash .artifacts/am05/access-management/build/prepare-ci-databases.sh "${{ job.services.postgres.id }}"
+          bash build/am05/prepare-owner-databases.sh "${{ job.services.postgres.id }}"
+      - name: Apply owner migrations and bootstrap bindings
+        run: |
+          (cd .artifacts/am05/access-management && bash build/provision-ci-tenants.sh "${{ job.services.postgres.id }}")
+          bash build/am05/provision-owner-databases.sh "${{ job.services.postgres.id }}"
+      - name: Verify owner behavior, atomicity and least privilege
+        run: dotnet test tests/persistence/Monergy.AccessIntegration.Tests --configuration Release --no-build --logger "trx;LogFileName=am05-owners.trx" --results-directory .artifacts/am05/results
+      - name: Verify real AM, C&I and Audit processes
+        env:
+          AM05_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: python3 build/am05/verify-process-integration.py | tee .artifacts/am05/process-results.log
+      - name: Capture formatter suggestions on failure
+        if: failure()
+        run: |
+          mkdir -p .artifacts/am05
+          for project in contracts/Monergy.Contracts shared/platform/Monergy.Platform services/customer-identity services/audit tests/persistence/Monergy.AccessIntegration.Tests build/local/Monergy.LocalAccessAuditHost; do
+            dotnet format "$project" --no-restore || true
+          done
+          git diff --binary > .artifacts/am05/formatter-suggestions.patch
+      - name: Preserve integration evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: am05-owner-integration
+          path: |
+            .artifacts/am05/results/*.trx
+            .artifacts/am05/*.log
+            .artifacts/am05/*.patch
+          if-no-files-found: warn

@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$am05Migrations = @(& (Join-Path $RepositoryRoot 'build/am05/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot)
 
 function Test-ExactSet {
     param([object[]]$Actual, [object[]]$Expected)
@@ -259,7 +260,7 @@ if ($D09ForwardRegression -or $D10ForwardRegression) {
 } else {
     Add-Check 'No physical provider dependency' ($projectText -notmatch 'EntityFrameworkCore|Npgsql|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Amazon\.|Google\.Cloud|OpenAI') 'No provider, database, broker, OCR, AI, or cloud SDK selected'
 }
-$migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
+$migrationFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql' | Where-Object { $_.FullName -cnotin $am05Migrations })
 if ($D10ForwardRegression) {
     Add-Check 'D10-bounded migrations' ($migrationFiles.Count -eq 12 -and @($migrationFiles | Where-Object { $_.FullName -notmatch '[/\\](evidence|financial-profile|financial-rules|reporting|audit|job-management)[/\\]migrations[/\\]' }).Count -eq 0) 'D09 cohort plus D10 Audit inbox and Job Management authority/lease migrations only'
 } elseif ($D09ForwardRegression) {
@@ -332,3 +333,4 @@ if ($failures.Count -gt 0) {
     throw "D03 verification failed: $($checks.Count - $failures.Count)/$($checks.Count); failed: $($failures.Name -join ', ')."
 }
 Write-Output "D03 verification passed: $($checks.Count)/$($checks.Count)."
+

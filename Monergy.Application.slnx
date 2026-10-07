@@ -20,6 +20,7 @@
   <Folder Name="/Build/">
     <Project Path="build/Monergy.DatabaseMigrator/Monergy.DatabaseMigrator.csproj" />
     <Project Path="build/local/Monergy.LocalAuditHost/Monergy.LocalAuditHost.csproj" />
+    <Project Path="build/local/Monergy.LocalAccessAuditHost/Monergy.LocalAccessAuditHost.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj" />
@@ -33,5 +34,7 @@
     <Project Path="tests/search-retrieval/Monergy.SearchRetrieval.Tests/Monergy.SearchRetrieval.Tests.csproj" />
     <Project Path="tests/vs02/Monergy.Vs02.Tests/Monergy.Vs02.Tests.csproj" />
     <Project Path="tests/persistence/Monergy.Persistence.Tests/Monergy.Persistence.Tests.csproj" />
+    <Project Path="tests/persistence/Monergy.AccessIntegration.Tests/Monergy.AccessIntegration.Tests.csproj" />
   </Folder>
 </Solution>
+

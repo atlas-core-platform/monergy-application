@@ -6,11 +6,11 @@ var connection = ResolveConnection(options);
 var repositoryRoot = Path.GetFullPath(Required(options, "repository-root"));
 var allowed = new HashSet<string>(StringComparer.Ordinal)
 {
-    "evidence", "financial-profile", "financial-rules", "reporting", "audit", "job-management",
+    "evidence", "financial-profile", "financial-rules", "reporting", "audit", "job-management", "customer-identity",
 };
 if (!allowed.Contains(service))
 {
-    throw new InvalidOperationException($"Service '{service}' is outside the D09 persistence cohort.");
+    throw new InvalidOperationException($"Service '{service}' is outside the governed persistence cohorts.");
 }
 
 var migrationRoot = Path.Combine(repositoryRoot, "services", service, "migrations");
@@ -65,3 +65,4 @@ static string ResolveConnection(IReadOnlyDictionary<string, string> values)
     // --connection-environment so credentials never appear in the process command line.
     return Required(values, "connection");
 }
+

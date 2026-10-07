@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$am05Migrations = @(& (Join-Path $RepositoryRoot 'build/am05/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot)
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
     $RepositoryRoot = Split-Path -Parent $PSScriptRoot
 }
@@ -177,9 +178,9 @@ $checks['CID-005 payload is minimal provider-neutral and Audit-envelope compatib
     $lifecycle.Contains('"Customer"') -and
     $lifecycle.Contains('session.CustomerId')
 
-$checks['Reference adapters remain LOCAL or CI_EPHEMERAL and introduce no physical store'] =
+$checks['D14 reference adapters remain LOCAL/CI without physical store; AM-05 owns its additive migration'] =
     @([regex]::Matches($adapters, 'ReferenceAdapterGuard.EnsureAllowed\(configuration\)')).Count -ge 5 -and
-    @((Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity') -Recurse -File -Filter '*.sql')).Count -eq 0 -and
+    @((Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity') -Recurse -File -Filter '*.sql' | Where-Object { $_.FullName -cnotin $am05Migrations })).Count -eq 0 -and
     ($application + $ports + $lifecycle + $adapters) -notmatch '(?i)EntityFrameworkCore|SqlConnection|Npgsql|MongoClient|Redis|Kafka|RabbitMQ|ServiceBus|EventBridge'
 
 $matrix = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d14-scenario-matrix.json') -Raw -Encoding utf8 | ConvertFrom-Json
@@ -230,3 +231,4 @@ foreach ($entry in $checks.GetEnumerator()) {
 $failed = @($checks.Values | Where-Object { -not $_ })
 if ($failed.Count) { throw "D14 verification failed: $($checks.Count - $failed.Count)/$($checks.Count)." }
 Write-Output "D14 verification passed: $($checks.Count)/$($checks.Count); candidate only."
+

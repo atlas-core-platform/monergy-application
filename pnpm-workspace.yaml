@@ -6,6 +6,7 @@ catalogMode: strict
 
 overrides:
   brace-expansion: 5.0.12
+  source-map-js: 1.2.2
 
 onlyBuiltDependencies:
   - esbuild

@@ -14,6 +14,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.UnmappedMemberHandling = ContractJson.Options.UnmappedMemberHandling;
     options.SerializerOptions.WriteIndented = ContractJson.Options.WriteIndented;
 });
+var tenantIntegration = TenantAccessIntegration.IsSelected(builder.Configuration);
+if (tenantIntegration)
+{
+    if (!builder.Environment.IsDevelopment()) throw new InvalidOperationException("Tenant integration is Development-only.");
+    builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 65_536);
+    builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectRequiredConstructorParameters = true);
+    builder.Services.AddTenantSessionAuthority(builder.Configuration);
+}
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);
 if (referenceAdapters)
 {
@@ -28,6 +36,9 @@ if (referenceAdapters)
     app.MapCustomerIdentityContracts();
 }
 
+if (tenantIntegration) app.MapTenantSessionAuthority();
+
 await app.RunAsync();
 
 public partial class Program;
+

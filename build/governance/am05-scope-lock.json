@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0.0",
+  "revision": "AR-001",
+  "architectureMain": "d4d2653ad97808872357865fca4a486611d40fd4",
+  "applicationBase": "45ccd9ebd1f693ca07a3976f3094b87604f6a0b7",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "migrations": [
+    {
+      "path": "services/customer-identity/migrations/0001_tenant_access_sessions.sql",
+      "sha256": "ca52983949102f237b1cf4f8020ee84e82fb365f2dcc3cc78f5087949183e1d9"
+    },
+    {
+      "path": "services/audit/migrations/0003_tenant_access_evidence.sql",
+      "sha256": "c7d20beb13f810181e873722f050584caee23acf91f21159c75662af7dfc6dab"
+    }
+  ]
+}

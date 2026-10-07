@@ -2,6 +2,7 @@
 param([string]$RepositoryRoot, [switch]$SelfTest, [switch]$D10ForwardRegression)
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$am05Migrations = @(& (Join-Path $RepositoryRoot 'build/am05/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot)
 if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) { $RepositoryRoot = Split-Path -Parent $PSScriptRoot }
 
 function Test-ExactSet([object[]]$Actual, [object[]]$Expected) {
@@ -86,7 +87,7 @@ foreach ($service in $currentCohort) {
     $migrationRoot = Join-Path $RepositoryRoot "services/$service/migrations"
     $checks["$service owns migrations"] = (Test-Path -LiteralPath $migrationRoot) -and @(Get-ChildItem -LiteralPath $migrationRoot -File -Filter '*.sql').Count -ge 1
 }
-$allSql = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
+$allSql = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql' | Where-Object { $_.FullName -cnotin $am05Migrations })
 $checks['No shared or out-of-cohort business migrations'] = @($allSql | Where-Object {
     $relative = $_.FullName.Substring($RepositoryRoot.Length).Replace('\','/')
     -not ($currentCohort | Where-Object { $relative.StartsWith("/services/$_/migrations/", [StringComparison]::Ordinal) })
@@ -134,3 +135,4 @@ foreach ($entry in $checks.GetEnumerator()) { Write-Output "[$(if($entry.Value){
 $failed = @($checks.Values | Where-Object { -not $_ })
 if ($failed.Count) { throw "D09 verification failed: $($checks.Count-$failed.Count)/$($checks.Count)." }
 Write-Output "D09 verification passed: $($checks.Count)/$($checks.Count); candidate only."
+

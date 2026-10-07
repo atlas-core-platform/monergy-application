@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+$am05Migrations = @(& (Join-Path $RepositoryRoot 'build/am05/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot)
 
 function Test-ExactSet {
     param([object[]]$Actual, [object[]]$Expected)
@@ -190,7 +191,7 @@ foreach ($serviceId in $expectedServiceIds) {
 Add-Check 'Service source folders' $serviceFoldersValid 'All 12 governed folders exist'
 Add-Check 'Service-owned migration scaffolds' $migrationFoldersValid 'All 12 services own a migration history location'
 
-$sqlFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql')
+$sqlFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql' | Where-Object { $_.FullName -cnotin $am05Migrations })
 if ($D10ForwardRegression) {
     $authorized = @($sqlFiles | Where-Object { $_.FullName -match '[/\\](evidence|financial-profile|financial-rules|reporting|audit|job-management)[/\\]migrations[/\\]' })
     Add-Check 'D10-authorized service migrations only' ($sqlFiles.Count -eq 12 -and $authorized.Count -eq 12) 'Exact D09 cohort plus D10 Audit inbox and Job Management authority/lease migrations'
@@ -330,3 +331,4 @@ if ($failures.Count -gt 0) {
     throw "Bootstrap verification failed: $($checks.Count - $failures.Count)/$($checks.Count); failed: $($failures.Name -join ', ')."
 }
 Write-Output "Bootstrap verification passed: $($checks.Count)/$($checks.Count)."
+
