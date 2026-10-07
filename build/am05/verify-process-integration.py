@@ -1,3 +1,4 @@
+# UI-01 operator setup: build/governance/UI-01-connected-workspace.md
 """Exercise real AM, C&I and Audit binaries with separate runtime credentials."""
 import hashlib
 import importlib.util
