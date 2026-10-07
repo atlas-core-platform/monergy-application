@@ -18,6 +18,7 @@ public sealed class PostgresOwnerTests : IAsyncLifetime
         {
             await using var ci = await OpenAsync("CI", tenant, "OWNER");
             await ci.ExecuteAsync("TRUNCATE customer_identity.trusted_sessions,customer_identity.access_event_inbox,customer_identity.access_subject_versions; UPDATE customer_identity.access_policy_version SET version=0;");
+            await ci.ExecuteAsync("TRUNCATE customer_identity.provisioning_receipts,customer_identity.tenant_principals;");
             await using var audit = await OpenAsync("AUDIT", tenant, "OWNER");
             await audit.ExecuteAsync("TRUNCATE audit.access_event_inbox,audit.inbox,audit.evidence CASCADE;");
         }
@@ -143,6 +144,81 @@ public sealed class PostgresOwnerTests : IAsyncLifetime
         await sessions.ConsumeAsync("T001", "sessions", message, default);
         await Assert.ThrowsAsync<TenantAccessException>(() => sessions.ConsumeAsync("T001", "sessions", message with { SubjectVersion = 3 }, default));
     }
+
+    [Fact]
+    public async Task ConcurrentIdentityRetriesReturnOneDurableTenantPrincipal()
+    {
+        await using var connections = new PostgresTenantSessions(Config());
+        var identities = new PostgresTenantIdentities(connections);
+        var request = IdentityRequest();
+        var receipts = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => identities.ProvisionAsync("T001", request, default)));
+        Assert.Single(receipts.Select(receipt => receipt.ActorId).Distinct());
+        await using var reopened = new PostgresTenantSessions(Config());
+        Assert.Equal(receipts[0], await new PostgresTenantIdentities(reopened).ProvisionAsync("T001", request, default));
+        var otherTenant = await identities.ProvisionAsync("T002", request with { TenantId = "T002" }, default);
+        Assert.NotEqual(receipts[0].ActorId, otherTenant.ActorId);
+        await using var owner = await OpenAsync("CI", "T001", "OWNER");
+        Assert.Equal(1, await owner.ExecuteScalarAsync<int>("SELECT count(*) FROM customer_identity.tenant_principals;"));
+        Assert.Equal(1, await owner.ExecuteScalarAsync<int>("SELECT count(*) FROM customer_identity.provisioning_receipts;"));
+        Assert.Equal(0, await owner.ExecuteScalarAsync<int>("SELECT count(*) FROM customer_identity.trusted_sessions;"));
+    }
+
+    [Fact]
+    public async Task IdentityEmailUniquenessAndImmutableImportKeysSurviveReplays()
+    {
+        await using var connections = new PostgresTenantSessions(Config());
+        var identities = new PostgresTenantIdentities(connections);
+        var request = IdentityRequest();
+        var first = await identities.ProvisionAsync("T001", request, default);
+        var repeatedEmail = await identities.ProvisionAsync("T001", request with { ImportId = "second-import", IdempotencyKey = new string('b', 64) }, default);
+        Assert.Equal(first.ActorId, repeatedEmail.ActorId);
+        Assert.Equal("IDENTITY_IDEMPOTENCY_CONFLICT", (await Assert.ThrowsAsync<TenantAccessException>(() =>
+            identities.ProvisionAsync("T001", request with { NormalizedEmail = "other@example.test" }, default))).Code);
+        Assert.Equal("IDENTITY_IMPORT_ROW_CONFLICT", (await Assert.ThrowsAsync<TenantAccessException>(() =>
+            identities.ProvisionAsync("T001", request with { IdempotencyKey = new string('c', 64) }, default))).Code);
+        await Assert.ThrowsAsync<TenantAccessException>(() => identities.ProvisionAsync("T002", request, default));
+    }
+
+    [Fact]
+    public async Task FailedIdentityReceiptRollsBackPrincipalAndRuntimeCannotRewriteIdentity()
+    {
+        await using var connections = new PostgresTenantSessions(Config());
+        var identities = new PostgresTenantIdentities(connections);
+        await using var owner = await OpenAsync("CI", "T001", "OWNER");
+        await owner.ExecuteAsync("REVOKE INSERT ON customer_identity.provisioning_receipts FROM am05_ci_t001_runtime;");
+        try
+        {
+            await Assert.ThrowsAsync<PostgresException>(() => identities.ProvisionAsync("T001", IdentityRequest(), default));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("SELECT count(*) FROM customer_identity.tenant_principals;"));
+        }
+        finally { await owner.ExecuteAsync("GRANT INSERT ON customer_identity.provisioning_receipts TO am05_ci_t001_runtime;"); }
+        await identities.ProvisionAsync("T001", IdentityRequest(), default);
+        await using var runtime = await OpenAsync("CI", "T001", "RUNTIME");
+        foreach (var sql in new[]
+        {
+            "UPDATE customer_identity.tenant_principals SET normalized_email='other@example.test';",
+            "DELETE FROM customer_identity.tenant_principals;",
+            "UPDATE customer_identity.provisioning_receipts SET import_id='forged';",
+            "DELETE FROM customer_identity.provisioning_receipts;",
+            "UPDATE customer_identity.provisioning_schema SET version=2;",
+        }) await Assert.ThrowsAsync<PostgresException>(() => runtime.ExecuteAsync(sql));
+        await using var wrongBinding = new PostgresTenantSessions(Config(wrongBinding: true));
+        await Assert.ThrowsAsync<TenantAccessException>(() => new PostgresTenantIdentities(wrongBinding)
+            .ProvisionAsync("T002", IdentityRequest() with { TenantId = "T002" }, default));
+    }
+
+    [Theory]
+    [InlineData("New@example.test", 1)]
+    [InlineData("name <new@example.test>", 1)]
+    [InlineData("new@example.test", 0)]
+    [InlineData("new@example.test", 501)]
+    public void InvalidProvisioningInputCannotEnterTheIdentityTransaction(string email, int row)
+    {
+        Assert.Throws<TenantAccessException>(() => TenantIdentityProvisioningProtocol.Validate(
+            IdentityRequest() with { NormalizedEmail = email, RowNumber = row }, "T001"));
+    }
+
+    private static TenantIdentityProvisioningRequest IdentityRequest() => new("T001", "identity-test", 1, "new@example.test", new string('a', 64));
 
     private static IConfiguration Config(bool wrongBinding = false)
     {

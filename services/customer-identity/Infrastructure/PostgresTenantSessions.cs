@@ -136,7 +136,7 @@ public sealed class PostgresTenantSessions : ITenantSessionRepository, IAsyncDis
         catch (Exception exception) when (exception is NpgsqlException or TenantAccessException) { return false; }
     }
 
-    private async Task<NpgsqlConnection> OpenAsync(string tenantId, CancellationToken cancellationToken)
+    internal async Task<NpgsqlConnection> OpenAsync(string tenantId, CancellationToken cancellationToken)
     {
         if (!sources.TryGetValue(tenantId, out var source)) throw new TenantAccessException("TENANT_UNAVAILABLE", 503);
         var connection = await source.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);

@@ -1,0 +1,14 @@
+{
+  "revision": "AR-001",
+  "increment": "AM-06",
+  "applicationBase": "375e6058b0f488f74d4a0924feae4f70f6fe10fb",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "migrations": [
+    {
+      "path": "services/customer-identity/migrations/0002_tenant_identity_provisioning.sql",
+      "sha256": "0072fe3f92738bd03e68493116a16c8545cde35a6055320d2f2a56f43667364d"
+    }
+  ]
+}

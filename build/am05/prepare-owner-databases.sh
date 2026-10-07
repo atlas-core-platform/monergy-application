@@ -26,7 +26,7 @@ SQL
     printf 'AM05_%s_%s_RUNTIME=Host=127.0.0.1;Port=55432;Database=%s;Username=%s;Password=%s;Timeout=5\n' "$service" "$tenant" "$database" "$runtime" "$runtime_password" >> "$GITHUB_ENV"
   done
 done
-for name in MEMBERSHIP CI_CONTEXT CI_EVENT AUDIT_EVENT T001_A900 T001_A100 T002_A900 T002_A100; do
+for name in MEMBERSHIP CI_CONTEXT CI_EVENT CI_PROVISIONING AUDIT_EVENT T001_A900 T001_A100 T002_A900 T002_A100; do
   token="$(openssl rand -hex 32)"
   echo "::add-mask::$token"
   printf 'AM05_%s_TOKEN=%s\n' "$name" "$token" >> "$GITHUB_ENV"
