@@ -34,7 +34,8 @@ foreach ($project in @($impact.testProjects)) {
     $projectPath = Join-Path $RepositoryRoot ([string]$project)
     if (-not (Test-Path -LiteralPath $projectPath)) { throw "Selected test project '$project' does not exist." }
     Write-Output "=== Impacted test: $project ==="
-    & $dotnet test $projectPath --configuration Release --no-build --filter 'Category!=Physical' --logger 'console;verbosity=minimal'
+    $resultFile = [IO.Path]::GetFileNameWithoutExtension($projectPath) + '.trx'
+    & $dotnet test $projectPath --configuration Release --no-build --filter 'Category!=Physical' --logger 'console;verbosity=minimal' --logger "trx;LogFileName=$resultFile" --results-directory (Join-Path $RepositoryRoot '.artifacts/tests')
     if ($LASTEXITCODE -ne 0) { throw "Impacted test project '$project' failed." }
 }
 
