@@ -80,7 +80,7 @@ public sealed class PostgresOwnerTests : IAsyncLifetime
         var audit = new TenantAccessAudit(repository);
         var message = AuditEvent();
         var results = await Task.WhenAll(Enumerable.Range(0, 6).Select(_ => audit.ConsumeAsync("T001", message, default)));
-        Assert.Single(results.Where(receipt => receipt.Disposition == "Applied"));
+        Assert.Single(results, receipt => receipt.Disposition == "Applied");
         Assert.Single(results.Select(receipt => receipt.EvidenceReference).Distinct());
         await using var owner = await OpenAsync("AUDIT", "T001", "OWNER");
         Assert.Equal(1, await owner.ExecuteScalarAsync<int>("SELECT count(*) FROM audit.evidence WHERE source_contract_id='CID-070' AND producer='Access Management Service';"));
