@@ -347,7 +347,7 @@ jobs:
         run: |
           ./build/local/Invoke-MonergyLocal.ps1 -Action Prepare
           ./build/local/Test-MonergyLocalPreparedIdentity.ps1
-      - name: Install Chromium
+      - name: Install Chromium for real D11 browser evidence
         shell: bash
         run: pnpm exec playwright install --with-deps chromium
       - name: Start seed and verify the clean D11 profile
@@ -362,6 +362,12 @@ jobs:
       - name: Verify restart outage timeout and lost-acknowledgement recovery
         shell: pwsh
         run: ./build/local/Invoke-D11RuntimeEvidence.ps1
+      - name: Capture bounded D11 controller status
+        if: always()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path .artifacts/d11/hosted -Force | Out-Null
+          ./build/local/Invoke-MonergyLocal.ps1 -Action Status | Set-Content -LiteralPath .artifacts/d11/hosted/controller-status.json -Encoding utf8
       - name: Stop only the owned D11 application runtime
         if: always()
         shell: pwsh
@@ -373,6 +379,7 @@ jobs:
           name: d11-persisted-reporting-${{ github.run_id }}
           path: |
             .artifacts/d11/remediation-r2/linux/*.json
+            .artifacts/d11/hosted/controller-status.json
             .artifacts/d11/persisted-reporting/verification-latest.json
             .artifacts/d11/playwright/results.json
             .artifacts/d11/playwright/test-results/**/trace.zip
