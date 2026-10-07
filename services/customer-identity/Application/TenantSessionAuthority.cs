@@ -69,6 +69,17 @@ public sealed class TenantSessionAuthority(ITenantSessionRepository repository, 
         return session;
     }
 
+    public async Task<bool> EndAsync(TenantSessionLookup lookup, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(lookup);
+        TenantAccessProtocol.Identifier(lookup.TenantId, 64);
+        TenantAccessProtocol.Identifier(lookup.AuthenticationContextId, 160);
+        // Possession only authorizes ending this exact tenant-scoped session.
+        // Idempotent revocation remains available after expiry or role removal.
+        await repository.RevokeAsync(lookup.TenantId, lookup.AuthenticationContextId, cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
     public async Task<TenantSessionContext> ValidateAsync(TenantSessionLookup lookup, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(lookup);

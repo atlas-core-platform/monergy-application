@@ -2,11 +2,17 @@ import { FoundationProvider } from '@monergy/ui-foundation';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import axe from 'axe-core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { App } from '../src/App';
 
-afterEach(cleanup);
+beforeEach(() => {
+  window.history.replaceState(null, '', '/foundation');
+});
+afterEach(() => {
+  cleanup();
+  window.history.replaceState(null, '', '/');
+});
 
 describe('D02 toolchain shell', () => {
   it('preserves toolchain evidence and exposes accepted VS-02 plus authorized search', () => {

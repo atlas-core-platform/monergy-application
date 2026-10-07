@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "sideEffects": [
-    "./src/semantic-tokens.generated.css"
+    "./src/semantic-tokens.generated.css",
+    "./src/workspace.css"
   ],
   "exports": {
     ".": "./src/index.ts",
-    "./semantic-tokens.css": "./src/semantic-tokens.generated.css"
+    "./semantic-tokens.css": "./src/semantic-tokens.generated.css",
+    "./workspace.css": "./src/workspace.css"
   },
   "scripts": {
     "build": "pnpm run check:tokens && tsc -p tsconfig.json",

@@ -6,6 +6,14 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
+      '/access-api/v1': {
+        target: 'http://127.0.0.1:5088',
+        rewrite: (path) => path.replace(/^\/access-api/, ''),
+      },
+      '/identity-api/local/v1/tenant-sessions': {
+        target: 'http://127.0.0.1:5101',
+        rewrite: (path) => path.replace(/^\/identity-api/, ''),
+      },
       '/contracts/cid-051': {
         target: 'http://127.0.0.1:5189',
         changeOrigin: true,

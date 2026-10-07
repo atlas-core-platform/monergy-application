@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('toolchain shell starts and its dialog is keyboard operable', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/foundation');
   await expect(page.getByRole('heading', { name: 'Monergy frontend foundation' })).toBeVisible();
   await expect(page.getByText('ACCEPTED · SIMULATOR')).toBeVisible();
 
