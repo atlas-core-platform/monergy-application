@@ -62,6 +62,16 @@ Use `-Profile name -Port 4183` on the first preparation to create a separate ins
 
 If startup fails, use Status first. The command reports failed containers without printing credentials. With the instance project name shown by Docker Desktop, inspect the failing container there. Bootstrap failures usually indicate migration failure or a mismatched retained volume/profile. Do not “fix” them by granting runtime users DDL rights or deleting data. A port conflict requires choosing a new profile/port or freeing the current port.
 
+If Windows reports `Access is denied` opening `compose.env` or another generated profile file, update the checkout, then repair the selected profile using the same Windows account that created it:
+
+```powershell
+git pull --ff-only
+.\build\uat\Invoke-MonergyUat.ps1 -Action RepairPermissions
+.\build\uat\Invoke-MonergyUat.ps1 -Action Start
+```
+
+RepairPermissions changes only filesystem permissions and verifies file reads. It never reads or rewrites credentials, changes file owners, rotates keys, invokes Docker, or removes a database volume. On Windows the launcher applies explicit SID-based access for the current operator (full control) and local SYSTEM (read access); unrelated users receive no grant. Existing profiles are also repaired before Prepare/Start reads their keys. Status, Verify, Credentials and Stop do not modify profile permissions. If repair itself fails, preserve the profile and capture the file ACL and error for diagnosis; do not reset the environment or grant Everyone access. Start checks Compose configuration before building or starting containers.
+
 ## Trust and delivery boundaries
 
 Only workspace port 4173 is published, bound to host loopback. PostgreSQL and owner endpoints have no published ports. Each service runs as its own process/container with its own mounted configuration. Service containers share the workspace network namespace so existing LOCAL-only HTTP adapters continue using loopback. The gateway forwards an explicit browser route/header allowlist; it never forwards workload credentials or exposes internal provisioning/event ingress.
@@ -73,5 +83,7 @@ The AM runtime source is an immutable dependency under `dependencies/`, pinned t
 ## Automated acceptance and Production limits
 
 `Local Docker UAT acceptance` runs **after pushes to main** and on manual dispatch. It creates its own disposable `ci` profile, builds the actual containers, checks all 13 boundaries for allow/deny/isolation, calls the actual Search owner, tests revocation with delivery stopped, restart persistence, disablement, owner outage recovery and browser session/audit/service journeys. It uploads only allowlisted credential-free results and a signed-in workspace screenshot. The destructive Python acceptance script requires an explicit disposable instance identifier; never point it at operator UAT data. Existing AM owner integration checks continue covering durable CSV onboarding, lost acknowledgements and migration grants.
+
+Separate Windows jobs exercise the actual launcher under Windows PowerShell 5.1 and PowerShell 7. They verify private ACLs and native Docker Compose file reads, deliberately deny access to existing credentials/configuration, and prove that repair preserves file contents, write times and owners. These checks do not start Linux containers on the Windows runner; the Docker process acceptance job remains Linux-based.
 
 Production remains blocked until real IdP/MFA/invitation delivery, workload identity/TLS, event transport, managed secrets, provider/Consent/business consumers, managed database backup/restore, monitoring, HA/DR, capacity and release approval are implemented and accepted. The new local gateway, tenant adapters and bootstrap reject an unsupported Production environment. Readiness of local processes does not upgrade D01–D16 or SG acceptance.

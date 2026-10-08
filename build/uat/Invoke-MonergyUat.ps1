@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','Status','Stop','Verify','Credentials','Reset')][string]$Action = 'Start',
+    [ValidateSet('Prepare','Start','Status','Stop','Verify','Credentials','RepairPermissions','Reset')][string]$Action = 'Start',
     [ValidatePattern('^[a-z][a-z0-9-]{0,30}$')][string]$Profile = 'default',
     [ValidateRange(1024,65535)][int]$Port = 4173,
     [ValidateSet('T001','T002')][string]$Tenant = 'T001',
@@ -16,12 +16,44 @@ $windows = $env:OS -eq 'Windows_NT'
 function Secret { $bytes = New-Object byte[] 32; $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }; return ([BitConverter]::ToString($bytes)).Replace('-','').ToLowerInvariant() }
 function Save-Text($name, $value) { [IO.File]::WriteAllText((Join-Path $folder $name), $value, (New-Object Text.UTF8Encoding($false))) }
 function Save-Json($name, $value) { Save-Text $name ($value | ConvertTo-Json -Depth 30) }
+function Assert-ProfileReadable {
+    foreach ($file in Get-ChildItem -LiteralPath $folder -Force -File) {
+        $stream = $null
+        try { $stream = [IO.File]::OpenRead($file.FullName) }
+        catch { throw "Cannot read local UAT file '$($file.Name)'. Run -Action RepairPermissions with the Windows account that created this profile; keep its credentials and database volume intact." }
+        finally { if ($null -ne $stream) { $stream.Dispose() } }
+    }
+}
 function Protect-Files {
     if ($windows) {
-        $identity = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-        & icacls $folder '/inheritance:r' '/grant:r' "${identity}:(OI)(CI)F" /T /Q | Out-Null
-        if ($LASTEXITCODE -ne 0) { throw 'Could not restrict local UAT credentials.' }
-    } else { & chmod 700 $folder; Get-ChildItem $folder -File | ForEach-Object { & chmod 600 $_.FullName } }
+        # Use SID-based explicit ACLs on each file. Do not recursively remove inherited
+        # file permissions while relying on a directory inheritance grant to restore them.
+        $identity = [Security.Principal.WindowsIdentity]::GetCurrent().User
+        $system = New-Object Security.Principal.SecurityIdentifier('S-1-5-18')
+        $directory = Get-Item -LiteralPath $folder -Force
+        if (-not $directory.PSIsContainer -or ($directory.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'UAT profile must be a real directory, not a link.' }
+        $directoryAcl = New-Object Security.AccessControl.DirectorySecurity
+        $directoryAcl.SetAccessRuleProtection($true, $false)
+        $directoryAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($identity, 'FullControl', 'ContainerInherit, ObjectInherit', 'None', 'Allow'))
+        $directoryAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($system, 'ReadAndExecute', 'ContainerInherit, ObjectInherit', 'None', 'Allow'))
+        Set-Acl -LiteralPath $folder -AclObject $directoryAcl
+        foreach ($file in Get-ChildItem -LiteralPath $folder -Force) {
+            if ($file.PSIsContainer -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'Unexpected directory or link in the UAT credential profile; permissions were not followed outside the profile.' }
+            $fileAcl = New-Object Security.AccessControl.FileSecurity
+            $fileAcl.SetAccessRuleProtection($true, $false)
+            $fileAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($identity, 'FullControl', 'Allow'))
+            $fileAcl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($system, 'Read', 'Allow'))
+            Set-Acl -LiteralPath $file.FullName -AclObject $fileAcl
+        }
+    } else {
+        & chmod 700 $folder
+        if ($LASTEXITCODE -ne 0) { throw 'Could not restrict the local UAT profile directory.' }
+        Get-ChildItem -LiteralPath $folder -File | ForEach-Object {
+            & chmod 600 $_.FullName
+            if ($LASTEXITCODE -ne 0) { throw 'Could not restrict a local UAT credential file.' }
+        }
+    }
+    Assert-ProfileReadable
 }
 function Invoke-UatDocker([string[]]$Arguments) {
     & docker @Arguments
@@ -34,6 +66,14 @@ function Connection($database, $scope) {
     $password = $database."${scope}Password"
     return "Host=postgres;Database=$($database.name);Username=$($database.name)_$scope;Password=$password;Timeout=5;Include Error Detail=false"
 }
+if ($Action -eq 'RepairPermissions') {
+    if (-not (Test-Path -LiteralPath $folder -PathType Container)) { throw 'No existing UAT profile to repair. Run Prepare or Start first.' }
+    Protect-Files
+    Write-Host 'UAT profile permissions repaired and file reads verified. Credentials and file contents are unchanged.'
+    return
+}
+# Restore access before reading an existing profile; never replace an unreadable key file.
+if ($Action -in @('Prepare','Start') -and (Test-Path -LiteralPath $folder -PathType Container)) { Protect-Files }
 if (-not (Test-Path $profileFile)) {
     if ($Action -notin @('Prepare','Start')) { throw 'No local UAT profile. Run Prepare or Start first.' }
     if (Test-Path $folder) { throw 'Incomplete profile directory exists. Recover its matching credentials before proceeding; do not overwrite a retained database profile.' }
@@ -114,6 +154,7 @@ if ($Action -eq 'Status') { Compose @('ps','--all'); return }
 if ($Action -eq 'Start') {
     $os = & docker info --format '{{.OSType}}'
     if ($LASTEXITCODE -ne 0 -or $os -ne 'linux') { throw 'Start Docker Desktop with Linux containers, then retry.' }
+    Compose @('config','--quiet')
     Compose @('up','-d','--build','--remove-orphans')
 }
 $url = "http://127.0.0.1:$($state.port)"
