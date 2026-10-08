@@ -52,7 +52,7 @@ describe('connected session administration', () => {
     await user.click(screen.getByRole('button', { name: /Sessions & security/ }));
     await user.click(await screen.findByRole('button', { name: 'Revoke all for A100' }));
     expect(calls.some((call) => call.url.includes('/revoke-sessions'))).toBe(false);
-    await user.click(await screen.findByRole('button', { name: 'Revoke sessions', exact: true }));
+    await user.click(await screen.findByRole('button', { name: 'Revoke sessions' }));
     await waitFor(() => {
       expect(calls.some((call) => call.url.includes('/revoke-sessions'))).toBe(true);
     });
