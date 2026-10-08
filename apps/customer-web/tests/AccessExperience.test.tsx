@@ -87,7 +87,16 @@ describe('tenant administration trust boundaries', () => {
       const editor = within(await screen.findByRole('dialog', { name: 'person@example.test' }));
       await user.click(await editor.findByRole('switch', { name: 'Tenant administrator' }));
       await user.click(editor.getByRole('button', { name: 'Review change' }));
-      await user.click(await screen.findByRole('button', { name: 'Save change' }));
+      // rc-component uses a fixed title ID in NODE_ENV=test; the browser test
+      // separately verifies the dialog's accessible name with real unique IDs.
+      const title = await screen.findByText('Review changes');
+      const dialog = title.closest<HTMLElement>('[role="dialog"]');
+      if (!dialog) throw new Error('Review title must belong to a dialog.');
+      const review = within(dialog);
+      const authority = review.getByText('Tenant administrator').closest('.access-review-row');
+      expect(authority).toHaveTextContent('BeforeNoAfterYes');
+      expect(writes).toEqual([]);
+      await user.click(review.getByRole('button', { name: 'Save changes' }));
       expect(
         await screen.findByText(/workspace changed or this operation conflicts/),
       ).toBeVisible();

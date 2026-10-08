@@ -121,3 +121,70 @@ test('CSV drag and drop validates the whole file and sign-out revokes the sessio
   });
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
 });
+
+test('bundled typography reaches drawers and review shows the exact role before saving', async ({
+  page,
+}) => {
+  const writes: unknown[] = [];
+  await page.route('**/identity-api/**', async (route) => route.fulfill({ json: session }));
+  await page.route('**/access-api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === 'POST') writes.push(route.request().postDataJSON());
+    await route.fulfill({
+      json: {
+        policyVersion: 7,
+        items: path.endsWith('/permissions')
+          ? [{ id: 'P1', label: 'Read financial information', code: 'financial-read' }]
+          : path.endsWith('/members')
+            ? [member]
+            : [],
+        nextCursor: null,
+      },
+    });
+  });
+  await page.goto('/access');
+  await page.evaluate(() => document.fonts.load('500 15px Inter'));
+  expect(
+    await page.evaluate(() =>
+      [...document.fonts].some((font) => font.family === 'Inter' && font.status === 'loaded'),
+    ),
+  ).toBe(true);
+  expect(
+    await page.evaluate(() =>
+      performance
+        .getEntriesByType('resource')
+        .some((entry) => entry.name.includes('inter-latin') && entry.name.endsWith('.woff2')),
+    ),
+  ).toBe(true);
+  await page.getByLabel('Local access key').fill('browser-fixture-only');
+  await page.getByRole('button', { name: 'Connect workspace' }).click();
+  await page.locator('.access-tabs').getByText('Roles', { exact: true }).click();
+  await page.getByRole('button', { name: 'Create role', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'Create role', exact: true });
+  await editor.getByLabel('Name', { exact: true }).fill('Financial analyst');
+  await editor.getByLabel('Code', { exact: true }).fill('financial-analyst');
+  await editor.getByRole('combobox', { name: 'Permissions' }).click();
+  await page.getByTitle('Read financial information', { exact: true }).click();
+  await editor.getByRole('button', { name: 'Review change' }).click();
+  const review = page.getByRole('dialog', { name: 'Review new role' });
+  await expect(review.getByText('Financial analyst', { exact: true })).toBeVisible();
+  await expect(review.getByText('financial-analyst', { exact: true })).toBeVisible();
+  await expect(review.getByText('Read financial information', { exact: true })).toBeVisible();
+  await expect(review.locator('.access-review-after').first()).toHaveCSS('font-size', '14px');
+  expect(writes).toEqual([]);
+  await page.screenshot({ path: '.artifacts/ui/role-review.png', animations: 'disabled' });
+  await review.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(editor.getByLabel('Name', { exact: true })).toHaveValue('Financial analyst');
+  expect(writes).toEqual([]);
+  await editor.getByRole('button', { name: 'Review change' }).click();
+  await review.getByRole('button', { name: 'Create role', exact: true }).click();
+  await expect(review).not.toBeVisible();
+  expect(writes).toEqual([
+    {
+      expectedPolicyVersion: 7,
+      code: 'financial-analyst',
+      label: 'Financial analyst',
+      permissionIds: ['P1'],
+    },
+  ]);
+});

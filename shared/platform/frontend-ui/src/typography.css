@@ -1,0 +1,108 @@
+/* UI-02: shared content typography, including overlays mounted outside the shell. */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/inter-latin-wght-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+body {
+  font-family: var(--monergy-font-sans);
+  font-size: var(--monergy-text-body);
+  line-height: var(--monergy-leading);
+  color: var(--monergy-color-neutral-950);
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+}
+
+:where(h1, h2, h3, h4, h5) {
+  font-weight: 600;
+  text-wrap: balance;
+}
+
+.ant-typography h1,
+h1.ant-typography {
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+}
+
+.ant-typography h2,
+h2.ant-typography,
+.ant-typography h3,
+h3.ant-typography {
+  letter-spacing: -0.025em;
+  line-height: 1.35;
+}
+
+.ant-btn {
+  letter-spacing: -0.01em;
+}
+.ant-form-item .ant-form-item-label > label {
+  font-weight: 500;
+}
+.ant-input,
+.ant-select,
+.ant-input-affix-wrapper {
+  font-size: var(--monergy-text-body);
+}
+.ant-tag {
+  font-weight: 500;
+}
+.ant-table {
+  font-variant-numeric: tabular-nums;
+}
+.ant-alert .ant-alert-title {
+  font-weight: 600;
+  font-size: var(--monergy-text-body);
+}
+.ant-alert .ant-alert-description {
+  font-size: var(--monergy-text-label);
+  line-height: 1.65;
+}
+.ant-drawer .ant-drawer-header {
+  padding: 24px;
+  border-bottom: 1px solid #e1e8f1;
+}
+.ant-drawer .ant-drawer-title {
+  font-size: var(--monergy-text-section);
+  letter-spacing: -0.025em;
+}
+.ant-drawer .ant-drawer-body {
+  padding: 28px 24px;
+}
+.ant-drawer .ant-drawer-footer {
+  background: #f8fafd;
+  border-top: 1px solid #e1e8f1;
+}
+.ant-modal .ant-modal-title {
+  letter-spacing: -0.025em;
+}
+.ant-modal .ant-modal-body {
+  line-height: 1.65;
+}
+.ant-card .ant-card-head-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* Media rule also covers Ant Design portals outside .mw-shell. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -181,6 +181,7 @@ export function WorkspaceShell({
             <div className="mw-top-actions">
               <button
                 className="mw-search-trigger"
+                aria-label="Find a workspace"
                 type="button"
                 onClick={() => {
                   setQuery('');

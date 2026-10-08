@@ -10,6 +10,10 @@ export interface SemanticTokens {
     fontFamily: string;
     fontFamilyMono: string;
     baseSize: string;
+    smallSize: string;
+    labelSize: string;
+    sectionSize: string;
+    titleSize: string;
     lineHeight: number;
   };
   spacing: { unit: string; xs: string; sm: string; md: string; lg: string; xl: string };

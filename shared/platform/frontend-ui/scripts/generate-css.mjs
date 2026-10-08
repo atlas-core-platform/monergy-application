@@ -24,6 +24,12 @@ const css = `/* Generated from tokens.json. Run pnpm generate:tokens; do not edi
   --monergy-color-error: ${tokens.color.state.error};
   --monergy-color-info: ${tokens.color.state.info};
   --monergy-font-sans: ${tokens.typography.fontFamily};
+  --monergy-text-body: ${tokens.typography.baseSize};
+  --monergy-text-small: ${tokens.typography.smallSize};
+  --monergy-text-label: ${tokens.typography.labelSize};
+  --monergy-text-section: ${tokens.typography.sectionSize};
+  --monergy-text-title: ${tokens.typography.titleSize};
+  --monergy-leading: ${tokens.typography.lineHeight};
   --monergy-font-mono: ${tokens.typography.fontFamilyMono};
   --monergy-space-unit: ${tokens.spacing.unit};
   --monergy-radius-control: ${tokens.radius.control}px;
