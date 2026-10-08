@@ -22,6 +22,7 @@ test('workspace navigation, command palette and guide support keyboard and reduc
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'A clearer view of everything.' })).toBeVisible();
   await expect(page).toHaveTitle('Monergy Workspace');
+  await expect(page.locator('.workspace-art-chip').first()).toHaveCSS('animation-name', 'none');
   await page.getByRole('button', { name: 'Collapse sidebar' }).click();
   await expect(page.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute(
     'aria-expanded',

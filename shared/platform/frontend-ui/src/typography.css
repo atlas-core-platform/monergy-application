@@ -96,13 +96,14 @@ h3.ant-typography {
   letter-spacing: -0.02em;
 }
 
-/* Media rule also covers Ant Design portals outside .mw-shell. */
+/* Custom motion follows the device preference. WorkspaceShell configures
+   Ant Design motion tokens for overlays, including portals outside the shell. */
 @media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
-    transition: none !important;
-    scroll-behavior: auto !important;
+  html body .mw-shell *,
+  html body .mw-shell *::before,
+  html body .mw-shell *::after {
+    animation: none;
+    transition: none;
+    scroll-behavior: auto;
   }
 }
