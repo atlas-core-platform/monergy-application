@@ -1,10 +1,12 @@
 import { Button, Card, Descriptions, Modal, Space, Tag, Typography } from 'antd';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { WorkspaceShell } from '@monergy/ui-foundation';
 
 import { destinations } from './workspace/destinations';
 import WorkspaceHome from './workspace/WorkspaceHome';
 import './workspace/workspace-home.css';
+import { localUat } from './access/workspaceSession';
+import { WorkspaceSessionProvider } from './access/WorkspaceSessionProvider';
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const SearchExperience = lazy(() => import('./search/SearchExperience'));
@@ -98,15 +100,15 @@ function ToolchainFoundation() {
   );
 }
 
-function RouteContent() {
-  if (window.location.pathname === '/') return <WorkspaceHome />;
-  if (window.location.pathname === '/access')
+function RouteContent({ path }: { path: string }) {
+  if (path === '/') return <WorkspaceHome />;
+  if (path === '/access')
     return (
       <Suspense fallback={<main aria-busy="true">Loading access management…</main>}>
         <AccessExperience />
       </Suspense>
     );
-  if (window.location.pathname === '/reports') {
+  if (path === '/reports') {
     return (
       <Suspense
         fallback={
@@ -120,7 +122,7 @@ function RouteContent() {
     );
   }
 
-  if (window.location.pathname === '/search') {
+  if (path === '/search') {
     return (
       <Suspense
         fallback={
@@ -134,7 +136,20 @@ function RouteContent() {
     );
   }
 
-  if (window.location.pathname === '/vs02') {
+  if (path === '/vs02' && localUat)
+    return (
+      <main className="access-page">
+        <Card title="Evidence journey: integration pending">
+          <p>
+            Document processing and job consumers are not connected in this Docker UAT profile. Test
+            administration, sessions, revocation, audit and service boundaries in People & access.
+            The existing VS-02 simulator remains separately verified.
+          </p>
+          <Button href="/access">Open People & access</Button>
+        </Card>
+      </main>
+    );
+  if (path === '/vs02') {
     return (
       <Suspense
         fallback={
@@ -152,16 +167,51 @@ function RouteContent() {
 }
 
 export function App() {
-  const current =
-    destinations.find((destination) => destination.href === window.location.pathname) ??
-    destinations[0];
+  const [path, setPath] = useState(window.location.pathname);
+  useEffect(() => {
+    const pop = () => {
+      setPath(window.location.pathname);
+    };
+    const navigate = (event: MouseEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const link = event.target instanceof Element ? event.target.closest('a') : null;
+      if (!link || link.target || link.hasAttribute('download')) return;
+      const url = new URL(link.href);
+      if (
+        url.origin !== window.location.origin ||
+        !['/', '/access', '/reports', '/search', '/vs02', '/foundation'].includes(url.pathname)
+      )
+        return;
+      event.preventDefault();
+      window.history.pushState(null, '', url.pathname + url.search + url.hash);
+      setPath(url.pathname);
+      window.scrollTo({ top: 0 });
+    };
+    window.addEventListener('popstate', pop);
+    document.addEventListener('click', navigate);
+    return () => {
+      window.removeEventListener('popstate', pop);
+      document.removeEventListener('click', navigate);
+    };
+  }, []);
+  const current = destinations.find((destination) => destination.href === path) ?? destinations[0];
   return (
-    <WorkspaceShell
-      destinations={destinations}
-      active={current?.id ?? 'home'}
-      area={current?.label ?? 'Overview'}
-    >
-      <RouteContent />
-    </WorkspaceShell>
+    <WorkspaceSessionProvider>
+      <WorkspaceShell
+        destinations={destinations}
+        active={current?.id ?? 'home'}
+        area={current?.label ?? 'Overview'}
+      >
+        <RouteContent path={path} />
+      </WorkspaceShell>
+    </WorkspaceSessionProvider>
   );
 }

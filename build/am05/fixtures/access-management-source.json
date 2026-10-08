@@ -2,9 +2,9 @@
   "schemaVersion": "1.0.0",
   "purpose": "Immutable verification-only source dependency; not an application runtime authority",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "014f0578470b749b5f1930c969e4a2a834e55e6a",
-  "verifiedRun": "https://github.com/atlas-core-platform/monergy-access-management-service/actions/runs/37656221978",
-  "archiveSha256": "5a4b1f19151f6c3c97e5671b60d489beb0ee802084fda43ba00968bf8fdec407",
+  "commit": "4cd825c52b4db4f131360c5b0b619d6c97c5e921",
+  "verifiedRun": "https://github.com/atlas-core-platform/monergy-access-management-service/actions/runs/37761106251",
+  "archiveSha256": "3d40253f561c4a5be82c7347aae9a702ee906b9d96ff2228b172ca845b3631d2",
   "files": [
     {
       "path": "Directory.Build.props",
@@ -27,8 +27,12 @@
       "gitBlobSha": "e1c5e9980fedfa6ce8a2a67c128634c78c392f46"
     },
     {
+      "path": "src/Monergy.AccessManagement/AdministrationContext.cs",
+      "gitBlobSha": "13370024204a46d5efdc0b76c9b80836b87c1b87"
+    },
+    {
       "path": "src/Monergy.AccessManagement/AdministrationEndpoints.cs",
-      "gitBlobSha": "aa75fb5684233529b0e326d9acaa4baa2463003c"
+      "gitBlobSha": "113a8d45218c10f3e4ce5594660305159e94ce0f"
     },
     {
       "path": "src/Monergy.AccessManagement/AdministrationModels.cs",
@@ -56,7 +60,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/ModelsAndEvaluator.cs",
-      "gitBlobSha": "261ab8c06fe2c4ab0e650d43884d947a23a29d6d"
+      "gitBlobSha": "01d41df9c151bde738d8a9355f07acda129a65fd"
     },
     {
       "path": "src/Monergy.AccessManagement/Monergy.AccessManagement.csproj",
@@ -104,7 +108,7 @@
     },
     {
       "path": "tools/Monergy.AccessManagement.DeliveryReference/Program.cs",
-      "gitBlobSha": "96e964f0552d47d8176ffc6c90741e2fe08aa4e9"
+      "gitBlobSha": "243f997d217b985894c71ef00fedddc0a33b3fd8"
     },
     {
       "path": "tools/Monergy.AccessManagement.DeliveryReference/ReferenceDeliveryReceiver.cs",

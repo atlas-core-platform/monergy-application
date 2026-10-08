@@ -19,6 +19,7 @@ public static class ReportingRegistration
         services.AddSingleton<IReportRepository>(new InMemoryReportRepository(configuration));
         services.AddSingleton(TimeProvider.System);
         services.AddTransient<ReportingApplication>();
+        if (TenantBoundaryOptions.Selected(configuration)) services.AddSingleton<IReportingAuthorizationPolicy, TenantReportingAuthorizationPolicy>();
         return services;
     }
 

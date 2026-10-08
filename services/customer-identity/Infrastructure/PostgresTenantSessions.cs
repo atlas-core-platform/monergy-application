@@ -74,6 +74,26 @@ public sealed class PostgresTenantSessions : ITenantSessionRepository, IAsyncDis
             """, new { Hash = SessionHash(sessionId) }, cancellationToken: cancellationToken)).ConfigureAwait(false);
     }
 
+    // Session hashes are one-way references, never bearer credentials. A list is
+    // descriptive; only ValidateAsync can establish current trusted authority.
+    public async Task<object> ListForAdministratorAsync(string tenantId, string? after, CancellationToken cancellationToken)
+    {
+        if (after is not null && (after.Length != 64 || after.Any(c => !char.IsAsciiHexDigit(c))))
+            throw new TenantAccessException("INVALID_SESSION_CURSOR", 400);
+        await using var connection = await OpenAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        var rows = (await connection.QueryAsync<AdminSessionRow>(new CommandDefinition("""
+            SELECT session_hash AS SessionReference,actor_id AS ActorId,subject_version AS SubjectVersion,
+                established_at AS EstablishedAt,expires_at AS ExpiresAt,revoked AS Revoked
+            FROM customer_identity.trusted_sessions WHERE @After='' OR (established_at,session_hash)<
+                (SELECT established_at,session_hash FROM customer_identity.trusted_sessions WHERE session_hash=@After)
+            ORDER BY established_at DESC,session_hash DESC LIMIT 101;
+            """, new { After = after ?? "" }, cancellationToken: cancellationToken)).ConfigureAwait(false)).ToArray();
+        return new { tenantId, items = rows.Take(100), nextCursor = rows.Length > 100 ? rows[99].SessionReference : null };
+    }
+
+    public sealed record AdminSessionRow(string SessionReference, string ActorId, long SubjectVersion,
+        DateTime EstablishedAt, DateTime ExpiresAt, bool Revoked);
+
     public async Task<AccessManagementReceipt> ConsumeAsync(string trustedTenant, string destination, AccessManagementEvent message, CancellationToken cancellationToken)
     {
         if (destination is not ("authorization" or "sessions")) throw new TenantAccessException("INVALID_DESTINATION");

@@ -22,6 +22,7 @@ public static class SearchRetrievalRegistration
         services.AddSingleton<IDerivedSearchIndex>(index);
         services.AddSingleton<ISearchAuthorizationPolicy>(authorization);
         services.AddTransient<SearchRetrievalApplication>();
+        if (TenantBoundaryOptions.Selected(configuration)) services.AddSingleton<ISearchAuthorizationPolicy, TenantSearchRetrievalAuthorizationPolicy>();
         return services;
     }
 }

@@ -162,3 +162,7 @@ SBOMs, runs fail-closed Grype scans, and uploads only evidence. Nothing in D03
 represents UAT, Production, provider-compatibility, publication, or deployment
 evidence. The VS-02 browser route remains unchanged. Frontend business change:
 NONE REQUIRED BY D04 FEATURE SCOPE.
+
+## Docker Desktop UAT
+
+Run the connected administration workspace locally with persistent tenant policy, C&I sessions/identities and canonical Audit. See [local UAT setup and acceptance journey](build/uat/README.md). The service view distinguishes implemented operations from scaffolds and keeps Production readiness explicit.
