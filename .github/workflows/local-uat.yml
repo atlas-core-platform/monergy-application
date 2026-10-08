@@ -9,6 +9,19 @@ concurrency:
   group: local-uat-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  windows-profile:
+    name: Windows UAT profile permissions (${{ matrix.shell }})
+    runs-on: windows-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Verify private profile reads and recovery without changing credentials
+        shell: ${{ matrix.shell }}
+        run: ./build/uat/Test-WindowsProfilePermissions.ps1
   docker-uat:
     runs-on: ubuntu-latest
     timeout-minutes: 35
