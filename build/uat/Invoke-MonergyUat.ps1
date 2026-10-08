@@ -23,12 +23,12 @@ function Protect-Files {
         if ($LASTEXITCODE -ne 0) { throw 'Could not restrict local UAT credentials.' }
     } else { & chmod 700 $folder; Get-ChildItem $folder -File | ForEach-Object { & chmod 600 $_.FullName } }
 }
-function Docker([string[]]$Arguments) {
+function Invoke-UatDocker([string[]]$Arguments) {
     & docker @Arguments
     if ($LASTEXITCODE -ne 0) { throw "Docker command failed: $($Arguments[0])" }
 }
 function Compose([string[]]$Arguments) {
-    Docker (@('compose','--env-file',(Join-Path $folder 'compose.env'),'-f',(Join-Path $PSScriptRoot 'compose.yml'),'--project-name',"monergy-uat-$($state.instanceId.Substring(0,8))") + $Arguments)
+    Invoke-UatDocker (@('compose','--env-file',(Join-Path $folder 'compose.env'),'-f',(Join-Path $PSScriptRoot 'compose.yml'),'--project-name',"monergy-uat-$($state.instanceId.Substring(0,8))") + $Arguments)
 }
 function Connection($database, $scope) {
     $password = $database."${scope}Password"
