@@ -1,7 +1,7 @@
 .access-page {
   max-width: 1380px;
   margin: 0 auto;
-  padding: 36px 42px 50px;
+  padding: 0 0 24px;
 }
 .access-connect-grid {
   display: grid;
@@ -52,12 +52,12 @@
 }
 .access-benefit strong {
   color: #263651;
-  font-size: 14px;
+  font-size: var(--monergy-text-body);
   margin-bottom: 5px;
 }
 .access-benefit span {
   color: #637187;
-  font-size: 13px;
+  font-size: var(--monergy-text-label);
   line-height: 1.6;
 }
 .access-connect-card.ant-card {
@@ -83,7 +83,7 @@
   gap: 9px;
   margin-top: 24px;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   line-height: 1.7;
 }
 .access-connect-footnote svg {
@@ -99,7 +99,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   font-weight: 600;
   color: #385274;
   background: white;
@@ -139,13 +139,13 @@
   display: block;
 }
 .access-overview-strip strong {
-  font-size: 13px;
+  font-size: var(--monergy-text-label);
   color: #2a3b57;
   margin-bottom: 6px;
 }
 .access-overview-strip div > span:not(.access-strip-icon) {
   color: #67758c;
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   line-height: 1.6;
 }
 .access-panel {
@@ -165,7 +165,7 @@
 }
 .access-tabs .ant-segmented-item-label {
   padding: 6px 17px;
-  font-size: 13px;
+  font-size: var(--monergy-text-label);
 }
 .access-list-heading {
   display: flex;
@@ -181,7 +181,7 @@
 }
 .access-list-heading p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--monergy-text-label);
   color: #68778e;
 }
 .access-search-row {
@@ -195,14 +195,14 @@
   max-width: 330px;
 }
 .access-search-row > span:last-child {
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   white-space: nowrap;
   color: #526173;
 }
 .access-panel .ant-table-thead > tr > th {
   background: #f8fafd;
   font-weight: 500;
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   color: #56677f;
   border-top: 1px solid #eef1f5;
 }
@@ -236,8 +236,8 @@
   border-radius: 50%;
   background: #eaf0fc;
   color: #3f65a2;
-  font-size: 12px;
-  font-weight: 650;
+  font-size: var(--monergy-text-small);
+  font-weight: 600;
 }
 .access-record-avatar.is-object {
   border-radius: 11px;
@@ -245,25 +245,25 @@
 }
 .access-record-button strong {
   display: block;
-  font-size: 13px;
-  font-weight: 550;
+  font-size: var(--monergy-text-label);
+  font-weight: 600;
 }
 .access-record-button small {
   display: block;
   margin-top: 5px;
-  font-size: 11px;
+  font-size: var(--monergy-text-small);
   color: #526173;
   max-width: 290px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .access-secondary {
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   color: #53637a;
 }
 .access-no-role {
   display: block;
-  font-size: 11px;
+  font-size: var(--monergy-text-small);
   margin-top: 4px;
   color: #526173;
 }
@@ -283,12 +283,12 @@
   margin-top: 2px;
 }
 .access-bottom-note p {
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   line-height: 1.7;
   margin: 0;
 }
 .access-explainer {
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   color: #64748b;
 }
 .access-explainer-grid {
@@ -299,7 +299,7 @@
 .access-explainer-grid p {
   line-height: 1.7;
   color: #64748b;
-  font-size: 13px;
+  font-size: var(--monergy-text-label);
 }
 .access-explainer-grid strong {
   display: block;
@@ -310,7 +310,7 @@
   margin: 0 0 24px;
   color: #64748b;
   line-height: 1.7;
-  font-size: 14px;
+  font-size: var(--monergy-text-body);
 }
 .access-drawer-footer {
   display: flex;
@@ -327,7 +327,7 @@
 }
 .access-form-hint {
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   line-height: 1.7;
 }
 .access-grant-row {
@@ -375,7 +375,7 @@
 }
 .access-drop-zone p {
   color: #6b7d96;
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   margin-bottom: 20px;
 }
 .access-template-row {
@@ -383,18 +383,18 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
   color: #67758b;
   padding: 14px 0;
 }
 .access-template-row button {
-  font-size: 12px;
+  font-size: var(--monergy-text-small);
 }
 .access-guidelines {
   padding-left: 18px;
   line-height: 1.9;
   color: #617189;
-  font-size: 13px;
+  font-size: var(--monergy-text-label);
 }
 .access-validation {
   margin-top: 20px;
@@ -426,7 +426,7 @@
   margin: 16px 0;
 }
 .access-import-result > p {
-  font-size: 14px;
+  font-size: var(--monergy-text-body);
   color: #64748b;
   line-height: 1.7;
 }
@@ -436,14 +436,14 @@
 }
 @media (max-width: 1150px) {
   .access-page {
-    padding: 28px;
+    padding: 0 0 24px;
   }
   .access-overview-strip {
     gap: 14px;
     padding: 18px;
   }
   .access-overview-strip strong {
-    font-size: 12px;
+    font-size: var(--monergy-text-small);
   }
   .access-strip-icon {
     width: 35px;
@@ -455,7 +455,7 @@
 }
 @media (max-width: 750px) {
   .access-page {
-    padding: 25px 18px;
+    padding: 0 0 24px;
   }
   .access-connect-grid {
     grid-template-columns: 1fr;
@@ -565,6 +565,283 @@
 .access-evidence-details dd {
   overflow-wrap: anywhere;
   margin: 4px 0 12px;
+}
+
+/* A quiet, high-contrast control surface, with depth reserved for key actions. */
+.access-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 30px 32px 0;
+  border: 1px solid #25475b;
+  border-radius: 22px;
+  background:
+    radial-gradient(ellipse at 100% 0%, #217b854d, transparent 60%),
+    linear-gradient(115deg, #11213a, #163c4d);
+  box-shadow: 0 14px 38px #18324c12;
+  color: #f4f8ff;
+}
+.access-hero::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  width: 520px;
+  height: 520px;
+  right: -120px;
+  top: -310px;
+  border: 1px solid #81cfd333;
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 55px #81cfd309,
+    0 0 0 110px #81cfd309;
+}
+.access-hero .workspace-page-heading {
+  margin-bottom: 26px;
+}
+.access-hero .workspace-eyebrow {
+  color: #90d7dc;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
+.access-hero .workspace-subtitle {
+  color: #c3d4e6;
+  font-size: var(--monergy-text-body);
+}
+.access-hero .access-tenant-pill {
+  background: #ffffff0d;
+  border-color: #58738b;
+  color: #e1f1ff;
+}
+.access-hero .access-session-context .ant-btn {
+  background: #ffffff0d;
+  color: #f4f8ff;
+  border-color: #58738b;
+}
+.access-hero .access-session-context .ant-btn:hover {
+  background: #ffffff1f;
+  border-color: #9ddde2;
+}
+.access-overview-strip {
+  margin: 0;
+  padding: 22px 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid #ffffff21;
+  border-radius: 0;
+}
+.access-overview-strip strong {
+  color: #eff6ff;
+  font-weight: 500;
+  font-size: var(--monergy-text-label);
+}
+.access-overview-strip div > span:not(.access-strip-icon) {
+  color: #b6cbdc;
+}
+.access-strip-icon {
+  background: #ffffff09;
+  border-color: #ffffff24;
+  color: #99e0de;
+}
+.access-operation-card {
+  padding: 22px 18px;
+  border-radius: 16px;
+  box-shadow: 0 3px 12px #172b3804;
+}
+.access-operation-card > svg:first-child {
+  color: #287481;
+  flex-shrink: 0;
+}
+.access-operation-card > svg:last-child {
+  color: #65778d;
+  width: 17px;
+  flex-shrink: 0;
+}
+.access-operation-card strong {
+  font-size: var(--monergy-text-label);
+  font-weight: 600;
+}
+.access-operation-card small {
+  font-size: var(--monergy-text-small);
+  color: #52647c;
+}
+.access-operation-card:hover,
+.access-operation-card:focus-visible {
+  border-color: #80b7c1;
+}
+.access-panel {
+  border-radius: 20px;
+  box-shadow: var(--monergy-shadow-panel);
+}
+.access-tabs {
+  padding: 16px 24px;
+  background: #fcfdff;
+}
+.access-tabs .ant-segmented {
+  background: #edf2f8;
+  padding: 4px;
+  border-radius: 12px;
+}
+.access-tabs .ant-segmented-item-label {
+  padding: 6px 14px;
+  font-weight: 500;
+}
+.access-tabs .ant-segmented-item-selected {
+  color: #204b84;
+  border-radius: 8px;
+  box-shadow: 0 2px 7px #213a5b12;
+}
+.access-list-heading {
+  padding-top: 28px;
+}
+.access-list-heading h2 {
+  font-size: 22px;
+  font-weight: 600;
+}
+.access-list-heading p {
+  color: #52647c;
+  line-height: 1.6;
+}
+.access-search-row {
+  padding-top: 18px;
+}
+.access-search-row > .ant-input-affix-wrapper {
+  max-width: 380px;
+}
+.access-search-row > span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+.access-record-button {
+  min-height: 40px;
+}
+.access-record-button strong {
+  font-size: var(--monergy-text-label);
+}
+.access-record-button:hover strong {
+  color: #2457a7;
+}
+.access-record-avatar {
+  width: 42px;
+  height: 42px;
+  background: linear-gradient(145deg, #e5edf9, #edf7f7);
+  border: 1px solid #d8e4f0;
+}
+.access-drawer-intro {
+  padding: 16px 18px;
+  border: 1px solid #dce7f2;
+  border-left: 3px solid #4b8d9c;
+  border-radius: 0 12px 12px 0;
+  background: #f5f9fd;
+  color: #40566e;
+}
+.access-form-section {
+  font-size: 18px;
+  font-weight: 600;
+}
+.access-form-hint {
+  color: #52647c;
+}
+.access-connect-story {
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(ellipse at top right, #257b8855, transparent 65%), #142b43;
+  border-color: #294658;
+}
+.access-connect-story h2 {
+  color: #f5f9ff;
+  font-weight: 600;
+}
+.access-connect-story > p {
+  color: #c7d7e6;
+}
+.access-connect-story .access-large-icon {
+  color: #a7e8e2;
+  background: #ffffff0a;
+  border-color: #739da15c;
+}
+.access-connect-story .access-benefit {
+  color: #96dcd7;
+}
+.access-connect-story .access-benefit strong {
+  color: #f1f7ff;
+  font-weight: 500;
+}
+.access-connect-story .access-benefit span {
+  color: #b9cddd;
+}
+.access-connect-card.ant-card {
+  box-shadow: 0 18px 48px #1738590a;
+}
+.access-review {
+  margin: 22px 0;
+  border: 1px solid #dce5ef;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.access-review-row {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e7edf4;
+  background: #f8fafd;
+}
+.access-review-row:last-child {
+  border-bottom: 0;
+}
+.access-review-row dt {
+  font-size: var(--monergy-text-small);
+  color: #52647c;
+  font-weight: 500;
+  margin-bottom: 6px;
+}
+.access-review-row dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--monergy-text-label);
+}
+.access-review-before {
+  white-space: pre-line;
+  display: block;
+  color: #68768a;
+  margin-bottom: 5px;
+}
+.access-review-after {
+  color: #173f5a;
+  font-weight: 500;
+  white-space: pre-line;
+}
+.access-review-badge {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #52647c;
+}
+
+@media (max-width: 750px) {
+  .access-hero {
+    padding: 24px 20px 0;
+    border-radius: 18px;
+  }
+  .access-hero .workspace-page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+  }
+  .access-hero .workspace-page-heading h1 {
+    font-size: 28px;
+  }
+  .access-hero .access-overview-strip {
+    padding: 20px 0;
+  }
+  .access-operation-card {
+    padding: 18px;
+  }
+  .access-search-row {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .access-tabs .ant-segmented-item-label {
+    padding: 6px 12px;
+  }
 }
 @media (max-width: 1200px) {
   .access-operations-grid {

@@ -383,59 +383,61 @@ function Administration({
   ];
   return (
     <main className="access-page">
-      <div className="workspace-page-heading">
-        <div>
-          <p className="workspace-eyebrow">WORKSPACE ADMINISTRATION</p>
-          <h1>People & access</h1>
-          <p className="workspace-subtitle">
-            A clear view of your team. Intentional access at every level.
-          </p>
-        </div>
-        <div className="access-session-context">
-          <span className="access-tenant-pill">
-            <WorkspaceIcon name="shield" size={14} />
-            {session.tenantId}
-          </span>
-          <Button
-            size="small"
-            onClick={() => {
-              void disconnect();
-            }}
-            disabled={busy}
-          >
-            Sign out
-          </Button>
-        </div>
-      </div>
-      <div className="access-overview-strip">
-        <div>
-          <span className="access-strip-icon">
-            <WorkspaceIcon name="users" size={22} />
-          </span>
+      <section className="access-hero" aria-label="Access workspace">
+        <div className="workspace-page-heading">
           <div>
-            <strong>Your people, connected</strong>
-            <span>One tenant. Clear responsibilities.</span>
+            <p className="workspace-eyebrow">WORKSPACE ADMINISTRATION</p>
+            <h1>People & access</h1>
+            <p className="workspace-subtitle">
+              A clear view of your team. Intentional access at every level.
+            </p>
+          </div>
+          <div className="access-session-context">
+            <span className="access-tenant-pill">
+              <WorkspaceIcon name="shield" size={14} />
+              {session.tenantId}
+            </span>
+            <Button
+              size="small"
+              onClick={() => {
+                void disconnect();
+              }}
+              disabled={busy}
+            >
+              Sign out
+            </Button>
           </div>
         </div>
-        <div>
-          <span className="access-strip-icon">
-            <WorkspaceIcon name="shield" size={22} />
-          </span>
+        <div className="access-overview-strip">
           <div>
-            <strong>Server-verified access</strong>
-            <span>Every change checks current authority.</span>
+            <span className="access-strip-icon">
+              <WorkspaceIcon name="users" size={22} />
+            </span>
+            <div>
+              <strong>Your people, connected</strong>
+              <span>One tenant. Clear responsibilities.</span>
+            </div>
+          </div>
+          <div>
+            <span className="access-strip-icon">
+              <WorkspaceIcon name="shield" size={22} />
+            </span>
+            <div>
+              <strong>Server-verified access</strong>
+              <span>Every change checks current authority.</span>
+            </div>
+          </div>
+          <div>
+            <span className="access-strip-icon">
+              <WorkspaceIcon name="layers" size={22} />
+            </span>
+            <div>
+              <strong>All-or-none onboarding</strong>
+              <span>Every identity ready before access begins.</span>
+            </div>
           </div>
         </div>
-        <div>
-          <span className="access-strip-icon">
-            <WorkspaceIcon name="layers" size={22} />
-          </span>
-          <div>
-            <strong>All-or-none onboarding</strong>
-            <span>Every identity ready before access begins.</span>
-          </div>
-        </div>
-      </div>
+      </section>
       {error && (
         <Alert
           type="error"

@@ -65,6 +65,7 @@ export function AccessEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [mode, setMode] = useState('details');
+  const [original, setOriginal] = useState<Values | null>(null);
   const [confirmation, setConfirmation] = useState<{ values?: Values; remove?: boolean } | null>(
     null,
   );
@@ -122,7 +123,7 @@ export function AccessEditor({
         setCapabilities(
           catalog.capabilities.filter((capability) => capability.lifecycle === 'Active'),
         );
-        form.setFieldsValue({
+        const initial: Values = {
           code: record?.code ?? '',
           label: record?.label ?? '',
           permissionIds: record?.permissionIds ?? [],
@@ -131,7 +132,9 @@ export function AccessEditor({
           active: record?.status === 'Active',
           tenantAdmin: record?.tenantAdmin ?? false,
           actorIds,
-        });
+        };
+        form.setFieldsValue(initial);
+        setOriginal(initial);
         setLoading(false);
       } catch (failure) {
         if (!controller.signal.aborted) {
@@ -218,6 +221,62 @@ export function AccessEditor({
     records
       .filter((item) => item.id)
       .map((item) => ({ value: item.id ?? '', label: item.label ?? item.code ?? item.id }));
+  const lookup = (records: AccessRecord[], value?: string) =>
+    records.find((item) => (item.id ?? item.actorId) === value)?.label ??
+    records.find((item) => (item.id ?? item.actorId) === value)?.normalizedEmail ??
+    value ??
+    'None';
+  const capabilityName = (value?: string) =>
+    capabilities.find((item) => item.capabilityId === value)?.displayName ?? value ?? 'None';
+  const list = (items: string[]) => (items.length ? [...items].sort().join('\n') : 'None');
+  const describe = (values: Values): { label: string; value: string }[] => {
+    if (area === 'members')
+      return [
+        { label: 'Business role', value: lookup(roles, values.businessRoleId) },
+        { label: 'Membership', value: values.active ? 'Active' : 'Disabled' },
+        { label: 'Tenant administrator', value: values.tenantAdmin ? 'Yes' : 'No' },
+      ];
+    if (area === 'groups' && mode === 'people')
+      return [
+        {
+          label: 'People',
+          value: list((values.actorIds ?? []).map((value) => lookup(people, value))),
+        },
+      ];
+    if (area === 'resource-grants')
+      return [
+        { label: 'Person', value: lookup(people, values.actorId) },
+        { label: 'Capability', value: capabilityName(values.capabilityId) },
+        { label: 'Resource identifier', value: values.resourceId ?? 'None' },
+      ];
+    return [
+      { label: 'Name', value: values.label },
+      { label: 'Code', value: values.code },
+      ...(area === 'roles'
+        ? [
+            {
+              label: 'Permissions',
+              value: list((values.permissionIds ?? []).map((value) => lookup(permissions, value))),
+            },
+          ]
+        : []),
+      ...(area === 'permissions'
+        ? [
+            {
+              label: 'Capabilities and scope',
+              value: list(
+                (values.grants ?? []).map(
+                  (grant) =>
+                    `${capabilityName(grant.capabilityId)} · ${grant.scope === 'Tenant' ? 'Tenant-wide' : 'Specific resources'}`,
+                ),
+              ),
+            },
+          ]
+        : []),
+    ];
+  };
+  const before = original ? describe(original) : [];
+  const proposed = confirmation?.values ? describe(confirmation.values) : [];
   const names = (
     <>
       <Form.Item name="label" label="Name" rules={[{ required: true, whitespace: true, max: 120 }]}>
@@ -510,8 +569,13 @@ export function AccessEditor({
       </Drawer>
       <Modal
         title={
-          confirmation?.remove ? 'Remove this access configuration?' : 'Save this access change?'
+          confirmation?.remove
+            ? 'Remove this access configuration?'
+            : record
+              ? 'Review changes'
+              : `Review new ${noun}`
         }
+        width={640}
         open={confirmation !== null}
         onCancel={() => {
           if (!busy) setConfirmation(null);
@@ -520,7 +584,7 @@ export function AccessEditor({
           void save();
         }}
         confirmLoading={busy}
-        okText={confirmation?.remove ? 'Remove' : 'Save change'}
+        okText={confirmation?.remove ? 'Remove' : record ? 'Save changes' : `Create ${noun}`}
         okButtonProps={{ danger: confirmation?.remove }}
         cancelButtonProps={{ disabled: busy }}
         closable={!busy}
@@ -529,20 +593,37 @@ export function AccessEditor({
         <p>
           {confirmation?.remove
             ? 'The service will reject removal if another access configuration still depends on this item.'
-            : 'This change takes effect immediately. Current administrator authority and the workspace revision will be checked again.'}
+            : 'Check the details below. Saving applies this change immediately to your tenant.'}
         </p>
-        {area === 'members' && (
+        {record && (
           <p>
-            <strong>{record?.normalizedEmail}</strong>
-            <br />
-            Role:{' '}
-            {roles.find((role) => role.id === confirmation?.values?.businessRoleId)?.label ??
-              'No business role'}
-            <br />
-            Membership: {confirmation?.values?.active ? 'Active' : 'Disabled'}
-            <br />
-            Tenant administrator: {confirmation?.values?.tenantAdmin ? 'Yes' : 'No'}
+            <strong>{record.normalizedEmail ?? record.label ?? record.resourceId ?? id}</strong>
           </p>
+        )}
+        {proposed.length > 0 && (
+          <dl className="access-review">
+            {proposed.map((item) => {
+              const previous = before.find((value) => value.label === item.label)?.value;
+              const changed = Boolean(record) && previous !== item.value;
+              return (
+                <div className="access-review-row" key={item.label}>
+                  <dt>{item.label}</dt>
+                  <dd>
+                    {changed && (
+                      <span className="access-review-before">
+                        <span className="access-review-badge">Before</span>
+                        {previous}
+                      </span>
+                    )}
+                    <span className="access-review-after">
+                      {changed && <span className="access-review-badge">After</span>}
+                      {item.value}
+                    </span>
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
         )}
       </Modal>
     </>

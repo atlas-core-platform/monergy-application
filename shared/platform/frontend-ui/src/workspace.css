@@ -1,6 +1,9 @@
+@import './semantic-tokens.generated.css';
+@import './typography.css';
+
 :root {
   --mw-ink: #172336;
-  --mw-muted: #627188;
+  --mw-muted: #52647c;
   --mw-canvas: #f5f7fa;
   --mw-line: #e5eaf1;
   --mw-primary: #2457a7;
@@ -11,15 +14,8 @@
 .mw-shell {
   min-height: 100vh;
   color: var(--mw-ink);
-  background: var(--mw-canvas);
-  font-family:
-    Inter,
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  background: radial-gradient(ellipse at 95% 0%, #dcebf780, transparent 45%), var(--mw-canvas);
+  font-family: var(--monergy-font-sans);
 }
 .mw-shell * {
   box-sizing: border-box;
@@ -29,7 +25,7 @@
   text-decoration: none;
 }
 .mw-shell button {
-  font: inherit;
+  font-family: inherit;
 }
 .mw-sidebar {
   position: fixed;
@@ -42,6 +38,15 @@
   color: #d2deee;
   padding: 30px 18px 18px;
   transition: width 0.22s var(--mw-ease);
+}
+.mw-sidebar .mw-navigation {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.mw-sidebar > :not(.mw-navigation) {
+  flex-shrink: 0;
 }
 .mw-brand {
   display: flex;
@@ -190,7 +195,8 @@
   justify-content: space-between;
   padding: 0 40px;
   border-bottom: 1px solid var(--mw-line);
-  background: #fff;
+  background: #ffffffed;
+  backdrop-filter: blur(16px);
   gap: 16px;
 }
 .mw-breadcrumb {
@@ -218,7 +224,7 @@
   border: 1px solid var(--mw-line);
   padding: 9px 12px;
   border-radius: 8px;
-  font-size: 11px;
+  font-size: 14px;
   cursor: pointer;
 }
 .mw-search-trigger kbd {
@@ -255,7 +261,7 @@
   font-weight: 600;
 }
 .mw-content {
-  padding: 38px 40px 48px;
+  padding: 32px 36px 48px;
   max-width: 1680px;
   margin: auto;
   outline: none;
@@ -300,6 +306,7 @@
   margin-top: 18px;
 }
 .mw-command-results button {
+  font: inherit;
   display: flex;
   align-items: center;
   justify-content: space-between;

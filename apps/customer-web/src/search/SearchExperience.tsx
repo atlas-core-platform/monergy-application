@@ -41,9 +41,9 @@ export default function SearchExperience() {
     }
   }
   return (
-    <main className="min-h-screen bg-canvas px-4 py-6 font-sans text-ink sm:px-8 lg:px-12">
+    <main className="workspace-reference min-h-screen bg-canvas px-4 py-6 font-sans text-ink sm:px-8 lg:px-12">
       <div className="mx-auto max-w-6xl space-y-6">
-        <header className="rounded-panel bg-surface p-6 shadow-panel sm:p-8">
+        <header className="workspace-feature-header rounded-panel bg-surface p-6 shadow-panel sm:p-8">
           <Space wrap>
             <Tag color="blue">REFERENCE · LOCAL / CI ONLY</Tag>
             <Tag color="purple">MWP-03-D07 · SIMULATOR</Tag>

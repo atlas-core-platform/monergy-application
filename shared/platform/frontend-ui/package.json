@@ -5,7 +5,8 @@
   "type": "module",
   "sideEffects": [
     "./src/semantic-tokens.generated.css",
-    "./src/workspace.css"
+    "./src/workspace.css",
+    "./src/typography.css"
   ],
   "exports": {
     ".": "./src/index.ts",
