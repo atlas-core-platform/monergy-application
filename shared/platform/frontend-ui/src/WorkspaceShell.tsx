@@ -44,6 +44,22 @@ export function WorkspaceShell({
       window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   );
   const input = useRef<InputRef>(null);
+  const mobileTrigger = useRef<HTMLButtonElement>(null);
+  const mobileWasOpen = useRef(false);
+
+  useEffect(() => {
+    if (mobileOpen) {
+      mobileWasOpen.current = true;
+      return;
+    }
+    if (!mobileWasOpen.current) return;
+    mobileWasOpen.current = false;
+    // Also restore focus when Escape interrupts the opening animation.
+    const frame = requestAnimationFrame(() => mobileTrigger.current?.focus());
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [mobileOpen]);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -70,6 +86,17 @@ export function WorkspaceShell({
     if (onNavigate) onNavigate(destination.id);
     else if (destination.href) window.location.assign(destination.href);
   };
+  const workspaceLabel = (
+    <div className="mw-workspace-label">
+      <span className="mw-workspace-avatar">
+        <WorkspaceIcon name="layers" size={18} />
+      </span>
+      <div>
+        <strong>Your workspace</strong>
+        <small>{context}</small>
+      </div>
+    </div>
+  );
   const navigation = (
     <nav aria-label="Workspace navigation" className="mw-navigation">
       {destinations.map((destination, index) => (
@@ -82,25 +109,31 @@ export function WorkspaceShell({
               href={destination.href}
               className={`mw-nav-item ${active === destination.id ? 'is-active' : ''}`}
               aria-current={active === destination.id ? 'page' : undefined}
+              aria-label={destination.label}
               title={collapsed ? destination.label : undefined}
             >
-              <WorkspaceIcon name={destination.icon} />
-              <span>{destination.label}</span>
-              {active === destination.id && <span className="mw-nav-marker" />}
+              <span className="mw-nav-icon">
+                <WorkspaceIcon name={destination.icon} />
+              </span>
+              <span className="mw-nav-label">{destination.label}</span>
+              {active === destination.id && <span className="mw-nav-marker" aria-hidden="true" />}
             </a>
           ) : (
             <button
               type="button"
               className={`mw-nav-item ${active === destination.id ? 'is-active' : ''}`}
               aria-current={active === destination.id ? 'page' : undefined}
+              aria-label={destination.label}
               onClick={() => {
                 navigate(destination);
               }}
               title={collapsed ? destination.label : undefined}
             >
-              <WorkspaceIcon name={destination.icon} />
-              <span>{destination.label}</span>
-              {active === destination.id && <span className="mw-nav-marker" />}
+              <span className="mw-nav-icon">
+                <WorkspaceIcon name={destination.icon} />
+              </span>
+              <span className="mw-nav-label">{destination.label}</span>
+              {active === destination.id && <span className="mw-nav-marker" aria-hidden="true" />}
             </button>
           )}
         </div>
@@ -136,17 +169,23 @@ export function WorkspaceShell({
         </a>
         <aside className="mw-sidebar">
           {brand}
-          <div className="mw-workspace-label">
-            <span className="mw-workspace-avatar">M</span>
-            <div>
-              <strong>Monergy</strong>
-              <small>Your connected workspace</small>
-            </div>
-          </div>
+          {workspaceLabel}
           {navigation}
           <div className="mw-sidebar-footer">
-            <span className="mw-environment-dot" />
-            <span>{context}</span>
+            <button
+              type="button"
+              className="mw-quick-jump"
+              aria-label="Jump to a workspace"
+              title={collapsed ? 'Jump to a workspace' : undefined}
+              onClick={() => {
+                setQuery('');
+                setCommandOpen(true);
+              }}
+            >
+              <WorkspaceIcon name="search" size={18} />
+              <span>Quick navigation</span>
+              <kbd>⌘ / Ctrl K</kbd>
+            </button>
           </div>
           <button
             className="mw-collapse"
@@ -156,17 +195,21 @@ export function WorkspaceShell({
             }}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-expanded={!collapsed}
+            title={collapsed ? 'Expand sidebar' : undefined}
           >
-            <WorkspaceIcon name="menu" />
+            <WorkspaceIcon name="panel" />
             <span>Collapse sidebar</span>
           </button>
         </aside>
         <div className="mw-body">
           <header className="mw-topbar">
             <button
+              ref={mobileTrigger}
               type="button"
               className="mw-icon-button mw-mobile-menu"
               aria-label="Open navigation"
+              aria-expanded={mobileOpen}
+              aria-haspopup="dialog"
               onClick={() => {
                 setMobileOpen(true);
               }}
@@ -218,8 +261,10 @@ export function WorkspaceShell({
             setMobileOpen(false);
           }}
           size={280}
+          rootClassName="mw-navigation-drawer"
           destroyOnHidden
         >
+          {workspaceLabel}
           {navigation}
         </Drawer>
         <Modal
