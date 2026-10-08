@@ -32,6 +32,13 @@ function Test-ProhibitedStyle {
     $Content -match '!important' -or $Content -match '\b[a-z0-9:_/-]+!'
 }
 
+function Test-FrontendTextPath {
+    param([string]$Path)
+    # Font assets are binary. Decoding compressed bytes as source text produces
+    # accidental CSS matches; repository security scanning still covers assets.
+    [IO.Path]::GetExtension($Path).ToLowerInvariant() -notin @('.woff', '.woff2', '.ttf', '.otf')
+}
+
 function Test-ProhibitedImport {
     param([string]$Content)
     $Content -match '(?m)import\s+\*\s+as\s+'
@@ -61,6 +68,12 @@ if ($SelfTest) {
         'workspace reference accepted' = (Test-ExactDependencyPins ([pscustomobject]@{ dependencies = [pscustomobject]@{ ui = 'workspace:*' } }))
         'important override rejected' = (Test-ProhibitedStyle '.sample { color: red !important; }')
         'ordinary style accepted' = (-not (Test-ProhibitedStyle '.sample { color: red; }'))
+        'binary variable font is not source text' = (-not (Test-FrontendTextPath 'fonts/inter.woff2'))
+        'uppercase font extension is not source text' = (-not (Test-FrontendTextPath 'fonts/inter.WOFF2'))
+        'stylesheet remains scanned' = (Test-FrontendTextPath 'src/typography.css')
+        'component remains scanned' = (Test-FrontendTextPath 'src/Editor.tsx')
+        'configuration remains scanned' = (Test-FrontendTextPath 'tokens.json')
+        'trailing important utility rejected' = (Test-ProhibitedStyle '<div className="text-red-600!" />')
         'wildcard Ant import rejected' = (Test-ProhibitedImport "import * as Ant from 'antd'")
         'named Ant import accepted' = (-not (Test-ProhibitedImport "import { Button } from 'antd'"))
         'exact set rejects duplicate' = (-not (Test-ExactSet @('a', 'a') @('a', 'b')))
@@ -304,7 +317,7 @@ $mainText = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'apps/customer-w
 $styleText = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'apps/customer-web/src/styles.css') -Raw
 $frontendFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'apps/customer-web') -Recurse -File | Where-Object { $_.FullName -notmatch '[\\/](?:node_modules|dist)[\\/]' }) +
     @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'shared/platform/frontend-ui') -Recurse -File | Where-Object { $_.FullName -notmatch '[\\/]node_modules[\\/]' })
-$frontendText = @($frontendFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+$frontendText = @($frontendFiles | Where-Object { Test-FrontendTextPath $_.FullName } | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 Add-Check 'Single CSS reset strategy' ($mainText.Contains("antd/dist/reset.css") -and $styleText.Contains("@monergy/ui-foundation/semantic-tokens.css") -and $styleText.Contains("tailwindcss/theme.css") -and $styleText.Contains("tailwindcss/utilities.css") -and $styleText -notmatch 'tailwindcss/(?:base|preflight)') 'Ant reset only; Tailwind Preflight omitted'
 Add-Check 'No wildcard Ant imports' (-not (Test-ProhibitedImport $frontendText)) 'Named component imports preserve tree shaking'
 Add-Check 'No routine important overrides' (-not (Test-ProhibitedStyle $frontendText)) 'No !important integration mechanism'
