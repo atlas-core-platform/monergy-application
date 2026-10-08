@@ -64,47 +64,50 @@ if ($Action -eq 'Reset') {
     Write-Host 'Selected local UAT profile reset.'
     return
 }
-# Regenerate service-specific files from the retained operator profile, never new keys.
-Save-Text 'postgres-password' $state.postgresPassword
-$ports = [ordered]@{ 'customer-identity'=5101; audit=5102; consent=5110; evidence=5111; 'document-intelligence'=5112; 'financial-profile'=5113; 'financial-rules'=5114; 'search-retrieval'=5115; reporting=5116; 'integration-gateway'=5117; 'job-management'=5118; 'ai-intelligence'=5119 }
-$am = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; AccessManagement=@{ Adapter='postgres-reference'; TrustedContext='customer-identity-reference'; CustomerIdentityUrl='http://127.0.0.1:5101/'; CustomerIdentityToken=$state.tokens.context; IdentityProvisioningToken=$state.tokens.provisioning; MembershipToken=$state.tokens.membership; TenantDatabases=@{} } } }
-foreach ($db in $state.databases | Where-Object service -eq 'am') { $am.Monergy.AccessManagement.TenantDatabases[$db.tenant] = Connection $db 'runtime' }
-Save-Json 'access-management.json' $am
-foreach ($service in $ports.Keys) {
-    $config = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; TenantBoundary=@{ Enabled='true'; ProbeUrl="http://127.0.0.1:$($ports[$service])/"; CustomerTenants=@{ 'reference-customer'='T001'; 'other-customer'='T002'; C001='T001'; C002='T002' } } } }
-    if ($service -in @('customer-identity','audit')) {
-        $integration = @{ Enabled='true'; AccessManagementUrl='http://127.0.0.1:5088/' }
-        if ($service -eq 'customer-identity') {
-            $integration.MembershipToken=$state.tokens.membership; $integration.CustomerIdentityToken=$state.tokens.context
-            $integration.IdentityProvisioningToken=$state.tokens.provisioning; $integration.CustomerIdentityEventToken=$state.tokens.identityEvent
-            $integration.Identities=$state.identities; $integration.CustomerIdentityDatabases=@{}
-            foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.CustomerIdentityDatabases[$db.tenant] = Connection $db 'runtime' }
-        } else {
-            $integration.AuditEventToken=$state.tokens.auditEvent; $integration.AuditDatabases=@{}
-            foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.AuditDatabases[$db.tenant] = Connection $db 'runtime' }
+# Regenerate configuration only when preparing/starting, never during read-only status or verification.
+if ($Action -in @('Prepare','Start')) {
+    # Retain operator keys; never generate replacements.
+    Save-Text 'postgres-password' $state.postgresPassword
+    $ports = [ordered]@{ 'customer-identity'=5101; audit=5102; consent=5110; evidence=5111; 'document-intelligence'=5112; 'financial-profile'=5113; 'financial-rules'=5114; 'search-retrieval'=5115; reporting=5116; 'integration-gateway'=5117; 'job-management'=5118; 'ai-intelligence'=5119 }
+    $am = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; AccessManagement=@{ Adapter='postgres-reference'; TrustedContext='customer-identity-reference'; CustomerIdentityUrl='http://127.0.0.1:5101/'; CustomerIdentityToken=$state.tokens.context; IdentityProvisioningToken=$state.tokens.provisioning; MembershipToken=$state.tokens.membership; TenantDatabases=@{} } } }
+    foreach ($db in $state.databases | Where-Object service -eq 'am') { $am.Monergy.AccessManagement.TenantDatabases[$db.tenant] = Connection $db 'runtime' }
+    Save-Json 'access-management.json' $am
+    foreach ($service in $ports.Keys) {
+        $config = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; TenantBoundary=@{ Enabled='true'; ProbeUrl="http://127.0.0.1:$($ports[$service])/"; CustomerTenants=@{ 'reference-customer'='T001'; 'other-customer'='T002'; C001='T001'; C002='T002' } } } }
+        if ($service -in @('customer-identity','audit')) {
+            $integration = @{ Enabled='true'; AccessManagementUrl='http://127.0.0.1:5088/' }
+            if ($service -eq 'customer-identity') {
+                $integration.MembershipToken=$state.tokens.membership; $integration.CustomerIdentityToken=$state.tokens.context
+                $integration.IdentityProvisioningToken=$state.tokens.provisioning; $integration.CustomerIdentityEventToken=$state.tokens.identityEvent
+                $integration.Identities=$state.identities; $integration.CustomerIdentityDatabases=@{}
+                foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.CustomerIdentityDatabases[$db.tenant] = Connection $db 'runtime' }
+            } else {
+                $integration.AuditEventToken=$state.tokens.auditEvent; $integration.AuditDatabases=@{}
+                foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.AuditDatabases[$db.tenant] = Connection $db 'runtime' }
+            }
+            $config.Monergy.AccessIntegration=$integration
+        } elseif ($service -in @('evidence','financial-profile','financial-rules','search-retrieval','reporting','integration-gateway')) {
+            $config.Monergy.ReferenceAdapters='true'
         }
-        $config.Monergy.AccessIntegration=$integration
-    } elseif ($service -in @('evidence','financial-profile','financial-rules','search-retrieval','reporting','integration-gateway')) {
-        $config.Monergy.ReferenceAdapters='true'
+        Save-Json "$service.json" $config
     }
-    Save-Json "$service.json" $config
-}
-foreach ($tenantId in @('T001','T002')) {
-    $delivery = @{}
-    $database = $state.databases | Where-Object { $_.service -eq 'am' -and $_.tenant -eq $tenantId }
-    $delivery["MONERGY_AM_${tenantId}_DELIVERY"] = Connection $database 'delivery'
-    foreach ($destination in @('AUTHORIZATION','SESSIONS','AUDIT')) {
-        $audit = $destination -eq 'AUDIT'
-        $delivery["MONERGY_AM_REFERENCE_${destination}_URL"] = $(if ($audit) { 'http://127.0.0.1:5102/' } else { 'http://127.0.0.1:5101/' })
-        $delivery["MONERGY_AM_REFERENCE_${destination}_TOKEN"] = $(if ($audit) { $state.tokens.auditEvent } else { $state.tokens.identityEvent })
+    foreach ($tenantId in @('T001','T002')) {
+        $delivery = @{}
+        $database = $state.databases | Where-Object { $_.service -eq 'am' -and $_.tenant -eq $tenantId }
+        $delivery["MONERGY_AM_${tenantId}_DELIVERY"] = Connection $database 'delivery'
+        foreach ($destination in @('AUTHORIZATION','SESSIONS','AUDIT')) {
+            $audit = $destination -eq 'AUDIT'
+            $delivery["MONERGY_AM_REFERENCE_${destination}_URL"] = $(if ($audit) { 'http://127.0.0.1:5102/' } else { 'http://127.0.0.1:5101/' })
+            $delivery["MONERGY_AM_REFERENCE_${destination}_TOKEN"] = $(if ($audit) { $state.tokens.auditEvent } else { $state.tokens.identityEvent })
+        }
+        Save-Json "delivery-$tenantId.json" $delivery
     }
-    Save-Json "delivery-$tenantId.json" $delivery
+    Save-Json 'workspace.json' @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' } } }
+    $runtimeUid = if ($windows) { '1654' } else { (& id -u).Trim() }
+    $path = $folder.Replace('\','/')
+    Save-Text 'compose.env' "UAT_CONFIG_ROOT='$path'`nUAT_PORT=$($state.port)`nUAT_UID=$runtimeUid`n"
+    Protect-Files
 }
-Save-Json 'workspace.json' @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' } } }
-$runtimeUid = if ($windows) { '1654' } else { (& id -u).Trim() }
-$path = $folder.Replace('\','/')
-Save-Text 'compose.env' "UAT_CONFIG_ROOT='$path'`nUAT_PORT=$($state.port)`nUAT_UID=$runtimeUid`n"
-Protect-Files
 if ($Action -eq 'Prepare') { Write-Host "Local profile prepared. Credentials: -Action Credentials -Tenant T001 -Actor A900"; return }
 if ($Action -eq 'Stop') { Compose @('down','--remove-orphans'); Write-Host 'Stopped. Tenant databases and credentials retained.'; return }
 if ($Action -eq 'Status') { Compose @('ps','--all'); return }
