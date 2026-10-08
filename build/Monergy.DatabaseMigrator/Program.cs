@@ -1,5 +1,8 @@
 using DbUp;
 
+if (args.Length == 2 && args[0] == "--local-uat-bootstrap")
+    return await Monergy.DatabaseMigrator.LocalUatBootstrap.RunAsync(args[1]);
+
 var options = Parse(args);
 var service = Required(options, "service");
 var connection = ResolveConnection(options);

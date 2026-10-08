@@ -516,3 +516,71 @@
   background: #ecfdf5;
   border-color: #bbf7d0;
 }
+
+.access-operations-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 24px 0;
+}
+.access-operation-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 16px;
+  text-align: left;
+  color: var(--monergy-ink, #172b38);
+  background: var(--monergy-surface, #fff);
+  border: 1px solid #dde6e9;
+  border-radius: 16px;
+  cursor: pointer;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+.access-operation-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px #163e5010;
+}
+.access-operation-card:focus-visible {
+  outline: 3px solid #247e89;
+  outline-offset: 3px;
+}
+.access-operation-card > span {
+  flex: 1;
+}
+.access-operation-card strong,
+.access-operation-card small {
+  display: block;
+}
+.access-operation-card small {
+  color: #5c7079;
+  margin-top: 6px;
+  line-height: 1.4;
+}
+.access-service-list {
+  display: grid;
+  gap: 12px;
+}
+.access-evidence-details dd {
+  overflow-wrap: anywhere;
+  margin: 4px 0 12px;
+}
+@media (max-width: 1200px) {
+  .access-operations-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .access-operations-grid {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .access-operation-card {
+    transition: none;
+  }
+  .access-operation-card:hover {
+    transform: none;
+  }
+}

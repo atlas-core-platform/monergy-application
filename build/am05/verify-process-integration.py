@@ -193,12 +193,21 @@ try:
     admin(ending, "GET", "members", expected=401)
     role["policyVersion"] = admin(owner, "GET", "roles")["policyVersion"]
     assigned = admin(owner, "PUT", "members/A100", {"expectedPolicyVersion": role["policyVersion"], "businessRoleId": role["id"], "active": True, "tenantAdmin": False})
+    context = admin(owner, "GET", "context")
+    assert context["authority"] == "TenantAdmin" and context["tenantId"] == "T001"
+    call("ci", "GET", "/local/v1/administration/sessions", headers=session_headers(owner))
+    call("ci", "GET", "/local/v1/administration/sessions", headers=session_headers(first), expected=401)
+    call("audit", "GET", "/local/v1/administration/access-events", headers=session_headers(owner))
     current = login("T001", "A100")
     unused = login("T001", "A100")
     other_tenant = login("T002", "A100")
     evaluation = {"capabilityId": "financial-profile.profile.read", "resourceType": "customer", "resourceId": "customer-100"}
     assert call("am", "POST", "/v1/authorization/evaluations", evaluation, session_headers(current))["outcome"] == "Allow"
     assert call("am", "POST", "/v1/authorization/evaluations", evaluation, session_headers(owner))["outcome"] == "Deny"
+    assigned = admin(owner, "POST", "members/A100/revoke-sessions", {"expectedPolicyVersion": assigned["policyVersion"]})
+    call("am", "POST", "/v1/authorization/evaluations", evaluation, session_headers(current), expected=401)
+    current = login("T001", "A100")
+    unused = login("T001", "A100")
     admin(owner, "PUT", "members/A100", {"expectedPolicyVersion": assigned["policyVersion"], "businessRoleId": role["id"], "active": False, "tenantAdmin": False})
     call("am", "POST", "/v1/authorization/evaluations", evaluation, session_headers(current), expected=401)
     call("ci", "POST", "/local/v1/tenant-sessions", {"tenantId": "T001"}, {"X-Monergy-Reference-Authentication": token("T001_A100")}, expected=401)

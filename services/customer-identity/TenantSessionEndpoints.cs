@@ -16,6 +16,7 @@ public static class TenantSessionEndpoints
         services.AddSingleton<ITenantMembershipClient, HttpTenantMembershipClient>();
         services.AddSingleton<ReferenceTenantAuthenticator>();
         services.AddSingleton<TenantSessionAuthority>();
+        services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
     }
 
     public static void MapTenantSessionAuthority(this WebApplication app)
@@ -50,6 +51,16 @@ public static class TenantSessionEndpoints
             InvokeAsync(() => authority.EstablishAsync(request.TenantId, http.Request.Headers["X-Monergy-Reference-Authentication"].ToString(), http.RequestAborted)));
         app.MapPost("/local/v1/tenant-sessions/revoke", (TenantSessionLookup request, HttpContext http, TenantSessionAuthority authority) =>
             InvokeAsync(() => authority.EndAsync(request, http.RequestAborted)));
+        app.MapGet("/local/v1/administration/sessions", async (HttpContext http, string? after,
+            TenantAccessClient access, PostgresTenantSessions sessions) =>
+        {
+            try
+            {
+                var administrator = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
+                return await InvokeAsync(() => sessions.ListForAdministratorAsync(administrator.TenantId, after, http.RequestAborted)).ConfigureAwait(false);
+            }
+            catch (TenantBoundaryException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.Status); }
+        });
         app.MapPost("/internal/v1/tenant-sessions/validate", (TenantSessionLookup request, HttpContext http, TenantSessionAuthority authority) =>
             TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Owner-Token"].ToString(), token)
                 ? InvokeAsync(() => authority.ValidateAsync(request, http.RequestAborted))

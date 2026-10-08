@@ -20,6 +20,8 @@ import { AccessApi, AccessApiError, displayError, establishSession, recordId } f
 import type { AccessArea, AccessPage, AccessRecord, TenantSession } from './accessApi';
 import { AccessEditor } from './AccessEditor';
 import { ImportDrawer } from './ImportDrawer';
+import { AccessOperations } from './AccessOperations';
+import { useWorkspaceSession } from './workspaceSession';
 import './access.css';
 
 const areas: { value: AccessArea; label: string; description: string }[] = [
@@ -52,7 +54,7 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
 ];
 
 export default function AccessExperience() {
-  const [session, setSession] = useState<TenantSession | null>(null);
+  const [session, setSession] = useWorkspaceSession();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [form] = Form.useForm<{ tenantId: string; key: string }>();
@@ -460,6 +462,7 @@ function Administration({
           className="access-notice"
         />
       )}
+      <AccessOperations api={api} onExpired={fail} />
       <section className="access-panel">
         <div className="access-tabs">
           <Segmented

@@ -1,3 +1,4 @@
+import { tenantContract } from '../access/workspaceSession';
 import type { ReportingFailure, TrustedFinancialReport } from './types';
 
 interface ContractResponse<T> {
@@ -73,27 +74,36 @@ async function invoke<T>(
   idempotencyKey: string | null = null,
 ): Promise<T> {
   const requestId = `report-request-${globalThis.crypto.randomUUID()}`;
+  const connected = tenantContract({
+    contractName,
+    contractVersion: '1.0.0',
+    requestId,
+    correlationId: requestId,
+    causationId: null,
+    security,
+    idempotencyKey,
+    payload,
+  });
   const response = await fetch(`/contracts/${contractId}/v1`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      contractName,
-      contractVersion: '1.0.0',
-      requestId,
-      correlationId: requestId,
-      causationId: null,
-      security,
-      idempotencyKey,
-      payload,
-    }),
+    headers: { 'content-type': 'application/json', ...connected.headers },
+    body: JSON.stringify(connected.body),
   });
   const body = (await response.json().catch(() => null)) as ContractResponse<T> | null;
   if (!response.ok || body?.outcome !== 'Success' || body.data === null) {
-    const failure = body?.error ?? {
-      code: 'report.reference.unavailable',
-      message: 'The trusted reference report is unavailable.',
-      retryable: response.status >= 500,
-    };
+    const failure =
+      body?.error && typeof body.error === 'object'
+        ? body.error
+        : {
+            code: 'report.reference.unavailable',
+            message:
+              response.status === 401
+                ? 'Your session has ended. Connect again in People & access.'
+                : response.status === 403
+                  ? 'Your current role does not allow this report.'
+                  : 'The trusted reference report is unavailable.',
+            retryable: response.status >= 500,
+          };
     throw new ReferenceReportingError(failure.message, failure);
   }
   return body.data;

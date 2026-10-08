@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -84,8 +84,9 @@ describe('tenant administration trust boundaries', () => {
       mount();
       const user = await connect();
       await user.click(await screen.findByRole('button', { name: 'Open person@example.test' }));
-      await user.click(await screen.findByRole('switch', { name: 'Tenant administrator' }));
-      await user.click(screen.getByRole('button', { name: 'Review change' }));
+      const editor = within(await screen.findByRole('dialog', { name: 'person@example.test' }));
+      await user.click(await editor.findByRole('switch', { name: 'Tenant administrator' }));
+      await user.click(editor.getByRole('button', { name: 'Review change' }));
       await user.click(await screen.findByRole('button', { name: 'Save change' }));
       expect(
         await screen.findByText(/workspace changed or this operation conflicts/),
@@ -154,20 +155,23 @@ describe('tenant administration trust boundaries', () => {
       mount();
       const user = await connect();
       await user.click(await screen.findByRole('button', { name: 'Import people' }));
-      await user.click(screen.getByText('Paste CSV instead'));
-      fireEvent.change(await screen.findByRole('textbox', { name: 'CSV contents' }), {
+      const drawer = within(
+        await screen.findByRole('dialog', { name: 'Bring your people onboard' }),
+      );
+      await user.click(drawer.getByText('Paste CSV instead'));
+      fireEvent.change(await drawer.findByRole('textbox', { name: 'CSV contents' }), {
         target: { value: 'email,role_code,group_codes\ninvalid,,' },
       });
-      await user.click(screen.getByRole('button', { name: 'Validate entire file' }));
+      await user.click(drawer.getByRole('button', { name: 'Validate entire file' }));
       expect(await screen.findByText('1 issues to resolve')).toBeVisible();
       expect(calls.some((call) => call.url.endsWith('/commit'))).toBe(false);
       valid = true;
 
-      fireEvent.change(screen.getByRole('textbox', { name: 'CSV contents' }), {
+      fireEvent.change(drawer.getByRole('textbox', { name: 'CSV contents' }), {
         target: { value: 'email,role_code,group_codes\nperson@example.test,,' },
       });
-      await user.click(screen.getByRole('button', { name: 'Validate entire file' }));
-      await user.click(await screen.findByRole('button', { name: 'Confirm onboarding' }));
+      await user.click(drawer.getByRole('button', { name: 'Validate entire file' }));
+      await user.click(await drawer.findByRole('button', { name: 'Confirm onboarding' }));
       await user.click(await screen.findByRole('button', { name: 'Onboard people' }));
       expect(await screen.findByText('Your people are ready.')).toBeVisible();
       const staged = calls.find((call) => call.url.endsWith('/commit'));

@@ -91,6 +91,33 @@ public sealed class PostgresTenantAccessAudit : ITenantAccessAuditRepository, IA
         catch (Exception exception) when (exception is NpgsqlException or TenantAccessException) { return false; }
     }
 
+    public async Task<object> ListForAdministratorAsync(string tenantId, string? after, CancellationToken cancellationToken)
+    {
+        if (after is not null) TenantAccessProtocol.Identifier(after, 200);
+        await using var connection = await OpenAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        var rows = (await connection.QueryAsync<AdminAuditRow>(new CommandDefinition("""
+            SELECT i.audit_evidence_id AS EvidenceReference,i.envelope::text AS Envelope,e.recorded_at AS RecordedAt
+            FROM audit.access_event_inbox i JOIN audit.evidence e USING(audit_evidence_id)
+            WHERE @After='' OR (e.recorded_at,i.audit_evidence_id)<
+                (SELECT e2.recorded_at,i2.audit_evidence_id FROM audit.access_event_inbox i2
+                 JOIN audit.evidence e2 USING(audit_evidence_id) WHERE i2.audit_evidence_id=@After)
+            ORDER BY e.recorded_at DESC,i.audit_evidence_id DESC LIMIT 101;
+            """, new { After = after ?? "" }, cancellationToken: cancellationToken)).ConfigureAwait(false)).ToArray();
+        return new
+        {
+            tenantId,
+            items = rows.Take(100).Select(row => new
+            {
+                row.EvidenceReference,
+                RecordedAt = DateTime.SpecifyKind(row.RecordedAt, DateTimeKind.Utc),
+                Event = JsonSerializer.Deserialize<AccessManagementEvent>(row.Envelope, TenantAccessProtocol.Json)
+            }),
+            nextCursor = rows.Length > 100 ? rows[99].EvidenceReference : null
+        };
+    }
+
+    private sealed record AdminAuditRow(string EvidenceReference, string Envelope, DateTime RecordedAt);
+
     private async Task<NpgsqlConnection> OpenAsync(string tenantId, CancellationToken cancellationToken)
     {
         if (!sources.TryGetValue(tenantId, out var source)) throw new TenantAccessException("TENANT_UNAVAILABLE", 503);

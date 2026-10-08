@@ -137,6 +137,16 @@ export class AccessApi {
       signal,
     });
   }
+  owner<T>(owner: 'identity' | 'audit' | 'uat', path: string, signal?: AbortSignal): Promise<T> {
+    return read<T>('/' + owner + '-api/' + path, {
+      method: 'GET',
+      signal,
+      headers: {
+        'X-Monergy-Tenant': this.session.tenantId,
+        'X-Monergy-Session': this.session.authenticationContextId,
+      },
+    });
+  }
   list(area: AccessArea, after?: string, signal?: AbortSignal): Promise<AccessPage> {
     return this.request<AccessPage>(
       'administration/' +

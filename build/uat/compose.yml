@@ -1,0 +1,244 @@
+# Local Docker Desktop UAT only. All peer HTTP stays in one loopback namespace.
+x-runtime: &runtime
+  image: monergy-local-uat:${COMPOSE_PROJECT_NAME}
+  pull_policy: never
+  user: '${UAT_UID:-1654}'
+  read_only: true
+  tmpfs: ['/tmp:rw,noexec,nosuid,size=64m,mode=1777']
+  cap_drop: [ALL]
+  security_opt: ['no-new-privileges:true']
+  restart: unless-stopped
+  stop_grace_period: 20s
+
+services:
+  postgres:
+    image: postgres:18.6@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+    secrets: [postgres-password]
+    volumes: ['tenant-data:/var/lib/postgresql']
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U postgres -d postgres']
+      interval: 2s
+      timeout: 3s
+      retries: 40
+    restart: unless-stopped
+  bootstrap:
+    <<: *runtime
+    build:
+      context: ../..
+      dockerfile: build/uat/Runtime.Containerfile
+    restart: 'no'
+    working_dir: /app/bootstrap
+    command: [Monergy.DatabaseMigrator.dll, --local-uat-bootstrap, /run/secrets/bootstrap-profile]
+    environment:
+      MONERGY_LOCAL_UAT_BOOTSTRAP: '1'
+    secrets: [bootstrap-profile]
+    depends_on:
+      postgres: { condition: service_healthy }
+  workspace:
+    <<: *runtime
+    working_dir: /app/workspace
+    command: [Monergy.UatGateway.dll, --urls, 'http://0.0.0.0:4173']
+    ports: ['127.0.0.1:${UAT_PORT:-4173}:4173']
+    secrets:
+      - source: workspace-config
+        target: /app/workspace/appsettings.Development.json
+    depends_on:
+      bootstrap: { condition: service_completed_successfully }
+  access-management:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/access-management
+    command: [Monergy.Services.AccessManagement.dll, --urls, 'http://127.0.0.1:5088']
+    secrets:
+      - source: access-management-config
+        target: /app/access-management/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  customer-identity:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/customer-identity
+    command: [Monergy.Services.CustomerIdentity.dll, --urls, 'http://127.0.0.1:5101']
+    secrets:
+      - source: customer-identity-config
+        target: /app/customer-identity/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  audit:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/audit
+    command: [Monergy.LocalAccessAuditHost.dll, --urls, 'http://127.0.0.1:5102']
+    secrets:
+      - source: audit-config
+        target: /app/audit/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  consent:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/consent
+    command: [Monergy.Services.Consent.dll, --urls, 'http://127.0.0.1:5110']
+    secrets:
+      - source: consent-config
+        target: /app/consent/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  evidence:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/evidence
+    command: [Monergy.Services.Evidence.dll, --urls, 'http://127.0.0.1:5111']
+    secrets:
+      - source: evidence-config
+        target: /app/evidence/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  document-intelligence:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/document-intelligence
+    command: [Monergy.Services.DocumentIntelligence.dll, --urls, 'http://127.0.0.1:5112']
+    secrets:
+      - source: document-intelligence-config
+        target: /app/document-intelligence/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  financial-profile:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/financial-profile
+    command: [Monergy.Services.FinancialProfile.dll, --urls, 'http://127.0.0.1:5113']
+    secrets:
+      - source: financial-profile-config
+        target: /app/financial-profile/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  financial-rules:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/financial-rules
+    command: [Monergy.Services.FinancialRules.dll, --urls, 'http://127.0.0.1:5114']
+    secrets:
+      - source: financial-rules-config
+        target: /app/financial-rules/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  search-retrieval:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/search-retrieval
+    command: [Monergy.Services.SearchRetrieval.dll, --urls, 'http://127.0.0.1:5115']
+    secrets:
+      - source: search-retrieval-config
+        target: /app/search-retrieval/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  reporting:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/reporting
+    command: [Monergy.Services.Reporting.dll, --urls, 'http://127.0.0.1:5116']
+    secrets:
+      - source: reporting-config
+        target: /app/reporting/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  integration-gateway:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/integration-gateway
+    command: [Monergy.Services.IntegrationGateway.dll, --urls, 'http://127.0.0.1:5117']
+    secrets:
+      - source: integration-gateway-config
+        target: /app/integration-gateway/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  job-management:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/job-management
+    command: [Monergy.Services.JobManagement.dll, --urls, 'http://127.0.0.1:5118']
+    secrets:
+      - source: job-management-config
+        target: /app/job-management/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  ai-intelligence:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/ai-intelligence
+    command: [Monergy.Services.AiIntelligence.dll, --urls, 'http://127.0.0.1:5119']
+    secrets:
+      - source: ai-intelligence-config
+        target: /app/ai-intelligence/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
+  delivery-t001:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/delivery
+    command: [Monergy.AccessManagement.DeliveryReference.dll, watch, T001]
+    environment:
+      MONERGY_AM_REFERENCE_DELIVERY: '1'
+      MONERGY_AM_DELIVERY_CONFIGURATION: /run/secrets/delivery-config
+    secrets:
+      - source: delivery-T001
+        target: delivery-config
+    depends_on:
+      workspace: { condition: service_started }
+  delivery-t002:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/delivery
+    command: [Monergy.AccessManagement.DeliveryReference.dll, watch, T002]
+    environment:
+      MONERGY_AM_REFERENCE_DELIVERY: '1'
+      MONERGY_AM_DELIVERY_CONFIGURATION: /run/secrets/delivery-config
+    secrets:
+      - source: delivery-T002
+        target: delivery-config
+    depends_on:
+      workspace: { condition: service_started }
+volumes:
+  tenant-data:
+secrets:
+  postgres-password:
+    file: '${UAT_CONFIG_ROOT}/postgres-password'
+  bootstrap-profile:
+    file: '${UAT_CONFIG_ROOT}/profile.json'
+  workspace-config:
+    file: '${UAT_CONFIG_ROOT}/workspace.json'
+  access-management-config:
+    file: '${UAT_CONFIG_ROOT}/access-management.json'
+  customer-identity-config:
+    file: '${UAT_CONFIG_ROOT}/customer-identity.json'
+  audit-config:
+    file: '${UAT_CONFIG_ROOT}/audit.json'
+  consent-config:
+    file: '${UAT_CONFIG_ROOT}/consent.json'
+  evidence-config:
+    file: '${UAT_CONFIG_ROOT}/evidence.json'
+  document-intelligence-config:
+    file: '${UAT_CONFIG_ROOT}/document-intelligence.json'
+  financial-profile-config:
+    file: '${UAT_CONFIG_ROOT}/financial-profile.json'
+  financial-rules-config:
+    file: '${UAT_CONFIG_ROOT}/financial-rules.json'
+  search-retrieval-config:
+    file: '${UAT_CONFIG_ROOT}/search-retrieval.json'
+  reporting-config:
+    file: '${UAT_CONFIG_ROOT}/reporting.json'
+  integration-gateway-config:
+    file: '${UAT_CONFIG_ROOT}/integration-gateway.json'
+  job-management-config:
+    file: '${UAT_CONFIG_ROOT}/job-management.json'
+  ai-intelligence-config:
+    file: '${UAT_CONFIG_ROOT}/ai-intelligence.json'
+  delivery-T001:
+    file: '${UAT_CONFIG_ROOT}/delivery-T001.json'
+  delivery-T002:
+    file: '${UAT_CONFIG_ROOT}/delivery-T002.json'

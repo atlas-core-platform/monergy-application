@@ -1,0 +1,50 @@
+name: Local Docker UAT acceptance
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: local-uat-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  docker-uat:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+      - name: Start isolated Docker UAT profile
+        shell: pwsh
+        run: ./build/uat/Invoke-MonergyUat.ps1 -Action Start -Profile ci -Port 4173
+      - name: Verify actual owner boundaries, security, delivery and restarts
+        shell: bash
+        run: |
+          export MONERGY_UAT_DISPOSABLE="$(python -c "import json; print(json.load(open('.artifacts/uat/ci/profile.json'))['instanceId'])")"
+          python build/uat/verify-uat.py
+      - name: Install pinned browser toolchain
+        run: |
+          corepack enable
+          corepack install --global pnpm@12.4.1
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install chromium
+      - name: Verify real administration browser journeys
+        run: pnpm exec playwright test --config build/uat/playwright.config.ts
+      - name: Preserve credential-free acceptance results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: local-uat-acceptance
+          path: |
+            .artifacts/uat-acceptance.json
+            .artifacts/uat-browser-results.json
+            .artifacts/uat-workspace.png
+          if-no-files-found: warn
+      - name: Stop disposable CI profile
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path .artifacts/uat/ci/profile.json) { ./build/uat/Invoke-MonergyUat.ps1 -Action Reset -Profile ci -ConfirmReset }
