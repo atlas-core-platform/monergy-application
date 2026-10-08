@@ -6,6 +6,14 @@ export type WorkspaceIconName =
   | 'access'
   | 'expert'
   | 'menu'
+  | 'panel'
+  | 'workflow'
+  | 'map'
+  | 'play'
+  | 'decisions'
+  | 'impact'
+  | 'changes'
+  | 'warning'
   | 'arrow'
   | 'help'
   | 'upload'
@@ -23,6 +31,14 @@ const paths: Record<WorkspaceIconName, string> = {
   access: 'M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Zm-4 9 3 3 5-6',
   expert: 'm12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7Z',
   menu: 'M4 6h16M4 12h16M4 18h16',
+  panel: 'M3 4h18v16H3V4Zm6 0v16m7-12-4 4 4 4',
+  workflow: 'M3 6h14m-4-4 4 4-4 4M21 18H7m4-4-4 4 4 4',
+  map: 'M9 3h6v6H9V3ZM2 15h6v6H2v-6Zm14 0h6v6h-6v-6ZM12 9v3M5 15v-3h14v3',
+  play: 'm8 4 12 8-12 8V4Z',
+  decisions: 'M5 3h14v18H5V3Zm4 5h6m-6 4h6m-6 4h3',
+  impact: 'm13 2-9 12h7l-1 8 10-13h-7l1-7Z',
+  changes: 'M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4',
+  warning: 'm12 3 10 18H2L12 3Zm0 6v5m0 3h.01',
   arrow: 'M4 12h16m-6-6 6 6-6 6',
   help: 'M9 9a3 3 0 1 1 5 2c-1 1-2 1-2 3m0 3h.01M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z',
   upload: 'M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6',

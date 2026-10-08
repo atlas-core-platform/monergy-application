@@ -28,6 +28,17 @@ test('workspace navigation, command palette and guide support keyboard and reduc
     'aria-expanded',
     'false',
   );
+  const compactAccess = page
+    .getByRole('navigation', { name: 'Workspace navigation' })
+    .getByRole('link', { name: 'Access management' });
+  await expect(compactAccess).toBeVisible();
+  await expect(compactAccess.locator('svg')).toBeVisible();
+  await page.getByRole('button', { name: 'Jump to a workspace', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Find a workspace' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('button', { name: 'Jump to a workspace', exact: true }),
+  ).toBeFocused();
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('dialog', { name: 'Jump to a workspace' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Find a workspace' })).toBeFocused();
@@ -45,8 +56,15 @@ test('workspace navigation, command palette and guide support keyboard and reduc
 });
 
 test('mobile navigation and access form remain within the viewport', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/');
+  await page.getByRole('button', { name: 'Collapse sidebar' }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Open navigation' }).click();
+  await expect(
+    page.getByRole('dialog').locator('.mw-nav-label').filter({ hasText: 'Access management' }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Open navigation' })).toBeFocused();
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('dialog').getByRole('link', { name: 'Access management' }).click();
   await expect(
@@ -60,6 +78,22 @@ test('mobile navigation and access form remain within the viewport', async ({ pa
     fullPage: true,
     animations: 'disabled',
   });
+});
+
+test('all sidebar destinations remain reachable on a short desktop viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 480 });
+  await page.goto('/');
+  const navigation = page.getByRole('navigation', { name: 'Workspace navigation' });
+  const foundation = navigation.getByRole('link', { name: 'Engineering foundation' });
+  await foundation.focus();
+  await expect(foundation).toBeInViewport();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/\/foundation$/);
+  await expect(navigation.getByRole('link', { name: 'Engineering foundation' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(page.getByRole('button', { name: 'Collapse sidebar' })).toBeInViewport();
 });
 
 test('CSV drag and drop validates the whole file and sign-out revokes the session', async ({
