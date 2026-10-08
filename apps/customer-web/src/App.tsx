@@ -100,15 +100,15 @@ function ToolchainFoundation() {
   );
 }
 
-function RouteContent({ path }: { path: string }) {
-  if (path === '/') return <WorkspaceHome />;
-  if (path === '/access')
+function RouteContent() {
+  if (window.location.pathname === '/') return <WorkspaceHome />;
+  if (window.location.pathname === '/access')
     return (
       <Suspense fallback={<main aria-busy="true">Loading access management…</main>}>
         <AccessExperience />
       </Suspense>
     );
-  if (path === '/reports') {
+  if (window.location.pathname === '/reports') {
     return (
       <Suspense
         fallback={
@@ -122,7 +122,7 @@ function RouteContent({ path }: { path: string }) {
     );
   }
 
-  if (path === '/search') {
+  if (window.location.pathname === '/search') {
     return (
       <Suspense
         fallback={
@@ -136,7 +136,7 @@ function RouteContent({ path }: { path: string }) {
     );
   }
 
-  if (path === '/vs02' && localUat)
+  if (window.location.pathname === '/vs02' && localUat)
     return (
       <main className="access-page">
         <Card title="Evidence journey: integration pending">
@@ -149,7 +149,7 @@ function RouteContent({ path }: { path: string }) {
         </Card>
       </main>
     );
-  if (path === '/vs02') {
+  if (window.location.pathname === '/vs02') {
     return (
       <Suspense
         fallback={
@@ -210,7 +210,7 @@ export function App() {
         active={current?.id ?? 'home'}
         area={current?.label ?? 'Overview'}
       >
-        <RouteContent path={path} />
+        <RouteContent />
       </WorkspaceShell>
     </WorkspaceSessionProvider>
   );
