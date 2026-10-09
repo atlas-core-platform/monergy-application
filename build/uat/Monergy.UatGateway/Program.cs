@@ -58,6 +58,15 @@ app.MapGet("/uat-api/v1/readiness", async (HttpContext http, TenantAccessClient 
     }
     });
 });
+app.MapGet("/uat-api/v1/resource-directory/{resourceType}", async (
+    string resourceType, HttpContext http, TenantAccessClient access, HttpClient client) =>
+{
+    _ = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
+    if (resourceType != "customer")
+        return Results.Json(new { error = "RESOURCE_DIRECTORY_UNAVAILABLE" }, statusCode: 503);
+    await ProxyAsync(http, client, new Uri("http://127.0.0.1:5101/local/v1/administration/resource-directory/customers")).ConfigureAwait(false);
+    return Results.Empty;
+});
 app.MapPost("/uat-api/v1/services/{service}/access-check", async (string service, HttpContext http, HttpClient client) =>
 {
     _ = TenantAccessClient.Headers(http);
