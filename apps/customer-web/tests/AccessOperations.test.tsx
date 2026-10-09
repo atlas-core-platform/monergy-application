@@ -49,7 +49,7 @@ describe('connected session administration', () => {
       </FoundationProvider>,
     );
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /Sessions & security/ }));
+    await user.click(screen.getByRole('button', { name: /Security & Sessions/ }));
     await user.click(await screen.findByRole('button', { name: 'Revoke all for A100' }));
     expect(calls.some((call) => call.url.includes('/revoke-sessions'))).toBe(false);
     await user.click(await screen.findByRole('button', { name: 'Revoke sessions' }));
@@ -75,7 +75,7 @@ describe('connected session administration', () => {
         <AccessOperations api={new AccessApi(session)} onExpired={expired} />
       </FoundationProvider>,
     );
-    await userEvent.setup().click(screen.getByRole('button', { name: /Sessions & security/ }));
+    await userEvent.setup().click(screen.getByRole('button', { name: /Security & Sessions/ }));
     await waitFor(() => {
       expect(expired).toHaveBeenCalledOnce();
     });

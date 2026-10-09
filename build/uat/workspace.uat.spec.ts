@@ -15,8 +15,25 @@ test('real tenant administration, sessions, canonical audit and service readines
       )?.token ?? '',
     );
   await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'People & access', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Import people', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'People. Permissions. Clarity.', exact: true }),
+  ).toBeVisible();
+  const navigation = page.getByRole('navigation', { name: 'Access Management navigation' });
+  await expect(navigation.getByRole('link', { name: 'System Expert' })).toHaveCount(0);
+  await navigation.getByRole('link', { name: 'Users', exact: true }).click();
+  await page.getByRole('button', { name: 'Create user', exact: true }).click();
+  await page.getByLabel('Email address').fill('uat-single@example.test');
+  await page.getByRole('combobox', { name: 'Business role' }).click();
+  await page.getByTitle('Disposable UAT tester', { exact: true }).click();
+  await page.getByRole('button', { name: 'Review user', exact: true }).click();
+  await expect(
+    page.getByRole('region', { name: 'Review onboarding' }).getByText('uat-single@example.test'),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Create user', exact: true }).click();
+  await expect(page.getByText('User created.')).toBeVisible();
+  await page.getByLabel('Close', { exact: true }).click();
+  await expect(page.getByText('uat-single@example.test', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Import users', exact: true }).click();
   await page.getByText('Paste CSV instead').click();
   await page
     .getByRole('textbox', { name: 'CSV contents' })
@@ -24,15 +41,22 @@ test('real tenant administration, sessions, canonical audit and service readines
   await page.getByRole('button', { name: 'Validate entire file' }).click();
   await page.getByRole('button', { name: 'Confirm onboarding' }).click();
   await page.getByRole('button', { name: 'Onboard people', exact: true }).click();
-  await expect(page.getByText('Your people are ready.')).toBeVisible();
+  await expect(page.getByText('User access activated.')).toBeVisible();
   await page.getByLabel('Close', { exact: true }).click();
   await expect(page.getByText('uat-onboard@example.test', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: /Sessions & security/ }).click();
+  await navigation.getByRole('link', { name: 'Security & Sessions', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Revoke all for A900' }).first()).toBeVisible();
-  await page.getByLabel('Close', { exact: true }).click();
-  await page.getByRole('button', { name: /Access activity/ }).click();
-  await expect(page.getByText('member.sessions-revoked', { exact: true }).first()).toBeVisible();
-  await page.getByLabel('Close', { exact: true }).click();
+  await navigation.getByRole('link', { name: 'Access Activity', exact: true }).click();
+  await expect(page.getByText('All user sessions revoked', { exact: true }).first()).toBeVisible();
+  await page.goto('/operations');
+  await page
+    .getByLabel('Local access key')
+    .fill(
+      profile.identities.find(
+        (identity) => identity.tenantId === 'T001' && identity.actorId === 'A900',
+      )?.token ?? '',
+    );
+  await page.getByRole('button', { name: 'Connect workspace' }).click();
   await page.getByRole('button', { name: /Connected services/ }).click();
   await expect(page.getByText('Running', { exact: true })).toHaveCount(13);
   await expect(page.getByText('Service scaffold; no live consent journey')).toBeVisible();

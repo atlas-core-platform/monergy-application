@@ -55,10 +55,26 @@ interface Page<T> {
   nextCursor: string | null;
 }
 const headings: Record<View, string> = {
-  sessions: 'Sessions & security',
-  audit: 'Access activity',
+  sessions: 'Security & Sessions',
+  audit: 'Access Activity',
   services: 'Connected services',
   readiness: 'Release readiness',
+};
+const activityLabels: Record<string, string> = {
+  'permission.saved': 'Permission saved',
+  'role.saved': 'Role saved',
+  'member.created': 'User added',
+  'member.updated': 'User access updated',
+  'member.sessions-revoked': 'All user sessions revoked',
+  'member.imported': 'User onboarded',
+  'resource-grant.created': 'Resource access assigned',
+  'group.saved': 'Group saved',
+  'group.members-replaced': 'Group membership updated',
+  'import.staged': 'Onboarding request saved',
+  'import.cancelled': 'Onboarding cancelled',
+  'import.attempt-started': 'Onboarding started',
+  'import.activated': 'User access activated',
+  'import.failed': 'Onboarding needs attention',
 };
 const dates = (value: string) =>
   new Date(
@@ -68,7 +84,9 @@ const dates = (value: string) =>
 export function AccessOperations({
   api,
   onExpired,
+  views = ['sessions', 'audit', 'services', 'readiness'],
 }: {
+  views?: View[];
   api: AccessApi;
   onExpired: (failure: unknown) => void;
 }) {
@@ -76,7 +94,7 @@ export function AccessOperations({
   return (
     <>
       <section className="access-operations-grid" aria-label="Administration operations">
-        {(['sessions', 'audit', 'services', 'readiness'] as const).map((key) => (
+        {views.map((key) => (
           <button
             type="button"
             className="access-operation-card"
@@ -128,12 +146,21 @@ export function AccessOperations({
   );
 }
 
+export function AccessOperationPage(props: {
+  view: 'sessions' | 'audit';
+  api: AccessApi;
+  onExpired: (failure: unknown) => void;
+}) {
+  return <OperationsDrawer {...props} page onClose={() => undefined} />;
+}
 function OperationsDrawer({
   view,
   api,
   onClose,
   onExpired,
+  page = false,
 }: {
+  page?: boolean;
   view: View;
   api: AccessApi;
   onClose: () => void;
@@ -266,31 +293,27 @@ function OperationsDrawer({
       setLoading(false);
     }
   };
-  return (
-    <Drawer
-      open
-      title={headings[view]}
-      size="large"
-      onClose={onClose}
-      extra={
-        <Button
-          disabled={loading}
-          onClick={() => {
-            setRevision((value) => value + 1);
-          }}
-        >
-          Refresh view
-        </Button>
-      }
+  const refreshButton = (
+    <Button
+      disabled={loading}
+      onClick={() => {
+        setRevision((value) => value + 1);
+      }}
     >
+      Refresh view
+    </Button>
+  );
+  const content = (
+    <>
       {error && <Alert type="error" showIcon title={error} className="access-notice" />}
       {notice && <Alert type="success" showIcon title={notice} className="access-notice" />}
       <Spin spinning={loading}>
         {view === 'sessions' && (
           <>
             <p className="workspace-subtitle">
-              Sessions issued by Customer & Identity. Stored session state is shown below; every
-              request also checks current membership and access version.
+              Review issued session records and revoke all sessions for a user. An issued record
+              does not guarantee current access: each request also checks the user’s current status
+              and permissions.
             </p>
             <Table<SessionRow>
               dataSource={sessions}
@@ -298,10 +321,10 @@ function OperationsDrawer({
               pagination={false}
               scroll={{ x: 590 }}
               columns={[
-                { title: 'Person', dataIndex: 'actorId' },
+                { title: 'User reference', dataIndex: 'actorId' },
                 { title: 'Issued', render: (_, row) => dates(row.establishedAt) },
                 {
-                  title: 'Stored state',
+                  title: 'Session record',
                   render: (_, row) => (
                     <Tag
                       color={
@@ -340,14 +363,16 @@ function OperationsDrawer({
         {view === 'audit' && (
           <>
             <p className="workspace-subtitle">
-              Canonical Audit evidence, newest first. Delivery is asynchronous; refresh to see
-              recently committed changes.
+              Review access changes, newest first. Recent changes may take a moment to appear;
+              refresh to check for updates.
             </p>
             {events.length ? (
               <Timeline
                 items={events.map((item) => ({
                   key: item.evidenceReference,
-                  title: item.event.operation,
+                  title:
+                    activityLabels[item.event.operation] ??
+                    item.event.operation.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/[._-]/g, ' '),
                   content: (
                     <div>
                       <p>
@@ -361,9 +386,11 @@ function OperationsDrawer({
                         items={[
                           {
                             key: 'details',
-                            label: 'Evidence details',
+                            label: 'Audit reference details',
                             children: (
                               <dl className="access-evidence-details">
+                                <dt>Operation</dt>
+                                <dd>{item.event.operation}</dd>
                                 <dt>Evidence</dt>
                                 <dd>{item.evidenceReference}</dd>
                                 <dt>Correlation</dt>
@@ -432,7 +459,7 @@ function OperationsDrawer({
             }}
             disabled={loading}
           >
-            Load more activity
+            {view === 'sessions' ? 'Load more sessions' : 'Load more activity'}
           </Button>
         )}
       </Spin>
@@ -455,6 +482,27 @@ function OperationsDrawer({
         </p>
         <p>Revoking your own sessions returns you to sign-in.</p>
       </Modal>
+    </>
+  );
+  return page ? (
+    <>
+      <header className="access-page-header">
+        <div>
+          <p className="workspace-eyebrow">SECURITY & OVERSIGHT</p>
+          <h1>{headings[view]}</h1>
+          <p>
+            {view === 'sessions'
+              ? 'Review sessions and end a user’s current access when needed.'
+              : 'Trace access decisions to the people who made them.'}
+          </p>
+        </div>
+        {refreshButton}
+      </header>
+      <section className="access-operation-page">{content}</section>
+    </>
+  ) : (
+    <Drawer open title={headings[view]} size="large" onClose={onClose} extra={refreshButton}>
+      {content}
     </Drawer>
   );
 }

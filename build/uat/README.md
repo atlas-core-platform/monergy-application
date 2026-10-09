@@ -31,15 +31,17 @@ Keys are generated once, stored in an access-restricted local profile, and exclu
 ## Administration UAT journey
 
 1. **Permissions → Roles:** create a permission such as `search.query.execute` with Tenant scope, then a role containing it. TenantAdmin alone does not grant business access.
-2. **People:** assign the role to a person. A membership change invalidates their existing sessions; sign in again to test the new policy. Local business browsing currently shares the administrator workspace session. You can assign a business role to your administrator for browser testing; programmatic acceptance separately verifies non-admin actors.
+2. **Users:** assign the role to a person. A membership change invalidates their existing sessions; sign in again to test the new policy. Local business browsing currently shares the administrator workspace session. You can assign a business role to your administrator for browser testing; programmatic acceptance separately verifies non-admin actors.
 3. **Groups:** organize people. A group never grants permissions by itself.
-4. **Imports:** download the CSV template, preview invalid and valid rows, stage, process and activate. No access is granted while an import is pending. The C&I owner stores the identity receipt; activation is all-or-none.
+4. **Users → Create user / Import users:** add one user with email and an optional business role or groups. For a team, download the CSV template, preview invalid and valid rows, stage, process and activate. No access is granted while an import is pending. The C&I owner stores the identity receipt; activation is all-or-none.
 5. **Resource access:** test a Resource-scoped permission with one resource granted and another denied. Resource grants complement the assigned role; they cannot create an unassigned capability.
-6. **Sessions & security:** review issued/revoked/expired sessions; revoke all sessions for a member. Revocation immediately advances the access version and later marks durable session rows via delivery. A stored “Issued” label is not proof of current authorization.
+6. **Security & Sessions:** review issued/revoked/expired sessions; revoke all sessions for a member. Revocation immediately advances the access version and later marks durable session rows via delivery. A stored “Issued” label is not proof of current authorization.
 7. **Access activity:** see the resulting operation, actor, policy revision and canonical Audit evidence. Delivery is asynchronous; refresh after a committed change.
-8. **Connected services / Release readiness:** inspect all 13 health results, actual implemented scope and explicit Production blockers.
+8. **Operator tools at `/operations` → Connected services / Release readiness:** inspect all 13 health results, actual implemented scope and explicit Production blockers.
 9. **Isolation:** sign out, connect to T002 with its own key and confirm that T001 people, roles and audit activity are absent. A T001 session cannot be used with a T002 header.
 10. **Restart:** Stop and Start, then verify the policy and audit history remain. Read-only Verify confirms all 13 service health endpoints; it does not mutate your UAT policies.
+
+Access Management has a dedicated navigation menu and guide. Onboarding history is under Users. Platform Search, Reports, Evidence and System Expert are absent from this module; the platform workspace remains at `/`. Operator diagnostics remain separately available at `/operations`.
 
 Search and Reports use the in-memory current session across internal navigation. The server checks tenant, customer ownership, actor/session binding and current permission on each request. Reference customer `reference-customer` belongs to T001; `other-customer` belongs to T002. Sample business data is available only where its reference owner supplies it; no fallback crosses tenants. Unadapted contracts fail closed.
 

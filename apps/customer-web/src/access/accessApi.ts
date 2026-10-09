@@ -158,10 +158,14 @@ export class AccessApi {
       signal,
     );
   }
-  async all(area: AccessArea, signal?: AbortSignal): Promise<AccessRecord[]> {
+  async all(
+    area: AccessArea,
+    signal?: AbortSignal,
+    expectedPolicyVersion?: number,
+  ): Promise<AccessRecord[]> {
     const records: AccessRecord[] = [];
     let cursor: string | undefined;
-    let revision: number | undefined;
+    let revision: number | undefined = expectedPolicyVersion;
     do {
       const page = await this.list(area, cursor, signal);
       if (revision !== undefined && page.policyVersion !== revision)

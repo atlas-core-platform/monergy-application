@@ -22,6 +22,7 @@ interface WorkspaceShellProps extends PropsWithChildren {
   context?: string;
   onNavigate?: (id: string) => void;
   actions?: ReactNode;
+  module?: { name: string; homeHref: string; guide: ReactNode };
 }
 
 export function WorkspaceShell({
@@ -31,6 +32,7 @@ export function WorkspaceShell({
   context = 'Local workspace',
   onNavigate,
   actions,
+  module,
   children,
 }: WorkspaceShellProps) {
   const [collapsed, setCollapsed] = useState(false);
@@ -69,6 +71,11 @@ export function WorkspaceShell({
     media.addEventListener('change', update);
     const keyboard = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        if (
+          document.querySelector('[role=dialog]') &&
+          !document.querySelector('.mw-command-dialog')
+        )
+          return;
         event.preventDefault();
         setCommandOpen((value) => !value);
       }
@@ -92,21 +99,38 @@ export function WorkspaceShell({
         <WorkspaceIcon name="layers" size={18} />
       </span>
       <div>
-        <strong>Your workspace</strong>
+        <strong>{module?.name ?? 'Your workspace'}</strong>
         <small>{context}</small>
       </div>
     </div>
   );
   const navigation = (
-    <nav aria-label="Workspace navigation" className="mw-navigation">
+    <nav
+      aria-label={module ? `${module.name} navigation` : 'Workspace navigation'}
+      className="mw-navigation"
+    >
       {destinations.map((destination, index) => (
         <div key={destination.id}>
           {destination.group && destination.group !== destinations[index - 1]?.group && (
             <div className="mw-nav-group">{destination.group}</div>
           )}
-          {destination.href && !onNavigate ? (
+          {destination.href ? (
             <a
               href={destination.href}
+              onClick={(event) => {
+                setMobileOpen(false);
+                if (
+                  onNavigate &&
+                  !event.ctrlKey &&
+                  !event.metaKey &&
+                  !event.shiftKey &&
+                  !event.altKey &&
+                  event.button === 0
+                ) {
+                  event.preventDefault();
+                  navigate(destination);
+                }
+              }}
               className={`mw-nav-item ${active === destination.id ? 'is-active' : ''}`}
               aria-current={active === destination.id ? 'page' : undefined}
               aria-label={destination.label}
@@ -141,7 +165,11 @@ export function WorkspaceShell({
     </nav>
   );
   const brand = (
-    <a className="mw-brand" href="/" aria-label="Monergy home">
+    <a
+      className="mw-brand"
+      href={module?.homeHref ?? '/'}
+      aria-label={module ? `${module.name} home` : 'Monergy home'}
+    >
       <span className="mw-mark" aria-hidden="true">
         <svg viewBox="0 0 32 32">
           <path
@@ -154,7 +182,10 @@ export function WorkspaceShell({
         </svg>
       </span>
       <span>
-        monergy<span className="mw-brand-caption">CONNECTED WORKSPACE</span>
+        monergy
+        <span className="mw-brand-caption">
+          {module ? module.name.toUpperCase() : 'CONNECTED WORKSPACE'}
+        </span>
       </span>
     </a>
   );
@@ -163,7 +194,7 @@ export function WorkspaceShell({
     <ConfigProvider
       theme={{ ...monergyTheme, token: { ...monergyTheme.token, motion: !reducedMotion } }}
     >
-      <div className={`mw-shell ${collapsed ? 'mw-collapsed' : ''}`}>
+      <div className={`mw-shell ${collapsed ? 'mw-collapsed' : ''} ${module ? 'mw-module' : ''}`}>
         <a href="#workspace-content" className="mw-skip">
           Skip to content
         </a>
@@ -175,8 +206,10 @@ export function WorkspaceShell({
             <button
               type="button"
               className="mw-quick-jump"
-              aria-label="Jump to a workspace"
-              title={collapsed ? 'Jump to a workspace' : undefined}
+              aria-label={module ? 'Jump to an access page' : 'Jump to a workspace'}
+              title={
+                collapsed ? (module ? 'Jump to an access page' : 'Jump to a workspace') : undefined
+              }
               onClick={() => {
                 setQuery('');
                 setCommandOpen(true);
@@ -217,14 +250,14 @@ export function WorkspaceShell({
               <WorkspaceIcon name="menu" />
             </button>
             <div className="mw-breadcrumb">
-              <span>Workspace</span>
+              <span>{module?.name ?? 'Workspace'}</span>
               <span aria-hidden="true">/</span>
               <strong>{area}</strong>
             </div>
             <div className="mw-top-actions">
               <button
                 className="mw-search-trigger"
-                aria-label="Find a workspace"
+                aria-label={module ? 'Find an access page' : 'Find a workspace'}
                 type="button"
                 onClick={() => {
                   setQuery('');
@@ -232,14 +265,14 @@ export function WorkspaceShell({
                 }}
               >
                 <WorkspaceIcon name="search" size={17} />
-                <span>Find a workspace</span>
+                <span>{module ? 'Find a page' : 'Find a workspace'}</span>
                 <kbd>Ctrl K</kbd>
               </button>
               {actions}
               <button
                 className="mw-icon-button"
                 type="button"
-                aria-label="Workspace guide"
+                aria-label={module ? 'Access management guide' : 'Workspace guide'}
                 onClick={() => {
                   setHelpOpen(true);
                 }}
@@ -254,7 +287,7 @@ export function WorkspaceShell({
           </div>
         </div>
         <Drawer
-          title="Monergy workspace"
+          title={module?.name ?? 'Monergy workspace'}
           placement="left"
           open={mobileOpen}
           onClose={() => {
@@ -268,7 +301,8 @@ export function WorkspaceShell({
           {navigation}
         </Drawer>
         <Modal
-          title="Jump to a workspace"
+          title={module ? 'Jump to an access page' : 'Jump to a workspace'}
+          className="mw-command-dialog"
           open={commandOpen}
           onCancel={() => {
             setCommandOpen(false);
@@ -281,7 +315,7 @@ export function WorkspaceShell({
         >
           <Input
             ref={input}
-            aria-label="Find a workspace"
+            aria-label={module ? 'Find an access page' : 'Find a workspace'}
             placeholder="Search pages…"
             value={query}
             onChange={(event) => {
@@ -312,11 +346,11 @@ export function WorkspaceShell({
               ))}
             {!destinations.some((destination) =>
               destination.label.toLowerCase().includes(query.toLowerCase()),
-            ) && <p>No matching workspace. Try another name.</p>}
+            ) && <p>No matching page. Try another name.</p>}
           </div>
         </Modal>
         <Drawer
-          title="A connected way to work"
+          title={module ? 'Your access management guide' : 'A connected way to work'}
           open={helpOpen}
           onClose={() => {
             setHelpOpen(false);
@@ -325,29 +359,35 @@ export function WorkspaceShell({
           destroyOnHidden
         >
           <div className="mw-guide">
-            <div className="mw-guide-icon">
-              <WorkspaceIcon name="layers" size={32} />
-            </div>
-            <h2>One workspace. Clear boundaries.</h2>
-            <p>
-              Move between financial workflows, access administration and System Expert using a
-              consistent navigation and visual language.
-            </p>
-            <h3>Stay in context</h3>
-            <p>
-              Details and edits open in drawers, so the current list stays in view. Escape closes a
-              drawer and returns focus to its trigger.
-            </p>
-            <h3>Make it yours</h3>
-            <p>
-              Collapse the sidebar for more room. Use Ctrl K or Command K to jump to a workspace.
-              Motion follows your device’s reduced-motion preference.
-            </p>
-            <h3>Know where you are</h3>
-            <p>
-              This workspace uses local services. Access administration requires a current tenant
-              session and server-verified administrator authority.
-            </p>
+            {module ? (
+              module.guide
+            ) : (
+              <>
+                <div className="mw-guide-icon">
+                  <WorkspaceIcon name="layers" size={32} />
+                </div>
+                <h2>One workspace. Clear boundaries.</h2>
+                <p>
+                  Move between financial workflows, access administration and System Expert using a
+                  consistent navigation and visual language.
+                </p>
+                <h3>Stay in context</h3>
+                <p>
+                  Details and edits open in drawers, so the current list stays in view. Escape
+                  closes a drawer and returns focus to its trigger.
+                </p>
+                <h3>Make it yours</h3>
+                <p>
+                  Collapse the sidebar for more room. Use Ctrl K or Command K to jump to a
+                  workspace. Motion follows your device’s reduced-motion preference.
+                </p>
+                <h3>Know where you are</h3>
+                <p>
+                  This workspace uses local services. Access administration requires a current
+                  tenant session and server-verified administrator authority.
+                </p>
+              </>
+            )}
           </div>
         </Drawer>
       </div>
