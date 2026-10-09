@@ -288,3 +288,57 @@ test('access routes keep the session and exclude platform navigation across deep
   await expect(page.getByText('This access management page does not exist.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Monergy frontend foundation' })).toHaveCount(0);
 });
+
+test('single-user review confirms inside the drawer while the directory action remains behind it', async ({
+  page,
+}) => {
+  const writes: { path: string; body: unknown }[] = [];
+  await page.route('**/identity-api/**', async (route) => route.fulfill({ json: session }));
+  await page.route('**/access-api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const result = {
+      id: 'one-user',
+      policyVersion: 8,
+      rowCount: 1,
+      identities: [{ rowNumber: 2, normalizedEmail: 'new@example.test', actorId: 'A101' }],
+    };
+    if (route.request().method() === 'POST')
+      writes.push({ path, body: route.request().postDataJSON() });
+    if (path.endsWith('/preview'))
+      await route.fulfill({
+        json: { valid: true, policyVersion: 7, contentHash: 'test-hash', rowCount: 1, errors: [] },
+      });
+    else if (path.endsWith('/commit'))
+      await route.fulfill({ json: { ...result, status: 'PendingIdentity' } });
+    else if (path.endsWith('/process'))
+      await route.fulfill({ json: { ...result, status: 'Activated', policyVersion: 9 } });
+    else await route.fulfill({ json: { policyVersion: 7, items: [], nextCursor: null } });
+  });
+  await page.goto('/access/users');
+  await page.getByLabel('Local access key').fill('browser-fixture-only');
+  await page.getByRole('button', { name: 'Connect workspace' }).click();
+  await page.getByRole('button', { name: 'Create user', exact: true }).click();
+  const form = page.getByRole('dialog', { name: 'Create user', exact: true });
+  await form.getByLabel('Email address').fill('new@example.test');
+  await form.getByRole('button', { name: 'Review user', exact: true }).click();
+  const review = page.getByRole('dialog', { name: 'Review new user', exact: true });
+  await expect(review.getByText('new@example.test', { exact: true })).toBeVisible();
+  expect(writes.filter((write) => write.path.endsWith('/commit'))).toHaveLength(0);
+  await review.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(form.getByLabel('Email address')).toHaveValue('new@example.test');
+  await form.getByRole('button', { name: 'Review user', exact: true }).click();
+  await review.getByRole('button', { name: 'Create user', exact: true }).click();
+  await expect(
+    page.getByRole('dialog').getByRole('heading', { name: 'User created.', exact: true }),
+  ).toBeVisible();
+  const commit = writes.find((write) => write.path.endsWith('/commit'));
+  expect(commit?.body).toEqual({
+    expectedPolicyVersion: 7,
+    csv: 'email,role_code,group_codes\n"new@example.test","",""\n',
+    contentHash: 'test-hash',
+  });
+  expect(writes.find((write) => write.path.endsWith('/process'))?.body).toEqual({
+    expectedPolicyVersion: 8,
+  });
+  await expect(page.locator('.access-panel .ant-spin-spinning')).toHaveCount(0);
+});

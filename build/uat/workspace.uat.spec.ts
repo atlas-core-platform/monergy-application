@@ -29,7 +29,10 @@ test('real tenant administration, sessions, canonical audit and service readines
   await expect(
     page.getByRole('region', { name: 'Review onboarding' }).getByText('uat-single@example.test'),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Create user', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: 'Review new user', exact: true })
+    .getByRole('button', { name: 'Create user', exact: true })
+    .click();
   await expect(page.getByText('User created.')).toBeVisible();
   await page.getByLabel('Close', { exact: true }).click();
   await expect(page.getByText('uat-single@example.test', { exact: true })).toBeVisible();
