@@ -25,6 +25,7 @@ import type {
   AccessRecord,
   Capability,
   Grant,
+  ResourceDirectoryItem,
 } from './accessApi';
 
 interface Values {
@@ -65,7 +66,11 @@ export function AccessEditor({
   const [form] = Form.useForm<Values>();
   const selectedPermissions = Form.useWatch('permissionIds', form);
   const selectedRole = Form.useWatch('businessRoleId', form);
+  const selectedCapability = Form.useWatch('capabilityId', form);
   const [resourceGrants, setResourceGrants] = useState<AccessRecord[]>([]);
+  const [resourceOptions, setResourceOptions] = useState<ResourceDirectoryItem[]>([]);
+  const [resourceLookupLoading, setResourceLookupLoading] = useState(false);
+  const [resourceLookupError, setResourceLookupError] = useState('');
   const [permissions, setPermissions] = useState<AccessRecord[]>([]);
   const [roles, setRoles] = useState<AccessRecord[]>([]);
   const [people, setPeople] = useState<AccessRecord[]>([]);
@@ -194,6 +199,43 @@ export function AccessEditor({
     };
   }, [api, area, form, id, onExpired, policyVersion, record]);
 
+  useEffect(() => {
+    if (area !== 'resource-grants') return;
+    const capability = capabilities.find((item) => item.capabilityId === selectedCapability);
+    const resourceType = capability?.resourceType ?? record?.resourceType;
+    if (!resourceType) {
+      setResourceOptions([]);
+      setResourceLookupError('');
+      return;
+    }
+    const controller = new AbortController();
+    setResourceLookupLoading(true);
+    setResourceLookupError('');
+    void api
+      .resourceDirectory(resourceType, controller.signal)
+      .then((directory) => {
+        if (!controller.signal.aborted) setResourceOptions(directory.items);
+      })
+      .catch((failure) => {
+        if (!controller.signal.aborted) {
+          setResourceOptions([]);
+          setResourceLookupError(
+            failure instanceof AccessApiError && failure.code === 'RESOURCE_DIRECTORY_UNAVAILABLE'
+              ? 'This resource type does not yet have an owner-backed directory.'
+              : displayError(failure),
+          );
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setResourceLookupLoading(false);
+      });
+    return () => controller.abort();
+  }, [api, area, capabilities, record?.resourceType, selectedCapability]);
+
+  const resourceName = (resourceId?: string) =>
+    resourceOptions.find((item) => item.resourceId === resourceId)?.displayName ??
+    (resourceId ? 'Selected resource' : 'None');
+
   const save = async () => {
     if (!confirmation || recovery || busy) return;
     setBusy(true);
@@ -296,7 +338,7 @@ export function AccessEditor({
       return [
         { label: 'Person', value: lookup(people, values.actorId) },
         { label: 'Capability', value: capabilityName(values.capabilityId) },
-        { label: 'Resource identifier', value: values.resourceId ?? 'None' },
+        { label: 'Resource', value: resourceName(values.resourceId), identity: values.resourceId ?? '' },
       ];
     return [
       { label: 'Name', value: values.label },
@@ -416,7 +458,7 @@ export function AccessEditor({
                     <ul>
                       {resourceGrants.map((grant) => (
                         <li key={recordId(grant)}>
-                          {capabilityName(grant.capabilityId)} · {grant.resourceId}
+                          {capabilityName(grant.capabilityId)} · {resourceName(grant.resourceId)}
                         </li>
                       ))}
                     </ul>
@@ -814,22 +856,33 @@ export function AccessEditor({
                         }))}
                     />
                   </Form.Item>
-                  <Form.Item
-                    name="resourceId"
-                    label="Resource identifier"
-                    rules={[
-                      { required: true },
-                      {
-                        pattern: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/,
-                        message: 'Enter the exact resource identifier.',
-                      },
-                    ]}
-                  >
-                    <Input />
+                  <Form.Item name="resourceId" label="Resource" rules={[{ required: true }]}>
+                    <Select
+                      showSearch={{ optionFilterProp: 'label' }}
+                      loading={resourceLookupLoading}
+                      disabled={!selectedCapability || resourceLookupLoading || Boolean(resourceLookupError)}
+                      placeholder="Choose a business resource"
+                      options={resourceOptions.map((resource) => ({
+                        value: resource.resourceId,
+                        label: resource.secondaryLabel
+                          ? resource.displayName + ' · ' + resource.secondaryLabel
+                          : resource.displayName,
+                      }))}
+                    />
                   </Form.Item>
+                  {resourceLookupError && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      title="Resource lookup is unavailable"
+                      description={resourceLookupError}
+                      className="access-notice"
+                    />
+                  )}
                   <p className="access-form-hint">
-                    The person’s role must already include this capability with resource-specific
-                    scope.
+                    Choose the business resource by name. Monergy stores its immutable identifier
+                    automatically. The person’s role must already include this capability with
+                    resource-specific scope.
                   </p>
                 </>
               )}
