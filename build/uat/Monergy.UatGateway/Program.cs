@@ -78,7 +78,10 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     if (!HttpMethods.IsGet(http.Request.Method) || path.StartsWith("/uat-api/", StringComparison.Ordinal) || path.Contains("api/", StringComparison.Ordinal) || path.StartsWith("/contracts/", StringComparison.Ordinal))
     { http.Response.StatusCode = 404; return; }
     // Static files are handled earlier; only known SPA destinations get the shell.
-    if (path is not ("/" or "/access" or "/search" or "/reports" or "/vs02" or "/foundation"))
+    if (path is not ("/" or "/access" or "/access/users" or "/access/users/history" or
+        "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
+        "/access/activity" or "/access/sessions" or "/operations" or
+        "/search" or "/reports" or "/vs02" or "/foundation"))
     { http.Response.StatusCode = 404; return; }
     http.Response.ContentType = "text/html; charset=utf-8";
     await http.Response.SendFileAsync(Path.Combine(environment.WebRootPath, "index.html"), http.RequestAborted).ConfigureAwait(false);
