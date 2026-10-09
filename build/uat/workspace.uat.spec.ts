@@ -53,9 +53,7 @@ test('real tenant administration, sessions, canonical audit and service readines
       )?.token ?? '',
     );
   await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'People. Permissions. Clarity.', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Access overview', exact: true })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Access Management navigation' });
   await expect(navigation.getByRole('link', { name: 'System Expert' })).toHaveCount(0);
   await navigation.getByRole('link', { name: 'Users', exact: true }).click();

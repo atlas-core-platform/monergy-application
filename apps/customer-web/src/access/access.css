@@ -18,7 +18,7 @@
   margin: 0 0 24px;
 }
 .access-page-header h1 {
-  margin: 6px 0;
+  margin: 0 0 6px;
   font-size: var(--monergy-compact-title);
   line-height: 1.35;
   font-weight: 600;
@@ -81,18 +81,6 @@
 .access-insight-panel {
   padding: 20px;
 }
-.access-list-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--monergy-midnight-border);
-}
-.access-list-toolbar > span {
-  font-size: 0.875rem;
-  font-weight: 600;
-}
 .access-search-row {
   display: flex;
   align-items: center;
@@ -100,12 +88,10 @@
   padding: 12px 16px;
 }
 .access-search-row > .ant-input-affix-wrapper {
-  max-width: 360px;
+  max-width: 400px;
 }
-.access-search-row > span:last-child {
+.access-refresh {
   margin-left: auto;
-  color: var(--monergy-midnight-secondary);
-  font-size: var(--monergy-compact-small);
 }
 .access-status-filter {
   min-width: 140px;
@@ -118,7 +104,7 @@
   font-weight: 500;
 }
 .access-panel .ant-table-tbody > tr > td {
-  padding: 8px 16px;
+  padding: 6px 16px;
   height: var(--monergy-compact-row);
   border-bottom-color: var(--monergy-midnight-border);
 }
@@ -139,18 +125,21 @@
   font-size: var(--monergy-compact-body);
   font-weight: 450;
 }
+.access-record-button small:empty {
+  display: none;
+}
 .access-record-button small {
   display: block;
   color: var(--monergy-midnight-secondary);
   font-size: var(--monergy-compact-small);
-  margin-top: 4px;
+  margin-top: 2px;
   overflow-wrap: anywhere;
 }
 .access-record-avatar {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 2.333em;
+  height: 2.333em;
   flex-shrink: 0;
   border-radius: 6px;
   border: 1px solid var(--monergy-midnight-border);
@@ -177,17 +166,26 @@
 }
 .access-table-footer {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
   justify-content: space-between;
   padding: 12px 16px;
   border-top: 1px solid var(--monergy-midnight-border);
   color: var(--monergy-midnight-secondary);
   font-size: var(--monergy-compact-small);
 }
+.access-directory-support {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
 .access-bottom-note {
   display: flex;
   gap: 8px;
   align-items: flex-start;
-  margin: 16px 0 8px;
+  margin: 6px 0 8px;
   color: var(--monergy-midnight-secondary);
 }
 .access-bottom-note svg {
@@ -202,14 +200,19 @@
 .access-metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 0;
+  border: 1px solid var(--monergy-midnight-border);
+  border-radius: var(--monergy-compact-panel-radius);
+  overflow: hidden;
 }
 .access-metric {
   position: relative;
   padding: 20px;
-  border: 1px solid var(--monergy-midnight-border);
-  border-radius: 8px;
+  border-right: 1px solid var(--monergy-midnight-border);
   background: var(--monergy-midnight-sidebar);
+}
+.access-metric:last-child {
+  border-right: 0;
 }
 .access-metric > div {
   display: flex;
@@ -238,7 +241,7 @@
   color: var(--monergy-midnight-secondary);
 }
 .access-metric:hover {
-  border-color: var(--monergy-midnight-control-border);
+  background: var(--monergy-midnight-surface);
 }
 .access-snapshot-note {
   display: flex;
@@ -288,7 +291,7 @@
 .access-task-row {
   display: flex;
   gap: 16px;
-  padding: 20px 0;
+  padding: 14px 0;
   border-bottom: 1px solid var(--monergy-midnight-border);
 }
 .access-task-row:last-child {
@@ -316,7 +319,7 @@
   color: var(--monergy-midnight-accent);
 }
 .access-insight-panel h2 {
-  margin-top: 16px;
+  margin-top: 0;
 }
 .access-insight-panel p strong {
   color: var(--monergy-midnight-text);
@@ -389,6 +392,10 @@
   border-bottom: 0;
 }
 .access-review-row dt {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 500;
   color: var(--monergy-midnight-secondary);
   font-size: var(--monergy-compact-small);
   margin-bottom: 6px;
@@ -405,11 +412,13 @@
   margin-bottom: 6px;
 }
 .access-review-after {
+  display: block;
   white-space: pre-line;
   color: var(--monergy-midnight-accent);
 }
 .access-review-badge {
   display: inline-block;
+  min-width: 68px;
   margin-right: 8px;
   font-size: var(--monergy-compact-small);
   color: var(--monergy-midnight-secondary);
@@ -674,6 +683,85 @@
   justify-content: space-between;
   gap: 16px;
 }
+
+.access-loading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  color: var(--monergy-midnight-secondary);
+}
+.access-editor-section {
+  padding: 16px 0;
+  border-top: 1px solid var(--monergy-midnight-border);
+}
+.access-editor-section h3 {
+  font-size: var(--monergy-compact-body);
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--monergy-midnight-text);
+}
+.access-editor-section .ant-form-item {
+  margin-bottom: 10px;
+}
+.access-form-hint a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.access-editor-section .access-form-hint {
+  margin: 0;
+}
+.access-editor-section .access-assignment-summary {
+  margin: 12px 0 0;
+}
+.access-identity {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 6px 12px;
+  font-size: var(--monergy-compact-body);
+  margin: 0 0 8px;
+}
+.access-identity dt {
+  color: var(--monergy-midnight-secondary);
+}
+.access-identity dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.access-review-heading {
+  font-size: var(--monergy-compact-section);
+  margin: 0 0 12px;
+  font-weight: 600;
+}
+.access-review-subject {
+  padding: 12px 0;
+  border-block: 1px solid var(--monergy-midnight-border);
+  overflow-wrap: anywhere;
+}
+.access-review-subject span {
+  display: block;
+  color: var(--monergy-midnight-secondary);
+  font-size: var(--monergy-compact-small);
+  margin-bottom: 4px;
+}
+.access-review-state {
+  font-size: var(--monergy-compact-small);
+  font-weight: 400;
+}
+.access-review-row.is-changed {
+  border-left: 2px solid var(--monergy-midnight-accent);
+  padding-left: 14px;
+}
+.access-review-row.is-changed dt,
+.access-review-row.is-new dt {
+  color: var(--monergy-midnight-text);
+}
+.access-review-row.is-unchanged {
+  background: var(--monergy-midnight-sidebar);
+}
+.access-review-row.is-unchanged .access-review-after {
+  color: var(--monergy-midnight-secondary);
+}
+
 @media (max-width: 64rem) {
   .access-overview-grid {
     grid-template-columns: 1fr;
@@ -686,13 +774,16 @@
   }
 }
 @media (max-width: 48rem) {
+  .access-directory-support {
+    flex-direction: column;
+  }
+  .access-page-header > .ant-space {
+    max-width: 100%;
+  }
   .access-page-header {
     flex-direction: column;
     gap: 16px;
     margin-bottom: 20px;
-  }
-  .access-list-toolbar {
-    flex-wrap: wrap;
   }
   .access-search-row {
     flex-wrap: wrap;
@@ -702,6 +793,13 @@
   }
   .access-metrics {
     grid-template-columns: 1fr;
+  }
+  .access-metric {
+    border-right: 0;
+    border-bottom: 1px solid var(--monergy-midnight-border);
+  }
+  .access-metric:last-child {
+    border-bottom: 0;
   }
   .access-operations-grid,
   .access-explainer-grid {

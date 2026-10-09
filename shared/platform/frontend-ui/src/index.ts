@@ -6,3 +6,5 @@ export { WorkspaceShell } from './WorkspaceShell';
 export type { WorkspaceDestination } from './WorkspaceShell';
 export { WorkspaceIcon } from './WorkspaceIcon';
 export type { WorkspaceIconName } from './WorkspaceIcon';
+
+export { containDialogTab } from './containDialogTab';

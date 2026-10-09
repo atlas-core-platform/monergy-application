@@ -26,6 +26,7 @@ html[data-monergy-theme='midnight'],
   --mw-navy: var(--monergy-midnight-sidebar);
 }
 /* Password reveal remains usable at compact density. */
+[data-monergy-theme='midnight'] .ant-input-clear-icon,
 [data-monergy-theme='midnight'] .ant-input-password-icon {
   display: inline-flex;
   align-items: center;
@@ -39,7 +40,7 @@ html[data-monergy-theme='midnight'],
 }
 [data-monergy-theme='midnight'] .mw-sidebar {
   width: var(--monergy-compact-sidebar);
-  padding: 20px 10px 12px;
+  padding: 20px 12px 12px;
   color: var(--mw-muted);
   background: var(--monergy-midnight-sidebar);
   border-color: var(--mw-line);
@@ -70,8 +71,8 @@ html[data-monergy-theme='midnight'],
   display: none;
 }
 [data-monergy-theme='midnight'] .mw-workspace-label {
-  margin: 24px 0 8px;
-  padding: 12px 10px 16px;
+  margin: 20px 0 8px;
+  padding: 12px 8px 16px;
   border: 0;
   border-bottom: 1px solid var(--mw-line);
   border-radius: 0;
@@ -95,17 +96,17 @@ html[data-monergy-theme='midnight'],
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  margin: 20px 10px 8px;
+  margin: 20px 8px 8px;
 }
 [data-monergy-theme='midnight'] .mw-nav-group::after {
   display: none;
 }
 [data-monergy-theme='midnight'] .mw-nav-item {
   min-height: 36px;
-  padding: 7px 10px;
+  padding: 7px 8px;
   gap: 10px;
-  margin: 4px 0;
-  border-radius: 5px;
+  margin: 3px 0;
+  border-radius: var(--monergy-compact-control-radius);
   color: var(--mw-muted);
   font-size: var(--monergy-text-body);
   transition:
@@ -124,7 +125,7 @@ html[data-monergy-theme='midnight'],
   box-shadow: none;
 }
 [data-monergy-theme='midnight'] .mw-nav-item.is-active::before {
-  left: -10px;
+  left: -12px;
   width: 2px;
   top: 8px;
   bottom: 8px;
@@ -254,6 +255,37 @@ html[data-monergy-theme='midnight'],
 }
 [data-monergy-theme='midnight'] .ant-checkbox-checked .ant-checkbox-inner::after {
   border-color: var(--monergy-midnight-canvas);
+}
+html[data-monergy-theme='midnight'] body {
+  min-width: 0;
+}
+/* Shared controls follow text resizing as well as browser zoom. */
+[data-monergy-theme='midnight'] .ant-btn,
+[data-monergy-theme='midnight'] .ant-input,
+[data-monergy-theme='midnight'] .ant-select,
+[data-monergy-theme='midnight'] .ant-form-item,
+[data-monergy-theme='midnight'] .ant-form-item-label > label,
+[data-monergy-theme='midnight'] .ant-table {
+  font-size: var(--monergy-compact-body);
+}
+[data-monergy-theme='midnight'] .ant-btn,
+[data-monergy-theme='midnight'] .ant-input,
+[data-monergy-theme='midnight'] .ant-select-single {
+  min-height: var(--monergy-compact-control);
+  height: auto;
+}
+[data-monergy-theme='midnight'] .ant-input-affix-wrapper > .ant-input {
+  min-height: 0;
+}
+[data-monergy-theme='midnight'] .ant-btn-icon,
+[data-monergy-theme='midnight'] .mw-icon-button:not(.mw-mobile-menu) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-monergy-theme='midnight'] .ant-drawer-title {
+  font-size: var(--monergy-compact-section);
+  font-weight: 600;
 }
 [data-monergy-theme='midnight'] .ant-tag {
   font-size: var(--monergy-text-small);

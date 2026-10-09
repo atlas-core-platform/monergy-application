@@ -1,3 +1,4 @@
+import { containDialogTab } from './containDialogTab';
 import { ConfigProvider, Drawer, Input, Modal, Tooltip } from 'antd';
 import type { InputRef } from 'antd';
 import { useEffect, useRef, useState } from 'react';
@@ -299,6 +300,7 @@ export function WorkspaceShell({
           </div>
         </div>
         <Drawer
+          onKeyDown={appearance === 'midnight' ? containDialogTab : undefined}
           title={module?.name ?? 'Monergy workspace'}
           placement="left"
           open={mobileOpen}
@@ -362,6 +364,7 @@ export function WorkspaceShell({
           </div>
         </Modal>
         <Drawer
+          onKeyDown={appearance === 'midnight' ? containDialogTab : undefined}
           title={module ? 'Your access management guide' : 'A connected way to work'}
           open={helpOpen}
           onClose={() => {

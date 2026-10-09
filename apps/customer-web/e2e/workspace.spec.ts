@@ -148,7 +148,7 @@ test('CSV drag and drop validates the whole file and sign-out revokes the sessio
   await page.goto('/access');
   await page.getByLabel('Local access key').fill('browser-fixture-only');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'People. Permissions. Clarity.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Access overview' })).toBeVisible();
   await page.getByRole('navigation').getByRole('link', { name: 'Users', exact: true }).click();
   await page.getByRole('button', { name: 'Import users' }).click();
   const transfer = await page.evaluateHandle(() => {
@@ -324,7 +324,7 @@ test('access routes keep the session and exclude platform navigation across deep
   await expect(page.getByRole('heading', { name: 'Permissions', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Access Management home' }).click();
   await expect(page).toHaveURL(/\/access$/);
-  await expect(page.getByRole('heading', { name: 'People. Permissions. Clarity.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Access overview' })).toBeVisible();
   expect(signIns).toBe(1);
   await page.goto('/access/not-a-page');
   await page.getByLabel('Local access key').fill('browser-fixture-only');
