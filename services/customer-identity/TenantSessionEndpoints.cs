@@ -51,6 +51,20 @@ public static class TenantSessionEndpoints
             InvokeAsync(() => authority.EstablishAsync(request.TenantId, http.Request.Headers["X-Monergy-Reference-Authentication"].ToString(), http.RequestAborted)));
         app.MapPost("/local/v1/tenant-sessions/revoke", (TenantSessionLookup request, HttpContext http, TenantSessionAuthority authority) =>
             InvokeAsync(() => authority.EndAsync(request, http.RequestAborted)));
+        app.MapGet("/local/v1/administration/resource-directory/customers", async (
+            HttpContext http, TenantAccessClient access, ITenantCustomerResourceDirectory directory) =>
+        {
+            try
+            {
+                var administrator = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
+                return Results.Ok(new
+                {
+                    resourceType = "customer",
+                    items = directory.List(administrator.TenantId)
+                });
+            }
+            catch (TenantBoundaryException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.Status); }
+        });
         app.MapGet("/local/v1/administration/sessions", async (HttpContext http, string? after,
             TenantAccessClient access, PostgresTenantSessions sessions) =>
         {
