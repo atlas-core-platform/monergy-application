@@ -1,7 +1,7 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Empty, Input, Space, Table, Tag, Tooltip, Select } from 'antd';
 import type { TableColumnsType } from 'antd';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AccessApiError, displayError, recordId } from './accessApi';
 import type { AccessApi, AccessArea, AccessPage, AccessRecord } from './accessApi';
@@ -23,7 +23,7 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   {
     value: 'roles',
     label: 'Roles',
-    description: 'Build clear responsibilities from reusable permissions.',
+    description: 'Define business roles and associate the permissions each role needs.',
   },
   {
     value: 'permissions',
@@ -43,7 +43,8 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   {
     value: 'resource-grants',
     label: 'Resource Access',
-    description: 'Limit resource-scoped capabilities to specific resources.',
+    description:
+      'Assign specific resources to users whose role includes a resource-scoped capability.',
   },
 ];
 
@@ -176,6 +177,8 @@ function Administration({
   const [editor, setEditor] = useState<{ record?: AccessRecord } | null>(null);
   const [importId, setImportId] = useState<string | null | undefined>(undefined);
   const [single, setSingle] = useState(false);
+  const onboardingOpener = useRef<HTMLElement | null>(null);
+  const pendingFocus = useRef<HTMLElement | null>(null);
   const [revision, setRevision] = useState(0);
   const fail = useCallback(
     (failure: unknown) => {
@@ -218,6 +221,15 @@ function Administration({
     setPage(null);
     setRevision((value) => value + 1);
   };
+  useEffect(() => {
+    if (!page || !pendingFocus.current) return;
+    const target = pendingFocus.current;
+    pendingFocus.current = null;
+    // Closing onboarding reloads the directory and temporarily disables its actions.
+    // Restore the opener once enabled, unless the user has moved focus elsewhere.
+    if (target.isConnected && document.activeElement === document.body)
+      target.focus({ preventScroll: true });
+  }, [page]);
   const changed = (message: string) => {
     setNotice(message);
     refresh();
@@ -377,15 +389,16 @@ function Administration({
     <>
       <header className="access-page-header">
         <div>
-          <p className="workspace-eyebrow">ACCESS MANAGEMENT</p>
           <h1>{selected?.label}</h1>
           <p>{selected?.description}</p>
         </div>
         <Space wrap>
           {area === 'members' && (
             <Button
+              disabled={!page}
               icon={<WorkspaceIcon name="upload" size={16} />}
-              onClick={() => {
+              onClick={(event) => {
+                onboardingOpener.current = event.currentTarget;
                 setSingle(false);
                 setImportId(null);
               }}
@@ -398,8 +411,9 @@ function Administration({
             type="primary"
             disabled={!page}
             icon={<WorkspaceIcon name={area === 'members' ? 'users' : 'access'} size={16} />}
-            onClick={() => {
+            onClick={(event) => {
               if (area === 'members' || area === 'imports') {
+                onboardingOpener.current = event.currentTarget;
                 setSingle(area === 'members');
                 setImportId(null);
               } else setEditor({});
@@ -439,15 +453,12 @@ function Administration({
           className="access-notice"
         />
       )}
-      <section className="access-panel" aria-label={selected?.label}>
-        <div className="access-list-toolbar">
-          <span>{area === 'members' ? 'User directory' : selected?.label}</span>
-          <Space wrap>
-            <Button onClick={refresh} disabled={busy}>
-              Refresh
-            </Button>
-          </Space>
-        </div>
+      <section className="access-panel" aria-label={selected?.label} aria-busy={!page && !error}>
+        {!page && !error && (
+          <span className="sr-only" role="status">
+            Loading records…
+          </span>
+        )}
         <div className="access-search-row">
           <Input
             allowClear
@@ -475,7 +486,9 @@ function Administration({
               ]}
             />
           )}
-          <span>Filters apply to loaded records</span>
+          <Button className="access-refresh" onClick={refresh} disabled={busy || (!page && !error)}>
+            Refresh
+          </Button>
         </div>
         <Table<AccessRecord>
           columns={columns}
@@ -490,19 +503,33 @@ function Administration({
                 description={
                   error
                     ? 'Records could not be loaded. Refresh to try again.'
-                    : query || statusFilter !== 'all'
-                      ? 'No loaded records match. Clear the filter or load more records.'
-                      : `No ${selected?.label.toLowerCase() ?? 'records'} yet. Use the action above to get started.`
+                    : !page
+                      ? 'Loading records…'
+                      : query || statusFilter !== 'all'
+                        ? 'No loaded records match. Clear the filter or load more records.'
+                        : `No ${selected?.label.toLowerCase() ?? 'records'} yet. Use the action above to get started.`
                 }
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-              />
+              >
+                {page && (query || statusFilter !== 'all') && (
+                  <Button
+                    onClick={() => {
+                      setQuery('');
+                      setStatusFilter('all');
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                )}
+              </Empty>
             ),
           }}
         />
         {page && (
-          <div className="access-table-footer">
+          <div className="access-table-footer" role="status">
             <span>
-              {filtered.length} of {page.items.length} loaded records
+              {filtered.length} of {page.items.length} loaded records · Filters apply only to loaded
+              records
             </span>
             <span>{page.nextCursor ? 'More records available' : 'No more records to load'}</span>
           </div>
@@ -520,17 +547,19 @@ function Administration({
           </div>
         )}
       </section>
-      {area === 'members' && (
-        <Button type="text" href="/access/users/history" style={{ float: 'right', marginTop: 12 }}>
-          Onboarding history
-        </Button>
-      )}
-      <div className="access-bottom-note">
-        <WorkspaceIcon name="shield" size={17} />
-        <p>
-          Tenant administrators manage access. Business permissions come from the person’s assigned
-          role and applicable resource grants.
-        </p>
+      <div className="access-directory-support">
+        <div className="access-bottom-note">
+          <WorkspaceIcon name="shield" size={17} />
+          <p>
+            Tenant administrators manage access. Business permissions come from the person’s
+            assigned role and applicable resource grants.
+          </p>
+        </div>
+        {area === 'members' && (
+          <Button type="text" href="/access/users/history">
+            Onboarding history
+          </Button>
+        )}
       </div>
       {editor && page && (
         <AccessEditor
@@ -539,14 +568,34 @@ function Administration({
           record={editor.record}
           api={api}
           policyVersion={page.policyVersion}
-          onClose={() => {
+          onClose={(reload) => {
             setEditor(null);
+            if (reload) refresh();
           }}
           onSaved={(message) => {
             setEditor(null);
             changed(message);
           }}
           onExpired={fail}
+          onReload={async () => {
+            // Complete a revision-consistent read before enabling another edit. No mutation replay.
+            const first = await api.list(area);
+            const items = first.nextCursor
+              ? await api.all(area, undefined, first.policyVersion)
+              : first.items;
+            const roles =
+              area === 'members' ? await api.all('roles', undefined, first.policyVersion) : [];
+            setRoleNames(
+              Object.fromEntries(
+                roles.map((role) => [role.id ?? '', role.label ?? role.code ?? role.id ?? '']),
+              ),
+            );
+            setPage({ ...first, items, nextCursor: null });
+            setEditor(null);
+            setNotice(
+              'Current records reloaded from the service. Check the saved values before making another change.',
+            );
+          }}
         />
       )}
       {importId !== undefined && (
@@ -555,6 +604,7 @@ function Administration({
           single={single && !importId}
           importId={importId}
           onClose={() => {
+            pendingFocus.current = importId ? null : onboardingOpener.current;
             setImportId(undefined);
             refresh();
           }}

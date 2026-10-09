@@ -1,3 +1,4 @@
+import { containDialogTab } from '@monergy/ui-foundation';
 import {
   Alert,
   Button,
@@ -12,7 +13,9 @@ import {
   Switch,
   Tabs,
 } from 'antd';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AccessChangeReview } from './AccessChangeReview';
+import type { ReviewValue } from './AccessChangeReview';
 
 import { AccessApiError, displayError, recordId } from './accessApi';
 import type {
@@ -42,9 +45,10 @@ interface Props {
   record?: AccessRecord;
   api: AccessApi;
   policyVersion: number;
-  onClose: () => void;
+  onClose: (reload?: boolean) => void;
   onSaved: (message: string) => void;
   onExpired: (failure: unknown) => void;
+  onReload: () => Promise<void>;
 }
 
 export function AccessEditor({
@@ -55,7 +59,9 @@ export function AccessEditor({
   onClose,
   onSaved,
   onExpired,
+  onReload,
 }: Props) {
+  const [open, setOpen] = useState(true);
   const [form] = Form.useForm<Values>();
   const selectedPermissions = Form.useWatch('permissionIds', form);
   const selectedRole = Form.useWatch('businessRoleId', form);
@@ -67,12 +73,33 @@ export function AccessEditor({
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [recovery, setRecovery] = useState<'conflict' | 'uncertain' | null>(null);
+  const reviewHeading = useRef<HTMLHeadingElement>(null);
+  const reviewButton = useRef<HTMLButtonElement>(null);
   const [mode, setMode] = useState('details');
   const [original, setOriginal] = useState<Values | null>(null);
   const [confirmation, setConfirmation] = useState<{ values?: Values; remove?: boolean } | null>(
     null,
   );
+  useEffect(() => {
+    if (confirmation) reviewHeading.current?.focus();
+  }, [confirmation]);
   const id = record ? recordId(record) : '';
+  const reload = async () => {
+    setBusy(true);
+    try {
+      await onReload();
+    } catch (failure) {
+      setError(displayError(failure));
+      onExpired(failure);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const close = () => {
+    if (busy) return;
+    setOpen(false);
+  };
   const noun =
     area === 'members'
       ? 'user'
@@ -168,7 +195,7 @@ export function AccessEditor({
   }, [api, area, form, id, onExpired, policyVersion, record]);
 
   const save = async () => {
-    if (!confirmation) return;
+    if (!confirmation || recovery || busy) return;
     setBusy(true);
     setError('');
     try {
@@ -224,6 +251,9 @@ export function AccessEditor({
       );
     } catch (failure) {
       setError(displayError(failure));
+      if (failure instanceof AccessApiError && failure.status === 409) setRecovery('conflict');
+      else if (!(failure instanceof AccessApiError) || failure.status >= 500)
+        setRecovery('uncertain');
       if (failure instanceof AccessApiError && (failure.status === 401 || failure.status === 403))
         onExpired(failure);
     } finally {
@@ -243,17 +273,22 @@ export function AccessEditor({
   const capabilityName = (value?: string) =>
     capabilities.find((item) => item.capabilityId === value)?.displayName ?? value ?? 'None';
   const list = (items: string[]) => (items.length ? [...items].sort().join('\n') : 'None');
-  const describe = (values: Values): { label: string; value: string }[] => {
+  const describe = (values: Values): ReviewValue[] => {
     if (area === 'members')
       return [
-        { label: 'Business role', value: lookup(roles, values.businessRoleId) },
-        { label: 'Membership', value: values.active ? 'Active' : 'Disabled' },
+        {
+          label: 'Business role',
+          value: lookup(roles, values.businessRoleId),
+          identity: values.businessRoleId ?? '',
+        },
+        { label: 'Account status', value: values.active ? 'Active' : 'Disabled' },
         { label: 'Tenant administrator', value: values.tenantAdmin ? 'Yes' : 'No' },
       ];
     if (area === 'groups' && mode === 'people')
       return [
         {
           label: 'People',
+          identity: list(values.actorIds ?? []),
           value: list((values.actorIds ?? []).map((value) => lookup(people, value))),
         },
       ];
@@ -270,6 +305,7 @@ export function AccessEditor({
         ? [
             {
               label: 'Permissions',
+              identity: list(values.permissionIds ?? []),
               value: list((values.permissionIds ?? []).map((value) => lookup(permissions, value))),
             },
           ]
@@ -278,6 +314,9 @@ export function AccessEditor({
         ? [
             {
               label: 'Capabilities and scope',
+              identity: list(
+                (values.grants ?? []).map((grant) => `${grant.capabilityId}:${grant.scope}`),
+              ),
               value: list(
                 (values.grants ?? []).map(
                   (grant) =>
@@ -289,7 +328,16 @@ export function AccessEditor({
         : []),
     ];
   };
-  const before = original ? describe(original) : [];
+  const before = original
+    ? describe(original).map((item) =>
+        area === 'members' && item.label === 'Account status' && record?.status
+          ? {
+              ...item,
+              value: record.status === 'PendingIdentity' ? 'Pending identity' : record.status,
+            }
+          : item,
+      )
+    : [];
   const proposed = confirmation?.values ? describe(confirmation.values) : [];
   const names = (
     <>
@@ -320,9 +368,81 @@ export function AccessEditor({
       </Form.Item>
     </>
   );
+  const configuredPermissions = (
+    <Collapse
+      className="access-assignment-summary"
+      items={[
+        {
+          key: 'configured',
+          label: 'Review configured permissions',
+          children: (
+            <>
+              <p className="access-form-hint">
+                This describes the selected role’s configuration. Actual access is checked by each
+                service, including user status and resource assignments.
+              </p>
+              {(area === 'roles'
+                ? (selectedPermissions ?? [])
+                : (roles.find((role) => role.id === selectedRole)?.permissionIds ?? [])
+              ).length ? (
+                (area === 'roles'
+                  ? (selectedPermissions ?? [])
+                  : (roles.find((role) => role.id === selectedRole)?.permissionIds ?? [])
+                ).map((permissionId) => {
+                  const permission = permissions.find((item) => item.id === permissionId);
+                  return (
+                    <div className="access-permission-summary" key={permissionId}>
+                      <strong>{permission?.label ?? permissionId}</strong>
+                      <ul>
+                        {permission?.grants?.map((grant) => (
+                          <li key={`${grant.capabilityId}:${grant.scope}`}>
+                            {capabilityName(grant.capabilityId)} ·{' '}
+                            {grant.scope === 'Tenant'
+                              ? 'Tenant-wide'
+                              : 'Specific resources (requires assignment)'}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })
+              ) : (
+                <p>No permissions in the selected role.</p>
+              )}
+              {area === 'members' && (
+                <>
+                  <h4>Saved resource assignments</h4>
+                  {resourceGrants.length ? (
+                    <ul>
+                      {resourceGrants.map((grant) => (
+                        <li key={recordId(grant)}>
+                          {capabilityName(grant.capabilityId)} · {grant.resourceId}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>No individual resource assignments.</p>
+                  )}
+                </>
+              )}
+            </>
+          ),
+        },
+      ]}
+    />
+  );
   return (
     <>
       <Drawer
+        onKeyDown={(event) => {
+          containDialogTab(event);
+          // Details remain mounted to preserve the draft; their popup portals must
+          // not consume Escape while the review is the active surface.
+          if (event.key === 'Escape' && confirmation && !busy) {
+            event.stopPropagation();
+            setOpen(false);
+          }
+        }}
         title={
           confirmation
             ? confirmation.remove
@@ -331,17 +451,20 @@ export function AccessEditor({
                 ? 'Review changes'
                 : `Review new ${noun}`
             : record
-              ? (record.normalizedEmail ?? record.label ?? 'Resource access')
+              ? area === 'members'
+                ? 'Manage user'
+                : (record.label ?? 'Resource access')
               : `Create ${noun}`
         }
-        open
-        onClose={() => {
-          if (!busy) onClose();
+        open={open}
+        onClose={close}
+        afterOpenChange={(visible) => {
+          if (!visible) onClose(Boolean(recovery));
         }}
         size={480}
         destroyOnHidden
         mask={{ closable: !busy }}
-        keyboard={!busy}
+        keyboard={!busy && !confirmation}
         footer={
           <div className="access-drawer-footer">
             <div>
@@ -351,7 +474,7 @@ export function AccessEditor({
                   onClick={() => {
                     setConfirmation({ remove: true });
                   }}
-                  disabled={busy || loading}
+                  disabled={busy || loading || Boolean(recovery)}
                 >
                   Remove
                 </Button>
@@ -360,21 +483,25 @@ export function AccessEditor({
             <Space>
               <Button
                 onClick={() => {
-                  if (confirmation) setConfirmation(null);
-                  else onClose();
+                  if (confirmation) {
+                    setConfirmation(null);
+                    requestAnimationFrame(() => reviewButton.current?.focus());
+                  } else if (recovery) void reload();
+                  else close();
                 }}
                 disabled={busy}
               >
-                {confirmation ? 'Back' : 'Close'}
+                {confirmation ? 'Back' : recovery ? 'Reload current records' : 'Close'}
               </Button>
               {(Boolean(confirmation) || !(area === 'resource-grants' && record)) && (
                 <Button
                   type="primary"
+                  ref={reviewButton}
                   onClick={() => {
                     if (confirmation) void save();
                     else form.submit();
                   }}
-                  disabled={loading}
+                  disabled={loading || Boolean(recovery)}
                   danger={confirmation?.remove}
                   loading={busy}
                 >
@@ -392,42 +519,37 @@ export function AccessEditor({
         }
       >
         {error && <Alert type="error" showIcon title={error} className="access-notice" />}
+        {recovery && (
+          <Alert
+            type="warning"
+            showIcon
+            className="access-notice"
+            title={
+              recovery === 'conflict'
+                ? 'Reload before making another change'
+                : 'The result has not been confirmed'
+            }
+            description="Your draft is shown below for reference. Reload reads the current records from the service before returning to the directory. Check the saved values before starting another change. This request will not be repeated."
+          />
+        )}
         {confirmation && (
           <section aria-label="Review changes">
+            <h2 className="access-review-heading" tabIndex={-1} ref={reviewHeading}>
+              Confirm {confirmation.remove ? 'removal' : 'access change'}
+            </h2>
             <p>
               {confirmation.remove
                 ? 'The service will reject removal if another access configuration still depends on this item.'
                 : 'Check the details below. Saving applies this change immediately to your tenant.'}
             </p>
             {record && (
-              <p>
+              <p className="access-review-subject">
+                <span>Affected {noun}</span>
                 <strong>{record.normalizedEmail ?? record.label ?? record.resourceId ?? id}</strong>
               </p>
             )}
             {proposed.length > 0 && (
-              <dl className="access-review">
-                {proposed.map((item) => {
-                  const previous = before.find((value) => value.label === item.label)?.value;
-                  const changed = Boolean(record) && previous !== item.value;
-                  return (
-                    <div className="access-review-row" key={item.label}>
-                      <dt>{item.label}</dt>
-                      <dd>
-                        {changed && (
-                          <span className="access-review-before">
-                            <span className="access-review-badge">Before</span>
-                            {previous}
-                          </span>
-                        )}
-                        <span className="access-review-after">
-                          {changed && <span className="access-review-badge">After</span>}
-                          {item.value}
-                        </span>
-                      </dd>
-                    </div>
-                  );
-                })}
-              </dl>
+              <AccessChangeReview current={record ? before : undefined} proposed={proposed} />
             )}
 
             {area === 'members' && !confirmation.remove && (
@@ -461,14 +583,17 @@ export function AccessEditor({
         <div hidden={Boolean(confirmation)}>
           <p className="access-drawer-intro">
             {area === 'members'
-              ? 'Manage this person’s role and administrative authority. Every change is verified by the service.'
+              ? 'Edit account access, then review the exact changes before saving.'
               : area === 'groups'
                 ? 'Groups organize people. They do not grant roles or business access.'
                 : 'Make access clear and intentional. Review your change before saving.'}
           </p>
 
           {loading && !error ? (
-            <Spin />
+            <div role="status" className="access-loading">
+              <Spin />
+              <span>Loading current configuration…</span>
+            </div>
           ) : area === 'resource-grants' && record ? (
             <Descriptions
               column={1}
@@ -491,7 +616,7 @@ export function AccessEditor({
               onFinish={(values) => {
                 setConfirmation({ values });
               }}
-              disabled={busy || loading}
+              disabled={busy || loading || Boolean(recovery)}
             >
               {area === 'groups' && record && (
                 <Tabs
@@ -517,72 +642,7 @@ export function AccessEditor({
                   />
                 </Form.Item>
               )}
-              {(area === 'roles' || area === 'members') && (
-                <Collapse
-                  className="access-assignment-summary"
-                  items={[
-                    {
-                      key: 'configured',
-                      label: 'Review configured permissions',
-                      children: (
-                        <>
-                          <p className="access-form-hint">
-                            This describes the selected role’s configuration. Actual access is
-                            checked by each service, including user status and resource assignments.
-                          </p>
-                          {(area === 'roles'
-                            ? (selectedPermissions ?? [])
-                            : (roles.find((role) => role.id === selectedRole)?.permissionIds ?? [])
-                          ).length ? (
-                            (area === 'roles'
-                              ? (selectedPermissions ?? [])
-                              : (roles.find((role) => role.id === selectedRole)?.permissionIds ??
-                                [])
-                            ).map((permissionId) => {
-                              const permission = permissions.find(
-                                (item) => item.id === permissionId,
-                              );
-                              return (
-                                <div className="access-permission-summary" key={permissionId}>
-                                  <strong>{permission?.label ?? permissionId}</strong>
-                                  <ul>
-                                    {permission?.grants?.map((grant) => (
-                                      <li key={`${grant.capabilityId}:${grant.scope}`}>
-                                        {capabilityName(grant.capabilityId)} ·{' '}
-                                        {grant.scope === 'Tenant'
-                                          ? 'Tenant-wide'
-                                          : 'Specific resources (requires assignment)'}
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              );
-                            })
-                          ) : (
-                            <p>No permissions in the selected role.</p>
-                          )}
-                          {area === 'members' && (
-                            <>
-                              <h4>Saved resource assignments</h4>
-                              {resourceGrants.length ? (
-                                <ul>
-                                  {resourceGrants.map((grant) => (
-                                    <li key={recordId(grant)}>
-                                      {capabilityName(grant.capabilityId)} · {grant.resourceId}
-                                    </li>
-                                  ))}
-                                </ul>
-                              ) : (
-                                <p>No individual resource assignments.</p>
-                              )}
-                            </>
-                          )}
-                        </>
-                      ),
-                    },
-                  ]}
-                />
-              )}
+              {area === 'roles' && configuredPermissions}
               {area === 'permissions' && (
                 <Form.List name="grants">
                   {(fields, { add, remove }) => (
@@ -649,37 +709,72 @@ export function AccessEditor({
                     </>
                   )}
                 </Form.List>
-              )}
+              )}{' '}
               {area === 'members' && (
                 <>
-                  <Form.Item name="businessRoleId" label="Business role">
-                    <Select
-                      allowClear
-                      showSearch={{ optionFilterProp: 'label' }}
-                      options={labeledOptions(roles)}
-                      placeholder="No business role"
-                    />
-                  </Form.Item>
-                  <Alert
-                    type="info"
-                    showIcon
-                    title="Changing a role removes existing individual resource grants."
-                    className="access-notice"
-                  />
-                  <Form.Item name="active" label="Active membership" valuePropName="checked">
-                    <Switch />
-                  </Form.Item>
-                  <Form.Item
-                    name="tenantAdmin"
-                    label="Tenant administrator"
-                    valuePropName="checked"
-                  >
-                    <Switch />
-                  </Form.Item>
-                  <p className="access-form-hint">
-                    Administrative authority does not grant access to financial or other business
-                    data. Disabling access invalidates the person’s existing sessions.
-                  </p>
+                  <section className="access-editor-section" aria-labelledby="user-identity">
+                    <h3 id="user-identity">Identity</h3>
+                    <dl className="access-identity">
+                      <dt>Email address</dt>
+                      <dd>{record?.normalizedEmail ?? 'Not available'}</dd>
+                      <dt>User reference</dt>
+                      <dd>{record?.actorId}</dd>
+                    </dl>
+                    <p className="access-form-hint">Identity details are read-only here.</p>
+                    {record?.status === 'PendingIdentity' && (
+                      <p className="access-form-hint">
+                        Identity activation is pending. Complete the existing request in{' '}
+                        <a href="/access/users/history">Onboarding history</a> before editing
+                        access.
+                      </p>
+                    )}
+                  </section>
+                  <section className="access-editor-section" aria-labelledby="user-status">
+                    <h3 id="user-status">Account status</h3>
+                    <Form.Item name="active" label="Active membership" valuePropName="checked">
+                      <Switch />
+                    </Form.Item>
+                    <p className="access-form-hint">
+                      An inactive user cannot access this tenant. Saving a change invalidates
+                      existing sessions.
+                    </p>
+                  </section>
+                  <section className="access-editor-section" aria-labelledby="user-role">
+                    <h3 id="user-role">Business access</h3>
+                    <Form.Item name="businessRoleId" label="Business role">
+                      <Select
+                        allowClear
+                        showSearch={{ optionFilterProp: 'label' }}
+                        options={labeledOptions(roles)}
+                        placeholder="No business role"
+                      />
+                    </Form.Item>
+                    <p className="access-form-hint">
+                      One business role per user. Changing it removes individual resource grants.
+                    </p>
+                    {configuredPermissions}
+                  </section>
+                  <section className="access-editor-section" aria-labelledby="user-authority">
+                    <h3 id="user-authority">Administrative authority</h3>
+                    <Form.Item
+                      name="tenantAdmin"
+                      label="Tenant administrator"
+                      valuePropName="checked"
+                    >
+                      <Switch />
+                    </Form.Item>
+                    <p className="access-form-hint">
+                      Allows administration of this tenant. Business data still requires a business
+                      role and applicable resource grants.
+                    </p>
+                  </section>
+                  <section className="access-editor-section" aria-labelledby="user-groups">
+                    <h3 id="user-groups">Group membership</h3>
+                    <p className="access-form-hint">
+                      Review and manage existing membership in <a href="/access/groups">Groups</a>.
+                      Group membership does not grant access.
+                    </p>
+                  </section>
                 </>
               )}
               {area === 'groups' && mode === 'people' && (

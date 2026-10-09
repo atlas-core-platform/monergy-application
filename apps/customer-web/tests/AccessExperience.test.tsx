@@ -108,7 +108,7 @@ describe('tenant administration trust boundaries', () => {
       const authority = within(review.getByRole('region', { name: 'Review changes' }))
         .getByText('Tenant administrator')
         .closest('.access-review-row');
-      expect(authority).toHaveTextContent('BeforeNoAfterYes');
+      expect(authority).toHaveTextContent('ChangedCurrentNoProposedYes');
       expect(writes).toEqual([]);
       await user.click(review.getByRole('button', { name: 'Save changes' }));
       expect(
@@ -118,7 +118,10 @@ describe('tenant administration trust boundaries', () => {
       expect(writes).toEqual([
         { expectedPolicyVersion: 7, businessRoleId: null, active: true, tenantAdmin: true },
       ]);
-      await user.click(screen.getByLabelText('Close'));
+      expect(screen.getByRole('button', { name: 'Review change' })).toBeDisabled();
+      await user.click(screen.getByRole('button', { name: 'Reload current records' }));
+      expect(await screen.findByText(/Current records reloaded from the service/)).toBeVisible();
+      expect(writes).toHaveLength(1);
       expired = true;
       await user.click(screen.getByRole('button', { name: 'Refresh' }));
       expect(await screen.findByRole('button', { name: 'Connect workspace' })).toBeVisible();

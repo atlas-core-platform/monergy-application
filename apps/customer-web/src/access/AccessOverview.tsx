@@ -43,9 +43,8 @@ export function AccessOverview({
     <>
       <header className="access-page-header">
         <div>
-          <p className="workspace-eyebrow">YOUR ACCESS WORKSPACE</p>
-          <h1>People. Permissions. Clarity.</h1>
-          <p>Keep your team organized and make every access decision intentional.</p>
+          <h1>Access overview</h1>
+          <p>Manage users, configure business access and review changes in this tenant.</p>
         </div>
         <Button href="/access/users" type="primary" icon={<WorkspaceIcon name="users" size={17} />}>
           Manage users
@@ -132,8 +131,8 @@ export function AccessOverview({
               <WorkspaceIcon name="workflow" />
             </span>
             <div>
-              <h2>Start with a clear purpose</h2>
-              <p>Three steps to thoughtful access.</p>
+              <h2>Common tasks</h2>
+              <p>Choose the task you need to complete.</p>
             </div>
           </div>
           {(
@@ -147,7 +146,7 @@ export function AccessOverview({
               ],
               [
                 '02',
-                'Bring your people in',
+                'Add and manage users',
                 'Create one user or import a team, then assign a business role.',
                 '/access/users',
                 'Open users',
@@ -174,8 +173,7 @@ export function AccessOverview({
           ))}
         </section>
         <aside className="access-insight-panel">
-          <span className="access-insight-label">ACCESS AT A GLANCE</span>
-          <h2>Keep access intentional.</h2>
+          <h2>Role assignments</h2>
           {users ? (
             <p>
               <strong>{unassigned}</strong> of the {users.items.length} users loaded have no
@@ -188,7 +186,7 @@ export function AccessOverview({
             Review assignments <WorkspaceIcon name="arrow" size={15} />
           </a>
           <hr />
-          <h3>Know the boundaries</h3>
+          <h3>How access works</h3>
           <p>
             <strong>One business role per user.</strong> Permissions come from that role and
             applicable resource assignments.

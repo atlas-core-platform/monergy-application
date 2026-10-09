@@ -53,9 +53,7 @@ test('real tenant administration, sessions, canonical audit and service readines
       )?.token ?? '',
     );
   await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(
-    page.getByRole('heading', { name: 'People. Permissions. Clarity.', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Access overview', exact: true })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Access Management navigation' });
   await expect(navigation.getByRole('link', { name: 'System Expert' })).toHaveCount(0);
   await navigation.getByRole('link', { name: 'Users', exact: true }).click();
@@ -73,7 +71,9 @@ test('real tenant administration, sessions, canonical audit and service readines
     .click();
   await expect(page.getByText('User created.')).toBeVisible();
   await page.getByLabel('Close', { exact: true }).click();
-  await expect(page.getByText('uat-single@example.test', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  const users = page.getByRole('region', { name: 'Users', exact: true });
+  await expect(users.getByText('uat-single@example.test', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Import users', exact: true }).click();
   await page.getByText('Paste CSV instead').click();
   await page
@@ -84,7 +84,8 @@ test('real tenant administration, sessions, canonical audit and service readines
   await page.getByRole('button', { name: 'Onboard people', exact: true }).click();
   await expect(page.getByText('User access activated.')).toBeVisible();
   await page.getByLabel('Close', { exact: true }).click();
-  await expect(page.getByText('uat-onboard@example.test', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(users.getByText('uat-onboard@example.test', { exact: true })).toBeVisible();
   await navigation.getByRole('link', { name: 'Security & Sessions', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Revoke all for A900' }).first()).toBeVisible();
   await navigation.getByRole('link', { name: 'Access Activity', exact: true }).click();
@@ -102,9 +103,11 @@ test('real tenant administration, sessions, canonical audit and service readines
   await expect(page.getByText('Running', { exact: true })).toHaveCount(13);
   await expect(page.getByText('Service scaffold; no live consent journey')).toBeVisible();
   await page.getByLabel('Close', { exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: /Release readiness/ }).click();
   await expect(page.getByText('Local UAT · Production acceptance pending')).toBeVisible();
   await page.getByLabel('Close', { exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.screenshot({ path: '.artifacts/uat-workspace.png', fullPage: true });
   // Browser refresh cannot recover a bearer token from browser storage.
   await page.reload();

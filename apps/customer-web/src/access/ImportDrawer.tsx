@@ -1,3 +1,4 @@
+import { containDialogTab } from '@monergy/ui-foundation';
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import {
   Alert,
@@ -15,6 +16,7 @@ import {
 } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 
+import { AccessChangeReview } from './AccessChangeReview';
 import { AccessApiError, displayError } from './accessApi';
 import type {
   AccessApi,
@@ -42,6 +44,7 @@ export function ImportDrawer({
   onChanged,
   onExpired,
 }: Props) {
+  const [open, setOpen] = useState(true);
   const [userForm] = Form.useForm<{ email?: string; role?: string; groups?: string[] }>();
   const [choices, setChoices] = useState<{ roles: AccessRecord[]; groups: AccessRecord[] } | null>(
     null,
@@ -263,6 +266,15 @@ export function ImportDrawer({
   return (
     <>
       <Drawer
+        onKeyDown={(event) => {
+          containDialogTab(event);
+          // Details remain mounted to preserve the draft; their popup portals must
+          // not consume Escape while the review is the active surface.
+          if (event.key === 'Escape' && confirm && !busy) {
+            event.stopPropagation();
+            setOpen(false);
+          }
+        }}
         title={
           confirm
             ? confirm === 'cancel'
@@ -278,17 +290,25 @@ export function ImportDrawer({
                 ? 'Create user'
                 : 'Import users'
         }
-        open
+        open={open}
         onClose={() => {
-          if (!busy) onClose();
+          if (!busy) setOpen(false);
+        }}
+        afterOpenChange={(visible) => {
+          if (!visible) onClose();
         }}
         size={single ? 480 : 650}
         mask={{ closable: !busy }}
-        keyboard={!busy}
+        keyboard={!busy && !confirm}
         destroyOnHidden
         footer={
           <div className="access-drawer-footer">
-            <Button onClick={onClose} disabled={busy}>
+            <Button
+              onClick={() => {
+                setOpen(false);
+              }}
+              disabled={busy}
+            >
               Close
             </Button>
             <Space>
@@ -394,34 +414,29 @@ export function ImportDrawer({
                   : 'Check the details before continuing. Access is activated only after identity verification succeeds.'}
             </p>
             {single && confirm === 'start' ? (
-              <dl className="access-review">
-                <div className="access-review-row">
-                  <dt>Email</dt>
-                  <dd>{userForm.getFieldValue('email')}</dd>
-                </div>
-                <div className="access-review-row">
-                  <dt>Business role</dt>
-                  <dd>
-                    {choices?.roles.find((role) => role.code === userForm.getFieldValue('role'))
-                      ?.label ?? 'None — no business permissions'}
-                  </dd>
-                </div>
-                <div className="access-review-row">
-                  <dt>Groups</dt>
-                  <dd>
-                    {(userForm.getFieldValue('groups') as string[] | undefined)
-                      ?.map(
-                        (code) =>
-                          choices?.groups.find((group) => group.code === code)?.label ?? code,
-                      )
-                      .join(', ') ?? 'None'}
-                  </dd>
-                </div>
-                <div className="access-review-row">
-                  <dt>Tenant administrator</dt>
-                  <dd>No</dd>
-                </div>
-              </dl>
+              <AccessChangeReview
+                proposed={[
+                  { label: 'Email', value: String(userForm.getFieldValue('email') ?? '') },
+                  {
+                    label: 'Business role',
+                    value:
+                      choices?.roles.find((role) => role.code === userForm.getFieldValue('role'))
+                        ?.label ?? 'None — no business permissions',
+                  },
+                  {
+                    label: 'Groups',
+                    value: (userForm.getFieldValue('groups') as string[] | undefined)?.length
+                      ? (userForm.getFieldValue('groups') as string[])
+                          .map(
+                            (code) =>
+                              choices?.groups.find((group) => group.code === code)?.label ?? code,
+                          )
+                          .join(', ')
+                      : 'None',
+                  },
+                  { label: 'Tenant administrator', value: 'No' },
+                ]}
+              />
             ) : confirm === 'start' ? (
               <>
                 <p>{preview?.rowCount} users will be onboarded with the roles and groups below.</p>

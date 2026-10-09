@@ -1,3 +1,4 @@
+import { containDialogTab } from '@monergy/ui-foundation';
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import {
   Alert,
@@ -319,6 +320,11 @@ function OperationsDrawer({
               dataSource={sessions}
               rowKey="sessionReference"
               pagination={false}
+              locale={{
+                emptyText: error
+                  ? 'Session records could not be loaded. Refresh to try again.'
+                  : 'No issued session records. Refresh to check for new records.',
+              }}
               scroll={{ x: 590 }}
               columns={[
                 { title: 'User reference', dataIndex: 'actorId' },
@@ -363,8 +369,8 @@ function OperationsDrawer({
         {view === 'audit' && (
           <>
             <p className="workspace-subtitle">
-              Review access changes, newest first. Recent changes may take a moment to appear;
-              refresh to check for updates.
+              Recorded changes appear newest first. These are audit records, not effective-access
+              decisions. Recent changes may take a moment to appear; refresh to check for updates.
             </p>
             {events.length ? (
               <Timeline
@@ -405,7 +411,15 @@ function OperationsDrawer({
                 }))}
               />
             ) : (
-              !loading && <Empty description="No delivered access events yet." />
+              !loading && (
+                <Empty
+                  description={
+                    error
+                      ? 'Activity could not be loaded. Refresh to try again.'
+                      : 'No recorded access changes yet. Refresh after making a change.'
+                  }
+                />
+              )
             )}
           </>
         )}
@@ -488,12 +502,11 @@ function OperationsDrawer({
     <>
       <header className="access-page-header">
         <div>
-          <p className="workspace-eyebrow">SECURITY & OVERSIGHT</p>
           <h1>{headings[view]}</h1>
           <p>
             {view === 'sessions'
               ? 'Review sessions and end a user’s current access when needed.'
-              : 'Trace access decisions to the people who made them.'}
+              : 'Review recorded access changes and the administrator responsible.'}
           </p>
         </div>
         {refreshButton}
@@ -501,7 +514,14 @@ function OperationsDrawer({
       <section className="access-operation-page">{content}</section>
     </>
   ) : (
-    <Drawer open title={headings[view]} size="large" onClose={onClose} extra={refreshButton}>
+    <Drawer
+      onKeyDown={containDialogTab}
+      open
+      title={headings[view]}
+      size="large"
+      onClose={onClose}
+      extra={refreshButton}
+    >
       {content}
     </Drawer>
   );
