@@ -168,6 +168,7 @@ function Administration({
   onExpired: (failure: unknown) => void;
 }) {
   const [roleNames, setRoleNames] = useState<Record<string, string>>({});
+  const [resourceNames, setResourceNames] = useState<Record<string, string>>({});
   const [page, setPage] = useState<AccessPage | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -222,6 +223,32 @@ function Administration({
     setRevision((value) => value + 1);
   };
   useEffect(() => {
+    if (area !== 'resource-grants' || !page) {
+      setResourceNames({});
+      return;
+    }
+    const controller = new AbortController();
+    const types = [...new Set(page.items.map((item) => item.resourceType).filter(Boolean))] as string[];
+    void Promise.all(
+      types.map(async (resourceType) => {
+        try {
+          const directory = await api.resourceDirectory(resourceType, controller.signal);
+          return directory.items;
+        } catch {
+          return [];
+        }
+      }),
+    ).then((groups) => {
+      if (controller.signal.aborted) return;
+      setResourceNames(
+        Object.fromEntries(
+          groups.flat().map((resource) => [resource.resourceId, resource.displayName]),
+        ),
+      );
+    });
+    return () => controller.abort();
+  }, [api, area, page]);
+  useEffect(() => {
     if (!page || !pendingFocus.current) return;
     const target = pendingFocus.current;
     pendingFocus.current = null;
@@ -257,7 +284,7 @@ function Administration({
           record.label,
           record.code,
           record.status,
-          record.resourceId,
+          record.resourceId ? resourceNames[record.resourceId] : undefined,
           record.actorId,
           record.businessRoleId ? roleNames[record.businessRoleId] : undefined,
         ].some((value) => value?.toLowerCase().includes(query.toLowerCase())) &&
@@ -292,7 +319,9 @@ function Administration({
           </span>
           <span>
             <strong>
-              {record.normalizedEmail ?? record.label ?? record.resourceId ?? record.id}
+              {record.normalizedEmail ??
+                record.label ??
+                (record.resourceId ? resourceNames[record.resourceId] ?? 'Restricted resource' : record.id)}
             </strong>
             <small>{record.code ?? (area === 'members' ? '' : (record.capabilityId ?? ''))}</small>
           </span>
