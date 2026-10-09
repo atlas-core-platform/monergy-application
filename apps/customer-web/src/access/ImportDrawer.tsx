@@ -243,6 +243,19 @@ export function ImportDrawer({
   };
   const verified = result?.identities.filter((identity) => identity.actorId !== null).length ?? 0;
   const terminal = result?.status === 'Activated' || result?.status === 'Cancelled';
+  const confirmationLabel =
+    confirm === 'cancel'
+      ? 'Cancel onboarding'
+      : confirm === 'retry'
+        ? 'Retry onboarding'
+        : single
+          ? 'Create user'
+          : 'Onboard people';
+  const preparationLabel = single
+    ? 'Review user'
+    : preview?.valid
+      ? 'Confirm onboarding'
+      : 'Validate entire file';
   return (
     <>
       <Drawer
@@ -286,20 +299,18 @@ export function ImportDrawer({
                     Back
                   </Button>
                   <Button
+                    key="confirm-onboarding"
                     type="primary"
+                    aria-label={confirmationLabel}
+                    aria-busy={busy}
+                    disabled={busy}
                     danger={confirm === 'cancel'}
                     loading={busy}
                     onClick={() => {
                       void run();
                     }}
                   >
-                    {confirm === 'cancel'
-                      ? 'Cancel onboarding'
-                      : confirm === 'retry'
-                        ? 'Retry onboarding'
-                        : single
-                          ? 'Create user'
-                          : 'Onboard people'}
+                    {confirmationLabel}
                   </Button>
                 </>
               ) : (
@@ -316,7 +327,10 @@ export function ImportDrawer({
                   )}
                   {!result && (
                     <Button
+                      key="prepare-onboarding"
                       type="primary"
+                      aria-label={preparationLabel}
+                      aria-busy={busy}
                       disabled={!csv || busy || Boolean(operationId) || (single && !choices)}
                       loading={busy}
                       onClick={() => {
@@ -324,13 +338,7 @@ export function ImportDrawer({
                         else void validate();
                       }}
                     >
-                      {preview?.valid
-                        ? single
-                          ? 'Review user'
-                          : 'Confirm onboarding'
-                        : single
-                          ? 'Review user'
-                          : 'Validate entire file'}
+                      {preparationLabel}
                     </Button>
                   )}
                   {result && !terminal && (
