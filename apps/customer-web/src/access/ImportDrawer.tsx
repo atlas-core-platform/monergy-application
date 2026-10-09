@@ -74,7 +74,11 @@ export function ImportDrawer({
       .then(setResult)
       .catch((failure: unknown) => {
         if (!controller.signal.aborted) {
-          setError(displayError(failure));
+          setError(
+            failure instanceof AccessApiError && failure.status === 404
+              ? 'The service confirms this onboarding request was not staged. Close this review and start a new request.'
+              : displayError(failure),
+          );
           if (
             failure instanceof AccessApiError &&
             (failure.status === 401 || failure.status === 403)
@@ -278,7 +282,7 @@ export function ImportDrawer({
         onClose={() => {
           if (!busy) onClose();
         }}
-        size={650}
+        size={single ? 480 : 650}
         mask={{ closable: !busy }}
         keyboard={!busy}
         destroyOnHidden

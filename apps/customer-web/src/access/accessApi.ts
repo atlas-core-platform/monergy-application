@@ -86,13 +86,17 @@ export class AccessApiError extends Error {
 }
 
 async function read<T>(url: string, options: RequestInit): Promise<T> {
+  const signal = AbortSignal.any([
+    ...(options.signal ? [options.signal] : []),
+    AbortSignal.timeout(20_000),
+  ]);
   let response: Response;
   try {
     response = await fetch(url, {
       cache: 'no-store',
       redirect: 'error',
       ...options,
-      signal: options.signal ?? AbortSignal.timeout(20_000),
+      signal,
     });
   } catch (error) {
     if (options.signal?.aborted) throw error;
@@ -110,12 +114,22 @@ async function read<T>(url: string, options: RequestInit): Promise<T> {
         : 'REQUEST_FAILED';
     throw new AccessApiError(response.status, code);
   }
-  return (await response.json()) as T;
+  try {
+    return (await response.json()) as T;
+  } catch (error) {
+    if (options.signal?.aborted) throw error;
+    throw new AccessApiError(503, 'RESPONSE_UNAVAILABLE');
+  }
 }
 
-export async function establishSession(tenantId: string, key: string): Promise<TenantSession> {
+export async function establishSession(
+  tenantId: string,
+  key: string,
+  signal?: AbortSignal,
+): Promise<TenantSession> {
   return read<TenantSession>('/identity-api/local/v1/tenant-sessions', {
     method: 'POST',
+    signal,
     headers: { 'Content-Type': 'application/json', 'X-Monergy-Reference-Authentication': key },
     body: JSON.stringify({ tenantId }),
   });
@@ -124,9 +138,44 @@ export async function establishSession(tenantId: string, key: string): Promise<T
 // Session data stays in component memory. No credential/session is stored in a
 // URL, browser storage, log or persisted user preference.
 export class AccessApi {
-  constructor(private readonly session: TenantSession) {}
+  constructor(
+    private readonly session: TenantSession,
+    private readonly lifecycle?: {
+      signal: AbortSignal;
+      onFailure: (failure: AccessApiError) => void;
+      onOperation: (id: string | null) => void;
+    },
+  ) {}
+  private async guarded<T>(path: string, options: RequestInit): Promise<T> {
+    const signal = this.lifecycle
+      ? AbortSignal.any([this.lifecycle.signal, ...(options.signal ? [options.signal] : [])])
+      : options.signal;
+    try {
+      if (this.lifecycle && Date.parse(this.session.expiresAt) <= Date.now())
+        throw new AccessApiError(401, 'SESSION_EXPIRED');
+      const result = await read<T>(path, { ...options, signal });
+      // A superseded session cannot repopulate a remounted tenant view.
+      signal?.throwIfAborted();
+      return result;
+    } catch (failure) {
+      if (
+        !this.lifecycle?.signal.aborted &&
+        failure instanceof AccessApiError &&
+        [401, 403, 503].includes(failure.status)
+      )
+        this.lifecycle?.onFailure(failure);
+      throw failure;
+    }
+  }
+  forgetOperation(): void {
+    this.lifecycle?.onOperation(null);
+  }
   request<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
-    return read<T>('/access-api/v1/' + path, {
+    const operation = /^administration\/imports\/([A-Za-z0-9-]+)\/(commit|process|cancel)$/.exec(
+      path,
+    );
+    if (method === 'POST' && operation?.[1]) this.lifecycle?.onOperation(operation[1]);
+    return this.guarded<T>('/access-api/v1/' + path, {
       method,
       headers: {
         'Content-Type': 'application/json',
@@ -135,10 +184,20 @@ export class AccessApi {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal,
+    }).then((value) => {
+      if (
+        operation &&
+        value &&
+        typeof value === 'object' &&
+        'status' in value &&
+        (value.status === 'Activated' || value.status === 'Cancelled')
+      )
+        this.forgetOperation();
+      return value;
     });
   }
   owner<T>(owner: 'identity' | 'audit' | 'uat', path: string, signal?: AbortSignal): Promise<T> {
-    return read<T>('/' + owner + '-api/' + path, {
+    return this.guarded<T>('/' + owner + '-api/' + path, {
       method: 'GET',
       signal,
       headers: {

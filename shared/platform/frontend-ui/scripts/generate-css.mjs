@@ -7,8 +7,22 @@ const tokenPath = resolve(packageRoot, 'src/tokens.json');
 const outputPath = resolve(packageRoot, 'src/semantic-tokens.generated.css');
 const tokens = JSON.parse(await readFile(tokenPath, 'utf8'));
 
+const midnightCss = Object.entries(tokens.midnight)
+  .map(
+    ([key, value]) =>
+      `  --monergy-midnight-${key.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase())}: ${value};`,
+  )
+  .join('\n');
+const compactCss = Object.entries(tokens.compact)
+  .map(
+    ([key, value]) =>
+      `  --monergy-compact-${key.replace(/[A-Z]/g, (letter) => '-' + letter.toLowerCase())}: ${typeof value === 'number' ? value + (key.endsWith('Ms') ? 'ms' : 'px') : value};`,
+  )
+  .join('\n');
 const css = `/* Generated from tokens.json. Run pnpm generate:tokens; do not edit directly. */
 :root {
+${midnightCss}
+${compactCss}
   --monergy-color-brand-primary: ${tokens.color.brand.primary};
   --monergy-color-brand-primary-hover: ${tokens.color.brand.primaryHover};
   --monergy-color-brand-on-primary: ${tokens.color.brand.onPrimary};

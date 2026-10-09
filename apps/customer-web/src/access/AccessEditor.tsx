@@ -338,7 +338,7 @@ export function AccessEditor({
         onClose={() => {
           if (!busy) onClose();
         }}
-        size={560}
+        size={480}
         destroyOnHidden
         mask={{ closable: !busy }}
         keyboard={!busy}

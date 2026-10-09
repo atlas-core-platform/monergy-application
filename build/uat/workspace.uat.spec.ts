@@ -3,10 +3,48 @@ import { expect, test } from '@playwright/test';
 const profile = JSON.parse(readFileSync('.artifacts/uat/ci/profile.json', 'utf8')) as {
   identities: { tenantId: string; actorId: string; token: string }[];
 };
+test('local UAT direct routes and invalid credentials never expose the protected shell', async ({
+  page,
+}) => {
+  for (const route of [
+    '/',
+    '/search',
+    '/reports',
+    '/foundation',
+    '/vs02',
+    '/operations',
+    '/access/users',
+  ]) {
+    await page.goto(route);
+    await expect(page.getByLabel('Local access key')).toBeVisible();
+    await expect(page.locator('.mw-shell')).toHaveCount(0);
+    await expect(page.getByRole('navigation')).toHaveCount(0);
+  }
+  await page.getByLabel('Local access key').fill('invalid-uat-test-key');
+  await page.getByRole('button', { name: 'Connect workspace', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Unable to connect');
+  await expect(page.locator('.mw-shell')).toHaveCount(0);
+  await page.getByLabel('Tenant', { exact: true }).fill('T002');
+  await page
+    .getByLabel('Local access key')
+    .fill(
+      profile.identities.find(
+        (identity) => identity.tenantId === 'T001' && identity.actorId === 'A900',
+      )?.token ?? '',
+    );
+  await page.getByRole('button', { name: 'Connect workspace', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Connect workspace', exact: true })).toBeEnabled();
+  await expect(page.getByRole('alert')).toContainText('Unable to connect');
+  await expect(page.locator('.mw-shell')).toHaveCount(0);
+});
 test('real tenant administration, sessions, canonical audit and service readiness', async ({
   page,
 }) => {
   await page.goto('/access');
+  await expect(page.locator('.mw-shell')).toHaveCount(0);
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+  await page.keyboard.press('Control+k');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await page
     .getByLabel('Local access key')
     .fill(
@@ -71,6 +109,7 @@ test('real tenant administration, sessions, canonical audit and service readines
   // Browser refresh cannot recover a bearer token from browser storage.
   await page.reload();
   await expect(page.getByRole('button', { name: 'Connect workspace' })).toBeVisible();
+  await expect(page.locator('.mw-shell')).toHaveCount(0);
   expect(
     await page.evaluate(() =>
       Object.keys(localStorage)

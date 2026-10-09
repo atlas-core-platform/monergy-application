@@ -1,6 +1,41 @@
 import rawTokens from './tokens.json';
 
 export interface SemanticTokens {
+  midnight: Record<
+    | 'canvas'
+    | 'sidebar'
+    | 'surface'
+    | 'elevated'
+    | 'accent'
+    | 'accentHover'
+    | 'text'
+    | 'secondary'
+    | 'border'
+    | 'controlBorder'
+    | 'success'
+    | 'warning'
+    | 'danger'
+    | 'info'
+    | 'selected',
+    string
+  >;
+  compact: {
+    body: string;
+    small: string;
+    section: string;
+    title: string;
+    control: number;
+    smallControl: number;
+    touchControl: number;
+    sidebar: string;
+    rail: string;
+    row: number;
+    controlRadius: number;
+    panelRadius: number;
+    hoverMs: number;
+    motionMs: number;
+  };
+
   color: {
     brand: { primary: string; primaryHover: string; onPrimary: string };
     neutral: Record<'0' | '50' | '100' | '300' | '600' | '800' | '950', string>;

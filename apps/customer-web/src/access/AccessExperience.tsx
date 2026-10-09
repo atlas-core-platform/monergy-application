@@ -1,14 +1,16 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
-import { Alert, Button, Card, Empty, Form, Input, Space, Table, Tag, Tooltip } from 'antd';
+import { Alert, Button, Empty, Input, Space, Table, Tag, Tooltip, Select } from 'antd';
 import type { TableColumnsType } from 'antd';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import { AccessApi, AccessApiError, displayError, establishSession, recordId } from './accessApi';
-import type { AccessArea, AccessPage, AccessRecord, TenantSession } from './accessApi';
+import { AccessApiError, displayError, recordId } from './accessApi';
+import type { AccessApi, AccessArea, AccessPage, AccessRecord } from './accessApi';
 import { AccessEditor } from './AccessEditor';
 import { ImportDrawer } from './ImportDrawer';
 import { AccessOperations, AccessOperationPage } from './AccessOperations';
 import { useWorkspaceSession } from './workspaceSession';
+import { WorkspaceSessionProvider } from './WorkspaceSessionProvider';
+import { WorkspaceEntry } from './WorkspaceEntry';
 import { AccessOverview } from './AccessOverview';
 import './access.css';
 
@@ -45,126 +47,19 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   },
 ];
 
-export default function AccessExperience({ path = '/access/users' }: { path?: string }) {
-  const [session, setSession] = useWorkspaceSession();
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [form] = Form.useForm<{ tenantId: string; key: string }>();
-  const connect = async (values: { tenantId: string; key: string }) => {
-    setBusy(true);
-    setError('');
-    try {
-      const current = await establishSession(values.tenantId.trim(), values.key);
-      form.setFieldValue('key', '');
-      await new AccessApi(current).list('members');
-      setSession(current);
-    } catch (failure) {
-      setError(displayError(failure));
-    } finally {
-      form.setFieldValue('key', '');
-      setBusy(false);
-    }
-  };
-  const end = useCallback(
-    (message: string) => {
-      setSession(null);
-      setError(message);
-    },
-    [setSession],
-  );
-  if (session)
-    return (
-      <AuthenticatedAccess
-        key={session.authenticationContextId}
-        path={path}
-        session={session}
-        onEnd={end}
-      />
-    );
+export default function AccessExperience({
+  path = '/access/users',
+  embedded = false,
+}: {
+  path?: string;
+  embedded?: boolean;
+}) {
   return (
-    <main className="access-page">
-      <header className="access-page-header">
-        <div>
-          <p className="workspace-eyebrow">MONERGY · ACCESS MANAGEMENT</p>
-          <h1>Access starts here.</h1>
-          <p>Manage who belongs to your tenant and what they can do.</p>
-        </div>
-      </header>
-      <div className="access-connect-grid">
-        <section className="access-connect-story">
-          <WorkspaceIcon name="access" size={32} />
-          <h2>
-            One place for people
-            <br />
-            and permissions.
-          </h2>
-          <p>
-            Create users. Define roles. Review changes.
-            <br />
-            Every action stays within your tenant.
-          </p>
-          <ol className="access-start-steps">
-            <li>
-              <strong>Connect securely</strong>
-              <span>Use your administrator’s local UAT access key.</span>
-            </li>
-            <li>
-              <strong>Set up your team</strong>
-              <span>Add one user or onboard a team together.</span>
-            </li>
-            <li>
-              <strong>Assign intentional access</strong>
-              <span>Choose a business role and review before saving.</span>
-            </li>
-          </ol>
-        </section>
-        <Card className="access-connect-card">
-          <span className="workspace-eyebrow">YOUR LOCAL WORKSPACE</span>
-          <h2>Connect to your tenant</h2>
-          <p>Use the local access key configured for your administrator account.</p>
-          {error && <Alert type="error" showIcon title={error} className="access-notice" />}
-          <Form
-            form={form}
-            layout="vertical"
-            onFinish={(values) => {
-              void connect(values);
-            }}
-            initialValues={{ tenantId: 'T001' }}
-          >
-            <Form.Item
-              name="tenantId"
-              label="Tenant"
-              rules={[
-                { required: true, message: 'Enter your tenant.' },
-                {
-                  pattern: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/,
-                  message: 'Enter a valid tenant identifier.',
-                },
-              ]}
-            >
-              <Input size="large" autoComplete="organization" disabled={busy} />
-            </Form.Item>
-            <Form.Item
-              name="key"
-              label="Local access key"
-              rules={[{ required: true, message: 'Enter your local access key.' }]}
-            >
-              <Input.Password size="large" autoComplete="off" disabled={busy} />
-            </Form.Item>
-            <Button type="primary" size="large" block htmlType="submit" loading={busy}>
-              Connect workspace
-            </Button>
-          </Form>
-          <div className="access-connect-footnote">
-            <WorkspaceIcon name="shield" size={15} />
-            <span>
-              Your key is cleared after use. This local connection does not configure Production
-              sign-in.
-            </span>
-          </div>
-        </Card>
-      </div>
-    </main>
+    <WorkspaceSessionProvider>
+      <WorkspaceEntry>
+        <AuthenticatedAccess path={path} embedded={embedded} />
+      </WorkspaceEntry>
+    </WorkspaceSessionProvider>
   );
 }
 
@@ -176,51 +71,62 @@ const routes: Record<string, AccessArea> = {
   '/access/groups': 'groups',
   '/access/resources': 'resource-grants',
 };
-function AuthenticatedAccess({
-  path,
-  session,
-  onEnd,
-}: {
-  path: string;
-  session: TenantSession;
-  onEnd: (message: string) => void;
-}) {
-  const api = useMemo(() => new AccessApi(session), [session]);
-  const [signingOut, setSigningOut] = useState(false);
-  const fail = useCallback(
-    (failure: unknown) => {
-      if (failure instanceof AccessApiError && (failure.status === 401 || failure.status === 403))
-        onEnd(displayError(failure));
-    },
-    [onEnd],
-  );
+function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boolean }) {
+  const { session, api, signOut, recovery } = useWorkspaceSession();
+  const [recovering, setRecovering] = useState(false);
+  // Lifecycle failures are handled once by the provider-owned API, above every shell/portal.
+  const fail = useCallback(() => undefined, []);
+  if (!session || !api) return null;
   const area = routes[path];
   return (
     <main className="access-page">
-      <div className="access-context-bar">
-        <span>
-          <WorkspaceIcon name="shield" size={15} /> Tenant <strong>{session.tenantId}</strong>
-          <span className="access-context-divider">/</span>Administrator
-        </span>
-        <Button
-          size="small"
-          type="text"
-          loading={signingOut}
-          onClick={() => {
-            setSigningOut(true);
-            void api
-              .endSession()
-              .then(() => {
-                onEnd('');
-              })
-              .catch((failure: unknown) => {
-                onEnd(displayError(failure));
-              });
+      {!embedded && (
+        <div className="access-context-bar">
+          <span>
+            <WorkspaceIcon name="shield" size={15} /> Tenant <strong>{session.tenantId}</strong>
+            <span className="access-context-divider">/</span>Administrator
+          </span>
+          <Button
+            size="small"
+            type="text"
+            onClick={() => {
+              void signOut();
+            }}
+          >
+            Sign out
+          </Button>
+        </div>
+      )}
+      {recovery && (
+        <Alert
+          type="warning"
+          showIcon
+          className="access-notice"
+          title="Review the interrupted onboarding request"
+          description="Check its recorded status before starting another request. Reconnecting does not repeat the operation."
+          action={
+            <Button
+              onClick={() => {
+                setRecovering(true);
+              }}
+            >
+              Review request
+            </Button>
+          }
+        />
+      )}
+      {recovering && recovery && (
+        <ImportDrawer
+          api={api}
+          importId={recovery.operationId}
+          onClose={() => {
+            setRecovering(false);
+            api.forgetOperation();
           }}
-        >
-          Sign out
-        </Button>
-      </div>
+          onChanged={() => undefined}
+          onExpired={fail}
+        />
+      )}
       {path === '/access' ? (
         <AccessOverview api={api} onExpired={fail} />
       ) : area ? (
@@ -263,6 +169,7 @@ function Administration({
   const [roleNames, setRoleNames] = useState<Record<string, string>>({});
   const [page, setPage] = useState<AccessPage | null>(null);
   const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -331,15 +238,18 @@ function Administration({
   };
   const selected = areas.find((item) => item.value === area) ?? areas[0];
   const filtered =
-    page?.items.filter((record) =>
-      [
-        record.normalizedEmail,
-        record.label,
-        record.code,
-        record.status,
-        record.resourceId,
-        record.actorId,
-      ].some((value) => value?.toLowerCase().includes(query.toLowerCase())),
+    page?.items.filter(
+      (record) =>
+        [
+          record.normalizedEmail,
+          record.label,
+          record.code,
+          record.status,
+          record.resourceId,
+          record.actorId,
+          record.businessRoleId ? roleNames[record.businessRoleId] : undefined,
+        ].some((value) => value?.toLowerCase().includes(query.toLowerCase())) &&
+        (statusFilter === 'all' || record.status === statusFilter),
     ) ?? [];
   const columns: TableColumnsType<AccessRecord> = [
     {
@@ -372,14 +282,7 @@ function Administration({
             <strong>
               {record.normalizedEmail ?? record.label ?? record.resourceId ?? record.id}
             </strong>
-            <small>
-              {record.code ??
-                (area === 'members'
-                  ? record.businessRoleId
-                    ? (roleNames[record.businessRoleId] ?? 'Business role assigned')
-                    : 'No business role'
-                  : (record.capabilityId ?? ''))}
-            </small>
+            <small>{record.code ?? (area === 'members' ? '' : (record.capabilityId ?? ''))}</small>
           </span>
         </button>
       ),
@@ -394,11 +297,21 @@ function Administration({
             ),
           },
           {
-            title: 'Authority',
+            title: 'Business role',
+            key: 'role',
+            render: (_: unknown, record: AccessRecord) =>
+              record.businessRoleId ? (
+                (roleNames[record.businessRoleId] ?? 'Business role assigned')
+              ) : (
+                <span className="access-secondary">None assigned</span>
+              ),
+          },
+          {
+            title: 'Administrator',
             key: 'authority',
             render: (_: unknown, record: AccessRecord) => (
               <span className="access-secondary">
-                {record.tenantAdmin ? 'Tenant administrator' : 'Member'}
+                {record.tenantAdmin ? 'Tenant administrator' : 'No'}
               </span>
             ),
           },
@@ -441,18 +354,21 @@ function Administration({
     {
       title: <span className="sr-only">Actions</span>,
       key: 'open',
-      width: 52,
+      width: 108,
       render: (_, record) => (
         <Tooltip title="Open details">
           <Button
             type="text"
             aria-label={`Open ${record.normalizedEmail ?? record.label ?? record.id ?? 'details'}`}
-            icon={<WorkspaceIcon name="arrow" size={17} />}
+            icon={<WorkspaceIcon name="arrow" size={15} />}
+            iconPlacement="end"
             onClick={() => {
               if (area === 'imports') setImportId(record.id);
               else setEditor({ record });
             }}
-          />
+          >
+            Manage
+          </Button>
         </Tooltip>
       ),
     },
@@ -466,6 +382,17 @@ function Administration({
           <p>{selected?.description}</p>
         </div>
         <Space wrap>
+          {area === 'members' && (
+            <Button
+              icon={<WorkspaceIcon name="upload" size={16} />}
+              onClick={() => {
+                setSingle(false);
+                setImportId(null);
+              }}
+            >
+              Import users
+            </Button>
+          )}
           {area === 'imports' ? <Button href="/access/users">Back to users</Button> : null}
           <Button
             type="primary"
@@ -516,22 +443,6 @@ function Administration({
         <div className="access-list-toolbar">
           <span>{area === 'members' ? 'User directory' : selected?.label}</span>
           <Space wrap>
-            {area === 'members' && (
-              <>
-                <Button type="text" href="/access/users/history">
-                  Onboarding history
-                </Button>
-                <Button
-                  icon={<WorkspaceIcon name="upload" size={16} />}
-                  onClick={() => {
-                    setSingle(false);
-                    setImportId(null);
-                  }}
-                >
-                  Import users
-                </Button>
-              </>
-            )}
             <Button onClick={refresh} disabled={busy}>
               Refresh
             </Button>
@@ -542,13 +453,29 @@ function Administration({
             allowClear
             prefix={<WorkspaceIcon name="search" size={17} />}
             aria-label="Filter loaded records"
-            placeholder="Filter loaded records…"
+            placeholder={
+              area === 'members' ? 'Filter loaded users by email or role' : 'Filter loaded records…'
+            }
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
             }}
           />
-          <span>{page ? `${String(page.items.length)} loaded` : 'Loading…'}</span>
+          {area === 'members' && (
+            <Select
+              className="access-status-filter"
+              aria-label="Filter loaded users by status"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'all', label: 'All statuses' },
+                { value: 'Active', label: 'Active' },
+                { value: 'Disabled', label: 'Disabled' },
+                { value: 'PendingIdentity', label: 'Pending identity' },
+              ]}
+            />
+          )}
+          <span>Filters apply to loaded records</span>
         </div>
         <Table<AccessRecord>
           columns={columns}
@@ -556,14 +483,14 @@ function Administration({
           rowKey={recordId}
           pagination={false}
           loading={!page && !error}
-          scroll={filtered.length ? { x: 620 } : undefined}
+          scroll={filtered.length ? { x: area === 'members' ? 850 : 620 } : undefined}
           locale={{
             emptyText: (
               <Empty
                 description={
                   error
                     ? 'Records could not be loaded. Refresh to try again.'
-                    : query
+                    : query || statusFilter !== 'all'
                       ? 'No loaded records match. Clear the filter or load more records.'
                       : `No ${selected?.label.toLowerCase() ?? 'records'} yet. Use the action above to get started.`
                 }
@@ -572,6 +499,14 @@ function Administration({
             ),
           }}
         />
+        {page && (
+          <div className="access-table-footer">
+            <span>
+              {filtered.length} of {page.items.length} loaded records
+            </span>
+            <span>{page.nextCursor ? 'More records available' : 'No more records to load'}</span>
+          </div>
+        )}
         {page?.nextCursor && (
           <div className="access-load-more">
             <Button
@@ -585,6 +520,11 @@ function Administration({
           </div>
         )}
       </section>
+      {area === 'members' && (
+        <Button type="text" href="/access/users/history" style={{ float: 'right', marginTop: 12 }}>
+          Onboarding history
+        </Button>
+      )}
       <div className="access-bottom-note">
         <WorkspaceIcon name="shield" size={17} />
         <p>

@@ -1,17 +1,24 @@
-import { createContext, useContext, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
-import type { TenantSession } from './accessApi';
-type State = [TenantSession | null, Dispatch<SetStateAction<TenantSession | null>>];
-export const Context = createContext<State | null>(null);
+import { createContext, useContext } from 'react';
+import type { AccessApi, TenantSession } from './accessApi';
+export interface WorkspaceSessionState {
+  status: 'public' | 'connecting' | 'verifying' | 'authorized' | 'disconnected';
+  session: TenantSession | null;
+  api: AccessApi | null;
+  message: string;
+  recovery: { tenantId: string; actorId: string; operationId: string } | null;
+  connect: (tenantId: string, key: string) => Promise<void>;
+  retry: () => Promise<void>;
+  signOut: () => Promise<void>;
+  cancel: () => void;
+}
+export const Context = createContext<WorkspaceSessionState | null>(null);
 export const sessionMemory: { current: TenantSession | null } = { current: null };
 export const localUat =
   (import.meta.env as Record<string, unknown>).VITE_MONERGY_LOCAL_UAT === 'true';
-// Isolated component hosts retain their own state. The application provider keeps
-// a session across SPA navigation; refresh deliberately requires sign-in again.
-export function useWorkspaceSession(): State {
+export function useWorkspaceSession(): WorkspaceSessionState {
   const context = useContext(Context);
-  const own = useState<TenantSession | null>(null);
-  return context ?? own;
+  if (!context) throw new Error('WorkspaceSessionProvider is required.');
+  return context;
 }
 export function tenantContract<
   T extends {
@@ -24,7 +31,11 @@ export function tenantContract<
 >(body: T): { body: T; headers: Record<string, string> } {
   if (!localUat) return { body, headers: {} };
   const current = sessionMemory.current;
-  if (!current || Date.parse(current.expiresAt) <= Date.now())
+  if (
+    !current ||
+    !Number.isFinite(Date.parse(current.expiresAt)) ||
+    Date.parse(current.expiresAt) <= Date.now()
+  )
     throw new Error('Connect your local tenant in People & access before continuing.');
   const customerId = current.tenantId === 'T001' ? 'reference-customer' : 'other-customer';
   return {

@@ -1,9 +1,9 @@
-import { ConfigProvider, Drawer, Input, Modal } from 'antd';
+import { ConfigProvider, Drawer, Input, Modal, Tooltip } from 'antd';
 import type { InputRef } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import type { PropsWithChildren, ReactNode } from 'react';
 
-import { monergyTheme } from './theme';
+import { midnightTheme, monergyTheme } from './theme';
 import { WorkspaceIcon } from './WorkspaceIcon';
 import type { WorkspaceIconName } from './WorkspaceIcon';
 
@@ -20,6 +20,7 @@ interface WorkspaceShellProps extends PropsWithChildren {
   active: string;
   area: string;
   context?: string;
+  appearance?: 'light' | 'midnight';
   onNavigate?: (id: string) => void;
   actions?: ReactNode;
   module?: { name: string; homeHref: string; guide: ReactNode };
@@ -30,6 +31,7 @@ export function WorkspaceShell({
   active,
   area,
   context = 'Local workspace',
+  appearance = 'light',
   onNavigate,
   actions,
   module,
@@ -114,52 +116,58 @@ export function WorkspaceShell({
           {destination.group && destination.group !== destinations[index - 1]?.group && (
             <div className="mw-nav-group">{destination.group}</div>
           )}
-          {destination.href ? (
-            <a
-              href={destination.href}
-              onClick={(event) => {
-                setMobileOpen(false);
-                if (
-                  onNavigate &&
-                  !event.ctrlKey &&
-                  !event.metaKey &&
-                  !event.shiftKey &&
-                  !event.altKey &&
-                  event.button === 0
-                ) {
-                  event.preventDefault();
+          <Tooltip
+            title={appearance === 'midnight' && collapsed && !mobileOpen ? destination.label : null}
+            placement="right"
+            trigger={['hover', 'focus']}
+          >
+            {destination.href ? (
+              <a
+                href={destination.href}
+                onClick={(event) => {
+                  setMobileOpen(false);
+                  if (
+                    onNavigate &&
+                    !event.ctrlKey &&
+                    !event.metaKey &&
+                    !event.shiftKey &&
+                    !event.altKey &&
+                    event.button === 0
+                  ) {
+                    event.preventDefault();
+                    navigate(destination);
+                  }
+                }}
+                className={`mw-nav-item ${active === destination.id ? 'is-active' : ''}`}
+                aria-current={active === destination.id ? 'page' : undefined}
+                aria-label={destination.label}
+                title={collapsed ? destination.label : undefined}
+              >
+                <span className="mw-nav-icon">
+                  <WorkspaceIcon name={destination.icon} />
+                </span>
+                <span className="mw-nav-label">{destination.label}</span>
+                {active === destination.id && <span className="mw-nav-marker" aria-hidden="true" />}
+              </a>
+            ) : (
+              <button
+                type="button"
+                className={`mw-nav-item ${active === destination.id ? 'is-active' : ''}`}
+                aria-current={active === destination.id ? 'page' : undefined}
+                aria-label={destination.label}
+                onClick={() => {
                   navigate(destination);
-                }
-              }}
-              className={`mw-nav-item ${active === destination.id ? 'is-active' : ''}`}
-              aria-current={active === destination.id ? 'page' : undefined}
-              aria-label={destination.label}
-              title={collapsed ? destination.label : undefined}
-            >
-              <span className="mw-nav-icon">
-                <WorkspaceIcon name={destination.icon} />
-              </span>
-              <span className="mw-nav-label">{destination.label}</span>
-              {active === destination.id && <span className="mw-nav-marker" aria-hidden="true" />}
-            </a>
-          ) : (
-            <button
-              type="button"
-              className={`mw-nav-item ${active === destination.id ? 'is-active' : ''}`}
-              aria-current={active === destination.id ? 'page' : undefined}
-              aria-label={destination.label}
-              onClick={() => {
-                navigate(destination);
-              }}
-              title={collapsed ? destination.label : undefined}
-            >
-              <span className="mw-nav-icon">
-                <WorkspaceIcon name={destination.icon} />
-              </span>
-              <span className="mw-nav-label">{destination.label}</span>
-              {active === destination.id && <span className="mw-nav-marker" aria-hidden="true" />}
-            </button>
-          )}
+                }}
+                title={collapsed ? destination.label : undefined}
+              >
+                <span className="mw-nav-icon">
+                  <WorkspaceIcon name={destination.icon} />
+                </span>
+                <span className="mw-nav-label">{destination.label}</span>
+                {active === destination.id && <span className="mw-nav-marker" aria-hidden="true" />}
+              </button>
+            )}
+          </Tooltip>
         </div>
       ))}
     </nav>
@@ -190,11 +198,15 @@ export function WorkspaceShell({
     </a>
   );
 
+  const selectedTheme = appearance === 'midnight' ? midnightTheme : monergyTheme;
   return (
     <ConfigProvider
-      theme={{ ...monergyTheme, token: { ...monergyTheme.token, motion: !reducedMotion } }}
+      theme={{ ...selectedTheme, token: { ...selectedTheme.token, motion: !reducedMotion } }}
     >
-      <div className={`mw-shell ${collapsed ? 'mw-collapsed' : ''} ${module ? 'mw-module' : ''}`}>
+      <div
+        data-monergy-theme={appearance}
+        className={`mw-shell ${collapsed ? 'mw-collapsed' : ''} ${module ? 'mw-module' : ''}`}
+      >
         <a href="#workspace-content" className="mw-skip">
           Skip to content
         </a>

@@ -1,13 +1,15 @@
 import { Button, Card, Descriptions, Modal, Space, Tag, Typography } from 'antd';
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { WorkspaceShell } from '@monergy/ui-foundation';
+import type { ComponentProps } from 'react';
+import { FoundationProvider, WorkspaceShell } from '@monergy/ui-foundation';
 
 import { accessDestinations, accessModule } from './workspace/accessNavigation';
 import { destinations } from './workspace/destinations';
 import WorkspaceHome from './workspace/WorkspaceHome';
 import './workspace/workspace-home.css';
-import { localUat } from './access/workspaceSession';
+import { localUat, useWorkspaceSession } from './access/workspaceSession';
 import { WorkspaceSessionProvider } from './access/WorkspaceSessionProvider';
+import { WorkspaceEntry } from './access/WorkspaceEntry';
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const SearchExperience = lazy(() => import('./search/SearchExperience'));
@@ -110,7 +112,7 @@ function RouteContent() {
   )
     return (
       <Suspense fallback={<main aria-busy="true">Loading access management…</main>}>
-        <AccessExperience path={window.location.pathname} />
+        <AccessExperience path={window.location.pathname} embedded />
       </Suspense>
     );
   if (window.location.pathname === '/reports') {
@@ -172,6 +174,35 @@ function RouteContent() {
 }
 
 export function App() {
+  return (
+    <WorkspaceSessionProvider>
+      <WorkspaceApplication />
+    </WorkspaceSessionProvider>
+  );
+}
+function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
+  const { session, signOut } = useWorkspaceSession();
+  return (
+    <WorkspaceShell
+      {...props}
+      context={session ? `Tenant ${session.tenantId}` : undefined}
+      actions={
+        session ? (
+          <Button
+            type="text"
+            onClick={() => {
+              void signOut();
+            }}
+          >
+            Sign out
+          </Button>
+        ) : undefined
+      }
+    />
+  );
+}
+function WorkspaceApplication() {
+  const { status } = useWorkspaceSession();
   const [path, setPath] = useState(window.location.pathname);
   useEffect(() => {
     const pop = () => {
@@ -224,27 +255,36 @@ export function App() {
       ? `${current?.label ?? 'Overview'} · Access Management · Monergy`
       : 'Monergy Workspace';
   }, [inAccess, current?.label]);
+  const gated = inAccess || path === '/operations' || localUat;
+  const midnight = inAccess || path === '/operations' || (localUat && status !== 'authorized');
+  useEffect(() => {
+    document.documentElement.dataset.monergyTheme = midnight ? 'midnight' : 'light';
+  }, [midnight]);
+  const shell = (
+    <SessionShell
+      appearance={midnight ? 'midnight' : 'light'}
+      destinations={navigation}
+      module={inAccess ? accessModule : undefined}
+      onNavigate={(id) => {
+        const href = navigation.find((item) => item.id === id)?.href;
+        if (!href) return;
+        if (!href.startsWith('/')) {
+          window.location.assign(href);
+          return;
+        }
+        window.history.pushState(null, '', href);
+        setPath(href);
+        window.scrollTo({ top: 0 });
+      }}
+      active={current?.id ?? 'home'}
+      area={current?.label ?? 'Overview'}
+    >
+      <RouteContent />
+    </SessionShell>
+  );
   return (
-    <WorkspaceSessionProvider>
-      <WorkspaceShell
-        destinations={navigation}
-        module={inAccess ? accessModule : undefined}
-        onNavigate={(id) => {
-          const href = navigation.find((item) => item.id === id)?.href;
-          if (!href) return;
-          if (!href.startsWith('/')) {
-            window.location.assign(href);
-            return;
-          }
-          window.history.pushState(null, '', href);
-          setPath(href);
-          window.scrollTo({ top: 0 });
-        }}
-        active={current?.id ?? 'home'}
-        area={current?.label ?? 'Overview'}
-      >
-        <RouteContent />
-      </WorkspaceShell>
-    </WorkspaceSessionProvider>
+    <FoundationProvider appearance={midnight ? 'midnight' : 'light'}>
+      {gated ? <WorkspaceEntry>{shell}</WorkspaceEntry> : shell}
+    </FoundationProvider>
   );
 }

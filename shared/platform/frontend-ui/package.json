@@ -6,6 +6,7 @@
   "sideEffects": [
     "./src/semantic-tokens.generated.css",
     "./src/workspace.css",
+    "./src/midnight.css",
     "./src/typography.css"
   ],
   "exports": {
