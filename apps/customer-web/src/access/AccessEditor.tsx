@@ -328,7 +328,16 @@ export function AccessEditor({
         : []),
     ];
   };
-  const before = original ? describe(original) : [];
+  const before = original
+    ? describe(original).map((item) =>
+        area === 'members' && item.label === 'Account status' && record?.status
+          ? {
+              ...item,
+              value: record.status === 'PendingIdentity' ? 'Pending identity' : record.status,
+            }
+          : item,
+      )
+    : [];
   const proposed = confirmation?.values ? describe(confirmation.values) : [];
   const names = (
     <>
@@ -712,6 +721,13 @@ export function AccessEditor({
                       <dd>{record?.actorId}</dd>
                     </dl>
                     <p className="access-form-hint">Identity details are read-only here.</p>
+                    {record?.status === 'PendingIdentity' && (
+                      <p className="access-form-hint">
+                        Identity activation is pending. Complete the existing request in{' '}
+                        <a href="/access/users/history">Onboarding history</a> before editing
+                        access.
+                      </p>
+                    )}
                   </section>
                   <section className="access-editor-section" aria-labelledby="user-status">
                     <h3 id="user-status">Account status</h3>

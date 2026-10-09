@@ -306,3 +306,26 @@ test('loaded-record filtering and enlarged text retain actions and honest counts
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
 });
+
+test('review preserves a pending identity status instead of labelling the current user disabled', async ({
+  page,
+}) => {
+  await fixtures(page, async (route) => {
+    if (!new URL(route.request().url()).pathname.endsWith('/members')) return false;
+    await route.fulfill({
+      json: {
+        policyVersion: 7,
+        nextCursor: null,
+        items: [{ ...member, status: 'PendingIdentity' }],
+      },
+    });
+    return true;
+  });
+  await page.getByRole('button', { name: `Open ${member.normalizedEmail}` }).click();
+  const drawer = page.getByRole('dialog');
+  await expect(drawer.getByText(/Identity activation is pending/)).toBeVisible();
+  await drawer.getByRole('button', { name: 'Review change' }).click();
+  await expect(
+    drawer.locator('.access-review-row').filter({ hasText: 'Account status' }),
+  ).toHaveText(/Account statusChangedCurrentPending identityProposedDisabled/);
+});
