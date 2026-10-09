@@ -1,7 +1,7 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Empty, Input, Space, Table, Tag, Tooltip, Select } from 'antd';
 import type { TableColumnsType } from 'antd';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AccessApiError, displayError, recordId } from './accessApi';
 import type { AccessApi, AccessArea, AccessPage, AccessRecord } from './accessApi';
@@ -177,6 +177,8 @@ function Administration({
   const [editor, setEditor] = useState<{ record?: AccessRecord } | null>(null);
   const [importId, setImportId] = useState<string | null | undefined>(undefined);
   const [single, setSingle] = useState(false);
+  const onboardingOpener = useRef<HTMLElement | null>(null);
+  const pendingFocus = useRef<HTMLElement | null>(null);
   const [revision, setRevision] = useState(0);
   const fail = useCallback(
     (failure: unknown) => {
@@ -219,6 +221,15 @@ function Administration({
     setPage(null);
     setRevision((value) => value + 1);
   };
+  useEffect(() => {
+    if (!page || !pendingFocus.current) return;
+    const target = pendingFocus.current;
+    pendingFocus.current = null;
+    // Closing onboarding reloads the directory and temporarily disables its actions.
+    // Restore the opener once enabled, unless the user has moved focus elsewhere.
+    if (target.isConnected && document.activeElement === document.body)
+      target.focus({ preventScroll: true });
+  }, [page]);
   const changed = (message: string) => {
     setNotice(message);
     refresh();
@@ -386,7 +397,8 @@ function Administration({
             <Button
               disabled={!page}
               icon={<WorkspaceIcon name="upload" size={16} />}
-              onClick={() => {
+              onClick={(event) => {
+                onboardingOpener.current = event.currentTarget;
                 setSingle(false);
                 setImportId(null);
               }}
@@ -399,8 +411,9 @@ function Administration({
             type="primary"
             disabled={!page}
             icon={<WorkspaceIcon name={area === 'members' ? 'users' : 'access'} size={16} />}
-            onClick={() => {
+            onClick={(event) => {
               if (area === 'members' || area === 'imports') {
+                onboardingOpener.current = event.currentTarget;
                 setSingle(area === 'members');
                 setImportId(null);
               } else setEditor({});
@@ -591,6 +604,7 @@ function Administration({
           single={single && !importId}
           importId={importId}
           onClose={() => {
+            pendingFocus.current = importId ? null : onboardingOpener.current;
             setImportId(undefined);
             refresh();
           }}

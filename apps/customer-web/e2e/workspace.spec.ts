@@ -333,10 +333,11 @@ test('access routes keep the session and exclude platform navigation across deep
   await expect(page.getByRole('heading', { name: 'Monergy frontend foundation' })).toHaveCount(0);
 });
 
-test('single-user review confirms inside the drawer while the directory action remains behind it', async ({
+test('single-user review, completion and drawer close return to the refreshed directory', async ({
   page,
 }) => {
   const writes: { path: string; body: unknown }[] = [];
+  let activated = false;
   await page.route('**/identity-api/**', async (route) => route.fulfill({ json: session }));
   await page.route('**/access-api/**', async (route) => {
     if (route.request().url().endsWith('/administration/context'))
@@ -363,9 +364,20 @@ test('single-user review confirms inside the drawer while the directory action r
       });
     else if (path.endsWith('/commit'))
       await route.fulfill({ json: { ...result, status: 'PendingIdentity' } });
-    else if (path.endsWith('/process'))
+    else if (path.endsWith('/process')) {
+      activated = true;
       await route.fulfill({ json: { ...result, status: 'Activated', policyVersion: 9 } });
-    else await route.fulfill({ json: { policyVersion: 7, items: [], nextCursor: null } });
+    } else
+      await route.fulfill({
+        json: {
+          policyVersion: activated ? 9 : 7,
+          items:
+            activated && path.endsWith('/members')
+              ? [{ ...member, actorId: 'A101', normalizedEmail: 'new@example.test' }]
+              : [],
+          nextCursor: null,
+        },
+      });
   });
   await page.goto('/access/users');
   await page.getByLabel('Local access key').fill('browser-fixture-only');
@@ -394,4 +406,15 @@ test('single-user review confirms inside the drawer while the directory action r
     expectedPolicyVersion: 8,
   });
   await expect(page.locator('.access-panel .ant-spin-spinning')).toHaveCount(0);
+  // Completion appears in both the refreshed directory and the result drawer.
+  // Wait for closing motion to finish and assert the intended directory record.
+  await expect(page.getByText('new@example.test', { exact: true })).toHaveCount(2);
+  await page.getByRole('dialog').getByLabel('Close', { exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(
+    page.getByRole('region', { name: 'Users', exact: true }).getByText('new@example.test', {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Create user', exact: true })).toBeFocused();
 });
