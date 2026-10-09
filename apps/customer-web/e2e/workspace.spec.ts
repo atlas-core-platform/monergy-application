@@ -46,6 +46,22 @@ test('workspace navigation, command palette and guide support keyboard and reduc
   await page.getByRole('dialog').getByRole('button', { name: 'Access management' }).click();
   await expect(page).toHaveURL(/\/access$/);
   await expect(page.getByRole('button', { name: 'Connect workspace' })).toBeVisible();
+  await expect(page.locator('.mw-shell')).toHaveCount(0);
+  await page.route('**/identity-api/**', (route) => route.fulfill({ json: session }));
+  await page.route('**/access-api/**', (route) =>
+    route.fulfill({
+      json: route.request().url().endsWith('/administration/context')
+        ? {
+            tenantId: session.tenantId,
+            actorId: session.actorId,
+            authority: 'TenantAdmin',
+            policyVersion: 7,
+          }
+        : { policyVersion: 7, items: [], nextCursor: null },
+    }),
+  );
+  await page.getByLabel('Local access key').fill('fixture-only');
+  await page.getByRole('button', { name: 'Connect workspace' }).click();
   const guide = page.getByRole('button', { name: 'Access management guide' });
   await guide.focus();
   await page.keyboard.press('Enter');
@@ -67,7 +83,7 @@ test('mobile navigation and access form remain within the viewport', async ({ pa
   await expect(page.getByRole('button', { name: 'Open navigation' })).toBeFocused();
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('dialog').getByRole('link', { name: 'Access management' }).click();
-  await expect(page.getByRole('heading', { name: 'Access starts here.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Connect to your workspace' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -106,6 +122,15 @@ test('CSV drag and drop validates the whole file and sign-out revokes the sessio
     await route.fulfill({ json: route.request().url().endsWith('/revoke') ? true : session });
   });
   await page.route('**/access-api/**', async (route) => {
+    if (route.request().url().endsWith('/administration/context'))
+      return route.fulfill({
+        json: {
+          tenantId: session.tenantId,
+          actorId: session.actorId,
+          authority: 'TenantAdmin',
+          policyVersion: 7,
+        },
+      });
     const url = route.request().url();
     if (url.endsWith('/preview')) {
       requests.push({ path: new URL(url).pathname, body: route.request().postDataJSON() });
@@ -162,6 +187,15 @@ test('bundled typography reaches drawers and review shows the exact role before 
   const writes: unknown[] = [];
   await page.route('**/identity-api/**', async (route) => route.fulfill({ json: session }));
   await page.route('**/access-api/**', async (route) => {
+    if (route.request().url().endsWith('/administration/context'))
+      return route.fulfill({
+        json: {
+          tenantId: session.tenantId,
+          actorId: session.actorId,
+          authority: 'TenantAdmin',
+          policyVersion: 7,
+        },
+      });
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/capabilities')) {
       await route.fulfill({ json: { capabilities: [] } });
@@ -212,7 +246,7 @@ test('bundled typography reaches drawers and review shows the exact role before 
       .getByRole('region', { name: 'Review changes' })
       .getByText('Read financial information', { exact: true }),
   ).toBeVisible();
-  await expect(review.locator('.access-review-after').first()).toHaveCSS('font-size', '14px');
+  await expect(review.locator('.access-review-after').first()).toHaveCSS('font-size', '13px');
   expect(writes).toEqual([]);
   await page.screenshot({ path: '.artifacts/ui/role-review.png', animations: 'disabled' });
   await review.getByRole('button', { name: 'Back', exact: true }).click();
@@ -240,6 +274,15 @@ test('access routes keep the session and exclude platform navigation across deep
     await route.fulfill({ json: session });
   });
   await page.route('**/access-api/**', async (route) => {
+    if (route.request().url().endsWith('/administration/context'))
+      return route.fulfill({
+        json: {
+          tenantId: session.tenantId,
+          actorId: session.actorId,
+          authority: 'TenantAdmin',
+          policyVersion: 7,
+        },
+      });
     await route.fulfill({ json: { policyVersion: 7, items: [], nextCursor: null } });
   });
   await page.goto('/access/roles');
@@ -254,13 +297,14 @@ test('access routes keep the session and exclude platform navigation across deep
   ]) {
     await expect(navigation.getByRole('link', { name, exact: true })).toHaveCount(0);
   }
+  await expect(navigation).toHaveCount(0);
+  await page.getByLabel('Local access key').fill('browser-fixture-only');
+  await page.getByRole('button', { name: 'Connect workspace' }).click();
+  await expect(page.getByRole('heading', { name: 'Roles', exact: true })).toBeVisible();
   await expect(navigation.getByRole('link', { name: 'Roles', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   );
-  await page.getByLabel('Local access key').fill('browser-fixture-only');
-  await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'Roles', exact: true })).toBeVisible();
   await navigation.getByRole('link', { name: 'Users', exact: true }).click();
   await page.getByRole('link', { name: 'Onboarding history', exact: true }).click();
   await expect(page).toHaveURL(/\/access\/users\/history$/);
@@ -295,6 +339,15 @@ test('single-user review confirms inside the drawer while the directory action r
   const writes: { path: string; body: unknown }[] = [];
   await page.route('**/identity-api/**', async (route) => route.fulfill({ json: session }));
   await page.route('**/access-api/**', async (route) => {
+    if (route.request().url().endsWith('/administration/context'))
+      return route.fulfill({
+        json: {
+          tenantId: session.tenantId,
+          actorId: session.actorId,
+          authority: 'TenantAdmin',
+          policyVersion: 7,
+        },
+      });
     const path = new URL(route.request().url()).pathname;
     const result = {
       id: 'one-user',

@@ -84,6 +84,16 @@ The AM runtime source is an immutable dependency under `dependencies/`, pinned t
 
 ## Automated acceptance and Production limits
 
+MWP-03 Midnight is a review candidate on `work/mwp-03-monergy-midnight`, not a
+released change. After its hosted checks pass, review it locally by fetching and
+switching to that branch in a clean checkout, then running the existing `Start`
+command. Start rebuilds the UI while retaining the selected profile's data and
+credentials; no Reset is needed. Verify that direct links and reload show only
+the connection screen before authentication, then review Users, roles, permissions,
+groups, resources, activity, sessions, sidebar collapse, drawers and sign-out.
+See [the candidate record](../governance/MWP-03-midnight-access-candidate.md) for
+scope, evidence and remaining acceptance checks.
+
 `Local Docker UAT acceptance` runs **after pushes to main** and on manual dispatch. It creates its own disposable `ci` profile, builds the actual containers, checks all 13 boundaries for allow/deny/isolation, calls the actual Search owner, tests revocation with delivery stopped, restart persistence, disablement, owner outage recovery and browser session/audit/service journeys. It uploads only allowlisted credential-free results and a signed-in workspace screenshot. The destructive Python acceptance script requires an explicit disposable instance identifier; never point it at operator UAT data. Existing AM owner integration checks continue covering durable CSV onboarding, lost acknowledgements and migration grants.
 
 A separate Windows job exercises the actual launcher under Windows PowerShell 5.1 and PowerShell 7. It verifies private ACLs and native Docker Compose file reads, deliberately denies access to existing credentials/configuration, and proves that repair preserves file contents, write times and owners. These checks do not start Linux containers on the Windows runner; the Docker process acceptance job remains Linux-based.

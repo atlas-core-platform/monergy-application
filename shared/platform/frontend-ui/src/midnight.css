@@ -1,0 +1,322 @@
+/* MWP-03: opt-in, reusable Midnight mode. Values originate in tokens.json. */
+html[data-monergy-theme='midnight'],
+[data-monergy-theme='midnight'] {
+  color-scheme: dark;
+  --monergy-text-body: var(--monergy-compact-body);
+  --monergy-text-label: var(--monergy-compact-body);
+  --monergy-text-small: var(--monergy-compact-small);
+  --monergy-text-section: var(--monergy-compact-section);
+  --monergy-text-title: var(--monergy-compact-title);
+  --monergy-leading: 1.54;
+  --monergy-color-neutral-0: var(--monergy-midnight-sidebar);
+  --monergy-color-neutral-50: var(--monergy-midnight-canvas);
+  --monergy-color-neutral-100: var(--monergy-midnight-surface);
+  --monergy-color-neutral-300: var(--monergy-midnight-control-border);
+  --monergy-color-neutral-600: var(--monergy-midnight-secondary);
+  --monergy-color-neutral-800: var(--monergy-midnight-text);
+  --monergy-color-neutral-950: var(--monergy-midnight-text);
+  --monergy-focus-color: var(--monergy-midnight-accent);
+  --monergy-focus-width: 2px;
+  --monergy-focus-offset: 3px;
+  --mw-ink: var(--monergy-midnight-text);
+  --mw-muted: var(--monergy-midnight-secondary);
+  --mw-canvas: var(--monergy-midnight-canvas);
+  --mw-line: var(--monergy-midnight-border);
+  --mw-primary: var(--monergy-midnight-accent);
+  --mw-navy: var(--monergy-midnight-sidebar);
+}
+/* Password reveal remains usable at compact density. */
+[data-monergy-theme='midnight'] .ant-input-password-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+}
+[data-monergy-theme='midnight'] .mw-shell,
+.mw-shell[data-monergy-theme='midnight'] {
+  background: var(--mw-canvas);
+}
+[data-monergy-theme='midnight'] .mw-sidebar {
+  width: var(--monergy-compact-sidebar);
+  padding: 20px 10px 12px;
+  color: var(--mw-muted);
+  background: var(--monergy-midnight-sidebar);
+  border-color: var(--mw-line);
+  box-shadow: none;
+  transition: width var(--monergy-compact-motion-ms) ease;
+}
+[data-monergy-theme='midnight'] .mw-body {
+  margin-left: var(--monergy-compact-sidebar);
+  transition: margin-left var(--monergy-compact-motion-ms) ease;
+}
+[data-monergy-theme='midnight'] .mw-brand {
+  font-size: 1.25rem;
+  letter-spacing: -0.04em;
+  gap: 9px;
+  color: var(--mw-ink);
+}
+[data-monergy-theme='midnight'] .mw-mark {
+  width: 28px;
+  height: 28px;
+  flex-basis: 28px;
+  padding: 0;
+  color: var(--mw-primary);
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+[data-monergy-theme='midnight'] .mw-brand-caption {
+  display: none;
+}
+[data-monergy-theme='midnight'] .mw-workspace-label {
+  margin: 24px 0 8px;
+  padding: 12px 10px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--mw-line);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+[data-monergy-theme='midnight'] .mw-workspace-avatar {
+  display: none;
+}
+[data-monergy-theme='midnight'] .mw-workspace-label strong {
+  color: var(--mw-ink);
+  font-size: var(--monergy-text-body);
+}
+[data-monergy-theme='midnight'] .mw-workspace-label small {
+  color: var(--mw-muted);
+  font-size: var(--monergy-text-small);
+}
+[data-monergy-theme='midnight'] .mw-nav-group {
+  color: var(--mw-muted);
+  font-size: var(--monergy-text-small);
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 20px 10px 8px;
+}
+[data-monergy-theme='midnight'] .mw-nav-group::after {
+  display: none;
+}
+[data-monergy-theme='midnight'] .mw-nav-item {
+  min-height: 36px;
+  padding: 7px 10px;
+  gap: 10px;
+  margin: 4px 0;
+  border-radius: 5px;
+  color: var(--mw-muted);
+  font-size: var(--monergy-text-body);
+  transition:
+    background var(--monergy-compact-hover-ms),
+    color var(--monergy-compact-hover-ms);
+}
+[data-monergy-theme='midnight'] .mw-nav-item:hover {
+  background: var(--monergy-midnight-elevated);
+  color: var(--mw-ink);
+  border-color: transparent;
+}
+[data-monergy-theme='midnight'] .mw-nav-item.is-active {
+  color: var(--mw-primary);
+  background: var(--monergy-midnight-selected);
+  border-color: transparent;
+  box-shadow: none;
+}
+[data-monergy-theme='midnight'] .mw-nav-item.is-active::before {
+  left: -10px;
+  width: 2px;
+  top: 8px;
+  bottom: 8px;
+  background: var(--mw-primary);
+  box-shadow: none;
+}
+[data-monergy-theme='midnight'] .mw-nav-icon,
+[data-monergy-theme='midnight'] .mw-nav-item .mw-nav-icon {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+  background: none;
+  color: inherit;
+  border-radius: 0;
+}
+[data-monergy-theme='midnight'] .mw-nav-icon svg {
+  width: 17px;
+  height: 17px;
+}
+[data-monergy-theme='midnight'] .mw-nav-marker {
+  display: none;
+}
+[data-monergy-theme='midnight'] .mw-sidebar-footer {
+  border-color: var(--mw-line);
+  padding-top: 12px;
+}
+[data-monergy-theme='midnight'] .mw-quick-jump,
+[data-monergy-theme='midnight'] .mw-collapse {
+  min-height: 36px;
+  padding: 8px;
+  color: var(--mw-muted);
+  font-size: var(--monergy-text-small);
+  border-radius: 6px;
+}
+[data-monergy-theme='midnight'] .mw-quick-jump kbd {
+  display: none;
+}
+[data-monergy-theme='midnight'] .mw-topbar {
+  min-height: 56px;
+  height: auto;
+  padding: 10px 24px;
+  background: var(--mw-canvas);
+  backdrop-filter: none;
+  border-color: var(--mw-line);
+}
+[data-monergy-theme='midnight'] .mw-top-actions {
+  gap: 8px;
+}
+[data-monergy-theme='midnight'] .mw-search-trigger {
+  font-size: var(--monergy-text-small);
+  min-height: 36px;
+  padding: 7px 10px;
+  border-color: var(--monergy-midnight-control-border);
+}
+[data-monergy-theme='midnight'] .mw-search-trigger kbd {
+  color: var(--mw-muted);
+  background: var(--monergy-midnight-surface);
+  border-color: var(--mw-line);
+  font-size: var(--monergy-text-small);
+  margin-left: 8px;
+}
+[data-monergy-theme='midnight'] .mw-environment {
+  color: var(--mw-muted);
+  background: var(--monergy-midnight-sidebar);
+  border-color: var(--mw-line);
+  font-size: var(--monergy-text-small);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+[data-monergy-theme='midnight'] .mw-content {
+  padding: 24px;
+}
+[data-monergy-theme='midnight'] .mw-content > main {
+  animation: none;
+}
+[data-monergy-theme='midnight'] .mw-icon-button:hover,
+[data-monergy-theme='midnight'] .mw-command-results button:hover {
+  background: var(--monergy-midnight-elevated);
+}
+[data-monergy-theme='midnight'] .mw-command-results button {
+  color: var(--mw-ink);
+}
+[data-monergy-theme='midnight'] .mw-guide h2 {
+  font-size: var(--monergy-text-section);
+}
+[data-monergy-theme='midnight'] .mw-guide p {
+  font-size: var(--monergy-text-body);
+}
+[data-monergy-theme='midnight'] .mw-guide-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--monergy-midnight-elevated);
+}
+[data-monergy-theme='midnight'] .mw-skip {
+  background: var(--monergy-midnight-surface);
+  color: var(--mw-ink);
+}
+[data-monergy-theme='midnight'] :focus-visible,
+[data-monergy-theme='midnight'] .mw-shell :focus-visible {
+  outline: 2px solid var(--monergy-midnight-accent);
+  outline-offset: 3px;
+}
+[data-monergy-theme='midnight'] .ant-drawer .ant-drawer-header {
+  padding: 20px 24px;
+  border-color: var(--monergy-midnight-border);
+}
+[data-monergy-theme='midnight'] .ant-drawer .ant-drawer-body {
+  padding: 24px;
+}
+[data-monergy-theme='midnight'] .ant-drawer .ant-drawer-footer {
+  background: var(--monergy-midnight-sidebar);
+  border-color: var(--monergy-midnight-border);
+}
+[data-monergy-theme='midnight'] .ant-drawer .ant-drawer-section {
+  background: var(--monergy-midnight-sidebar);
+}
+[data-monergy-theme='midnight'] .mw-navigation-drawer.ant-drawer .ant-drawer-section,
+[data-monergy-theme='midnight'] .mw-navigation-drawer.ant-drawer .ant-drawer-content {
+  background: var(--monergy-midnight-sidebar);
+}
+[data-monergy-theme='midnight'] .mw-shell a.ant-btn-primary:not([disabled]):not(.ant-btn-disabled) {
+  color: var(--monergy-midnight-canvas);
+}
+[data-monergy-theme='midnight'] .ant-switch-checked .ant-switch-handle::before {
+  background: var(--monergy-midnight-canvas);
+}
+[data-monergy-theme='midnight'] .ant-checkbox-checked .ant-checkbox-inner::after {
+  border-color: var(--monergy-midnight-canvas);
+}
+[data-monergy-theme='midnight'] .ant-tag {
+  font-size: var(--monergy-text-small);
+}
+[data-monergy-theme='midnight'] .ant-tag-success {
+  color: var(--monergy-midnight-success);
+  background: var(--monergy-midnight-selected);
+  border-color: var(--monergy-midnight-border);
+}
+[data-monergy-theme='midnight'] .ant-tag-error {
+  color: var(--monergy-midnight-danger);
+  background: var(--monergy-midnight-surface);
+  border-color: var(--monergy-midnight-border);
+}
+[data-monergy-theme='midnight'] .ant-tag-warning {
+  color: var(--monergy-midnight-warning);
+  background: var(--monergy-midnight-surface);
+  border-color: var(--monergy-midnight-border);
+}
+@media (min-width: 901px) {
+  [data-monergy-theme='midnight'] .mw-collapsed .mw-sidebar,
+  .mw-collapsed[data-monergy-theme='midnight'] .mw-sidebar {
+    width: var(--monergy-compact-rail);
+    padding-inline: 10px;
+  }
+  [data-monergy-theme='midnight'] .mw-collapsed .mw-body,
+  .mw-collapsed[data-monergy-theme='midnight'] .mw-body {
+    margin-left: var(--monergy-compact-rail);
+  }
+}
+@media (max-width: 900px) {
+  [data-monergy-theme='midnight'] .mw-body {
+    margin-left: 0;
+  }
+  [data-monergy-theme='midnight'] .mw-topbar {
+    padding-inline: 16px;
+  }
+  [data-monergy-theme='midnight'] .mw-content {
+    padding: 20px 16px;
+  }
+}
+@media (max-width: 48rem), (pointer: coarse) {
+  [data-monergy-theme='midnight'] .ant-btn,
+  [data-monergy-theme='midnight'] .ant-input-affix-wrapper,
+  [data-monergy-theme='midnight'] .ant-input:not(textarea),
+  [data-monergy-theme='midnight'] .ant-select-single,
+  [data-monergy-theme='midnight'] .mw-icon-button,
+  [data-monergy-theme='midnight'] .mw-nav-item {
+    min-height: var(--monergy-compact-touch-control);
+  }
+  [data-monergy-theme='midnight'] .ant-input-affix-wrapper > .ant-input {
+    min-height: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-monergy-theme='midnight'] *,
+  html[data-monergy-theme='midnight'] *::before,
+  html[data-monergy-theme='midnight'] *::after,
+  html[data-monergy-theme='midnight'] [class],
+  html[data-monergy-theme='midnight'] [class]::before,
+  html[data-monergy-theme='midnight'] [class]::after {
+    animation: none;
+    transition: none;
+    scroll-behavior: auto;
+  }
+}

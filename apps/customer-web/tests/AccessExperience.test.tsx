@@ -66,6 +66,15 @@ describe('tenant administration trust boundaries', () => {
       vi.stubGlobal(
         'fetch',
         vi.fn((url: string, options?: RequestInit) => {
+          if (url.endsWith('/administration/context'))
+            return Promise.resolve(
+              json({
+                tenantId: session.tenantId,
+                actorId: session.actorId,
+                authority: 'TenantAdmin',
+                policyVersion: 7,
+              }),
+            );
           if (url.includes('/identity-api/')) return Promise.resolve(json(session));
           if (url.endsWith('/capabilities')) return Promise.resolve(json({ capabilities: [] }));
           if (expired) return Promise.resolve(json({ error: 'SESSION_NOT_CURRENT' }, 401));
@@ -85,7 +94,9 @@ describe('tenant administration trust boundaries', () => {
       mount();
       const user = await connect();
       await user.click(await screen.findByRole('button', { name: 'Open person@example.test' }));
-      const editor = within(await screen.findByRole('dialog', { name: 'person@example.test' }));
+      // rc-component test IDs can collide with the status Select; real browser tests assert dialog names.
+      const editor = within(await screen.findByRole('dialog'));
+      expect(editor.getByText('person@example.test', { exact: true })).toBeVisible();
       await user.click(await editor.findByRole('switch', { name: 'Tenant administrator' }));
       await user.click(editor.getByRole('button', { name: 'Review change' }));
       // rc-component uses a fixed title ID in NODE_ENV=test; the browser test
@@ -128,6 +139,15 @@ describe('tenant administration trust boundaries', () => {
             ? JSON.parse(typeof options.body === 'string' ? options.body : '{}')
             : null;
           calls.push({ url, body });
+          if (url.endsWith('/administration/context'))
+            return Promise.resolve(
+              json({
+                tenantId: session.tenantId,
+                actorId: session.actorId,
+                authority: 'TenantAdmin',
+                policyVersion: 7,
+              }),
+            );
           if (url.includes('/identity-api/')) return Promise.resolve(json(session));
           if (url.endsWith('/preview'))
             return Promise.resolve(
@@ -167,7 +187,8 @@ describe('tenant administration trust boundaries', () => {
       mount();
       const user = await connect();
       await user.click(await screen.findByRole('button', { name: 'Import users' }));
-      const drawer = within(await screen.findByRole('dialog', { name: 'Import users' }));
+      const drawer = within(await screen.findByRole('dialog'));
+      expect(drawer.getByText('Import users', { exact: true })).toBeVisible();
       await user.click(drawer.getByText('Paste CSV instead'));
       fireEvent.change(await drawer.findByRole('textbox', { name: 'CSV contents' }), {
         target: { value: 'email,role_code,group_codes\ninvalid,,' },

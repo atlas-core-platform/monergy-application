@@ -1,5 +1,6 @@
 @import './semantic-tokens.generated.css';
 @import './typography.css';
+@import './midnight.css';
 
 :root {
   --mw-ink: #172336;
