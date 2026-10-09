@@ -16,6 +16,7 @@ public static class CustomerIdentityRegistration
         services.AddSingleton<ICustomerAuthenticationProvider>(provider =>
             provider.GetRequiredService<ReferenceCustomerAuthenticationProvider>());
         services.AddSingleton<InMemoryCustomerIdentityRepository>();
+        services.AddSingleton<ITenantCustomerResourceDirectory, ReferenceTenantCustomerResourceDirectory>();
         services.AddSingleton<ICustomerIdentityRepository>(provider =>
             provider.GetRequiredService<InMemoryCustomerIdentityRepository>());
         services.AddSingleton<InMemoryCustomerIdentityTelemetry>();
