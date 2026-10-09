@@ -20,6 +20,13 @@ export const destinations: WorkspaceDestination[] = [
     group: 'Intelligence',
   },
   {
+    id: 'operations',
+    label: 'Local UAT operations',
+    icon: 'workflow',
+    href: '/operations',
+    group: 'Operations',
+  },
+  {
     id: 'foundation',
     label: 'Engineering foundation',
     icon: 'layers',

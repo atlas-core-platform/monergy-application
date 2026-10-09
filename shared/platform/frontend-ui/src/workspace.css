@@ -24,6 +24,9 @@
   color: inherit;
   text-decoration: none;
 }
+.mw-shell a.ant-btn-primary:not([disabled]):not(.ant-btn-disabled) {
+  color: #fff;
+}
 .mw-shell button {
   font-family: inherit;
 }

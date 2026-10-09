@@ -2,6 +2,7 @@ import { Button, Card, Descriptions, Modal, Space, Tag, Typography } from 'antd'
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { WorkspaceShell } from '@monergy/ui-foundation';
 
+import { accessDestinations, accessModule } from './workspace/accessNavigation';
 import { destinations } from './workspace/destinations';
 import WorkspaceHome from './workspace/WorkspaceHome';
 import './workspace/workspace-home.css';
@@ -102,10 +103,14 @@ function ToolchainFoundation() {
 
 function RouteContent() {
   if (window.location.pathname === '/') return <WorkspaceHome />;
-  if (window.location.pathname === '/access')
+  if (
+    window.location.pathname === '/access' ||
+    window.location.pathname.startsWith('/access/') ||
+    window.location.pathname === '/operations'
+  )
     return (
       <Suspense fallback={<main aria-busy="true">Loading access management…</main>}>
-        <AccessExperience />
+        <AccessExperience path={window.location.pathname} />
       </Suspense>
     );
   if (window.location.pathname === '/reports') {
@@ -187,7 +192,11 @@ export function App() {
       const url = new URL(link.href);
       if (
         url.origin !== window.location.origin ||
-        !['/', '/access', '/reports', '/search', '/vs02', '/foundation'].includes(url.pathname)
+        !(
+          ['/', '/access', '/reports', '/search', '/vs02', '/foundation', '/operations'].includes(
+            url.pathname,
+          ) || url.pathname.startsWith('/access/')
+        )
       )
         return;
       event.preventDefault();
@@ -202,11 +211,35 @@ export function App() {
       document.removeEventListener('click', navigate);
     };
   }, []);
-  const current = destinations.find((destination) => destination.href === path) ?? destinations[0];
+  const inAccess = path === '/access' || path.startsWith('/access/');
+  const navigation = inAccess ? accessDestinations : destinations;
+  const current =
+    navigation.find(
+      (destination) =>
+        destination.href === path ||
+        (path === '/access/users/history' && destination.id === 'users'),
+    ) ?? navigation[0];
+  useEffect(() => {
+    document.title = inAccess
+      ? `${current?.label ?? 'Overview'} · Access Management · Monergy`
+      : 'Monergy Workspace';
+  }, [inAccess, current?.label]);
   return (
     <WorkspaceSessionProvider>
       <WorkspaceShell
-        destinations={destinations}
+        destinations={navigation}
+        module={inAccess ? accessModule : undefined}
+        onNavigate={(id) => {
+          const href = navigation.find((item) => item.id === id)?.href;
+          if (!href) return;
+          if (!href.startsWith('/')) {
+            window.location.assign(href);
+            return;
+          }
+          window.history.pushState(null, '', href);
+          setPath(href);
+          window.scrollTo({ top: 0 });
+        }}
         active={current?.id ?? 'home'}
         area={current?.label ?? 'Overview'}
       >

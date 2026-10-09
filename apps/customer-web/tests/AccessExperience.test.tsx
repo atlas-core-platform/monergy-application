@@ -53,7 +53,7 @@ describe('tenant administration trust boundaries', () => {
     mount();
     await connect();
     expect(await screen.findByText('Tenant administrator access is required.')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Import people' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Import users' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Local access key')).toHaveValue('');
   });
 
@@ -67,6 +67,7 @@ describe('tenant administration trust boundaries', () => {
         'fetch',
         vi.fn((url: string, options?: RequestInit) => {
           if (url.includes('/identity-api/')) return Promise.resolve(json(session));
+          if (url.endsWith('/capabilities')) return Promise.resolve(json({ capabilities: [] }));
           if (expired) return Promise.resolve(json({ error: 'SESSION_NOT_CURRENT' }, 401));
           if (options?.method === 'PUT') {
             writes.push(JSON.parse(typeof options.body === 'string' ? options.body : '{}'));
@@ -75,7 +76,7 @@ describe('tenant administration trust boundaries', () => {
           return Promise.resolve(
             json({
               policyVersion: 7,
-              items: url.includes('/roles') ? [] : [member],
+              items: url.includes('/members') ? [member] : [],
               nextCursor: null,
             }),
           );
@@ -93,7 +94,9 @@ describe('tenant administration trust boundaries', () => {
       const dialog = title.closest<HTMLElement>('[role="dialog"]');
       if (!dialog) throw new Error('Review title must belong to a dialog.');
       const review = within(dialog);
-      const authority = review.getByText('Tenant administrator').closest('.access-review-row');
+      const authority = within(review.getByRole('region', { name: 'Review changes' }))
+        .getByText('Tenant administrator')
+        .closest('.access-review-row');
       expect(authority).toHaveTextContent('BeforeNoAfterYes');
       expect(writes).toEqual([]);
       await user.click(review.getByRole('button', { name: 'Save changes' }));
@@ -163,10 +166,8 @@ describe('tenant administration trust boundaries', () => {
       );
       mount();
       const user = await connect();
-      await user.click(await screen.findByRole('button', { name: 'Import people' }));
-      const drawer = within(
-        await screen.findByRole('dialog', { name: 'Bring your people onboard' }),
-      );
+      await user.click(await screen.findByRole('button', { name: 'Import users' }));
+      const drawer = within(await screen.findByRole('dialog', { name: 'Import users' }));
       await user.click(drawer.getByText('Paste CSV instead'));
       fireEvent.change(await drawer.findByRole('textbox', { name: 'CSV contents' }), {
         target: { value: 'email,role_code,group_codes\ninvalid,,' },
@@ -182,7 +183,7 @@ describe('tenant administration trust boundaries', () => {
       await user.click(drawer.getByRole('button', { name: 'Validate entire file' }));
       await user.click(await drawer.findByRole('button', { name: 'Confirm onboarding' }));
       await user.click(await screen.findByRole('button', { name: 'Onboard people' }));
-      expect(await screen.findByText('Your people are ready.')).toBeVisible();
+      expect(await screen.findByText('User access activated.')).toBeVisible();
       const staged = calls.find((call) => call.url.endsWith('/commit'));
       const processed = calls.find((call) => call.url.endsWith('/process'));
       expect(processed?.url.replace('/process', '')).toBe(staged?.url.replace('/commit', ''));

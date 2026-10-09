@@ -1,18 +1,5 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
-import {
-  Alert,
-  Button,
-  Card,
-  Collapse,
-  Empty,
-  Form,
-  Input,
-  Segmented,
-  Space,
-  Table,
-  Tag,
-  Tooltip,
-} from 'antd';
+import { Alert, Button, Card, Empty, Form, Input, Space, Table, Tag, Tooltip } from 'antd';
 import type { TableColumnsType } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -20,12 +7,17 @@ import { AccessApi, AccessApiError, displayError, establishSession, recordId } f
 import type { AccessArea, AccessPage, AccessRecord, TenantSession } from './accessApi';
 import { AccessEditor } from './AccessEditor';
 import { ImportDrawer } from './ImportDrawer';
-import { AccessOperations } from './AccessOperations';
+import { AccessOperations, AccessOperationPage } from './AccessOperations';
 import { useWorkspaceSession } from './workspaceSession';
+import { AccessOverview } from './AccessOverview';
 import './access.css';
 
 const areas: { value: AccessArea; label: string; description: string }[] = [
-  { value: 'members', label: 'People', description: 'Give every teammate the access they need.' },
+  {
+    value: 'members',
+    label: 'Users',
+    description: 'Create user accounts and manage their role, status and administrator authority.',
+  },
   {
     value: 'roles',
     label: 'Roles',
@@ -43,17 +35,17 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   },
   {
     value: 'imports',
-    label: 'Imports',
-    description: 'Bring people in together, with every row accounted for.',
+    label: 'Onboarding history',
+    description: 'Review single-user and bulk onboarding requests, including incomplete requests.',
   },
   {
     value: 'resource-grants',
-    label: 'Resource access',
+    label: 'Resource Access',
     description: 'Limit resource-scoped capabilities to specific resources.',
   },
 ];
 
-export default function AccessExperience() {
+export default function AccessExperience({ path = '/access/users' }: { path?: string }) {
   const [session, setSession] = useWorkspaceSession();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -73,60 +65,58 @@ export default function AccessExperience() {
       setBusy(false);
     }
   };
+  const end = useCallback(
+    (message: string) => {
+      setSession(null);
+      setError(message);
+    },
+    [setSession],
+  );
   if (session)
     return (
-      <Administration
+      <AuthenticatedAccess
         key={session.authenticationContextId}
+        path={path}
         session={session}
-        onEnd={(message) => {
-          setSession(null);
-          setError(message);
-        }}
+        onEnd={end}
       />
     );
   return (
     <main className="access-page">
-      <div className="workspace-page-heading">
+      <header className="access-page-header">
         <div>
-          <p className="workspace-eyebrow">WORKSPACE ADMINISTRATION</p>
-          <h1>Good work starts with the right access.</h1>
-          <p className="workspace-subtitle">
-            People, roles and permissions, thoughtfully connected.
-          </p>
+          <p className="workspace-eyebrow">MONERGY · ACCESS MANAGEMENT</p>
+          <h1>Access starts here.</h1>
+          <p>Manage who belongs to your tenant and what they can do.</p>
         </div>
-      </div>
+      </header>
       <div className="access-connect-grid">
         <section className="access-connect-story">
-          <div className="access-large-icon">
-            <WorkspaceIcon name="access" size={40} />
-          </div>
+          <WorkspaceIcon name="access" size={32} />
           <h2>
-            Bring your people
+            One place for people
             <br />
-            into focus.
+            and permissions.
           </h2>
-          <p>A clear view of who belongs, what they can do, and how your workspace is organized.</p>
-          <div className="access-benefit">
-            <WorkspaceIcon name="users" />
-            <div>
-              <strong>Onboard with confidence</strong>
-              <span>Preview every row before bringing your team in.</span>
-            </div>
-          </div>
-          <div className="access-benefit">
-            <WorkspaceIcon name="shield" />
-            <div>
-              <strong>Make access intentional</strong>
-              <span>Keep administrative authority and business access distinct.</span>
-            </div>
-          </div>
-          <div className="access-benefit">
-            <WorkspaceIcon name="layers" />
-            <div>
-              <strong>Stay in your flow</strong>
-              <span>Edit in context without losing your place.</span>
-            </div>
-          </div>
+          <p>
+            Create users. Define roles. Review changes.
+            <br />
+            Every action stays within your tenant.
+          </p>
+          <ol className="access-start-steps">
+            <li>
+              <strong>Connect securely</strong>
+              <span>Use your administrator’s local UAT access key.</span>
+            </li>
+            <li>
+              <strong>Set up your team</strong>
+              <span>Add one user or onboard a team together.</span>
+            </li>
+            <li>
+              <strong>Assign intentional access</strong>
+              <span>Choose a business role and review before saving.</span>
+            </li>
+          </ol>
         </section>
         <Card className="access-connect-card">
           <span className="workspace-eyebrow">YOUR LOCAL WORKSPACE</span>
@@ -178,15 +168,99 @@ export default function AccessExperience() {
   );
 }
 
-function Administration({
+const routes: Record<string, AccessArea> = {
+  '/access/users': 'members',
+  '/access/users/history': 'imports',
+  '/access/roles': 'roles',
+  '/access/permissions': 'permissions',
+  '/access/groups': 'groups',
+  '/access/resources': 'resource-grants',
+};
+function AuthenticatedAccess({
+  path,
   session,
   onEnd,
 }: {
+  path: string;
   session: TenantSession;
   onEnd: (message: string) => void;
 }) {
   const api = useMemo(() => new AccessApi(session), [session]);
-  const [area, setArea] = useState<AccessArea>('members');
+  const [signingOut, setSigningOut] = useState(false);
+  const fail = useCallback(
+    (failure: unknown) => {
+      if (failure instanceof AccessApiError && (failure.status === 401 || failure.status === 403))
+        onEnd(displayError(failure));
+    },
+    [onEnd],
+  );
+  const area = routes[path];
+  return (
+    <main className="access-page">
+      <div className="access-context-bar">
+        <span>
+          <WorkspaceIcon name="shield" size={15} /> Tenant <strong>{session.tenantId}</strong>
+          <span className="access-context-divider">/</span>Administrator
+        </span>
+        <Button
+          size="small"
+          type="text"
+          loading={signingOut}
+          onClick={() => {
+            setSigningOut(true);
+            void api
+              .endSession()
+              .then(() => {
+                onEnd('');
+              })
+              .catch((failure: unknown) => {
+                onEnd(displayError(failure));
+              });
+          }}
+        >
+          Sign out
+        </Button>
+      </div>
+      {path === '/access' ? (
+        <AccessOverview api={api} onExpired={fail} />
+      ) : area ? (
+        <Administration key={area} area={area} api={api} onExpired={fail} />
+      ) : path === '/access/activity' || path === '/access/sessions' ? (
+        <AccessOperationPage
+          key={path}
+          view={path.endsWith('activity') ? 'audit' : 'sessions'}
+          api={api}
+          onExpired={fail}
+        />
+      ) : path === '/operations' ? (
+        <>
+          <header className="access-page-header">
+            <div>
+              <p className="workspace-eyebrow">LOCAL UAT · OPERATOR TOOLS</p>
+              <h1>Environment operations</h1>
+              <p>Inspect local service connections and the remaining release gates.</p>
+            </div>
+          </header>
+          <AccessOperations api={api} onExpired={fail} views={['services', 'readiness']} />
+        </>
+      ) : (
+        <Empty description="This access management page does not exist.">
+          <Button href="/access">Return to overview</Button>
+        </Empty>
+      )}
+    </main>
+  );
+}
+function Administration({
+  area,
+  api,
+  onExpired,
+}: {
+  area: AccessArea;
+  api: AccessApi;
+  onExpired: (failure: unknown) => void;
+}) {
+  const [roleNames, setRoleNames] = useState<Record<string, string>>({});
   const [page, setPage] = useState<AccessPage | null>(null);
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState(false);
@@ -194,16 +268,17 @@ function Administration({
   const [notice, setNotice] = useState('');
   const [editor, setEditor] = useState<{ record?: AccessRecord } | null>(null);
   const [importId, setImportId] = useState<string | null | undefined>(undefined);
+  const [single, setSingle] = useState(false);
   const [revision, setRevision] = useState(0);
   const fail = useCallback(
     (failure: unknown) => {
       if (failure instanceof AccessApiError && (failure.status === 401 || failure.status === 403)) {
-        onEnd(displayError(failure));
+        onExpired(failure);
         return;
       }
       setError(displayError(failure));
     },
-    [onEnd],
+    [onExpired],
   );
   // A new tenant/session mounts a new Administration component. Cancelled loads
   // cannot repopulate the next tenant's view or replace a newer selected page.
@@ -211,8 +286,16 @@ function Administration({
     const controller = new AbortController();
     void api
       .list(area, undefined, controller.signal)
-      .then((result) => {
+      .then(async (result) => {
+        const roles =
+          area === 'members' ? await api.all('roles', controller.signal, result.policyVersion) : [];
         if (!controller.signal.aborted) {
+          setRoleNames(
+            roles.reduce<Record<string, string>>((names, role) => {
+              if (role.id) names[role.id] = role.label ?? role.code ?? role.id;
+              return names;
+            }, {}),
+          );
           setPage(result);
           setError('');
         }
@@ -246,15 +329,6 @@ function Administration({
       setBusy(false);
     }
   };
-  const disconnect = async () => {
-    setBusy(true);
-    try {
-      await api.endSession();
-      onEnd('');
-    } catch (failure) {
-      onEnd(displayError(failure));
-    }
-  };
   const selected = areas.find((item) => item.value === area) ?? areas[0];
   const filtered =
     page?.items.filter((record) =>
@@ -271,7 +345,7 @@ function Administration({
     {
       title:
         area === 'members'
-          ? 'Person'
+          ? 'User'
           : area === 'imports'
             ? 'Import'
             : area === 'resource-grants'
@@ -299,7 +373,12 @@ function Administration({
               {record.normalizedEmail ?? record.label ?? record.resourceId ?? record.id}
             </strong>
             <small>
-              {record.code ?? (area === 'members' ? record.actorId : (record.capabilityId ?? ''))}
+              {record.code ??
+                (area === 'members'
+                  ? record.businessRoleId
+                    ? (roleNames[record.businessRoleId] ?? 'Business role assigned')
+                    : 'No business role'
+                  : (record.capabilityId ?? ''))}
             </small>
           </span>
         </button>
@@ -320,9 +399,6 @@ function Administration({
             render: (_: unknown, record: AccessRecord) => (
               <span className="access-secondary">
                 {record.tenantAdmin ? 'Tenant administrator' : 'Member'}
-                {!record.businessRoleId && (
-                  <small className="access-no-role">No business role</small>
-                )}
               </span>
             ),
           },
@@ -382,62 +458,34 @@ function Administration({
     },
   ];
   return (
-    <main className="access-page">
-      <section className="access-hero" aria-label="Access workspace">
-        <div className="workspace-page-heading">
-          <div>
-            <p className="workspace-eyebrow">WORKSPACE ADMINISTRATION</p>
-            <h1>People & access</h1>
-            <p className="workspace-subtitle">
-              A clear view of your team. Intentional access at every level.
-            </p>
-          </div>
-          <div className="access-session-context">
-            <span className="access-tenant-pill">
-              <WorkspaceIcon name="shield" size={14} />
-              {session.tenantId}
-            </span>
-            <Button
-              size="small"
-              onClick={() => {
-                void disconnect();
-              }}
-              disabled={busy}
-            >
-              Sign out
-            </Button>
-          </div>
+    <>
+      <header className="access-page-header">
+        <div>
+          <p className="workspace-eyebrow">ACCESS MANAGEMENT</p>
+          <h1>{selected?.label}</h1>
+          <p>{selected?.description}</p>
         </div>
-        <div className="access-overview-strip">
-          <div>
-            <span className="access-strip-icon">
-              <WorkspaceIcon name="users" size={22} />
-            </span>
-            <div>
-              <strong>Your people, connected</strong>
-              <span>One tenant. Clear responsibilities.</span>
-            </div>
-          </div>
-          <div>
-            <span className="access-strip-icon">
-              <WorkspaceIcon name="shield" size={22} />
-            </span>
-            <div>
-              <strong>Server-verified access</strong>
-              <span>Every change checks current authority.</span>
-            </div>
-          </div>
-          <div>
-            <span className="access-strip-icon">
-              <WorkspaceIcon name="layers" size={22} />
-            </span>
-            <div>
-              <strong>All-or-none onboarding</strong>
-              <span>Every identity ready before access begins.</span>
-            </div>
-          </div>
-        </div>
-      </section>
+        <Space wrap>
+          {area === 'imports' ? <Button href="/access/users">Back to users</Button> : null}
+          <Button
+            type="primary"
+            disabled={!page}
+            icon={<WorkspaceIcon name={area === 'members' ? 'users' : 'access'} size={16} />}
+            onClick={() => {
+              if (area === 'members' || area === 'imports') {
+                setSingle(area === 'members');
+                setImportId(null);
+              } else setEditor({});
+            }}
+          >
+            {area === 'members'
+              ? 'Create user'
+              : area === 'imports'
+                ? 'Import users'
+                : `Create ${area === 'resource-grants' ? 'resource access' : area.slice(0, -1)}`}
+          </Button>
+        </Space>
+      </header>
       {error && (
         <Alert
           type="error"
@@ -464,51 +512,29 @@ function Administration({
           className="access-notice"
         />
       )}
-      <AccessOperations api={api} onExpired={fail} />
-      <section className="access-panel">
-        <div className="access-tabs">
-          <Segmented
-            disabled={busy}
-            options={areas.map((item) => ({ value: item.value, label: item.label }))}
-            value={area}
-            onChange={(value) => {
-              setArea(value);
-              setPage(null);
-              setQuery('');
-              setNotice('');
-            }}
-          />
-        </div>
-        <div className="access-list-heading">
-          <div>
-            <h2>{selected?.label}</h2>
-            <p>{selected?.description}</p>
-          </div>
-          <Space>
+      <section className="access-panel" aria-label={selected?.label}>
+        <div className="access-list-toolbar">
+          <span>{area === 'members' ? 'User directory' : selected?.label}</span>
+          <Space wrap>
+            {area === 'members' && (
+              <>
+                <Button type="text" href="/access/users/history">
+                  Onboarding history
+                </Button>
+                <Button
+                  icon={<WorkspaceIcon name="upload" size={16} />}
+                  onClick={() => {
+                    setSingle(false);
+                    setImportId(null);
+                  }}
+                >
+                  Import users
+                </Button>
+              </>
+            )}
             <Button onClick={refresh} disabled={busy}>
               Refresh
             </Button>
-            {area === 'members' || area === 'imports' ? (
-              <Button
-                type="primary"
-                icon={<WorkspaceIcon name="upload" size={16} />}
-                onClick={() => {
-                  setImportId(null);
-                }}
-              >
-                Import people
-              </Button>
-            ) : (
-              <Button
-                type="primary"
-                onClick={() => {
-                  setEditor({});
-                }}
-                disabled={!page}
-              >
-                Create {area === 'resource-grants' ? 'resource access' : area.slice(0, -1)}
-              </Button>
-            )}
           </Space>
         </div>
         <div className="access-search-row">
@@ -529,15 +555,17 @@ function Administration({
           dataSource={filtered}
           rowKey={recordId}
           pagination={false}
-          loading={!page}
-          scroll={{ x: 620 }}
+          loading={!page && !error}
+          scroll={filtered.length ? { x: 620 } : undefined}
           locale={{
             emptyText: (
               <Empty
                 description={
-                  query
-                    ? 'No loaded records match your search.'
-                    : `No ${selected?.label.toLowerCase() ?? 'records'} yet.`
+                  error
+                    ? 'Records could not be loaded. Refresh to try again.'
+                    : query
+                      ? 'No loaded records match. Clear the filter or load more records.'
+                      : `No ${selected?.label.toLowerCase() ?? 'records'} yet. Use the action above to get started.`
                 }
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
               />
@@ -564,31 +592,6 @@ function Administration({
           role and applicable resource grants.
         </p>
       </div>
-      <Collapse
-        className="access-explainer"
-        ghost
-        items={[
-          {
-            key: 'guide',
-            label: 'How roles, permissions and groups work together',
-            children: (
-              <div className="access-explainer-grid">
-                <p>
-                  <strong>Roles</strong> bring permissions together. A person has at most one
-                  business role.
-                </p>
-                <p>
-                  <strong>Permissions</strong> connect service capabilities to tenant-wide or
-                  resource-specific access.
-                </p>
-                <p>
-                  <strong>Groups</strong> organize people. Group membership does not grant access.
-                </p>
-              </div>
-            ),
-          },
-        ]}
-      />
       {editor && page && (
         <AccessEditor
           key={`${area}:${editor.record ? recordId(editor.record) : 'new'}`}
@@ -609,6 +612,7 @@ function Administration({
       {importId !== undefined && (
         <ImportDrawer
           api={api}
+          single={single && !importId}
           importId={importId}
           onClose={() => {
             setImportId(undefined);
@@ -618,6 +622,6 @@ function Administration({
           onExpired={fail}
         />
       )}
-    </main>
+    </>
   );
 }
