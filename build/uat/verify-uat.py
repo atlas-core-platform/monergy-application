@@ -64,6 +64,16 @@ def contract(session, customer='reference-customer', forged_actor=None):
         'payload':{'customerId':customer,'query':'income','matchMode':'Lexical','limit':20}}
 
 ready()
+# Direct links and browser reloads must receive the shell without broadening API routing.
+for path in ('/access', '/access/users', '/access/users/history', '/access/roles',
+             '/access/permissions', '/access/groups', '/access/resources',
+             '/access/activity', '/access/sessions', '/operations'):
+    with urllib.request.urlopen(base + path, timeout=15) as response:
+        assert response.status == 200 and response.headers.get('Content-Type', '').startswith('text/html'), path
+        assert b'id="root"' in response.read(), path
+        checks += 1
+for path in ('/access/not-a-page', '/operations/internal'):
+    call(path, status=404)
 owner = login()
 other = login('T002')
 assert admin('context')['actorId'] == 'A900'
