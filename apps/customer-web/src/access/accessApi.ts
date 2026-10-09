@@ -18,6 +18,15 @@ export interface Grant {
   capabilityId: string;
   scope: 'Tenant' | 'Resource';
 }
+export interface ResourceDirectoryItem {
+  resourceId: string;
+  displayName: string;
+  secondaryLabel?: string | null;
+}
+export interface ResourceDirectory {
+  resourceType: string;
+  items: ResourceDirectoryItem[];
+}
 export interface AccessRecord {
   id?: string;
   actorId?: string;
@@ -205,6 +214,15 @@ export class AccessApi {
         'X-Monergy-Session': this.session.authenticationContextId,
       },
     });
+  }
+  resourceDirectory(resourceType: string, signal?: AbortSignal): Promise<ResourceDirectory> {
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(resourceType))
+      return Promise.reject(new AccessApiError(400, 'INVALID_RESOURCE_TYPE'));
+    return this.owner<ResourceDirectory>(
+      'uat',
+      'v1/resource-directory/' + encodeURIComponent(resourceType),
+      signal,
+    );
   }
   list(area: AccessArea, after?: string, signal?: AbortSignal): Promise<AccessPage> {
     return this.request<AccessPage>(
