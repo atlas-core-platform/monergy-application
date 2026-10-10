@@ -69,6 +69,7 @@ export function AccessEditor({
   const selectedCapability = Form.useWatch('capabilityId', form);
   const [resourceGrants, setResourceGrants] = useState<AccessRecord[]>([]);
   const [resourceOptions, setResourceOptions] = useState<ResourceDirectoryItem[]>([]);
+  const [resolvedResourceNames, setResolvedResourceNames] = useState<Record<string, string>>({});
   const [resourceLookupLoading, setResourceLookupLoading] = useState(false);
   const [resourceLookupError, setResourceLookupError] = useState('');
   const [permissions, setPermissions] = useState<AccessRecord[]>([]);
@@ -214,7 +215,13 @@ export function AccessEditor({
     void api
       .resourceDirectory(resourceType, controller.signal)
       .then((directory) => {
-        if (!controller.signal.aborted) setResourceOptions(directory.items);
+        if (!controller.signal.aborted) {
+          setResourceOptions(directory.items);
+          setResolvedResourceNames((current) => ({
+            ...current,
+            ...Object.fromEntries(directory.items.map((item) => [item.resourceId, item.displayName])),
+          }));
+        }
       })
       .catch((failure) => {
         if (!controller.signal.aborted) {
@@ -232,9 +239,33 @@ export function AccessEditor({
     return () => controller.abort();
   }, [api, area, capabilities, record?.resourceType, selectedCapability]);
 
+  useEffect(() => {
+    if (area !== 'members' || resourceGrants.length === 0) return;
+    const controller = new AbortController();
+    const resourceTypes = [
+      ...new Set(resourceGrants.map((grant) => grant.resourceType).filter(Boolean)),
+    ] as string[];
+    void Promise.all(
+      resourceTypes.map(async (resourceType) => {
+        try {
+          return (await api.resourceDirectory(resourceType, controller.signal)).items;
+        } catch {
+          return [];
+        }
+      }),
+    ).then((groups) => {
+      if (!controller.signal.aborted)
+        setResolvedResourceNames(
+          Object.fromEntries(groups.flat().map((item) => [item.resourceId, item.displayName])),
+        );
+    });
+    return () => controller.abort();
+  }, [api, area, resourceGrants]);
+
   const resourceName = (resourceId?: string) =>
+    (resourceId ? resolvedResourceNames[resourceId] : undefined) ??
     resourceOptions.find((item) => item.resourceId === resourceId)?.displayName ??
-    (resourceId ? 'Selected resource' : 'None');
+    (resourceId ? 'Restricted resource' : 'None');
 
   const save = async () => {
     if (!confirmation || recovery || busy) return;
