@@ -136,6 +136,8 @@ admin('customer-relationships', 'POST', {'expectedPolicyVersion': revision(), 'a
 
 # Tenant Admin cannot supply Consent on behalf of the customer.
 consent_path = '/consent-api/local/v1/consents/customers/reference-customer/grants'
+consent_list_path = '/consent-api/local/v1/consents/customers/reference-customer'
+assert call(consent_list_path, session=customer)['items'] == []
 request = grant(customer, 'ci-consent-1')
 call(consent_path, 'POST', request, owner, status=403)
 # A missing durable audit/outbox write must roll back the entire owner mutation.
@@ -148,6 +150,13 @@ finally:
 assert consent_version(customer) == before_consent
 assert sql('uat_consent_t001', 'SELECT (SELECT count(*) FROM consent.grants)+(SELECT count(*) FROM consent.receipts)+(SELECT count(*) FROM consent.audit)+(SELECT count(*) FROM consent.outbox);') == '0'
 receipt = call(consent_path, 'POST', request, customer)
+listed = call(consent_list_path, session=customer)
+assert listed['version'] == receipt['version'] and len(listed['items']) == 1
+listed_grant = listed['items'][0]
+assert listed_grant['id'] == receipt['id'] and listed_grant['actorId'] == request['actorId']
+assert listed_grant['customerId'] == request['customerId'] and listed_grant['purpose'] == request['purpose']
+assert listed_grant['capabilityIds'] == sorted(request['capabilityIds']) and listed_grant['revokedAt'] is None
+assert datetime.datetime.fromisoformat(listed_grant['expiresAt']) == datetime.datetime.fromisoformat(request['expiresAt'])
 assert call(consent_path, 'POST', request, customer) == receipt
 call(consent_path, 'POST', {**request, 'capabilityIds': ['search.query.execute']}, customer, status=409)
 assert evaluate(advisor)['accessBasis'] == 'Advisor'
@@ -177,6 +186,9 @@ call('/contracts/cid-052/v1', 'POST', envelope(second_customer, 'GetReport', {'c
 compose('stop', 'delivery-t001')
 revocation = {'requestId': 'ci-revoke-1', 'expectedVersion': consent_version(customer)}
 revoked = call(consent_path + '/' + receipt['id'], 'DELETE', revocation, customer)
+listed = call(consent_list_path, session=customer)
+assert listed['version'] == revoked['version']
+assert next(item for item in listed['items'] if item['id'] == receipt['id'])['revokedAt'] is not None
 assert call(consent_path + '/' + receipt['id'], 'DELETE', revocation, customer) == revoked
 assert evaluate(advisor)['outcome'] == 'Deny'
 call('/contracts/cid-021/v1', 'POST', envelope(advisor, 'GetEvidenceMetadata', metadata), advisor, status=403)

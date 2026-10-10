@@ -4,6 +4,7 @@
     <RootNamespace>Monergy.Services.Consent</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Monergy.AccessIntegration.Tests" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="Npgsql" />
     <ProjectReference Include="../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />

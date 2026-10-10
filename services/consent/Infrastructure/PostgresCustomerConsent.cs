@@ -208,5 +208,16 @@ public sealed class PostgresCustomerConsent : IAsyncDisposable
     private sealed record ReplayRow(string Hash, string Receipt);
     private static DateTimeOffset Utc(DateTime value) => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
     private sealed record DecisionRow(DateTime EvaluatedAt, DateTime? ExpiresAt);
-    private sealed record GrantRow(string Id, string CustomerId, string ActorId, string Purpose, string[] CapabilityIds, DateTime ExpiresAt, DateTime? RevokedAt);
+    // Npgsql 10 exposes array column metadata as System.Array. Dapper's positional
+    // constructor matching cannot bind that to string[]; property mapping can.
+    internal sealed class GrantRow
+    {
+        public string Id { get; set; } = string.Empty;
+        public string CustomerId { get; set; } = string.Empty;
+        public string ActorId { get; set; } = string.Empty;
+        public string Purpose { get; set; } = string.Empty;
+        public string[] CapabilityIds { get; set; } = [];
+        public DateTime ExpiresAt { get; set; }
+        public DateTime? RevokedAt { get; set; }
+    }
 }
