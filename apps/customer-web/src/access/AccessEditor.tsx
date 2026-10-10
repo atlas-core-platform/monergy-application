@@ -68,14 +68,23 @@ export function AccessEditor({
   const selectedRole = Form.useWatch('businessRoleId', form);
   const selectedCapability = Form.useWatch('capabilityId', form);
   const [resourceGrants, setResourceGrants] = useState<AccessRecord[]>([]);
-  const [resourceOptions, setResourceOptions] = useState<ResourceDirectoryItem[]>([]);
+  const [resourceLookup, setResourceLookup] = useState<{
+    type: string;
+    items: ResourceDirectoryItem[];
+    error: string;
+  } | null>(null);
   const [resolvedResourceNames, setResolvedResourceNames] = useState<Record<string, string>>({});
-  const [resourceLookupLoading, setResourceLookupLoading] = useState(false);
-  const [resourceLookupError, setResourceLookupError] = useState('');
   const [permissions, setPermissions] = useState<AccessRecord[]>([]);
   const [roles, setRoles] = useState<AccessRecord[]>([]);
   const [people, setPeople] = useState<AccessRecord[]>([]);
   const [capabilities, setCapabilities] = useState<Capability[]>([]);
+  const resourceType =
+    capabilities.find((item) => item.capabilityId === selectedCapability)?.resourceType ??
+    record?.resourceType;
+  const matchingLookup = resourceLookup?.type === resourceType ? resourceLookup : null;
+  const resourceOptions = matchingLookup?.items ?? [];
+  const resourceLookupLoading = Boolean(resourceType && !matchingLookup);
+  const resourceLookupError = matchingLookup?.error ?? '';
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -201,43 +210,37 @@ export function AccessEditor({
   }, [api, area, form, id, onExpired, policyVersion, record]);
 
   useEffect(() => {
-    if (area !== 'resource-grants') return;
-    const capability = capabilities.find((item) => item.capabilityId === selectedCapability);
-    const resourceType = capability?.resourceType ?? record?.resourceType;
-    if (!resourceType) {
-      setResourceOptions([]);
-      setResourceLookupError('');
-      return;
-    }
+    if (area !== 'resource-grants' || !resourceType) return;
     const controller = new AbortController();
-    setResourceLookupLoading(true);
-    setResourceLookupError('');
     void api
       .resourceDirectory(resourceType, controller.signal)
       .then((directory) => {
         if (!controller.signal.aborted) {
-          setResourceOptions(directory.items);
+          setResourceLookup({ type: resourceType, items: directory.items, error: '' });
           setResolvedResourceNames((current) => ({
             ...current,
-            ...Object.fromEntries(directory.items.map((item) => [item.resourceId, item.displayName])),
+            ...Object.fromEntries(
+              directory.items.map((item) => [item.resourceId, item.displayName]),
+            ),
           }));
         }
       })
-      .catch((failure) => {
+      .catch((failure: unknown) => {
         if (!controller.signal.aborted) {
-          setResourceOptions([]);
-          setResourceLookupError(
-            failure instanceof AccessApiError && failure.code === 'RESOURCE_DIRECTORY_UNAVAILABLE'
-              ? 'This resource type does not yet have an owner-backed directory.'
-              : displayError(failure),
-          );
+          setResourceLookup({
+            type: resourceType,
+            items: [],
+            error:
+              failure instanceof AccessApiError && failure.code === 'RESOURCE_DIRECTORY_UNAVAILABLE'
+                ? 'This resource type does not yet have an owner-backed directory.'
+                : displayError(failure),
+          });
         }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setResourceLookupLoading(false);
       });
-    return () => controller.abort();
-  }, [api, area, capabilities, record?.resourceType, selectedCapability]);
+    return () => {
+      controller.abort();
+    };
+  }, [api, area, resourceType]);
 
   useEffect(() => {
     if (area !== 'members' || resourceGrants.length === 0) return;
@@ -259,7 +262,9 @@ export function AccessEditor({
           Object.fromEntries(groups.flat().map((item) => [item.resourceId, item.displayName])),
         );
     });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+    };
   }, [api, area, resourceGrants]);
 
   const resourceName = (resourceId?: string) =>
@@ -369,7 +374,11 @@ export function AccessEditor({
       return [
         { label: 'Person', value: lookup(people, values.actorId) },
         { label: 'Capability', value: capabilityName(values.capabilityId) },
-        { label: 'Resource', value: resourceName(values.resourceId), identity: values.resourceId ?? '' },
+        {
+          label: 'Resource',
+          value: resourceName(values.resourceId),
+          identity: values.resourceId ?? '',
+        },
       ];
     return [
       { label: 'Name', value: values.label },
@@ -618,7 +627,11 @@ export function AccessEditor({
             {record && (
               <p className="access-review-subject">
                 <span>Affected {noun}</span>
-                <strong>{record.normalizedEmail ?? record.label ?? record.resourceId ?? id}</strong>
+                <strong>
+                  {area === 'resource-grants'
+                    ? resourceName(record.resourceId)
+                    : (record.normalizedEmail ?? record.label ?? id)}
+                </strong>
               </p>
             )}
             {proposed.length > 0 && (
@@ -679,7 +692,7 @@ export function AccessEditor({
                     capabilities.find((item) => item.capabilityId === record.capabilityId)
                       ?.displayName ?? record.capabilityId,
                 },
-                { key: 'resource', label: 'Resource', children: record.resourceId },
+                { key: 'resource', label: 'Resource', children: resourceName(record.resourceId) },
               ]}
             />
           ) : (
@@ -687,6 +700,17 @@ export function AccessEditor({
               form={form}
               layout="vertical"
               onFinish={(values) => {
+                if (
+                  area === 'resource-grants' &&
+                  (resourceLookupLoading ||
+                    resourceLookupError ||
+                    !resourceOptions.some((resource) => resource.resourceId === values.resourceId))
+                ) {
+                  form.setFields([
+                    { name: 'resourceId', errors: ['Choose an available resource by name.'] },
+                  ]);
+                  return;
+                }
                 setConfirmation({ values });
               }}
               disabled={busy || loading || Boolean(recovery)}
@@ -879,6 +903,9 @@ export function AccessEditor({
                   <Form.Item name="capabilityId" label="Capability" rules={[{ required: true }]}>
                     <Select
                       showSearch={{ optionFilterProp: 'label' }}
+                      onChange={() => {
+                        form.setFieldValue('resourceId', undefined);
+                      }}
                       options={capabilities
                         .filter((capability) => capability.resourceType)
                         .map((capability) => ({
@@ -891,7 +918,9 @@ export function AccessEditor({
                     <Select
                       showSearch={{ optionFilterProp: 'label' }}
                       loading={resourceLookupLoading}
-                      disabled={!selectedCapability || resourceLookupLoading || Boolean(resourceLookupError)}
+                      disabled={
+                        !selectedCapability || resourceLookupLoading || Boolean(resourceLookupError)
+                      }
                       placeholder="Choose a business resource"
                       options={resourceOptions.map((resource) => ({
                         value: resource.resourceId,

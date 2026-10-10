@@ -224,11 +224,12 @@ function Administration({
   };
   useEffect(() => {
     if (area !== 'resource-grants' || !page) {
-      setResourceNames({});
       return;
     }
     const controller = new AbortController();
-    const types = [...new Set(page.items.map((item) => item.resourceType).filter(Boolean))] as string[];
+    const types = [
+      ...new Set(page.items.map((item) => item.resourceType).filter(Boolean)),
+    ] as string[];
     void Promise.all(
       types.map(async (resourceType) => {
         try {
@@ -246,7 +247,9 @@ function Administration({
         ),
       );
     });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+    };
   }, [api, area, page]);
   useEffect(() => {
     if (!page || !pendingFocus.current) return;
@@ -321,7 +324,9 @@ function Administration({
             <strong>
               {record.normalizedEmail ??
                 record.label ??
-                (record.resourceId ? resourceNames[record.resourceId] ?? 'Restricted resource' : record.id)}
+                (record.resourceId
+                  ? (resourceNames[record.resourceId] ?? 'Restricted resource')
+                  : record.id)}
             </strong>
             <small>{record.code ?? (area === 'members' ? '' : (record.capabilityId ?? ''))}</small>
           </span>
@@ -400,7 +405,7 @@ function Administration({
         <Tooltip title="Open details">
           <Button
             type="text"
-            aria-label={`Open ${record.normalizedEmail ?? record.label ?? record.id ?? 'details'}`}
+            aria-label={`Open ${record.normalizedEmail ?? record.label ?? (record.resourceId ? (resourceNames[record.resourceId] ?? 'restricted resource') : record.id) ?? 'details'}`}
             icon={<WorkspaceIcon name="arrow" size={15} />}
             iconPlacement="end"
             onClick={() => {

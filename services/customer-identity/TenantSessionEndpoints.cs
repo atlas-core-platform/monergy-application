@@ -16,6 +16,7 @@ public static class TenantSessionEndpoints
         services.AddSingleton<ITenantMembershipClient, HttpTenantMembershipClient>();
         services.AddSingleton<ReferenceTenantAuthenticator>();
         services.AddSingleton<TenantSessionAuthority>();
+        services.AddSingleton<ITenantCustomerResourceDirectory, ReferenceTenantCustomerResourceDirectory>();
         services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
     }
 

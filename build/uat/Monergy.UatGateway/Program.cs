@@ -63,7 +63,7 @@ app.MapGet("/uat-api/v1/resource-directory/{resourceType}", async (
 {
     _ = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
     if (resourceType != "customer")
-        return Results.Json(new { error = "RESOURCE_DIRECTORY_UNAVAILABLE" }, statusCode: 503);
+        return Results.Json(new { error = "RESOURCE_DIRECTORY_UNAVAILABLE" }, statusCode: 422);
     await ProxyAsync(http, client, new Uri("http://127.0.0.1:5101/local/v1/administration/resource-directory/customers")).ConfigureAwait(false);
     return Results.Empty;
 });

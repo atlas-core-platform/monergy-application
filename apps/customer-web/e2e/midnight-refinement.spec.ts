@@ -21,12 +21,24 @@ const grant = {
   actorId: 'A100',
   resourceId: 'record-1',
   capabilityId: 'records.read',
-  resourceType: 'record',
+  resourceType: 'customer',
 };
 async function fixtures(page: Page, override?: (route: Route) => Promise<boolean>) {
   await page.route('**/*-api/**', async (route) => {
     if (await override?.(route)) return;
     const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/resource-directory/customer')) {
+      await route.fulfill({
+        json: {
+          resourceType: 'customer',
+          items: [
+            { resourceId: 'record-1', displayName: 'First Customer' },
+            { resourceId: 'record-2', displayName: 'Second Customer' },
+          ],
+        },
+      });
+      return;
+    }
     await route.fulfill({
       json: path.endsWith('/tenant-sessions')
         ? {
@@ -45,7 +57,7 @@ async function fixtures(page: Page, override?: (route: Route) => Promise<boolean
                     capabilityId: 'records.read',
                     displayName: 'Read records',
                     service: 'records',
-                    resourceType: 'record',
+                    resourceType: 'customer',
                     lifecycle: 'Active',
                   },
                 ],
@@ -235,17 +247,26 @@ test('permission, group and resource editing keep existing contracts and review 
   await page.getByTitle(member.normalizedEmail, { exact: true }).click();
   await drawer.getByLabel('Capability', { exact: true }).click();
   await page.getByTitle('Read records', { exact: true }).click();
-  await drawer.getByLabel('Resource identifier').fill('record-2');
+  await drawer.getByLabel('Resource', { exact: true }).click();
+  await page.getByTitle('Second Customer', { exact: true }).click();
+  await expect(drawer.getByLabel('Resource identifier')).toHaveCount(0);
   await drawer.getByRole('button', { name: 'Review change' }).click();
+  await expect(
+    drawer
+      .getByRole('region', { name: 'Review changes' })
+      .getByText('Second Customer', { exact: true }),
+  ).toBeVisible();
   expect(writes).toHaveLength(2);
   await drawer.getByRole('button', { name: 'Create resource access', exact: true }).click();
   await expect(drawer).toHaveCount(0);
-  await page.getByRole('button', { name: 'Open GRT1' }).click();
+  await page.getByRole('button', { name: 'Open First Customer' }).click();
+  await expect(drawer.getByText('First Customer', { exact: true })).toBeVisible();
+  await expect(drawer.getByText('record-1', { exact: true })).toHaveCount(0);
   await drawer.getByRole('button', { name: 'Remove', exact: true }).click();
   expect(writes).toHaveLength(3);
   await drawer.getByRole('button', { name: 'Remove', exact: true }).click();
   await expect(drawer).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Open GRT1' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open First Customer' })).toBeVisible();
   expect(writes).toEqual([
     {
       path: '/access-api/v1/administration/permissions/P1',
@@ -269,7 +290,7 @@ test('permission, group and resource editing keep existing contracts and review 
         expectedPolicyVersion: 7,
         actorId: 'A100',
         capabilityId: 'records.read',
-        resourceType: 'record',
+        resourceType: 'customer',
         resourceId: 'record-2',
       },
     },

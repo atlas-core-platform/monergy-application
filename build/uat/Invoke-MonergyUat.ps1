@@ -120,6 +120,12 @@ if ($Action -in @('Prepare','Start')) {
                 $integration.MembershipToken=$state.tokens.membership; $integration.CustomerIdentityToken=$state.tokens.context
                 $integration.IdentityProvisioningToken=$state.tokens.provisioning; $integration.CustomerIdentityEventToken=$state.tokens.identityEvent
                 $integration.Identities=$state.identities; $integration.CustomerIdentityDatabases=@{}
+                $integration.CustomerResources=@(
+                    @{ TenantId='T001'; ResourceId='reference-customer'; DisplayName='Reference Customer'; SecondaryLabel='Primary UAT customer' },
+                    @{ TenantId='T001'; ResourceId='C001'; DisplayName='Sample Customer One'; SecondaryLabel='Additional UAT customer' },
+                    @{ TenantId='T002'; ResourceId='other-customer'; DisplayName='Other Customer'; SecondaryLabel='Primary UAT customer' },
+                    @{ TenantId='T002'; ResourceId='C002'; DisplayName='Sample Customer Two'; SecondaryLabel='Additional UAT customer' }
+                )
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.CustomerIdentityDatabases[$db.tenant] = Connection $db 'runtime' }
             } else {
                 $integration.AuditEventToken=$state.tokens.auditEvent; $integration.AuditDatabases=@{}

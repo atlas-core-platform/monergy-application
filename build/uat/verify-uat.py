@@ -77,6 +77,15 @@ for path in ('/access/not-a-page', '/operations/internal'):
 owner = login()
 other = login('T002')
 assert admin('context')['actorId'] == 'A900'
+directory_path = '/uat-api/v1/resource-directory/customer'
+call(directory_path, status=401)
+directory = call(directory_path, session=owner)
+assert directory['resourceType'] == 'customer'
+assert {item['resourceId'] for item in directory['items']} == {'reference-customer', 'C001'}
+assert all(item['displayName'] and item['displayName'] != item['resourceId'] for item in directory['items'])
+assert {item['resourceId'] for item in call(directory_path, session=other)['items']} == {'other-customer', 'C002'}
+call(directory_path, session={**owner, 'tenantId': 'T002'}, status=401)
+call('/uat-api/v1/resource-directory/document', session=owner, status=422)
 call('/uat-api/v1/topology', status=401)
 services = call('/uat-api/v1/topology', session=owner)['services']
 assert len(services) == 13 and all(item['available'] for item in services)
@@ -89,6 +98,7 @@ for actor in ('A100','A300'):
     if not any(row.get('actorId') == actor for row in admin('members')['items']):
         admin('members','POST',{'expectedPolicyVersion':revision(),'actorId':actor})
 no_role = login(actor='A300')
+call(directory_path, session=no_role, status=403)
 for path in ('/identity-api/local/v1/administration/sessions','/audit-api/local/v1/administration/access-events','/uat-api/v1/topology'):
     call(path, session=no_role, status=403)
 catalog = call('/access-api/v1/capabilities', session=owner)['capabilities']
