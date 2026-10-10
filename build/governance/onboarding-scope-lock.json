@@ -1,0 +1,18 @@
+{
+  "revision": "AR-002",
+  "increment": "REL-01-SETUP-01",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "authorization": "User continuation of 2026-10-10 after the bounded LOCAL/UAT Consent dependency proposal; no production policy or release authority.",
+  "migrations": [
+    {
+      "path": "services/customer-identity/migrations/0003_customer_ownership.sql",
+      "sha256": "17f4902855f33d6d6efb2cfd12220d25bb482dd72f34836419741be91e3ee7eb"
+    },
+    {
+      "path": "services/consent/migrations/0001_customer_consent.sql",
+      "sha256": "bd5b7e757d4f690c5a07d21a32add2fc5f8a65e0673e667cbda25a7fec7d352f"
+    }
+  ]
+}

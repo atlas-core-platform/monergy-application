@@ -4,5 +4,5 @@ public sealed record TenantCustomerResource(string ResourceId, string DisplayNam
 
 public interface ITenantCustomerResourceDirectory
 {
-    IReadOnlyList<TenantCustomerResource> List(string tenantId);
+    Task<IReadOnlyList<TenantCustomerResource>> ListAsync(string tenantId, CancellationToken cancellationToken);
 }

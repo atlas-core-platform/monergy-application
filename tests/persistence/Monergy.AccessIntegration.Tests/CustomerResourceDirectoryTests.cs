@@ -10,7 +10,7 @@ namespace Monergy.AccessIntegration.Tests;
 public sealed class CustomerResourceDirectoryTests
 {
     [Fact]
-    public void TenantSessionCompositionResolvesLabelsFromMatchingOwnerBindings()
+    public async Task TenantSessionCompositionResolvesLabelsFromMatchingOwnerBindings()
     {
         var services = new ServiceCollection();
         var configuration = Configuration();
@@ -18,11 +18,11 @@ public sealed class CustomerResourceDirectoryTests
         services.AddTenantSessionAuthority(configuration);
         using var provider = services.BuildServiceProvider();
         var directory = provider.GetRequiredService<ITenantCustomerResourceDirectory>();
-        var customer = Assert.Single(directory.List("T001"));
+        var customer = Assert.Single(await directory.ListAsync("T001", default));
         Assert.Equal("reference-customer", customer.ResourceId);
         Assert.Equal("Reference Customer", customer.DisplayName);
-        Assert.Empty(directory.List("T002"));
-        Assert.Empty(directory.List("unknown"));
+        Assert.Empty(await directory.ListAsync("T002", default));
+        Assert.Empty(await directory.ListAsync("unknown", default));
     }
 
     [Theory]

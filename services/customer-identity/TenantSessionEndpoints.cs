@@ -16,7 +16,12 @@ public static class TenantSessionEndpoints
         services.AddSingleton<ITenantMembershipClient, HttpTenantMembershipClient>();
         services.AddSingleton<ReferenceTenantAuthenticator>();
         services.AddSingleton<TenantSessionAuthority>();
-        services.AddSingleton<ITenantCustomerResourceDirectory, ReferenceTenantCustomerResourceDirectory>();
+        if (configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
+        {
+            services.AddSingleton<PostgresCustomers>();
+            services.AddSingleton<ITenantCustomerResourceDirectory>(provider => provider.GetRequiredService<PostgresCustomers>());
+        }
+        else services.AddSingleton<ITenantCustomerResourceDirectory, ReferenceTenantCustomerResourceDirectory>();
         services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
     }
 
@@ -26,6 +31,26 @@ public static class TenantSessionEndpoints
         var eventToken = TenantAccessIntegration.Required(app.Configuration, "Monergy:AccessIntegration:CustomerIdentityEventToken");
         TenantAccessIntegration.ValidateToken(token);
         TenantAccessIntegration.ValidateToken(eventToken);
+        if (app.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
+        {
+            var contextToken = TenantAccessIntegration.Required(app.Configuration, "Monergy:AccessIntegration:CustomerContextToken");
+            TenantAccessIntegration.ValidateToken(contextToken);
+            if (contextToken == token || contextToken == eventToken || contextToken == app.Configuration["Monergy:AccessIntegration:IdentityProvisioningToken"])
+                throw new InvalidOperationException("Customer context requires a separate workload credential.");
+            app.MapGet("/internal/v1/customer-context/{customerId}", async (string customerId, HttpContext http, PostgresCustomers customers) =>
+            {
+                if (!TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Owner-Token"].ToString(), contextToken))
+                    return (IResult)Results.StatusCode(403);
+                try
+                {
+                    var customer = await customers.ReadAsync(http.Request.Headers["X-Monergy-Tenant"].ToString(), customerId, http.RequestAborted).ConfigureAwait(false);
+                    return customer is null ? Results.NotFound() : Results.Ok(customer);
+                }
+                catch (TenantBoundaryException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.Status); }
+                catch (TenantAccessException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }
+                catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
+            });
+        }
         // Separate workload credential: session validators cannot create identities.
         if (app.Configuration["Monergy:AccessIntegration:IdentityProvisioningToken"] is { } provisioningToken)
         {
@@ -61,10 +86,12 @@ public static class TenantSessionEndpoints
                 return Results.Ok(new
                 {
                     resourceType = "customer",
-                    items = directory.List(administrator.TenantId)
+                    items = await directory.ListAsync(administrator.TenantId, http.RequestAborted).ConfigureAwait(false)
                 });
             }
             catch (TenantBoundaryException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.Status); }
+            catch (TenantAccessException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }
+            catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
         });
         app.MapGet("/local/v1/administration/sessions", async (HttpContext http, string? after,
             TenantAccessClient access, PostgresTenantSessions sessions) =>

@@ -6,6 +6,13 @@ var builder = WebApplication.CreateBuilder(args);
 if (!builder.Environment.IsDevelopment() || builder.Configuration["Monergy:ExecutionZone"] is not ("LOCAL" or "CI_EPHEMERAL"))
     throw new InvalidOperationException("The Docker UAT workspace requires Development LOCAL/CI.");
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 262_144);
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.RespectRequiredConstructorParameters = true;
+    options.SerializerOptions.RespectNullableAnnotations = true;
+    options.SerializerOptions.UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow;
+});
+builder.AddTenantSetup();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
 builder.Services.AddSingleton(new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
 { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1_048_576 });
@@ -26,6 +33,7 @@ app.Use(async (http, next) =>
 });
 app.UseStaticFiles();
 app.UseRouting();
+app.MapTenantSetup();
 app.MapGet("/health/live", () => Results.Ok(new { profile = "local-uat", productionAccepted = false }));
 app.MapGet("/health/ready", async (HttpClient client, CancellationToken ct) =>
 {
@@ -40,7 +48,12 @@ app.MapGet("/uat-api/v1/context", async (HttpContext http, TenantAccessClient ac
 app.MapGet("/uat-api/v1/topology", async (HttpContext http, TenantAccessClient access, HttpClient client) =>
 {
     var administrator = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
-    return Results.Ok(new { administrator.TenantId, services = await Topology.ReadAsync(client, http.RequestAborted).ConfigureAwait(false) });
+    return Results.Ok(new
+    {
+        administrator.TenantId,
+        services = await Topology.ReadAsync(client, http.RequestAborted,
+        app.Configuration.GetValue<bool>("Monergy:Onboarding:Enabled")).ConfigureAwait(false)
+    });
 });
 app.MapGet("/uat-api/v1/readiness", async (HttpContext http, TenantAccessClient access) =>
 {
@@ -53,7 +66,7 @@ app.MapGet("/uat-api/v1/readiness", async (HttpContext http, TenantAccessClient 
         new { id = "identity", state = "Blocked", detail = "Production identity provider, MFA and invitation delivery are not configured." },
         new { id = "transport", state = "Blocked", detail = "Workload identity, TLS and the production event transport require integration." },
         new { id = "operations", state = "Blocked", detail = "Managed secrets, backups, restore drills, monitoring, HA/DR and capacity acceptance remain required." },
-        new { id = "business", state = "Blocked", detail = "Consent/AI are scaffolds. Document Intelligence and Job Management lack live business consumers. Service health and permission checks do not prove those journeys." },
+        new { id = "business", state = "Blocked", detail = "Consent supports a bounded local onboarding profile. AI remains a scaffold; Document Intelligence and Job Management lack live business consumers. Service health and permission checks do not prove those journeys." },
         new { id = "governance", state = "Blocked", detail = "Historical D01–D16 and SG release acceptance remain unchanged. Local UAT does not confer Production approval." },
     }
     });
@@ -106,6 +119,8 @@ static string? Route(string path, string method)
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/audit-api/local/v1/administration/access-events" && method == "GET")
         return "http://127.0.0.1:5102" + path[10..];
+    if (path.StartsWith("/consent-api/local/v1/consents/customers/", StringComparison.Ordinal) && method is "GET" or "POST" or "DELETE")
+        return "http://127.0.0.1:5110" + path[12..];
     if (method != "POST") return null;
     var id = path.Split('/');
     if (id.Length != 4 || id[1] != "contracts" || id[3] != "v1") return null;

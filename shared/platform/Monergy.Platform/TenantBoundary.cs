@@ -17,6 +17,7 @@ public sealed class TenantBoundaryOptions
     public required string CapabilityPrefix { get; init; }
     public required IReadOnlyDictionary<string, string> CustomerTenants { get; init; }
     public required string ProbeUrl { get; init; }
+    public bool CustomerRelationships { get; init; }
 
     public static bool Selected(IConfiguration configuration) => configuration["Monergy:TenantBoundary:Enabled"] == "true";
 
@@ -51,7 +52,8 @@ public sealed class TenantBoundaryOptions
             Service = service,
             CapabilityPrefix = service == "search-retrieval" ? "search." : service + ".",
             CustomerTenants = customers,
-            ProbeUrl = address
+            ProbeUrl = address,
+            CustomerRelationships = configuration["Monergy:TenantBoundary:CustomerRelationships"] == "true"
         };
     }
 }
@@ -93,6 +95,8 @@ public sealed class TenantBoundaryMiddleware(RequestDelegate next, TenantBoundar
                 return;
             }
             var rule = Rule(options.Service, path);
+            if (rule is null && options.CustomerRelationships && options.Service == "evidence" && path == "/contracts/cid-022/v1")
+                rule = ("evidence.document.read", "document", "documentVersionId");
             if (rule is null) throw new TenantBoundaryException("CONTRACT_TENANT_ADAPTER_REQUIRED", 503);
             var security = body.RootElement.GetProperty("security");
             var actor = security.GetProperty("actor");
@@ -109,12 +113,24 @@ public sealed class TenantBoundaryMiddleware(RequestDelegate next, TenantBoundar
                 "$customer" => customer,
                 var property => Text(payload, property),
             };
-            var result = await access.EvaluateAsync(http, new(rule.Value.Capability, rule.Value.ResourceType, resource)).ConfigureAwait(false);
-            if (result.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
-            if (Text(actor, "actorId") != result.ActorId || Text(actor, "authenticationContextId") != session)
+            string authorizedActor;
+            string decisionId;
+            if (options.CustomerRelationships)
+            {
+                var result = await access.EvaluateCustomerAsync(http, rule.Value.Capability, customer).ConfigureAwait(false);
+                if (result.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+                authorizedActor = result.ActorId; decisionId = result.DecisionId;
+            }
+            else
+            {
+                var result = await access.EvaluateAsync(http, new(rule.Value.Capability, rule.Value.ResourceType, resource)).ConfigureAwait(false);
+                if (result.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+                authorizedActor = result.ActorId; decisionId = result.DecisionId;
+            }
+            if (Text(actor, "actorId") != authorizedActor || Text(actor, "authenticationContextId") != session)
                 throw new TenantBoundaryException("ACTOR_CONTEXT_MISMATCH", 403);
-            http.Features.Set(new TenantBoundaryProof(tenant, result.ActorId, session, customer,
-                Text(body.RootElement, "contractName"), rule.Value.Capability, result.DecisionId));
+            http.Features.Set(new TenantBoundaryProof(tenant, authorizedActor, session, customer,
+                Text(body.RootElement, "contractName"), rule.Value.Capability, decisionId));
         }
         catch (TenantBoundaryException failure)
         { http.Response.StatusCode = failure.Status; await http.Response.WriteAsJsonAsync(new { error = failure.Code }, http.RequestAborted).ConfigureAwait(false); return; }

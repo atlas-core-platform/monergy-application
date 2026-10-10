@@ -6,5 +6,6 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="dbup-postgresql" />
+    <ProjectReference Include="../../platform/control-plane/Monergy.Platform.ControlPlane.csproj" />
   </ItemGroup>
 </Project>

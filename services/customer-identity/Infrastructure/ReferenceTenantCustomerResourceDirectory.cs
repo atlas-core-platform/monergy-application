@@ -39,6 +39,12 @@ public sealed class ReferenceTenantCustomerResourceDirectory : ITenantCustomerRe
     public IReadOnlyList<TenantCustomerResource> List(string tenantId) =>
         resources.GetValueOrDefault(tenantId) ?? [];
 
+    public Task<IReadOnlyList<TenantCustomerResource>> ListAsync(string tenantId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(List(tenantId));
+    }
+
     private static bool ValidLabel(string value) =>
         !string.IsNullOrWhiteSpace(value) && value.Length <= 120 && !value.Any(char.IsControl);
 }

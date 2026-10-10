@@ -33,6 +33,9 @@
           "OpenTelemetry.Instrumentation.Runtime": "[1.18.0, )"
         }
       },
+      "monergy.platform.controlplane": {
+        "type": "Project"
+      },
       "OpenTelemetry.Exporter.OpenTelemetryProtocol": {
         "type": "CentralTransitive",
         "requested": "[1.18.0, )",

@@ -27,6 +27,12 @@ async function fixtures(page: Page, override?: (route: Route) => Promise<boolean
   await page.route('**/*-api/**', async (route) => {
     if (await override?.(route)) return;
     const path = new URL(route.request().url()).pathname;
+    if (path === '/uat-api/v1/setup') {
+      await route.fulfill({
+        json: { enabled: false, tenantId: 'T001', customerRelationships: false },
+      });
+      return;
+    }
     if (path.endsWith('/resource-directory/customer')) {
       await route.fulfill({
         json: {
@@ -116,7 +122,9 @@ test('user review preserves drafts, explains consequences, traps focus and resto
   await page.getByTitle('Reviewer', { exact: true }).click();
   await drawer.getByRole('button', { name: 'Review change' }).click();
   await expect(
-    drawer.getByText(/Changing the business role removes all individual resource grants/),
+    drawer.getByText(
+      /Changing the business role removes customer assignments and individual resource grants/,
+    ),
   ).toBeVisible();
   for (let i = 0; i < 8; i++) {
     await page.keyboard.press('Tab');

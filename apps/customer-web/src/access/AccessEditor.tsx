@@ -648,8 +648,8 @@ export function AccessEditor({
                     <p>Saving changes invalidates this user’s existing sessions.</p>
                     {original?.businessRoleId !== confirmation.values?.businessRoleId && (
                       <p>
-                        Changing the business role removes all individual resource grants. Review
-                        and reassign any required resources after saving.
+                        Changing the business role removes customer assignments and individual
+                        resource grants. Review and reassign any required resources after saving.
                       </p>
                     )}
                     {!confirmation.values?.active && (
@@ -847,7 +847,8 @@ export function AccessEditor({
                       />
                     </Form.Item>
                     <p className="access-form-hint">
-                      One business role per user. Changing it removes individual resource grants.
+                      One business role per user. Changing it removes customer assignments and
+                      individual resource grants.
                     </p>
                     {configuredPermissions}
                   </section>

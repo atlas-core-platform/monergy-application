@@ -12,6 +12,7 @@ import { useWorkspaceSession } from './workspaceSession';
 import { WorkspaceSessionProvider } from './WorkspaceSessionProvider';
 import { WorkspaceEntry } from './WorkspaceEntry';
 import { AccessOverview } from './AccessOverview';
+import { CustomerRelationships } from './CustomerRelationships';
 import './access.css';
 
 const areas: { value: AccessArea; label: string; description: string }[] = [
@@ -130,6 +131,11 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
       )}
       {path === '/access' ? (
         <AccessOverview api={api} onExpired={fail} />
+      ) : area === 'resource-grants' ? (
+        <CustomerRelationships
+          api={api}
+          legacy={<Administration area={area} api={api} onExpired={fail} />}
+        />
       ) : area ? (
         <Administration key={area} area={area} api={api} onExpired={fail} />
       ) : path === '/access/activity' || path === '/access/sessions' ? (

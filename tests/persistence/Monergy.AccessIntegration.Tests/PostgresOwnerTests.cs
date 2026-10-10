@@ -18,7 +18,7 @@ public sealed class PostgresOwnerTests : IAsyncLifetime
         {
             await using var ci = await OpenAsync("CI", tenant, "OWNER");
             await ci.ExecuteAsync("TRUNCATE customer_identity.trusted_sessions,customer_identity.access_event_inbox,customer_identity.access_subject_versions; UPDATE customer_identity.access_policy_version SET version=0;");
-            await ci.ExecuteAsync("TRUNCATE customer_identity.provisioning_receipts,customer_identity.tenant_principals;");
+            await ci.ExecuteAsync("TRUNCATE customer_identity.customers,customer_identity.provisioning_receipts,customer_identity.tenant_principals;");
             await using var audit = await OpenAsync("AUDIT", tenant, "OWNER");
             await audit.ExecuteAsync("TRUNCATE audit.access_event_inbox,audit.inbox,audit.evidence CASCADE;");
         }

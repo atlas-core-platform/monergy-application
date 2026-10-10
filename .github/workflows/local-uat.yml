@@ -31,12 +31,13 @@ jobs:
           node-version: 24.21.0
       - name: Start isolated Docker UAT profile
         shell: pwsh
-        run: ./build/uat/Invoke-MonergyUat.ps1 -Action Start -Profile ci -Port 4173
+        run: ./build/uat/Invoke-MonergyUat.ps1 -Action Start -Profile ci -Port 4173 -EnableOnboarding
       - name: Verify actual owner boundaries, security, delivery and restarts
         shell: bash
         run: |
           export MONERGY_UAT_DISPOSABLE="$(python -c "import json; print(json.load(open('.artifacts/uat/ci/profile.json'))['instanceId'])")"
           python build/uat/verify-uat.py
+          python build/uat/verify-onboarding.py
       - name: Install pinned browser toolchain
         run: |
           corepack enable
@@ -45,6 +46,8 @@ jobs:
           pnpm exec playwright install chromium
       - name: Verify real administration browser journeys
         run: pnpm exec playwright test --config build/uat/playwright.config.ts
+      - name: Verify onboarding presentation and access-entry regressions
+        run: pnpm exec playwright test --config build/uat/onboarding.playwright.config.ts
       - name: Preserve credential-free acceptance results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -54,6 +57,10 @@ jobs:
             .artifacts/uat-acceptance.json
             .artifacts/uat-browser-results.json
             .artifacts/uat-workspace.png
+            .artifacts/onboarding-acceptance.json
+            .artifacts/onboarding-browser-results.json
+            .artifacts/onboarding-setup.png
+            .artifacts/onboarding-relationship-review.png
           if-no-files-found: warn
       - name: Stop disposable CI profile
         if: always()
