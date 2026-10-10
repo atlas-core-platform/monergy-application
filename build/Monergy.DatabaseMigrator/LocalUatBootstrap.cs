@@ -35,6 +35,11 @@ internal static partial class LocalUatBootstrap
                 if (database.Service == "am") ValidateSecret(database.DeliveryPassword ?? "");
             }
             ValidateSecret(profile.PostgresPassword);
+            if (profile.Onboarding)
+            {
+                stage = "onboarding-storage";
+                await ProbeOnboardingStorageAsync(OnboardingFolder).ConfigureAwait(false);
+            }
             stage = "cluster-connection";
             await using var cluster = new NpgsqlConnection(Connection("postgres", "postgres", profile.PostgresPassword));
             await cluster.OpenAsync().ConfigureAwait(false);

@@ -2,6 +2,8 @@ using DbUp;
 
 if (args.Length == 2 && args[0] == "--local-uat-bootstrap")
     return await Monergy.DatabaseMigrator.LocalUatBootstrap.RunAsync(args[1]);
+if (args.Length == 2 && args[0] == "--verify-local-uat-storage")
+    return await Monergy.DatabaseMigrator.LocalUatBootstrap.VerifyStorageAsync(args[1]);
 
 var options = Parse(args);
 var service = Required(options, "service");

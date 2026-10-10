@@ -96,6 +96,13 @@ scope, evidence and remaining acceptance checks.
 
 `Local Docker UAT acceptance` runs **after pushes to main** and on manual dispatch. It creates its own disposable `ci` profile, builds the actual containers, checks all 13 boundaries for allow/deny/isolation, calls the actual Search owner, tests revocation with delivery stopped, restart persistence, disablement, owner outage recovery and browser session/audit/service journeys. It uploads only allowlisted credential-free results and a signed-in workspace screenshot. The destructive Python acceptance script requires an explicit disposable instance identifier; never point it at operator UAT data. Existing AM owner integration checks continue covering durable CSV onboarding, lost acknowledgements and migration grants.
 
+The runtime image verifies onboarding storage with a non-root UID during its build.
+For onboarding profiles, bootstrap repeats the create/replace/readback check against
+the mounted volume before provisioning. It uses temporary probe files and preserves
+existing registry, setup and database state. A permission failure stops startup;
+do not delete an operator profile or its volume to recover access. Failure diagnostics
+are redacted before upload as `uat-diagnostics.log` in the acceptance artifact.
+
 A separate Windows job exercises the actual launcher under Windows PowerShell 5.1 and PowerShell 7. It verifies private ACLs and native Docker Compose file reads, deliberately denies access to existing credentials/configuration, and proves that repair preserves file contents, write times and owners. These checks do not start Linux containers on the Windows runner; the Docker process acceptance job remains Linux-based.
 
 Production remains blocked until real IdP/MFA/invitation delivery, workload identity/TLS, event transport, managed secrets, provider/Consent/business consumers, managed database backup/restore, monitoring, HA/DR, capacity and release approval are implemented and accepted. The new local gateway, tenant adapters and bootstrap reject an unsupported Production environment. Readiness of local processes does not upgrade D01–D16 or SG acceptance.
