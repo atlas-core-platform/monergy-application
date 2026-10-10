@@ -63,7 +63,8 @@ def ready():
         try:
             call('/health/ready')
             return
-        except (AssertionError, urllib.error.URLError, TimeoutError):
+        # A restarting gateway can reset an accepted connection before responding.
+        except (AssertionError, urllib.error.URLError, TimeoutError, ConnectionError):
             time.sleep(1)
     raise AssertionError('Onboarding UAT readiness timed out')
 
