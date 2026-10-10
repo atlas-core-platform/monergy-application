@@ -15,5 +15,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+    <ProjectReference Include="../../../platform/control-plane/Monergy.Platform.ControlPlane.csproj" />
   </ItemGroup>
 </Project>

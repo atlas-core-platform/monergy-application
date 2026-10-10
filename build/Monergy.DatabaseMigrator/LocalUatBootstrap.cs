@@ -6,32 +6,41 @@ using Npgsql;
 namespace Monergy.DatabaseMigrator;
 
 internal sealed record UatDatabase(string Service, string Tenant, string Name, string OwnerPassword, string RuntimePassword, string? DeliveryPassword);
-internal sealed record UatProfile(string InstanceId, string PostgresPassword, UatDatabase[] Databases);
+internal sealed record UatProfile(string InstanceId, string PostgresPassword, UatDatabase[] Databases, bool Onboarding = false);
 
-internal static class LocalUatBootstrap
+internal static partial class LocalUatBootstrap
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public static async Task<int> RunAsync(string file)
     {
+        Console.WriteLine("Local UAT bootstrap: starting.");
         if (Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") != "Development" ||
             Environment.GetEnvironmentVariable("MONERGY_LOCAL_UAT_BOOTSTRAP") != "1")
             throw new InvalidOperationException("Explicit Development local UAT bootstrap is required.");
+        UatProfile? profile = null;
+        var stage = "profile-validation";
         try
         {
-            var profile = JsonSerializer.Deserialize<UatProfile>(await File.ReadAllTextAsync(file).ConfigureAwait(false), Json)
+            profile = JsonSerializer.Deserialize<UatProfile>(await File.ReadAllTextAsync(file).ConfigureAwait(false), Json)
                 ?? throw new InvalidOperationException("Missing profile.");
-            if (!Guid.TryParseExact(profile.InstanceId, "N", out _) || profile.Databases.Length != 6)
+            if (!Guid.TryParseExact(profile.InstanceId, "N", out _) || profile.Databases.Length != (profile.Onboarding ? 8 : 6))
                 throw new InvalidOperationException("Invalid profile.");
             var expected = new HashSet<string>(StringComparer.Ordinal);
             foreach (var database in profile.Databases)
             {
-                if (database.Service is not ("am" or "customer-identity" or "audit") || database.Tenant is not ("T001" or "T002") ||
+                if (!(database.Service is "am" or "customer-identity" or "audit" || profile.Onboarding && database.Service == "consent") || database.Tenant is not ("T001" or "T002") ||
                     database.Name != "uat_" + database.Service.Replace('-', '_') + "_" + database.Tenant.ToLowerInvariant() || !expected.Add(database.Name))
                     throw new InvalidOperationException("Invalid owner binding.");
                 ValidateSecret(database.OwnerPassword); ValidateSecret(database.RuntimePassword);
                 if (database.Service == "am") ValidateSecret(database.DeliveryPassword ?? "");
             }
             ValidateSecret(profile.PostgresPassword);
+            if (profile.Onboarding)
+            {
+                stage = "onboarding-storage";
+                await ProbeOnboardingStorageAsync(OnboardingFolder).ConfigureAwait(false);
+            }
+            stage = "cluster-connection";
             await using var cluster = new NpgsqlConnection(Connection("postgres", "postgres", profile.PostgresPassword));
             await cluster.OpenAsync().ConfigureAwait(false);
             await ExecuteAsync(cluster, "SELECT pg_advisory_lock(705901);").ConfigureAwait(false);
@@ -46,8 +55,13 @@ internal static class LocalUatBootstrap
             if ((string?)await ScalarAsync(cluster, "SELECT instance_id FROM public.monergy_uat_instance WHERE singleton;").ConfigureAwait(false) != profile.InstanceId)
                 throw new InvalidOperationException("Retained database belongs to another credential profile.");
             await ExecuteAsync(cluster, "DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='monergy_audit_runtime') THEN CREATE ROLE monergy_audit_runtime NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE; END IF; END $$;").ConfigureAwait(false);
-            foreach (var database in profile.Databases)
+            stage = "tenant-registry";
+            if (profile.Onboarding) await PrepareOnboardingAsync(profile).ConfigureAwait(false);
+            // Establish the C&I initial principal before AM bootstraps authority.
+            foreach (var database in profile.Databases.OrderBy(database => database.Service == "am" ? 1 : 0))
             {
+                stage = $"owner-bootstrap:{database.Service}/{database.Tenant}";
+                Console.WriteLine($"Local UAT bootstrap: {stage}.");
                 foreach (var role in new[] { (Suffix: "owner", Password: database.OwnerPassword), (Suffix: "runtime", Password: database.RuntimePassword), (Suffix: "delivery", Password: database.DeliveryPassword) })
                 {
                     if (role.Password is null) continue;
@@ -86,18 +100,26 @@ internal static class LocalUatBootstrap
                 await ExecuteAsync(scoped, Grants(database)).ConfigureAwait(false);
                 if (database.Service != "am")
                 {
-                    var table = database.Service == "audit" ? "audit.access_tenant_identity" : "customer_identity.tenant_identity";
+                    var table = database.Service switch { "audit" => "audit.access_tenant_identity", "consent" => "consent.tenant_identity", _ => "customer_identity.tenant_identity" };
                     await ExecuteAsync(scoped, $"INSERT INTO {table} VALUES(true,@value,1) ON CONFLICT(singleton) DO NOTHING;", database.Tenant).ConfigureAwait(false);
                     if ((string?)await ScalarAsync(scoped, $"SELECT tenant_id FROM {table} WHERE singleton;").ConfigureAwait(false) != database.Tenant)
                         throw new InvalidOperationException("Tenant database mismatch.");
                 }
+                if (profile.Onboarding && database.Service == "customer-identity")
+                    await SeedCustomerOwnershipAsync(scoped, database.Tenant, profile.InstanceId).ConfigureAwait(false);
                 Console.WriteLine($"Ready: {database.Service}/{database.Tenant}; scoped runtime grants applied.");
             }
+            stage = "owner-readback-receipts";
+            if (profile.Onboarding) await RecordOnboardingAsync(profile, cluster).ConfigureAwait(false);
             return 0;
         }
-        catch (Exception error) when (error is NpgsqlException or InvalidOperationException or JsonException or IOException)
+        catch (Exception error) when (error is NpgsqlException or InvalidOperationException or JsonException or IOException or UnauthorizedAccessException)
         {
-            Console.Error.WriteLine("Local UAT bootstrap failed. Check profile/volume pairing and owner migration output; credentials are not printed.");
+            if (profile is { Onboarding: true }) await RecordOnboardingFailureAsync(profile).ConfigureAwait(false);
+            // Only controlled stage, exception type and SQLSTATE; an exception
+            // message/connection string can contain profile credentials.
+            var sqlState = error is PostgresException databaseError ? $"; SQLSTATE={databaseError.SqlState}" : "";
+            Console.Error.WriteLine($"Local UAT bootstrap failed at {stage}: {error.GetType().Name}{sqlState}. Credentials are not printed.");
             return 1;
         }
     }
@@ -109,9 +131,10 @@ internal static class LocalUatBootstrap
         var common = $"REVOKE CREATE ON SCHEMA public FROM PUBLIC; GRANT USAGE ON SCHEMA {schema} TO {runtime}; GRANT SELECT ON ALL TABLES IN SCHEMA {schema} TO {runtime};";
         return common + (database.Service switch
         {
-            "am" => $"GRANT INSERT,UPDATE,DELETE ON am.permissions,am.roles,am.permission_capabilities,am.role_permissions,am.access_subjects,am.resource_grants,am.groups,am.group_members,am.import_batches,am.import_rows,am.import_email_reservations TO {runtime}; GRANT UPDATE(policy_version) ON am.policy_state TO {runtime}; GRANT INSERT ON am.outbox TO {runtime}; GRANT USAGE ON SCHEMA am TO {delivery}; GRANT SELECT ON am.tenant_identity,am.policy_state,am.outbox,am.outbox_delivery,am.outbox_redrives TO {delivery}; GRANT INSERT,UPDATE ON am.outbox_delivery TO {delivery}; GRANT INSERT ON am.outbox_redrives TO {delivery};",
+            "am" => $"GRANT INSERT,UPDATE,DELETE ON am.permissions,am.roles,am.permission_capabilities,am.role_permissions,am.access_subjects,am.resource_grants,am.customer_relationships,am.groups,am.group_members,am.import_batches,am.import_rows,am.import_email_reservations TO {runtime}; GRANT UPDATE(policy_version) ON am.policy_state TO {runtime}; GRANT INSERT ON am.outbox TO {runtime}; GRANT USAGE ON SCHEMA am TO {delivery}; GRANT SELECT ON am.tenant_identity,am.policy_state,am.outbox,am.outbox_delivery,am.outbox_redrives TO {delivery}; GRANT INSERT,UPDATE ON am.outbox_delivery TO {delivery}; GRANT INSERT ON am.outbox_redrives TO {delivery};",
             "customer-identity" => $"GRANT INSERT(session_hash,actor_id,subject_version),UPDATE(revoked) ON customer_identity.trusted_sessions TO {runtime}; GRANT INSERT,UPDATE(version) ON customer_identity.access_subject_versions TO {runtime}; GRANT UPDATE(version) ON customer_identity.access_policy_version TO {runtime}; GRANT INSERT ON customer_identity.access_event_inbox TO {runtime}; GRANT INSERT(actor_id,normalized_email) ON customer_identity.tenant_principals TO {runtime}; GRANT INSERT ON customer_identity.provisioning_receipts TO {runtime};",
             "audit" => $"GRANT INSERT ON audit.evidence,audit.inbox,audit.access_event_inbox TO {runtime};",
+            "consent" => $"GRANT INSERT ON consent.grants,consent.receipts,consent.audit,consent.outbox TO {runtime}; GRANT UPDATE(revoked_at) ON consent.grants TO {runtime}; GRANT UPDATE(version) ON consent.state TO {runtime};",
             _ => throw new InvalidOperationException("Unknown service."),
         });
     }

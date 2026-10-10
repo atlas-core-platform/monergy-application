@@ -15,7 +15,17 @@ public static class EvidenceServiceRegistration
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<InMemoryEvidenceRepository>();
         services.AddSingleton<IEvidenceRepository>(provider => provider.GetRequiredService<InMemoryEvidenceRepository>());
-        services.AddSingleton<ReferenceEvidenceContentStore>();
+        services.AddSingleton(_ =>
+        {
+            var store = new ReferenceEvidenceContentStore();
+            if (configuration["Monergy:OnboardingFixtures"] == "true")
+            {
+                const string content = "Monergy local onboarding acceptance fixture. Not customer financial data.";
+                var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
+                store.Seed("reference://onboarding-evidence", hash, "text/plain", content);
+            }
+            return store;
+        });
         services.AddSingleton<IEvidenceContentStore>(provider => provider.GetRequiredService<ReferenceEvidenceContentStore>());
         services.AddSingleton<EvidenceApplication>();
         return services;

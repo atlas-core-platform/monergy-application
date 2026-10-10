@@ -21,6 +21,12 @@ async function fixtures(page: Page, override?: (route: Route) => Promise<boolean
   await page.route('**/*-api/**', async (route) => {
     if (await override?.(route)) return;
     const path = new URL(route.request().url()).pathname;
+    if (path === '/uat-api/v1/setup') {
+      await route.fulfill({
+        json: { enabled: false, tenantId: 'T001', customerRelationships: false },
+      });
+      return;
+    }
     await route.fulfill({
       json: path.endsWith('/tenant-sessions')
         ? session

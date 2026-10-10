@@ -22,10 +22,10 @@ const member = {
 };
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
-const mount = () =>
+const mount = (path = '/access/users') =>
   render(
     <FoundationProvider>
-      <AccessExperience />
+      <AccessExperience path={path} />
     </FoundationProvider>,
   );
 async function connect() {
@@ -220,6 +220,102 @@ describe('tenant administration trust boundaries', () => {
     },
   );
 
+  it(
+    'selects resource access by owner-resolved business name while sending the immutable ID',
+    { timeout: 30000 },
+    async () => {
+      const writes: unknown[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((url: string, options?: RequestInit) => {
+          if (url.includes('/identity-api/local/v1/tenant-sessions'))
+            return Promise.resolve(json(session));
+          if (url.endsWith('/administration/context'))
+            return Promise.resolve(
+              json({
+                tenantId: session.tenantId,
+                actorId: session.actorId,
+                authority: 'TenantAdmin',
+                policyVersion: 7,
+              }),
+            );
+          if (url.endsWith('/capabilities'))
+            return Promise.resolve(
+              json({
+                capabilities: [
+                  {
+                    capabilityId: 'financial-profile.profile.read',
+                    service: 'financial-profile',
+                    displayName: 'Read financial profile',
+                    resourceType: 'customer',
+                    lifecycle: 'Active',
+                  },
+                ],
+              }),
+            );
+          if (url.includes('/administration/members'))
+            return Promise.resolve(json({ policyVersion: 7, items: [member], nextCursor: null }));
+          if (url.includes('/administration/resource-grants') && options?.method === 'POST') {
+            writes.push(JSON.parse(typeof options.body === 'string' ? options.body : '{}'));
+            return Promise.resolve(json({ id: 'grant-1', policyVersion: 8, subjectVersion: 2 }));
+          }
+          if (url.includes('/administration/resource-grants'))
+            return Promise.resolve(json({ policyVersion: 7, items: [], nextCursor: null }));
+          if (url.endsWith('/uat-api/v1/resource-directory/customer'))
+            return Promise.resolve(
+              json({
+                resourceType: 'customer',
+                items: [
+                  {
+                    resourceId: 'customer-a',
+                    displayName: 'Reference Customer A',
+                    secondaryLabel: 'Primary client',
+                  },
+                ],
+              }),
+            );
+          return Promise.resolve(json({ policyVersion: 7, items: [], nextCursor: null }));
+        }),
+      );
+
+      mount('/access/resources');
+      const user = await connect();
+      await user.click(await screen.findByRole('button', { name: 'Create resource access' }));
+      const editor = within(await screen.findByRole('dialog'));
+      await user.click(editor.getByRole('combobox', { name: 'Person' }));
+      await user.click(await screen.findByTitle('person@example.test'));
+      await user.click(editor.getByRole('combobox', { name: 'Capability' }));
+      await user.click(await screen.findByTitle('Read financial profile'));
+      await user.click(editor.getByRole('combobox', { name: 'Resource' }));
+      await user.click(await screen.findByTitle('Reference Customer A · Primary client'));
+
+      expect(editor.getByRole('combobox', { name: 'Resource' })).toHaveAttribute(
+        'aria-expanded',
+        'false',
+      );
+      expect(editor.queryByText('customer-a')).not.toBeInTheDocument();
+
+      await user.click(editor.getByRole('button', { name: 'Review change' }));
+      const reviewTitle = await screen.findByText('Review new resource access');
+      const reviewDialog = reviewTitle.closest<HTMLElement>('[role="dialog"]');
+      if (!reviewDialog) throw new Error('Review title must belong to a dialog.');
+      const review = within(reviewDialog);
+      expect(review.getByText('Reference Customer A')).toBeVisible();
+      expect(review.queryByText('customer-a')).not.toBeInTheDocument();
+
+      await user.click(review.getByRole('button', { name: 'Create resource access' }));
+      expect(writes).toEqual([
+        {
+          expectedPolicyVersion: 7,
+          actorId: 'A100',
+          capabilityId: 'financial-profile.profile.read',
+          resourceType: 'customer',
+          resourceId: 'customer-a',
+        },
+      ]);
+    },
+  );
+
   it('rejects mixed-revision pagination and addresses resource grants by grant ID', async () => {
     const fetcher = vi
       .fn()
@@ -231,5 +327,23 @@ describe('tenant administration trust boundaries', () => {
     await waitFor(() => {
       expect(fetcher).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it('keeps the authenticated workspace when a directory type is unsupported', async () => {
+    const onFailure = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(json({ error: 'RESOURCE_DIRECTORY_UNAVAILABLE' }, 422)),
+    );
+    const api = new AccessApi(session, {
+      signal: new AbortController().signal,
+      onFailure,
+      onOperation: vi.fn(),
+    });
+    await expect(api.resourceDirectory('document')).rejects.toMatchObject({
+      status: 422,
+      code: 'RESOURCE_DIRECTORY_UNAVAILABLE',
+    });
+    expect(onFailure).not.toHaveBeenCalled();
   });
 });

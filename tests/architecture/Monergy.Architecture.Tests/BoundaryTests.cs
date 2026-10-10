@@ -98,6 +98,7 @@ public sealed class BoundaryTests
             "reporting",
             "job-management",
             "customer-identity", // AR-001 / AM-05 owner-local tenant sessions.
+            "consent", // Approved continuation: bounded LOCAL/UAT customer Consent owner.
         };
         var authorizedRoots = persistenceCohort
             .Select(serviceId => Path.GetFullPath(Path.Combine(ServicesRoot, serviceId, "migrations")))
@@ -148,6 +149,7 @@ public sealed class BoundaryTests
             "reporting",
             "job-management",
             "customer-identity", // AR-001 / AM-05 owner-local tenant sessions.
+            "consent", // Approved continuation: bounded LOCAL/UAT customer Consent owner.
         };
 
         foreach (var projectPath in Directory.GetFiles(RepositoryRoot, "*.csproj", SearchOption.AllDirectories))
@@ -206,6 +208,30 @@ public sealed class BoundaryTests
             || relative.StartsWith("tests/job-management/", StringComparison.Ordinal)
             || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal),
             $"Physical persistence source escaped its D09 boundary: {relative}"));
+    }
+
+    [Fact]
+    public void TenantControlPlaneRemainsAPlatformBoundaryOutsideBusinessServices()
+    {
+        var projectPath = Path.Combine(
+            RepositoryRoot,
+            "platform",
+            "control-plane",
+            "Monergy.Platform.ControlPlane.csproj");
+        Assert.True(File.Exists(projectPath));
+
+        var references = XDocument.Load(projectPath)
+            .Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value.Replace('\\', '/'))
+            .Where(value => value is not null)
+            .Cast<string>()
+            .ToArray();
+
+        Assert.Empty(references);
+
+        Assert.DoesNotContain(
+            Directory.GetFiles(ServicesRoot, "*.csproj", SearchOption.AllDirectories),
+            project => project.Contains("control-plane", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

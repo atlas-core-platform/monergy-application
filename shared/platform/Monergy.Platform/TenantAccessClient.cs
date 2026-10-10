@@ -8,6 +8,10 @@ namespace Monergy.Platform;
 
 public sealed record TenantAdminContext(string TenantId, string ActorId, long PolicyVersion, string Authority);
 public sealed record TenantAccessRequest(string CapabilityId, string? ResourceType, string? ResourceId);
+public sealed record CustomerAccessRequest(string CapabilityId, string CustomerId, string Purpose);
+public sealed record CustomerAccessDecision(string DecisionId, string Outcome, string TenantId, string ActorId,
+    string CustomerId, string CapabilityId, string Purpose, string ReasonCode, string? AccessBasis,
+    long PolicyVersion, long SubjectVersion, long CustomerVersion, long ConsentVersion, DateTimeOffset EvaluatedAt);
 public sealed record TenantAccessDecision(string DecisionId, string Outcome, string TenantId, string ActorId,
     string CapabilityId, string? ResourceType, string? ResourceId, string ReasonCode, long PolicyVersion,
     long SubjectVersion, string CapabilityCatalogVersion, DateTimeOffset EvaluatedAt, DateTimeOffset? ExpiresAt,
@@ -78,6 +82,22 @@ public sealed class TenantAccessClient : IDisposable
         if (tenant.Count != 1 || session.Count != 1 || !Identifier(tenant[0], 64) || !Identifier(session[0], 160))
             throw new TenantBoundaryException("TENANT_SESSION_REQUIRED", 401);
         return (tenant[0]!, session[0]!);
+    }
+
+    public async Task<CustomerAccessDecision> EvaluateCustomerAsync(HttpContext http, string capability, string customer)
+    {
+        var (tenant, session) = Headers(http);
+        const string purpose = "customer-advice"; // Owner-selected; never taken from browser input.
+        using var request = Request(HttpMethod.Post, "v1/authorization/customer-evaluations", tenant, session);
+        request.Content = JsonContent.Create(new CustomerAccessRequest(capability, customer, purpose));
+        var result = await SendAsync<CustomerAccessDecision>(request, http.RequestAborted).ConfigureAwait(false);
+        if (result.TenantId != tenant || result.CustomerId != customer || result.CapabilityId != capability || result.Purpose != purpose ||
+            !Identifier(result.ActorId, 128) || !Identifier(result.DecisionId, 128) || result.Outcome is not ("Allow" or "Deny") ||
+            result.EvaluatedAt < DateTimeOffset.UtcNow.AddSeconds(-10) || result.EvaluatedAt > DateTimeOffset.UtcNow.AddSeconds(5) ||
+            result.Outcome == "Allow" && (result.PolicyVersion < 1 || result.SubjectVersion < 1 || result.CustomerVersion < 1 ||
+                result.ReasonCode != "Granted" || result.AccessBasis is not ("Self" or "Advisor") || result.AccessBasis == "Advisor" && result.ConsentVersion < 1))
+            throw new TenantBoundaryException("ACCESS_OWNER_RESPONSE_INVALID", 503);
+        return result;
     }
 
     public static bool Identifier(string? value, int maximum) => !string.IsNullOrWhiteSpace(value) && value.Length <= maximum &&

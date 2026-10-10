@@ -10,6 +10,9 @@ import './workspace/workspace-home.css';
 import { localUat, useWorkspaceSession } from './access/workspaceSession';
 import { WorkspaceSessionProvider } from './access/WorkspaceSessionProvider';
 import { WorkspaceEntry } from './access/WorkspaceEntry';
+const TenantSetupGate = lazy(() =>
+  import('./access/TenantSetup').then((module) => ({ default: module.TenantSetupGate })),
+);
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const SearchExperience = lazy(() => import('./search/SearchExperience'));
@@ -284,7 +287,21 @@ function WorkspaceApplication() {
   );
   return (
     <FoundationProvider appearance={midnight ? 'midnight' : 'light'}>
-      {gated ? <WorkspaceEntry>{shell}</WorkspaceEntry> : shell}
+      {gated ? (
+        <WorkspaceEntry>
+          <Suspense
+            fallback={
+              <main aria-busy="true" className="access-loading">
+                Checking workspace setup…
+              </main>
+            }
+          >
+            <TenantSetupGate>{shell}</TenantSetupGate>
+          </Suspense>
+        </WorkspaceEntry>
+      ) : (
+        shell
+      )}
     </FoundationProvider>
   );
 }

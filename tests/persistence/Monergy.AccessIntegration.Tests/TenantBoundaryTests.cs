@@ -10,6 +10,33 @@ namespace Monergy.AccessIntegration.Tests;
 
 public sealed class TenantBoundaryTests
 {
+    [Theory]
+    [InlineData("Allow", "C001", 1, 200)]
+    [InlineData("Deny", "C001", 1, 403)]
+    [InlineData("Allow", "C002", 1, 503)]
+    [InlineData("Allow", "C001", 0, 503)]
+    public async Task RelationshipModeUsesBoundCustomerConsentDecisionWithoutLegacyFallback(string outcome, string customer, long consentVersion, int expected)
+    {
+        var invoked = false;
+        var options = Options();
+        var middleware = new TenantBoundaryMiddleware(http => { invoked = true; return Task.CompletedTask; }, new()
+        {
+            Service = options.Service,
+            CapabilityPrefix = options.CapabilityPrefix,
+            ProbeUrl = options.ProbeUrl,
+            CustomerTenants = options.CustomerTenants,
+            CustomerRelationships = true,
+        });
+        var http = Http(); http.Request.Path = "/contracts/cid-021/v1";
+        http.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes("""
+            {"contractName":"GetDocument","security":{"actor":{"actorId":"A100","authenticationContextId":"token"},"access":{"customerId":"C001"}},"payload":{"customerId":"C001","documentId":"D001"}}
+            """));
+        using var client = Client(new CustomerAccessDecision("decision-1", outcome, "T001", "A100", customer, "evidence.document.read",
+            "customer-advice", outcome == "Allow" ? "Granted" : "ConsentRequired", "Advisor", 3, 2, 1, consentVersion, DateTimeOffset.UtcNow));
+        await middleware.InvokeAsync(http, client);
+        Assert.Equal(expected, http.Response.StatusCode); Assert.Equal(expected == 200, invoked);
+    }
+
     [Fact]
     public async Task AdministratorContextRejectsAnotherTenantAndMissingHeaders()
     {

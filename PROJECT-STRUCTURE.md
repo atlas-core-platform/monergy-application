@@ -1,6 +1,8 @@
-# Monergy Application Repository Structure — D13 Customer Identity Candidate
+# Monergy Application Repository Structure — CP-01 Onboarding Candidate
 
-The D05 application root has exactly six governed responsibility areas:
+The D05 baseline retains its six responsibility areas. CP-01 adds the separate
+`platform/control-plane` boundary for tenant lifecycle orchestration and setup.
+The current candidate therefore has seven governed root responsibility areas:
 
 ```text
 monergy-application/
@@ -9,14 +11,20 @@ monergy-application/
 ├── services/             Twelve independently owned R3 service boundaries
 ├── contracts/            Transport-neutral D03 contract implementation boundary
 ├── shared/platform/      Reusable technical platform concerns only
+├── platform/control-plane/ Tenant registry, provisioning orchestration and setup
 ├── tests/                Contract, integration, end-to-end, and bootstrap evidence
 └── build/                Local/CI bootstrap, policy, release, and supply-chain logic
 ```
 
 `.github/` realizes hosted repository governance and technology-specific CI; it
-does not add a seventh application responsibility. Root policy/toolchain files do
+does not add an application responsibility. Root policy/toolchain files do
 not add application responsibilities. `.artifacts/` and `.toolcache/` are ignored
 local evidence/tool homes.
+
+The control plane is not a thirteenth business service. It owns tenant lifecycle
+and orchestration metadata, while each service retains its own persistence,
+authorization and migrations. The root verifier permits only `control-plane`
+inside `platform`; unrelated roots or platform boundaries fail verification.
 
 D02 provides the accepted toolchain foundation. D03 adds:
 

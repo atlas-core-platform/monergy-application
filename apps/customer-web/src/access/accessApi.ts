@@ -18,6 +18,15 @@ export interface Grant {
   capabilityId: string;
   scope: 'Tenant' | 'Resource';
 }
+export interface ResourceDirectoryItem {
+  resourceId: string;
+  displayName: string;
+  secondaryLabel?: string | null;
+}
+export interface ResourceDirectory {
+  resourceType: string;
+  items: ResourceDirectoryItem[];
+}
 export interface AccessRecord {
   id?: string;
   actorId?: string;
@@ -37,6 +46,8 @@ export interface AccessRecord {
   capabilityId?: string;
   resourceType?: string;
   resourceId?: string;
+  customerId?: string;
+  assignedAt?: string;
 }
 export interface AccessPage {
   policyVersion: number;
@@ -204,6 +215,26 @@ export class AccessApi {
         'X-Monergy-Tenant': this.session.tenantId,
         'X-Monergy-Session': this.session.authenticationContextId,
       },
+    });
+  }
+  resourceDirectory(resourceType: string, signal?: AbortSignal): Promise<ResourceDirectory> {
+    if (!/^[a-z][a-z0-9-]{0,63}$/.test(resourceType))
+      return Promise.reject(new AccessApiError(400, 'INVALID_RESOURCE_TYPE'));
+    return this.owner<ResourceDirectory>(
+      'uat',
+      'v1/resource-directory/' + encodeURIComponent(resourceType),
+      signal,
+    );
+  }
+  setup<T>(path: '' | '/activate', body: unknown): Promise<T> {
+    return this.guarded<T>('/uat-api/v1/setup' + path, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Monergy-Tenant': this.session.tenantId,
+        'X-Monergy-Session': this.session.authenticationContextId,
+      },
+      body: JSON.stringify(body),
     });
   }
   list(area: AccessArea, after?: string, signal?: AbortSignal): Promise<AccessPage> {

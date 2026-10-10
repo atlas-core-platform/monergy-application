@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './apps/customer-web/e2e',
-  testIgnore: 'd11-persisted-reporting.spec.ts',
+  // These journeys need their respective owner-backed composition profiles.
+  testIgnore: ['d11-persisted-reporting.spec.ts', 'onboarding.spec.ts'],
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 1 : 0,

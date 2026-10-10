@@ -19,13 +19,14 @@ internal static class Topology
         new("job-management", "Job Management", "http://127.0.0.1:5118", "/health/ready", "Worker boundary; business consumer not connected"),
         new("ai-intelligence", "AI Intelligence", "http://127.0.0.1:5119", "/health/ready", "Service scaffold; no live AI journey"),
     ];
-    public static Task<ServiceState[]> ReadAsync(HttpClient client, CancellationToken ct) => Task.WhenAll(Services.Select(async service =>
+    public static Task<ServiceState[]> ReadAsync(HttpClient client, CancellationToken ct, bool onboarding = false) => Task.WhenAll(Services.Select(async service =>
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(3));
         var available = false;
         try { using var response = await client.GetAsync(service.Url + service.HealthPath, timeout.Token).ConfigureAwait(false); available = response.IsSuccessStatusCode; }
         catch (Exception error) when (error is HttpRequestException or OperationCanceledException) { }
-        return new ServiceState(service.Id, service.Label, service.Implementation, available);
+        var implementation = onboarding && service.Id == "consent" ? "Durable local customer Consent, expiry and revocation" : service.Implementation;
+        return new ServiceState(service.Id, service.Label, implementation, available);
     }));
 }

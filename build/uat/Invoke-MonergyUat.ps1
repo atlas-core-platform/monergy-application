@@ -4,10 +4,12 @@ param(
     [ValidatePattern('^[a-z][a-z0-9-]{0,30}$')][string]$Profile = 'default',
     [ValidateRange(1024,65535)][int]$Port = 4173,
     [ValidateSet('T001','T002')][string]$Tenant = 'T001',
-    [ValidateSet('A900','A100','A300')][string]$Actor = 'A900',
-    [switch]$ConfirmReset
+    [ValidateSet('A900','A100','A200','A300')][string]$Actor = 'A900',
+    [switch]$ConfirmReset,
+    [switch]$EnableOnboarding
 )
 $ErrorActionPreference = 'Stop'
+if ($EnableOnboarding -and $Profile -eq 'default') { throw 'Use a new named profile for onboarding, for example -Profile onboarding -EnableOnboarding. The retained default profile is not upgraded.' }
 Set-StrictMode -Version Latest
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $folder = Join-Path $repository ".artifacts/uat/$Profile"
@@ -81,18 +83,25 @@ if (-not (Test-Path $profileFile)) {
     Protect-Files
     $databases = @(); $identities = @()
     foreach ($tenantId in @('T001','T002')) {
-        foreach ($service in @('am','customer-identity','audit')) {
+        $ownerServices = @('am','customer-identity','audit')
+        if ($EnableOnboarding) { $ownerServices += 'consent' }
+        foreach ($service in $ownerServices) {
             $databases += @{ service=$service; tenant=$tenantId; name=('uat_'+$service.Replace('-','_')+'_'+$tenantId.ToLowerInvariant()); ownerPassword=(Secret); runtimePassword=(Secret); deliveryPassword=$(if ($service -eq 'am') { Secret } else { $null }) }
         }
-        foreach ($actorId in @('A900','A100','A300')) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
+        $localActors = @('A900','A100','A300')
+        if ($EnableOnboarding) { $localActors += 'A200' }
+        foreach ($actorId in $localActors) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
     }
-    $new = @{ instanceId=[Guid]::NewGuid().ToString('N'); postgresPassword=(Secret); databases=$databases; identities=$identities; tokens=@{}; port=$Port }
-    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent')) { $new.tokens[$name] = Secret }
+    $new = @{ instanceId=[Guid]::NewGuid().ToString('N'); postgresPassword=(Secret); databases=$databases; identities=$identities; tokens=@{}; port=$Port; onboarding=[bool]$EnableOnboarding }
+    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','customerContext','consent')) { $new.tokens[$name] = Secret }
     Save-Json 'profile.json' $new
 }
 $state = Get-Content $profileFile -Raw | ConvertFrom-Json
+$onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
+if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
 if ($Action -eq 'Credentials') {
     $identity = $state.identities | Where-Object { $_.tenantId -eq $Tenant -and $_.actorId -eq $Actor }
+    if ($null -eq $identity) { throw 'This actor has no key in the selected profile.' }
     Write-Host "Local UAT only | Tenant $Tenant | Actor $Actor"
     Write-Output $identity.token
     return
@@ -111,16 +120,37 @@ if ($Action -in @('Prepare','Start')) {
     $ports = [ordered]@{ 'customer-identity'=5101; audit=5102; consent=5110; evidence=5111; 'document-intelligence'=5112; 'financial-profile'=5113; 'financial-rules'=5114; 'search-retrieval'=5115; reporting=5116; 'integration-gateway'=5117; 'job-management'=5118; 'ai-intelligence'=5119 }
     $am = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; AccessManagement=@{ Adapter='postgres-reference'; TrustedContext='customer-identity-reference'; CustomerIdentityUrl='http://127.0.0.1:5101/'; CustomerIdentityToken=$state.tokens.context; IdentityProvisioningToken=$state.tokens.provisioning; MembershipToken=$state.tokens.membership; TenantDatabases=@{} } } }
     foreach ($db in $state.databases | Where-Object service -eq 'am') { $am.Monergy.AccessManagement.TenantDatabases[$db.tenant] = Connection $db 'runtime' }
+    if ($onboarding) {
+        $am.Monergy.AccessManagement.CustomerRelationships=$true
+        $am.Monergy.AccessManagement.CustomerContextToken=$state.tokens.customerContext
+        $am.Monergy.AccessManagement.ConsentUrl='http://127.0.0.1:5110/'
+        $am.Monergy.AccessManagement.ConsentToken=$state.tokens.consent
+    }
     Save-Json 'access-management.json' $am
     foreach ($service in $ports.Keys) {
         $config = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; TenantBoundary=@{ Enabled='true'; ProbeUrl="http://127.0.0.1:$($ports[$service])/"; CustomerTenants=@{ 'reference-customer'='T001'; 'other-customer'='T002'; C001='T001'; C002='T002' } } } }
-        if ($service -in @('customer-identity','audit')) {
+        if ($onboarding) { $config.Monergy.TenantBoundary.CustomerRelationships='true' }
+        if ($service -in @('customer-identity','audit') -or ($onboarding -and $service -eq 'consent')) {
             $integration = @{ Enabled='true'; AccessManagementUrl='http://127.0.0.1:5088/' }
+            if ($onboarding -and $service -in @('customer-identity','consent')) {
+                $integration.CustomerRelationships='true'; $integration.CustomerContextToken=$state.tokens.customerContext
+                $integration.CustomerIdentityUrl='http://127.0.0.1:5101/'; $integration.CustomerIdentityToken=$state.tokens.context
+                $integration.MembershipToken=$state.tokens.membership; $integration.ConsentToken=$state.tokens.consent
+            }
             if ($service -eq 'customer-identity') {
                 $integration.MembershipToken=$state.tokens.membership; $integration.CustomerIdentityToken=$state.tokens.context
                 $integration.IdentityProvisioningToken=$state.tokens.provisioning; $integration.CustomerIdentityEventToken=$state.tokens.identityEvent
                 $integration.Identities=$state.identities; $integration.CustomerIdentityDatabases=@{}
+                $integration.CustomerResources=@(
+                    @{ TenantId='T001'; ResourceId='reference-customer'; DisplayName='Reference Customer'; SecondaryLabel='Primary UAT customer' },
+                    @{ TenantId='T001'; ResourceId='C001'; DisplayName='Sample Customer One'; SecondaryLabel='Additional UAT customer' },
+                    @{ TenantId='T002'; ResourceId='other-customer'; DisplayName='Other Customer'; SecondaryLabel='Primary UAT customer' },
+                    @{ TenantId='T002'; ResourceId='C002'; DisplayName='Sample Customer Two'; SecondaryLabel='Additional UAT customer' }
+                )
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.CustomerIdentityDatabases[$db.tenant] = Connection $db 'runtime' }
+            } elseif ($service -eq 'consent') {
+                $integration.ConsentDatabases=@{}
+                foreach ($db in $state.databases | Where-Object service -eq 'consent') { $integration.ConsentDatabases[$db.tenant] = Connection $db 'runtime' }
             } else {
                 $integration.AuditEventToken=$state.tokens.auditEvent; $integration.AuditDatabases=@{}
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.AuditDatabases[$db.tenant] = Connection $db 'runtime' }
@@ -128,6 +158,7 @@ if ($Action -in @('Prepare','Start')) {
             $config.Monergy.AccessIntegration=$integration
         } elseif ($service -in @('evidence','financial-profile','financial-rules','search-retrieval','reporting','integration-gateway')) {
             $config.Monergy.ReferenceAdapters='true'
+            if ($onboarding -and $service -eq 'evidence') { $config.Monergy.OnboardingFixtures='true' }
         }
         Save-Json "$service.json" $config
     }
@@ -142,7 +173,7 @@ if ($Action -in @('Prepare','Start')) {
         }
         Save-Json "delivery-$tenantId.json" $delivery
     }
-    Save-Json 'workspace.json' @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' } } }
+    Save-Json 'workspace.json' @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' } } }
     $runtimeUid = if ($windows) { '1654' } else { (& id -u).Trim() }
     $path = $folder.Replace('\','/')
     Save-Text 'compose.env' "UAT_CONFIG_ROOT='$path'`nUAT_PORT=$($state.port)`nUAT_UID=$runtimeUid`n"
@@ -171,7 +202,9 @@ if ($Action -eq 'Start' -and -not (Test-Path (Join-Path $folder 'members-initial
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
-            foreach ($actorId in @('A100','A300')) {
+            $memberActors = @('A100','A300')
+            if ($onboarding) { $memberActors += 'A200' }
+            foreach ($actorId in $memberActors) {
                 $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
                 if (-not @($members.items | Where-Object actorId -eq $actorId).Count) {
                     Invoke-RestMethod "$url/access-api/v1/administration/members" -Method Post -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;actorId=$actorId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null

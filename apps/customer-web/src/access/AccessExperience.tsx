@@ -12,6 +12,7 @@ import { useWorkspaceSession } from './workspaceSession';
 import { WorkspaceSessionProvider } from './WorkspaceSessionProvider';
 import { WorkspaceEntry } from './WorkspaceEntry';
 import { AccessOverview } from './AccessOverview';
+import { CustomerRelationships } from './CustomerRelationships';
 import './access.css';
 
 const areas: { value: AccessArea; label: string; description: string }[] = [
@@ -130,6 +131,11 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
       )}
       {path === '/access' ? (
         <AccessOverview api={api} onExpired={fail} />
+      ) : area === 'resource-grants' ? (
+        <CustomerRelationships
+          api={api}
+          legacy={<Administration area={area} api={api} onExpired={fail} />}
+        />
       ) : area ? (
         <Administration key={area} area={area} api={api} onExpired={fail} />
       ) : path === '/access/activity' || path === '/access/sessions' ? (
@@ -168,6 +174,7 @@ function Administration({
   onExpired: (failure: unknown) => void;
 }) {
   const [roleNames, setRoleNames] = useState<Record<string, string>>({});
+  const [resourceNames, setResourceNames] = useState<Record<string, string>>({});
   const [page, setPage] = useState<AccessPage | null>(null);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -222,6 +229,35 @@ function Administration({
     setRevision((value) => value + 1);
   };
   useEffect(() => {
+    if (area !== 'resource-grants' || !page) {
+      return;
+    }
+    const controller = new AbortController();
+    const types = [
+      ...new Set(page.items.map((item) => item.resourceType).filter(Boolean)),
+    ] as string[];
+    void Promise.all(
+      types.map(async (resourceType) => {
+        try {
+          const directory = await api.resourceDirectory(resourceType, controller.signal);
+          return directory.items;
+        } catch {
+          return [];
+        }
+      }),
+    ).then((groups) => {
+      if (controller.signal.aborted) return;
+      setResourceNames(
+        Object.fromEntries(
+          groups.flat().map((resource) => [resource.resourceId, resource.displayName]),
+        ),
+      );
+    });
+    return () => {
+      controller.abort();
+    };
+  }, [api, area, page]);
+  useEffect(() => {
     if (!page || !pendingFocus.current) return;
     const target = pendingFocus.current;
     pendingFocus.current = null;
@@ -257,7 +293,7 @@ function Administration({
           record.label,
           record.code,
           record.status,
-          record.resourceId,
+          record.resourceId ? resourceNames[record.resourceId] : undefined,
           record.actorId,
           record.businessRoleId ? roleNames[record.businessRoleId] : undefined,
         ].some((value) => value?.toLowerCase().includes(query.toLowerCase())) &&
@@ -292,7 +328,11 @@ function Administration({
           </span>
           <span>
             <strong>
-              {record.normalizedEmail ?? record.label ?? record.resourceId ?? record.id}
+              {record.normalizedEmail ??
+                record.label ??
+                (record.resourceId
+                  ? (resourceNames[record.resourceId] ?? 'Restricted resource')
+                  : record.id)}
             </strong>
             <small>{record.code ?? (area === 'members' ? '' : (record.capabilityId ?? ''))}</small>
           </span>
@@ -371,7 +411,7 @@ function Administration({
         <Tooltip title="Open details">
           <Button
             type="text"
-            aria-label={`Open ${record.normalizedEmail ?? record.label ?? record.id ?? 'details'}`}
+            aria-label={`Open ${record.normalizedEmail ?? record.label ?? (record.resourceId ? (resourceNames[record.resourceId] ?? 'restricted resource') : record.id) ?? 'details'}`}
             icon={<WorkspaceIcon name="arrow" size={15} />}
             iconPlacement="end"
             onClick={() => {

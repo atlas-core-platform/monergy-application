@@ -25,6 +25,7 @@ import type {
   AccessRecord,
   Capability,
   Grant,
+  ResourceDirectoryItem,
 } from './accessApi';
 
 interface Values {
@@ -65,11 +66,25 @@ export function AccessEditor({
   const [form] = Form.useForm<Values>();
   const selectedPermissions = Form.useWatch('permissionIds', form);
   const selectedRole = Form.useWatch('businessRoleId', form);
+  const selectedCapability = Form.useWatch('capabilityId', form);
   const [resourceGrants, setResourceGrants] = useState<AccessRecord[]>([]);
+  const [resourceLookup, setResourceLookup] = useState<{
+    type: string;
+    items: ResourceDirectoryItem[];
+    error: string;
+  } | null>(null);
+  const [resolvedResourceNames, setResolvedResourceNames] = useState<Record<string, string>>({});
   const [permissions, setPermissions] = useState<AccessRecord[]>([]);
   const [roles, setRoles] = useState<AccessRecord[]>([]);
   const [people, setPeople] = useState<AccessRecord[]>([]);
   const [capabilities, setCapabilities] = useState<Capability[]>([]);
+  const resourceType =
+    capabilities.find((item) => item.capabilityId === selectedCapability)?.resourceType ??
+    record?.resourceType;
+  const matchingLookup = resourceLookup?.type === resourceType ? resourceLookup : null;
+  const resourceOptions = matchingLookup?.items ?? [];
+  const resourceLookupLoading = Boolean(resourceType && !matchingLookup);
+  const resourceLookupError = matchingLookup?.error ?? '';
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -194,6 +209,69 @@ export function AccessEditor({
     };
   }, [api, area, form, id, onExpired, policyVersion, record]);
 
+  useEffect(() => {
+    if (area !== 'resource-grants' || !resourceType) return;
+    const controller = new AbortController();
+    void api
+      .resourceDirectory(resourceType, controller.signal)
+      .then((directory) => {
+        if (!controller.signal.aborted) {
+          setResourceLookup({ type: resourceType, items: directory.items, error: '' });
+          setResolvedResourceNames((current) => ({
+            ...current,
+            ...Object.fromEntries(
+              directory.items.map((item) => [item.resourceId, item.displayName]),
+            ),
+          }));
+        }
+      })
+      .catch((failure: unknown) => {
+        if (!controller.signal.aborted) {
+          setResourceLookup({
+            type: resourceType,
+            items: [],
+            error:
+              failure instanceof AccessApiError && failure.code === 'RESOURCE_DIRECTORY_UNAVAILABLE'
+                ? 'This resource type does not yet have an owner-backed directory.'
+                : displayError(failure),
+          });
+        }
+      });
+    return () => {
+      controller.abort();
+    };
+  }, [api, area, resourceType]);
+
+  useEffect(() => {
+    if (area !== 'members' || resourceGrants.length === 0) return;
+    const controller = new AbortController();
+    const resourceTypes = [
+      ...new Set(resourceGrants.map((grant) => grant.resourceType).filter(Boolean)),
+    ] as string[];
+    void Promise.all(
+      resourceTypes.map(async (resourceType) => {
+        try {
+          return (await api.resourceDirectory(resourceType, controller.signal)).items;
+        } catch {
+          return [];
+        }
+      }),
+    ).then((groups) => {
+      if (!controller.signal.aborted)
+        setResolvedResourceNames(
+          Object.fromEntries(groups.flat().map((item) => [item.resourceId, item.displayName])),
+        );
+    });
+    return () => {
+      controller.abort();
+    };
+  }, [api, area, resourceGrants]);
+
+  const resourceName = (resourceId?: string) =>
+    (resourceId ? resolvedResourceNames[resourceId] : undefined) ??
+    resourceOptions.find((item) => item.resourceId === resourceId)?.displayName ??
+    (resourceId ? 'Restricted resource' : 'None');
+
   const save = async () => {
     if (!confirmation || recovery || busy) return;
     setBusy(true);
@@ -296,7 +374,11 @@ export function AccessEditor({
       return [
         { label: 'Person', value: lookup(people, values.actorId) },
         { label: 'Capability', value: capabilityName(values.capabilityId) },
-        { label: 'Resource identifier', value: values.resourceId ?? 'None' },
+        {
+          label: 'Resource',
+          value: resourceName(values.resourceId),
+          identity: values.resourceId ?? '',
+        },
       ];
     return [
       { label: 'Name', value: values.label },
@@ -416,7 +498,7 @@ export function AccessEditor({
                     <ul>
                       {resourceGrants.map((grant) => (
                         <li key={recordId(grant)}>
-                          {capabilityName(grant.capabilityId)} · {grant.resourceId}
+                          {capabilityName(grant.capabilityId)} · {resourceName(grant.resourceId)}
                         </li>
                       ))}
                     </ul>
@@ -545,7 +627,11 @@ export function AccessEditor({
             {record && (
               <p className="access-review-subject">
                 <span>Affected {noun}</span>
-                <strong>{record.normalizedEmail ?? record.label ?? record.resourceId ?? id}</strong>
+                <strong>
+                  {area === 'resource-grants'
+                    ? resourceName(record.resourceId)
+                    : (record.normalizedEmail ?? record.label ?? id)}
+                </strong>
               </p>
             )}
             {proposed.length > 0 && (
@@ -562,8 +648,8 @@ export function AccessEditor({
                     <p>Saving changes invalidates this user’s existing sessions.</p>
                     {original?.businessRoleId !== confirmation.values?.businessRoleId && (
                       <p>
-                        Changing the business role removes all individual resource grants. Review
-                        and reassign any required resources after saving.
+                        Changing the business role removes customer assignments and individual
+                        resource grants. Review and reassign any required resources after saving.
                       </p>
                     )}
                     {!confirmation.values?.active && (
@@ -606,7 +692,7 @@ export function AccessEditor({
                     capabilities.find((item) => item.capabilityId === record.capabilityId)
                       ?.displayName ?? record.capabilityId,
                 },
-                { key: 'resource', label: 'Resource', children: record.resourceId },
+                { key: 'resource', label: 'Resource', children: resourceName(record.resourceId) },
               ]}
             />
           ) : (
@@ -614,6 +700,17 @@ export function AccessEditor({
               form={form}
               layout="vertical"
               onFinish={(values) => {
+                if (
+                  area === 'resource-grants' &&
+                  (resourceLookupLoading ||
+                    resourceLookupError ||
+                    !resourceOptions.some((resource) => resource.resourceId === values.resourceId))
+                ) {
+                  form.setFields([
+                    { name: 'resourceId', errors: ['Choose an available resource by name.'] },
+                  ]);
+                  return;
+                }
                 setConfirmation({ values });
               }}
               disabled={busy || loading || Boolean(recovery)}
@@ -750,7 +847,8 @@ export function AccessEditor({
                       />
                     </Form.Item>
                     <p className="access-form-hint">
-                      One business role per user. Changing it removes individual resource grants.
+                      One business role per user. Changing it removes customer assignments and
+                      individual resource grants.
                     </p>
                     {configuredPermissions}
                   </section>
@@ -806,6 +904,9 @@ export function AccessEditor({
                   <Form.Item name="capabilityId" label="Capability" rules={[{ required: true }]}>
                     <Select
                       showSearch={{ optionFilterProp: 'label' }}
+                      onChange={() => {
+                        form.setFieldValue('resourceId', undefined);
+                      }}
                       options={capabilities
                         .filter((capability) => capability.resourceType)
                         .map((capability) => ({
@@ -814,22 +915,35 @@ export function AccessEditor({
                         }))}
                     />
                   </Form.Item>
-                  <Form.Item
-                    name="resourceId"
-                    label="Resource identifier"
-                    rules={[
-                      { required: true },
-                      {
-                        pattern: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/,
-                        message: 'Enter the exact resource identifier.',
-                      },
-                    ]}
-                  >
-                    <Input />
+                  <Form.Item name="resourceId" label="Resource" rules={[{ required: true }]}>
+                    <Select
+                      showSearch={{ optionFilterProp: 'label' }}
+                      loading={resourceLookupLoading}
+                      disabled={
+                        !selectedCapability || resourceLookupLoading || Boolean(resourceLookupError)
+                      }
+                      placeholder="Choose a business resource"
+                      options={resourceOptions.map((resource) => ({
+                        value: resource.resourceId,
+                        label: resource.secondaryLabel
+                          ? resource.displayName + ' · ' + resource.secondaryLabel
+                          : resource.displayName,
+                      }))}
+                    />
                   </Form.Item>
+                  {resourceLookupError && (
+                    <Alert
+                      type="warning"
+                      showIcon
+                      title="Resource lookup is unavailable"
+                      description={resourceLookupError}
+                      className="access-notice"
+                    />
+                  )}
                   <p className="access-form-hint">
-                    The person’s role must already include this capability with resource-specific
-                    scope.
+                    Choose the business resource by name. Monergy stores its immutable identifier
+                    automatically. The person’s role must already include this capability with
+                    resource-specific scope.
                   </p>
                 </>
               )}

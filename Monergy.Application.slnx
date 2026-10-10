@@ -17,6 +17,9 @@
     <Project Path="contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
     <Project Path="shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
   </Folder>
+  <Folder Name="/Platform/">
+    <Project Path="platform/control-plane/Monergy.Platform.ControlPlane.csproj" />
+  </Folder>
   <Folder Name="/Build/">
     <Project Path="build/Monergy.DatabaseMigrator/Monergy.DatabaseMigrator.csproj" />
     <Project Path="build/local/Monergy.LocalAuditHost/Monergy.LocalAuditHost.csproj" />

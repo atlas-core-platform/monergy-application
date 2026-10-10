@@ -17,6 +17,14 @@ function Test-ExactSet {
     return $actualText -ceq $expectedText
 }
 
+function Test-GovernedRootLayout {
+    param([object[]]$Roots, [object[]]$PlatformChildren)
+    # CP-01 adds one governed platform boundary; it is not a business service or
+    # an unrestricted exception for arbitrary new root/platform directories.
+    (Test-ExactSet $Roots @('apps', 'services', 'contracts', 'shared', 'tests', 'build', 'platform')) -and
+        (Test-ExactSet $PlatformChildren @('control-plane'))
+}
+
 function Test-SecretText {
     param([string]$Content)
     $assignment = '(?im)(password|secret|token|api[_-]?key|private[_-]?key)\s*[:=]\s*["''][^"''$\s][^"'']+["'']'
@@ -31,6 +39,10 @@ if ($SelfTest) {
         'exact set accepted' = (Test-ExactSet @('a', 'b') @('b', 'a'))
         'duplicate rejected' = (-not (Test-ExactSet @('a', 'a') @('a', 'b')))
         'missing item rejected' = (-not (Test-ExactSet @('a') @('a', 'b')))
+        'CP-01 root layout accepted' = (Test-GovernedRootLayout @('apps','services','contracts','shared','tests','build','platform') @('control-plane'))
+        'missing platform root rejected' = (-not (Test-GovernedRootLayout @('apps','services','contracts','shared','tests','build') @('control-plane')))
+        'unrelated root rejected' = (-not (Test-GovernedRootLayout @('apps','services','contracts','shared','tests','build','platform','unowned') @('control-plane')))
+        'unrelated platform boundary rejected' = (-not (Test-GovernedRootLayout @('apps','services','contracts','shared','tests','build','platform') @('control-plane','unowned')))
         'literal credential rejected' = (Test-SecretText $unsafeCredentialFixture)
         'empty secret references accepted' = (-not (Test-SecretText '"secretReferences": []'))
         'private key rejected' = (Test-SecretText ('-----BEGIN PRIVATE ' + 'KEY-----'))
@@ -62,10 +74,10 @@ function Add-Check {
     $checks.Add([pscustomobject]@{ Name = $Name; Passed = $Passed; Evidence = $Evidence }) | Out-Null
 }
 
-$expectedRoot = @('apps', 'services', 'contracts', 'shared', 'tests', 'build')
 $ignoredGeneratedRoots = @('node_modules', 'playwright-report', 'test-results')
 $actualRoot = @(Get-ChildItem -LiteralPath $RepositoryRoot -Directory | Where-Object { $_.Name -notmatch '^\.' -and $_.Name -notin $ignoredGeneratedRoots } | Select-Object -ExpandProperty Name)
-Add-Check 'D05 root responsibilities' (Test-ExactSet $actualRoot $expectedRoot) ($actualRoot -join ', ')
+$platformChildren = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'platform') -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
+Add-Check 'D05 roots with CP-01 platform boundary' (Test-GovernedRootLayout $actualRoot $platformChildren) ($actualRoot -join ', ')
 
 $expectedServiceIds = @(
     'customer-identity', 'consent', 'integration-gateway', 'evidence',

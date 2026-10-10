@@ -228,7 +228,7 @@ $d06GovernanceValid = $d06Scope.deliverable -ceq 'MWP-03-D06' -and
     $d06Manifest.integrationEvidenceLevel -ceq 'SIMULATOR_REFERENCE_ADAPTER' -and
     $d06Manifest.d06FrontendBusinessChange -ceq 'NONE_REQUIRED_BY_D06_FEATURE_SCOPE' -and
     (Test-ExactSet @($d06Manifest.d06OutstandingDecisions) @('OD-04', 'OD-05', 'OD-06'))
-Add-Check 'Controlled post-D02 service state' ($catalogStateValid -and $d06GovernanceValid) 'Five exact D03 participants, accepted D05 Rules, exact D06 Gateway, D07 Search and D08 Reporting candidates at SIMULATOR, and three exact toolchain scaffolds'
+Add-Check 'Controlled post-D02 service state' ($catalogStateValid -and $d06GovernanceValid) 'Historical catalog states remain unchanged; separately governed LOCAL owner overlays do not advance those accepted delivery states'
 
 $hostSplitValid = $true
 $serviceReferenceValid = $true
@@ -264,6 +264,16 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
     if ($entry.Value -ceq 'Microsoft.NET.Sdk.Web') {
         $healthOnlyValid = $healthOnlyValid -and $program.Contains('MapHealthChecks') -and
             ($governedContractParticipant -or $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\(')
+        if ($entry.Key -ceq 'consent') {
+            # REL-01 is an explicit LOCAL owner overlay, not a health-only host or
+            # a retrospective advancement of the historical service catalog.
+            $healthOnlyValid = $healthOnlyValid -and
+                $program.Contains('Monergy:AccessIntegration:CustomerRelationships') -and
+                $program.Contains('builder.Environment.IsDevelopment()') -and
+                $program.Contains('TenantAccessIntegration.EnsureAllowed') -and
+                $program.Contains('if (customerConsent) app.MapCustomerConsent();') -and
+                (Test-Path -LiteralPath (Join-Path $serviceRoot 'CustomerConsentEndpoints.cs'))
+        }
         if ($entry.Key -ceq 'integration-gateway') {
             $healthOnlyValid = $healthOnlyValid -and
                 $program.Contains('MapIntegrationGatewayContracts') -and
@@ -285,8 +295,8 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
 }
 Add-Check 'Evidence-based host split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 9 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 3) 'Nine HTTP hosts and three primary workers'
 Add-Check 'No service-to-service project references' $serviceReferenceValid 'Every service references Platform exactly once, Contracts zero or one time, and no other project; service/test/app and duplicate references are forbidden'
-Add-Check $(if ($D10ForwardRegression) { 'D10-bounded service-owned migrations' } elseif ($D09ForwardRegression) { 'D09-bounded service-owned migrations' } else { 'Empty service-owned migrations' }) $migrationOwnershipValid $(if ($D10ForwardRegression) { 'D09 cohort plus Job Management populated; six histories remain empty' } elseif ($D09ForwardRegression) { 'Exact five-service cohort populated; seven histories remain empty' } else { '12 independent empty migration histories' })
-Add-Check 'Controlled host scope' $healthOnlyValid 'Three true scaffolds remain health/startup-only; exact D03 and D05-D08 governed participants may expose contract surfaces'
+Add-Check $(if ($D10ForwardRegression) { 'D10-bounded service-owned migrations' } elseif ($D09ForwardRegression) { 'D09-bounded service-owned migrations' } else { 'Empty service-owned migrations' }) $migrationOwnershipValid $(if ($D10ForwardRegression) { 'Historical D09 and Job Management cohort; separately hash-verified LOCAL owner migrations excluded from historical counts' } elseif ($D09ForwardRegression) { 'Historical five-service cohort plus separately hash-verified LOCAL owner overlays' } else { 'Historical baseline remains empty after separately hash-verified LOCAL owner overlays' })
+Add-Check 'Controlled host scope' $healthOnlyValid 'Historical contract hosts and worker startup retained; Consent routes require the explicit Development LOCAL owner composition'
 
 $lockFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter 'packages.lock.json' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
 $projectFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
@@ -294,7 +304,7 @@ $projectsWithoutLocks = @($projectFiles | Where-Object { -not (Test-Path -Litera
 Add-Check 'NuGet lock coverage' ($lockFiles.Count -eq $projectFiles.Count -and $projectsWithoutLocks.Count -eq 0) 'Every service, shared, contract, and independently owned test project has a lock file'
 $projectText = @($projectFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
 $forbiddenProviders = if ($D09ForwardRegression) { 'EntityFrameworkCore|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Google\.Cloud|OpenAI' } else { 'EntityFrameworkCore|Npgsql|SqlClient|MongoDB|StackExchange\.Redis|Azure\.|Amazon\.|Google\.Cloud|OpenAI' }
-Add-Check $(if ($D09ForwardRegression) { 'D09-bounded provider dependency graph' } else { 'Provider-neutral dependency graph' }) ($projectText -notmatch $forbiddenProviders) $(if ($D09ForwardRegression) { 'Only separately verified D09 persistence packages are allowed' } else { 'No database, cloud, broker, storage, search, OCR, AI, identity, secret, or orchestrator SDK' })
+Add-Check $(if ($D09ForwardRegression) { 'D09-bounded provider dependency graph' } else { 'Provider-neutral dependency graph' }) ($projectText -notmatch $forbiddenProviders) $(if ($D09ForwardRegression) { 'D09 and explicitly governed LOCAL owner persistence dependencies; prohibited cloud/provider SDKs remain blocked' } else { 'No database, cloud, broker, storage, search, OCR, AI, identity, secret, or orchestrator SDK' })
 Add-Check 'Vendor-neutral observability bootstrap' ($projectText.Contains('OpenTelemetry.Extensions.Hosting') -and $projectText.Contains('OpenTelemetry.Exporter.OpenTelemetryProtocol')) 'OpenTelemetry SDK and OTLP exporter only'
 Add-Check 'Architecture tests implemented' (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'tests/architecture/Monergy.Architecture.Tests/BoundaryTests.cs')) 'xUnit boundary suite exists'
 
