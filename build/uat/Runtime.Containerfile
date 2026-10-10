@@ -21,7 +21,7 @@ COPY --from=build /out /app
 COPY --from=build /source/services/customer-identity/migrations /source/services/customer-identity/migrations
 COPY --from=build /source/services/audit/migrations /source/services/audit/migrations
 COPY --from=build /source/services/consent/migrations /source/services/consent/migrations
-COPY --from=build /out/onboarding-data /var/lib/monergy-onboarding
+COPY --from=build --chmod=1777 /out/onboarding-data /var/lib/monergy-onboarding
 COPY --from=frontend /source/apps/customer-web/dist /app/workspace/wwwroot
 ENV DOTNET_PROCESSOR_COUNT=2 DOTNET_EnableDiagnostics=0 DOTNET_ENVIRONMENT=Development ASPNETCORE_ENVIRONMENT=Development
 USER 1654

@@ -13,10 +13,12 @@ internal static partial class LocalUatBootstrap
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public static async Task<int> RunAsync(string file)
     {
+        Console.WriteLine("Local UAT bootstrap: starting.");
         if (Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT") != "Development" ||
             Environment.GetEnvironmentVariable("MONERGY_LOCAL_UAT_BOOTSTRAP") != "1")
             throw new InvalidOperationException("Explicit Development local UAT bootstrap is required.");
         UatProfile? profile = null;
+        var stage = "profile-validation";
         try
         {
             profile = JsonSerializer.Deserialize<UatProfile>(await File.ReadAllTextAsync(file).ConfigureAwait(false), Json)
@@ -33,6 +35,7 @@ internal static partial class LocalUatBootstrap
                 if (database.Service == "am") ValidateSecret(database.DeliveryPassword ?? "");
             }
             ValidateSecret(profile.PostgresPassword);
+            stage = "cluster-connection";
             await using var cluster = new NpgsqlConnection(Connection("postgres", "postgres", profile.PostgresPassword));
             await cluster.OpenAsync().ConfigureAwait(false);
             await ExecuteAsync(cluster, "SELECT pg_advisory_lock(705901);").ConfigureAwait(false);
@@ -47,10 +50,13 @@ internal static partial class LocalUatBootstrap
             if ((string?)await ScalarAsync(cluster, "SELECT instance_id FROM public.monergy_uat_instance WHERE singleton;").ConfigureAwait(false) != profile.InstanceId)
                 throw new InvalidOperationException("Retained database belongs to another credential profile.");
             await ExecuteAsync(cluster, "DO $$ BEGIN IF NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='monergy_audit_runtime') THEN CREATE ROLE monergy_audit_runtime NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE; END IF; END $$;").ConfigureAwait(false);
+            stage = "tenant-registry";
             if (profile.Onboarding) await PrepareOnboardingAsync(profile).ConfigureAwait(false);
             // Establish the C&I initial principal before AM bootstraps authority.
             foreach (var database in profile.Databases.OrderBy(database => database.Service == "am" ? 1 : 0))
             {
+                stage = $"owner-bootstrap:{database.Service}/{database.Tenant}";
+                Console.WriteLine($"Local UAT bootstrap: {stage}.");
                 foreach (var role in new[] { (Suffix: "owner", Password: database.OwnerPassword), (Suffix: "runtime", Password: database.RuntimePassword), (Suffix: "delivery", Password: database.DeliveryPassword) })
                 {
                     if (role.Password is null) continue;
@@ -98,13 +104,17 @@ internal static partial class LocalUatBootstrap
                     await SeedCustomerOwnershipAsync(scoped, database.Tenant, profile.InstanceId).ConfigureAwait(false);
                 Console.WriteLine($"Ready: {database.Service}/{database.Tenant}; scoped runtime grants applied.");
             }
+            stage = "owner-readback-receipts";
             if (profile.Onboarding) await RecordOnboardingAsync(profile, cluster).ConfigureAwait(false);
             return 0;
         }
-        catch (Exception error) when (error is NpgsqlException or InvalidOperationException or JsonException or IOException)
+        catch (Exception error) when (error is NpgsqlException or InvalidOperationException or JsonException or IOException or UnauthorizedAccessException)
         {
             if (profile is { Onboarding: true }) await RecordOnboardingFailureAsync(profile).ConfigureAwait(false);
-            Console.Error.WriteLine("Local UAT bootstrap failed. Check profile/volume pairing and owner migration output; credentials are not printed.");
+            // Only controlled stage, exception type and SQLSTATE; an exception
+            // message/connection string can contain profile credentials.
+            var sqlState = error is PostgresException databaseError ? $"; SQLSTATE={databaseError.SqlState}" : "";
+            Console.Error.WriteLine($"Local UAT bootstrap failed at {stage}: {error.GetType().Name}{sqlState}. Credentials are not printed.");
             return 1;
         }
     }

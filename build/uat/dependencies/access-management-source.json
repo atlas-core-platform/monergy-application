@@ -4,7 +4,7 @@
   "repository": "atlas-core-platform/monergy-access-management-service",
   "commit": "fb242bfccd161e49d63223b0d32c68fdf770a024",
   "sourceTree": "c5a2489411344c426b434c53e0cdbc768fbc21df",
-  "verificationStatus": "IMPLEMENTATION_CANDIDATE_HOSTED_ACCEPTANCE_PENDING",
+  "verificationStatus": "OWNER_HOSTED_VERIFIED_INTEGRATED_UAT_PENDING",
   "candidatePullRequest": "https://github.com/atlas-core-platform/monergy-access-management-service/pull/10",
   "archiveSha256": "e3c74c04ac459ea0b767f4b589ba76c73d18f2670b983b4c5230999732b87795",
   "files": [
@@ -168,5 +168,6 @@
       "path": "tools/Monergy.AccessManagement.Migrations/packages.lock.json",
       "gitBlobSha": "45328e64d43da453a7accddb94584e1d7fe5f2a6"
     }
-  ]
+  ],
+  "verifiedRun": "https://github.com/atlas-core-platform/monergy-access-management-service/actions/runs/38047073048"
 }

@@ -29,6 +29,8 @@ jobs:
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24.21.0
+      - name: Verify diagnostic credential redaction
+        run: python build/uat/collect-diagnostics.py --self-test
       - name: Start isolated Docker UAT profile
         shell: pwsh
         run: ./build/uat/Invoke-MonergyUat.ps1 -Action Start -Profile ci -Port 4173 -EnableOnboarding
@@ -48,6 +50,9 @@ jobs:
         run: pnpm exec playwright test --config build/uat/playwright.config.ts
       - name: Verify onboarding presentation and access-entry regressions
         run: pnpm exec playwright test --config build/uat/onboarding.playwright.config.ts
+      - name: Capture redacted container diagnostics before cleanup
+        if: failure()
+        run: python build/uat/collect-diagnostics.py --profile ci
       - name: Preserve credential-free acceptance results
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -61,6 +66,7 @@ jobs:
             .artifacts/onboarding-browser-results.json
             .artifacts/onboarding-setup.png
             .artifacts/onboarding-relationship-review.png
+            .artifacts/uat-diagnostics.log
           if-no-files-found: warn
       - name: Stop disposable CI profile
         if: always()
