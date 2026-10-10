@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Diagnostics;
 
 namespace Monergy.Platform.ControlPlane;
 
@@ -17,7 +18,7 @@ public interface ITenantRegistry
         CancellationToken cancellationToken);
 }
 
-public sealed class FileTenantRegistry : ITenantRegistry
+public sealed class FileTenantRegistry : ITenantRegistry, IDisposable
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
@@ -33,6 +34,8 @@ public sealed class FileTenantRegistry : ITenantRegistry
         this.path = Path.GetFullPath(path);
     }
 
+    public void Dispose() => gate.Dispose();
+
     public async Task<TenantRegistryRecord> CreateOrGetAsync(
         TenantOnboardingRequest request,
         TimeProvider clock,
@@ -43,6 +46,7 @@ public sealed class FileTenantRegistry : ITenantRegistry
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await using var lease = await AcquireFileLeaseAsync(cancellationToken).ConfigureAwait(false);
             var state = await ReadAsync(cancellationToken).ConfigureAwait(false);
             var existing = state.Tenants.SingleOrDefault(item => item.RequestId == request.RequestId);
             if (existing is not null)
@@ -85,6 +89,7 @@ public sealed class FileTenantRegistry : ITenantRegistry
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await using var lease = await AcquireFileLeaseAsync(cancellationToken).ConfigureAwait(false);
             var state = await ReadAsync(cancellationToken).ConfigureAwait(false);
             return state.Tenants.SingleOrDefault(item => item.TenantId == tenantId);
         }
@@ -106,12 +111,15 @@ public sealed class FileTenantRegistry : ITenantRegistry
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
+            await using var lease = await AcquireFileLeaseAsync(cancellationToken).ConfigureAwait(false);
             var state = await ReadAsync(cancellationToken).ConfigureAwait(false);
             var index = state.Tenants.FindIndex(item => item.TenantId == record.TenantId);
             if (index < 0) throw new InvalidOperationException("TENANT_NOT_FOUND");
             var current = state.Tenants[index];
             if (current.ConfigurationVersion != expectedConfigurationVersion)
                 throw new InvalidOperationException("TENANT_CONFIGURATION_CONFLICT");
+
+            ValidateReplacement(current, record);
 
             var replacement = record with { ConfigurationVersion = expectedConfigurationVersion + 1 };
             state.Tenants[index] = replacement;
@@ -122,6 +130,62 @@ public sealed class FileTenantRegistry : ITenantRegistry
         {
             gate.Release();
         }
+    }
+
+    // The instance semaphore alone cannot serialize two registry instances/processes.
+    // FileShare.None is held across read/compare/write, with a bounded cancellable wait.
+    private async Task<FileStream> AcquireFileLeaseAsync(CancellationToken cancellationToken)
+    {
+        var folder = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(folder)) Directory.CreateDirectory(folder);
+        var started = Stopwatch.GetTimestamp();
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try { return new FileStream(path + ".lock", FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+            catch (IOException) when (Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(5))
+            { await Task.Delay(25, cancellationToken).ConfigureAwait(false); }
+        }
+    }
+
+    private static void ValidateReplacement(TenantRegistryRecord current, TenantRegistryRecord next)
+    {
+        if (next.ConfigurationVersion != current.ConfigurationVersion || next.RequestId != current.RequestId ||
+            next.OrganizationName != current.OrganizationName || next.DisplayName != current.DisplayName ||
+            next.CountryCode != current.CountryCode || next.TimeZone != current.TimeZone ||
+            next.Environment != current.Environment || next.InitialAdministratorEmail != current.InitialAdministratorEmail ||
+            next.PlacementMode != current.PlacementMode || next.CreatedAt != current.CreatedAt || next.UpdatedAt < current.UpdatedAt)
+            throw new InvalidOperationException("TENANT_REGISTRY_IDENTITY_IMMUTABLE");
+        if (next.Receipts is null || next.Receipts.Count < current.Receipts.Count ||
+            next.Receipts.Count > current.Receipts.Count + 1 || next.Receipts.Count > 6 ||
+            !next.Receipts.Take(current.Receipts.Count).SequenceEqual(current.Receipts))
+            throw new InvalidOperationException("TENANT_PROVISIONING_RECEIPTS_IMMUTABLE");
+        for (var i = 0; i < next.Receipts.Count; i++)
+        {
+            var receipt = next.Receipts[i];
+            if ((int)receipt.Step != i + 1 || receipt.OperationId != $"{next.TenantId}:{i + 1:D2}" ||
+                string.IsNullOrWhiteSpace(receipt.EvidenceReference) || receipt.EvidenceReference.Length > 300 ||
+                receipt.EvidenceReference.Any(char.IsControl) || receipt.CompletedAt < next.CreatedAt ||
+                receipt.CompletedAt > next.UpdatedAt)
+                throw new InvalidOperationException("TENANT_PROVISIONING_RECEIPT_INVALID");
+        }
+        if (next.Receipts.Count != current.Receipts.Count &&
+            (current.State != TenantLifecycleState.Provisioning || next.State != TenantLifecycleState.Provisioning))
+            throw new InvalidOperationException("TENANT_PROVISIONING_STATE_INVALID");
+        var valid = (current.State, next.State) switch
+        {
+            (TenantLifecycleState.Requested, TenantLifecycleState.Provisioning) => true,
+            (TenantLifecycleState.Provisioning, TenantLifecycleState.Provisioning or TenantLifecycleState.ProvisioningFailed) => true,
+            (TenantLifecycleState.Provisioning, TenantLifecycleState.ReadyForAdmin) => next.Receipts.Count == 6,
+            (TenantLifecycleState.ProvisioningFailed, TenantLifecycleState.Provisioning) => true,
+            (TenantLifecycleState.ReadyForAdmin, TenantLifecycleState.Active) => next.Receipts.Count == 6 &&
+                !string.IsNullOrWhiteSpace(next.SetupReceiptReference) && next.SetupReceiptReference.Length <= 300 &&
+                !next.SetupReceiptReference.Any(char.IsControl),
+            _ => false,
+        };
+        if (!valid || current.SetupReceiptReference is not null && next.SetupReceiptReference != current.SetupReceiptReference ||
+            next.State != TenantLifecycleState.Active && next.SetupReceiptReference != current.SetupReceiptReference)
+            throw new InvalidOperationException("TENANT_LIFECYCLE_TRANSITION_INVALID");
     }
 
     private async Task<RegistryDocument> ReadAsync(CancellationToken cancellationToken)
@@ -157,10 +221,10 @@ public sealed class FileTenantRegistry : ITenantRegistry
     private static bool SemanticallyMatches(TenantRegistryRecord existing, TenantOnboardingRequest request) =>
         existing.OrganizationName == request.OrganizationName.Trim() &&
         existing.DisplayName == request.DisplayName.Trim() &&
-        existing.CountryCode == request.CountryCode.ToUpperInvariant() &&
+        string.Equals(existing.CountryCode, request.CountryCode, StringComparison.OrdinalIgnoreCase) &&
         existing.TimeZone == request.TimeZone &&
         existing.Environment == request.Environment &&
-        existing.InitialAdministratorEmail == request.InitialAdministratorEmail.Trim().ToLowerInvariant() &&
+        string.Equals(existing.InitialAdministratorEmail, request.InitialAdministratorEmail.Trim(), StringComparison.OrdinalIgnoreCase) &&
         existing.PlacementMode == request.PlacementMode;
 
     private static void Validate(TenantOnboardingRequest request)
@@ -169,11 +233,12 @@ public sealed class FileTenantRegistry : ITenantRegistry
         Identifier(request.RequestId, 128);
         Text(request.OrganizationName, 200);
         Text(request.DisplayName, 200);
-        if (request.CountryCode.Length != 2 || request.CountryCode.Any(c => !char.IsAsciiLetter(c)))
+        if (request.CountryCode is not { Length: 2 } || request.CountryCode.Any(c => !char.IsAsciiLetter(c)))
             throw new InvalidOperationException("INVALID_COUNTRY_CODE");
         Text(request.TimeZone, 100);
         Identifier(request.Environment, 40);
-        if (request.InitialAdministratorEmail.Length is < 3 or > 320 ||
+        if (!Enum.IsDefined(request.PlacementMode)) throw new InvalidOperationException("INVALID_PLACEMENT_MODE");
+        if (request.InitialAdministratorEmail is not { Length: >= 3 and <= 320 } ||
             !request.InitialAdministratorEmail.Contains('@') ||
             request.InitialAdministratorEmail.Any(char.IsWhiteSpace))
             throw new InvalidOperationException("INVALID_INITIAL_ADMINISTRATOR_EMAIL");

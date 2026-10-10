@@ -2,7 +2,7 @@ namespace Monergy.Platform.ControlPlane;
 
 public interface ITenantProvisioningOperation
 {
-    TenantProvisioningStep Step { get; }
+    TenantProvisioningStep ProvisioningStep { get; }
 
     Task<TenantProvisioningResult> ExecuteAsync(
         TenantRegistryRecord tenant,
@@ -23,24 +23,27 @@ public sealed class TenantOnboardingOrchestrator
     ];
 
     private readonly ITenantRegistry registry;
-    private readonly IReadOnlyDictionary<TenantProvisioningStep, ITenantProvisioningOperation> operations;
+    private readonly Dictionary<TenantProvisioningStep, ITenantProvisioningOperation> operations;
     private readonly TimeProvider clock;
+    private readonly ITenantSetupReadiness? setupReadiness;
 
     public TenantOnboardingOrchestrator(
         ITenantRegistry registry,
         IEnumerable<ITenantProvisioningOperation> operations,
-        TimeProvider clock)
+        TimeProvider clock,
+        ITenantSetupReadiness? setupReadiness = null)
     {
         this.registry = registry ?? throw new ArgumentNullException(nameof(registry));
         this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        this.setupReadiness = setupReadiness;
 
         var supplied = operations?.ToArray() ?? throw new ArgumentNullException(nameof(operations));
         if (supplied.Length != RequiredSteps.Length ||
-            supplied.Select(item => item.Step).Distinct().Count() != supplied.Length ||
-            RequiredSteps.Any(step => supplied.All(item => item.Step != step)))
+            supplied.Select(item => item.ProvisioningStep).Distinct().Count() != supplied.Length ||
+            RequiredSteps.Any(step => supplied.All(item => item.ProvisioningStep != step)))
             throw new InvalidOperationException("TENANT_PROVISIONING_OPERATIONS_INCOMPLETE");
 
-        this.operations = supplied.ToDictionary(item => item.Step);
+        this.operations = supplied.ToDictionary(item => item.ProvisioningStep);
     }
 
     public Task<TenantRegistryRecord> RequestAsync(
@@ -149,10 +152,18 @@ public sealed class TenantOnboardingOrchestrator
             RequiredSteps.Any(step => !tenant.HasCompleted(step)))
             throw new InvalidOperationException("TENANT_NOT_READY_FOR_ACTIVATION");
 
+        var setup = setupReadiness is null ? null :
+            await setupReadiness.ReadAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        if (setup is null || !setup.Ready || setup.TenantId != tenantId ||
+            string.IsNullOrWhiteSpace(setup.ReceiptReference) || setup.ReceiptReference.Length > 300 ||
+            setup.ReceiptReference.Any(char.IsControl))
+            throw new InvalidOperationException("TENANT_ADMIN_SETUP_REQUIRED");
+
         return await registry.ReplaceAsync(
             tenant with
             {
                 State = TenantLifecycleState.Active,
+                SetupReceiptReference = setup.ReceiptReference,
                 LastFailureCode = null,
                 UpdatedAt = clock.GetUtcNow(),
             },

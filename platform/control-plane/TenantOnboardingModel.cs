@@ -62,6 +62,16 @@ public sealed record TenantRegistryRecord(
     DateTimeOffset UpdatedAt)
 {
     public bool HasCompleted(TenantProvisioningStep step) => Receipts.Any(receipt => receipt.Step == step);
+    public string? SetupReceiptReference { get; init; }
+}
+
+// Supplied by a server-side setup owner after current tenant/session/admin checks;
+// never bind this value directly from browser input. No adapter means not ready.
+public sealed record TenantSetupReadiness(string TenantId, bool Ready, string? ReceiptReference);
+
+public interface ITenantSetupReadiness
+{
+    Task<TenantSetupReadiness> ReadAsync(string tenantId, CancellationToken cancellationToken);
 }
 
 public sealed record TenantProvisioningResult(

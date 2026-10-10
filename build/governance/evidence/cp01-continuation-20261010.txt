@@ -1,0 +1,24 @@
+CP-01 continuation regression evidence
+Date: 2026-10-10 UTC
+Scope: local candidate checks; no Docker acceptance or hosted CI run is claimed.
+Raw command output below; absolute workspace prefix replaced with <workspace>.
+Commands: dotnet build platform/control-plane; dotnet test tests/architecture/Monergy.Architecture.Tests (locked restore, no analyzer suppression).
+
+--- cp-build.log ---
+  Monergy.Platform.ControlPlane -> <workspace>/platform/control-plane/bin/Debug/net10.0/Monergy.Platform.ControlPlane.dll
+
+Build succeeded.
+    0 Warning(s)
+    0 Error(s)
+
+Time Elapsed 00:00:02.72
+
+--- architecture-tests.log ---
+  Monergy.Platform -> <workspace>/shared/platform/Monergy.Platform/bin/Debug/net10.0/Monergy.Platform.dll
+  Monergy.Platform.ControlPlane -> <workspace>/platform/control-plane/bin/Debug/net10.0/Monergy.Platform.ControlPlane.dll
+  Monergy.Architecture.Tests -> <workspace>/tests/architecture/Monergy.Architecture.Tests/bin/Debug/net10.0/Monergy.Architecture.Tests.dll
+Test run for <workspace>/tests/architecture/Monergy.Architecture.Tests/bin/Debug/net10.0/Monergy.Architecture.Tests.dll (.NETCoreApp,Version=v10.0)
+A total of 1 test files matched the specified pattern.
+Results File: /workspace/scratch/854d05fd6254/onboarding-evidence/architecture.trx
+
+Passed!  - Failed:     0, Passed:    16, Skipped:     0, Total:    16, Duration: 570 ms - Monergy.Architecture.Tests.dll (net10.0)
