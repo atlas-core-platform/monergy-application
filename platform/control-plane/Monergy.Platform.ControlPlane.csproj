@@ -3,7 +3,4 @@
     <AssemblyName>Monergy.Platform.ControlPlane</AssemblyName>
     <RootNamespace>Monergy.Platform.ControlPlane</RootNamespace>
   </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
-  </ItemGroup>
 </Project>
