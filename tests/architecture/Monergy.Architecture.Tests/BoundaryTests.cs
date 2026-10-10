@@ -209,6 +209,34 @@ public sealed class BoundaryTests
     }
 
     [Fact]
+    public void TenantControlPlaneRemainsAPlatformBoundaryOutsideBusinessServices()
+    {
+        var projectPath = Path.Combine(
+            RepositoryRoot,
+            "platform",
+            "control-plane",
+            "Monergy.Platform.ControlPlane.csproj");
+        Assert.True(File.Exists(projectPath));
+
+        var references = XDocument.Load(projectPath)
+            .Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value.Replace('\\', '/'))
+            .Where(value => value is not null)
+            .Cast<string>()
+            .ToArray();
+
+        Assert.Single(references);
+        Assert.EndsWith("shared/platform/Monergy.Platform/Monergy.Platform.csproj",
+            references[0], StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(references,
+            reference => reference.Contains("services/", StringComparison.OrdinalIgnoreCase));
+
+        Assert.DoesNotContain(
+            Directory.GetFiles(ServicesRoot, "*.csproj", SearchOption.AllDirectories),
+            project => project.Contains("control-plane", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void PlatformMetadataCannotBeMistakenForAProductFeature()
     {
         var metadata = ComponentMetadata.Create("test-component");
