@@ -225,11 +225,7 @@ public sealed class BoundaryTests
             .Cast<string>()
             .ToArray();
 
-        Assert.Single(references);
-        Assert.EndsWith("shared/platform/Monergy.Platform/Monergy.Platform.csproj",
-            references[0], StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(references,
-            reference => reference.Contains("services/", StringComparison.OrdinalIgnoreCase));
+        Assert.Empty(references);
 
         Assert.DoesNotContain(
             Directory.GetFiles(ServicesRoot, "*.csproj", SearchOption.AllDirectories),
