@@ -413,7 +413,7 @@
   margin-bottom: 18px;
   color: var(--mw-primary);
   font-size: 11px;
-  letter-spacing: .08em;
+  letter-spacing: 0.08em;
 }
 .product-processing-steps strong {
   font-size: 13px;

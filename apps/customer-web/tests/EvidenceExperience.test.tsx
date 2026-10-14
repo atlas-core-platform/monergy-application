@@ -267,7 +267,9 @@ it('reviews authorized structured-text processing and displays source facts with
   vi.spyOn(crypto, 'randomUUID').mockReturnValue('cccccccc-cccc-cccc-cccc-cccccccccccc');
   mount(api);
   const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: 'View provenance for financial-facts.txt' }));
+  await user.click(
+    await screen.findByRole('button', { name: 'View provenance for financial-facts.txt' }),
+  );
   const provenance = screen.getByRole('dialog', { name: 'Evidence provenance' });
   await user.click(within(provenance).getByRole('button', { name: 'Review processing' }));
   const review = await screen.findByRole('dialog', { name: 'Review document processing' });

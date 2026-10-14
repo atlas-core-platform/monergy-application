@@ -180,13 +180,19 @@ export default function EvidenceExperience() {
         controller.signal,
       );
       setProcessing(view);
-      for (let attempt = 0; attempt < 30 && !['Completed', 'Failed', 'Cancelled'].includes(view.job.state); attempt += 1) {
+      for (
+        let attempt = 0;
+        attempt < 30 && !['Completed', 'Failed', 'Cancelled'].includes(view.job.state);
+        attempt += 1
+      ) {
         await new Promise((resolve) => window.setTimeout(resolve, 400));
         view = await getDocumentProcessing(api, view.job.jobId, controller.signal);
         setProcessing(view);
       }
       if (!['Completed', 'Failed', 'Cancelled'].includes(view.job.state))
-        setProcessingError('Processing is still running. Close this review and reopen the document to check again.');
+        setProcessingError(
+          'Processing is still running. Close this review and reopen the document to check again.',
+        );
     } catch (failure) {
       setProcessingError(
         failure instanceof AccessApiError && failure.status === 403
@@ -490,9 +496,7 @@ export default function EvidenceExperience() {
               </div>
               <Button
                 type="primary"
-                disabled={
-                  !canProcess || selectedEvidence.contentType !== 'text/plain'
-                }
+                disabled={!canProcess || selectedEvidence.contentType !== 'text/plain'}
                 onClick={() => {
                   setProcessingEvidence(selectedEvidence);
                   setSelectedEvidence(null);
@@ -553,7 +557,9 @@ export default function EvidenceExperience() {
                   {processing?.job.state.toUpperCase() ?? 'READY TO SCHEDULE'}
                 </Tag>
                 <h3>{processingEvidence.originalFileName}</h3>
-                <p>Version {processingEvidence.version} · {typeName(processingEvidence.contentType)}</p>
+                <p>
+                  Version {processingEvidence.version} · {typeName(processingEvidence.contentType)}
+                </p>
               </div>
             </div>
             <Alert
@@ -574,7 +580,11 @@ export default function EvidenceExperience() {
                 showIcon
                 type="error"
                 title="Processing did not produce source facts"
-                description={processing.processing?.failureCode ?? processing.job.failureCode ?? 'The source did not match the supported structured-text format.'}
+                description={
+                  processing.processing?.failureCode ??
+                  processing.job.failureCode ??
+                  'The source did not match the supported structured-text format.'
+                }
               />
             )}
             {processing?.facts.length ? (
@@ -592,11 +602,16 @@ export default function EvidenceExperience() {
                       <div>
                         <Tag>{fact.factType}</Tag>
                         <strong>{fact.label}</strong>
-                        <span>{fact.sourceLocation} · {fact.effectiveDate}</span>
+                        <span>
+                          {fact.sourceLocation} · {fact.effectiveDate}
+                        </span>
                       </div>
                       <div className="product-fact-value">
                         <strong>
-                          {new Intl.NumberFormat(undefined, { style: 'currency', currency: fact.currency }).format(fact.candidateValue)}
+                          {new Intl.NumberFormat(undefined, {
+                            style: 'currency',
+                            currency: fact.currency,
+                          }).format(fact.candidateValue)}
                         </strong>
                         <span>{Math.round(fact.confidence * 100)}% confidence</span>
                       </div>
@@ -605,15 +620,29 @@ export default function EvidenceExperience() {
                 </div>
                 <p className="product-review-note">
                   Each candidate retains the evidence ID, document version, source location,
-                  extraction version and validation version. No candidate is authoritative financial data.
+                  extraction version and validation version. No candidate is authoritative financial
+                  data.
                 </p>
               </section>
             ) : (
-              !processingBusy && !processing?.job && (
+              !processingBusy &&
+              !processing?.job && (
                 <div className="product-processing-steps">
-                  <div><span>01</span><strong>Schedule</strong><p>Create a durable, customer-scoped job.</p></div>
-                  <div><span>02</span><strong>Verify</strong><p>Recheck access and resolve the exact source.</p></div>
-                  <div><span>03</span><strong>Review</strong><p>Show candidates with lineage—never silent profile changes.</p></div>
+                  <div>
+                    <span>01</span>
+                    <strong>Schedule</strong>
+                    <p>Create a durable, customer-scoped job.</p>
+                  </div>
+                  <div>
+                    <span>02</span>
+                    <strong>Verify</strong>
+                    <p>Recheck access and resolve the exact source.</p>
+                  </div>
+                  <div>
+                    <span>03</span>
+                    <strong>Review</strong>
+                    <p>Show candidates with lineage—never silent profile changes.</p>
+                  </div>
                 </div>
               )
             )}

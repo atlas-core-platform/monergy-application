@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Monergy.Contracts;
 
 public static class Vs02ContractNames
@@ -90,6 +92,7 @@ public sealed record ProcessDocument(
     string CustomerId,
     DateTimeOffset RequestedAt);
 
+[JsonConverter(typeof(JsonStringEnumConverter<ProcessingState>))]
 public enum ProcessingState
 {
     Accepted,
@@ -217,6 +220,7 @@ public sealed record ScheduleJob(
     string CustomerId,
     DateTimeOffset RequestedAt);
 
+[JsonConverter(typeof(JsonStringEnumConverter<JobState>))]
 public enum JobState
 {
     Scheduled,
