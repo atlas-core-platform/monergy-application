@@ -38,6 +38,40 @@ public sealed class TenantBoundaryTests
     }
 
     [Fact]
+    public async Task EvidenceLibraryReevaluatesCustomerReadAuthorityAtOwnerBoundary()
+    {
+        TenantBoundaryProof? proof = null;
+        var options = Options();
+        var middleware = new TenantBoundaryMiddleware(http =>
+        {
+            proof = http.Features.Get<TenantBoundaryProof>();
+            return Task.CompletedTask;
+        }, new()
+        {
+            Service = options.Service,
+            CapabilityPrefix = options.CapabilityPrefix,
+            ProbeUrl = options.ProbeUrl,
+            CustomerTenants = options.CustomerTenants,
+            CustomerRelationships = true,
+        });
+        var http = Http();
+        http.Request.Path = "/contracts/app-02/evidence-list/v1";
+        http.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes("""
+            {"contractName":"ListCustomerEvidence","security":{"actor":{"actorId":"A100","authenticationContextId":"token"},"access":{"customerId":"C001"}},"payload":{"customerId":"C001","limit":100}}
+            """));
+        using var client = Client(new CustomerAccessDecision(
+            "decision-library", "Allow", "T001", "A100", "C001", "evidence.document.read",
+            "customer-advice", "Granted", "Self", 3, 2, 1, 0, DateTimeOffset.UtcNow));
+
+        await middleware.InvokeAsync(http, client);
+
+        Assert.Equal(200, http.Response.StatusCode);
+        Assert.NotNull(proof);
+        Assert.Equal("evidence.document.read", proof.CapabilityId);
+        Assert.Equal("C001", proof.CustomerId);
+    }
+
+    [Fact]
     public async Task AdministratorContextRejectsAnotherTenantAndMissingHeaders()
     {
         using var client = Client(new TenantAdminContext("T002", "A900", 3, "TenantAdmin"));
