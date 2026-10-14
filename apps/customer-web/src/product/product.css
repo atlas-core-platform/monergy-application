@@ -99,14 +99,14 @@
   margin: 0 auto 17px;
   border-radius: 14px;
 }
-.product-drop-zone .ant-upload-text {
-  color: var(--mw-ink) !important;
-  font-size: 15px !important;
+.product-drop-zone.ant-upload-wrapper .ant-upload.ant-upload-drag .ant-upload-text {
+  color: var(--mw-ink);
+  font-size: 15px;
   font-weight: 600;
 }
-.product-drop-zone .ant-upload-hint {
-  color: var(--mw-muted) !important;
-  font-size: var(--monergy-text-small) !important;
+.product-drop-zone.ant-upload-wrapper .ant-upload.ant-upload-drag .ant-upload-hint {
+  color: var(--mw-muted);
+  font-size: var(--monergy-text-small);
 }
 .product-trust-row {
   display: flex;
