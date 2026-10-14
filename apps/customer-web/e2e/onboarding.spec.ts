@@ -270,7 +270,9 @@ test('customer entry stays isolated from administration and confirms reviewed ev
   await expect(review).toContainText('Current LOCAL/UAT runtime only');
   expect(writes).toHaveLength(0);
   await review.getByRole('button', { name: 'Upload evidence' }).click();
-  await expect(page.getByText('CONFIRMED')).toBeVisible();
+  const receipt = page.locator('article.product-receipt').filter({ hasText: 'statement.txt' });
+  await expect(receipt.getByText('CONFIRMED', { exact: true })).toBeVisible();
+  await expect(receipt).toContainText('document-version-');
   expect(writes).toHaveLength(1);
   await page.screenshot({ path: '.artifacts/customer-evidence-intake.png', fullPage: true });
 });
