@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { connectProductWorkspace } from './product-session-fixture';
 
 test('toolchain shell starts and its dialog is keyboard operable', async ({ page }) => {
   await page.goto('/foundation');
@@ -97,7 +98,9 @@ test('D07 authorized search exposes derived provenance without frontend filterin
       }),
     });
   });
-  await page.goto('/search');
+  await connectProductWorkspace(page, '/search', {
+    capabilities: ['search.query.execute'],
+  });
   await expect(page.getByRole('heading', { name: 'Authorized search & provenance' })).toBeVisible();
   await expect(page.getByText('REFERENCE · LOCAL / CI ONLY')).toBeVisible();
   await page.getByLabel('Search query').fill('salary');
@@ -163,7 +166,9 @@ test('D08 trusted report supports source drill-down and deterministic export', a
       body: JSON.stringify({ outcome: 'Success', error: null, data: report }),
     }),
   );
-  await page.goto('/reports');
+  await connectProductWorkspace(page, '/reports', {
+    capabilities: ['reporting.report.generate'],
+  });
   await expect(page.getByRole('heading', { name: 'Trusted financial report' })).toBeVisible();
   await expect(page.getByText('REFERENCE · LOCAL / CI ONLY')).toBeVisible();
   await page.getByRole('button', { name: 'Generate basic report' }).click();

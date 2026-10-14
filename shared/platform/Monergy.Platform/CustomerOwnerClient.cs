@@ -24,16 +24,22 @@ public sealed class CustomerOwnerClient : IDisposable
     private readonly string contextToken;
     private readonly string sessionToken;
     private readonly string membershipToken;
+    private readonly bool ownsClient;
 
     public CustomerOwnerClient(IConfiguration configuration) : this(configuration,
-        new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false }))
+        new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
+        { Timeout = TimeSpan.FromSeconds(5), MaxResponseContentBufferSize = 16_384 }, true)
     { }
 
     public CustomerOwnerClient(IConfiguration configuration, HttpClient httpClient)
+        : this(configuration, httpClient, false)
+    { }
+
+    private CustomerOwnerClient(IConfiguration configuration, HttpClient httpClient, bool ownsClient)
     {
         TenantAccessIntegration.EnsureAllowed(configuration);
-        client = httpClient;
-        client.Timeout = TimeSpan.FromSeconds(5); client.MaxResponseContentBufferSize = 16_384;
+        client = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        this.ownsClient = ownsClient;
         identity = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:CustomerIdentityUrl"));
         access = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:AccessManagementUrl"));
         contextToken = TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:CustomerContextToken");
@@ -112,5 +118,8 @@ public sealed class CustomerOwnerClient : IDisposable
         { throw new TenantBoundaryException("CUSTOMER_OWNER_UNAVAILABLE", 503); }
     }
 
-    public void Dispose() => client.Dispose();
+    public void Dispose()
+    {
+        if (ownsClient) client.Dispose();
+    }
 }

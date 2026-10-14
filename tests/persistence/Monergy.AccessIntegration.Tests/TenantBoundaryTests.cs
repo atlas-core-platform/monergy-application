@@ -102,7 +102,32 @@ public sealed class TenantBoundaryTests
         using var body = await System.Text.Json.JsonDocument.ParseAsync(http.Response.Body);
         Assert.False(body.RootElement.GetProperty("operationExecuted").GetBoolean());
     }
+
+    [Fact]
+    public async Task CustomerOwnerClientDoesNotMutateOrDisposeAnInjectedStartedClient()
+    {
+        using var httpClient = new HttpClient(new ResponseHandler(new { ready = true }));
+        using (var response = await httpClient.GetAsync("http://127.0.0.1/health/ready"))
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var owner = new CustomerOwnerClient(OwnerConfiguration(), httpClient);
+        owner.Dispose();
+
+        using var afterOwnerDisposal = await httpClient.GetAsync("http://127.0.0.1/health/ready");
+        Assert.Equal(HttpStatusCode.OK, afterOwnerDisposal.StatusCode);
+    }
+
     private static TenantBoundaryOptions Options() => new() { Service = "evidence", CapabilityPrefix = "evidence.", ProbeUrl = "http://127.0.0.1:5111/", CustomerTenants = new Dictionary<string, string> { ["C001"] = "T001" } };
+    private static IConfiguration OwnerConfiguration() => new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+    {
+        ["Monergy:ExecutionZone"] = "CI_EPHEMERAL",
+        ["Monergy:AccessIntegration:Enabled"] = "true",
+        ["Monergy:AccessIntegration:CustomerIdentityUrl"] = "http://127.0.0.1:5101/",
+        ["Monergy:AccessIntegration:AccessManagementUrl"] = "http://127.0.0.1:5088/",
+        ["Monergy:AccessIntegration:CustomerContextToken"] = new string('a', 32),
+        ["Monergy:AccessIntegration:CustomerIdentityToken"] = new string('b', 32),
+        ["Monergy:AccessIntegration:MembershipToken"] = new string('c', 32),
+    }).Build();
     private static DefaultHttpContext Http()
     {
         var http = new DefaultHttpContext(); http.Request.Method = "POST";

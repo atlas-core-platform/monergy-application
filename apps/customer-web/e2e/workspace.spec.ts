@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import { connectProductWorkspace } from './product-session-fixture';
 
 const member = {
   actorId: 'A100',
@@ -15,43 +15,6 @@ const session = {
   subjectVersion: 1,
   expiresAt: '2027-01-01T00:00:00Z',
 };
-const productSession = {
-  ...session,
-  actorId: 'A100',
-  authenticationContextId: 'browser-product-session',
-};
-const productContext = {
-  tenantId: 'T001',
-  actorId: 'A100',
-  customerId: 'reference-customer',
-  customerName: 'Alex Morgan',
-  customerDetail: 'Personal workspace',
-  capabilities: [
-    'evidence.document.upload',
-    'financial-profile.profile.read',
-    'search.query.execute',
-    'reporting.report.generate',
-  ],
-  environment: 'Local UAT',
-  dataDurability: 'Runtime only',
-  productionAccepted: false,
-};
-
-async function connectProduct(page: Page, path = '/') {
-  await page.route('**/identity-api/**', async (route) => {
-    await route.fulfill({
-      json: route.request().url().endsWith('/revoke') ? true : productSession,
-    });
-  });
-  await page.route('**/product-api/v1/context', async (route) => {
-    await route.fulfill({ json: productContext });
-  });
-  await page.goto(path);
-  await page.getByLabel('Local access key').fill('browser-product-fixture-only');
-  await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'Start with what you know.' })).toBeVisible();
-}
-
 test('product direct routes isolate the protected shell until authorization succeeds', async ({
   page,
 }) => {
@@ -69,7 +32,7 @@ test('workspace navigation, command palette and guide support keyboard and reduc
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await connectProduct(page);
+  await connectProductWorkspace(page);
   await expect(page.getByRole('heading', { name: 'Start with what you know.' })).toBeVisible();
   await expect(page).toHaveTitle('Overview · Monergy');
   await expect(page.locator('.workspace-art-chip').first()).toHaveCSS('animation-name', 'none');
@@ -109,7 +72,7 @@ test('workspace navigation, command palette and guide support keyboard and reduc
 
 test('mobile navigation and access form remain within the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await connectProduct(page);
+  await connectProductWorkspace(page);
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await expect(
     page.getByRole('dialog').locator('.mw-nav-label').filter({ hasText: 'Evidence' }),
@@ -133,7 +96,7 @@ test('mobile navigation and access form remain within the viewport', async ({ pa
 
 test('all product destinations remain reachable on a short desktop viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 480 });
-  await connectProduct(page);
+  await connectProductWorkspace(page);
   const navigation = page.getByRole('navigation', { name: 'Financial Workspace navigation' });
   const reports = navigation.getByRole('link', { name: 'Reports' });
   await reports.focus();

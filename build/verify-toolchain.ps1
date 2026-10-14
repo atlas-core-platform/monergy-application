@@ -115,7 +115,7 @@ function Add-Check {
 
 $versions = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/toolchain/versions.json') -Raw | ConvertFrom-Json
 $expectedVersions = [ordered]@{
-    dotnetSdk = '10.0.401'; dotnetRuntime = '10.0.12'; csharp = '14.0'; node = '24.21.0'; pnpm = '12.4.1'
+    dotnetSdk = '10.0.401'; dotnetRuntime = '10.0.13'; csharp = '14.0'; node = '24.21.0'; pnpm = '12.4.1'
     react = '19.3.0'; vite = '8.3.0'; antDesign = '6.6.3'; tailwindCss = '4.3.3'
     syft = '1.51.1'; grype = '0.118.0'; gitleaks = '8.30.1'
 }

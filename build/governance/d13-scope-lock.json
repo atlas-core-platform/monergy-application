@@ -46,6 +46,11 @@
   },
   "customerIdentityOciBaseImages": {
     "sdk": "mcr.microsoft.com/dotnet/sdk:10.0.401-noble@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d",
-    "runtime": "mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:48e51f2f6798897be7ac4e775c049ed8fe60d3190f637e1f9c9dc7513efa659c"
+    "runtime": "mcr.microsoft.com/dotnet/aspnet:10.0.13-noble-chiseled@sha256:84def277556c2843a44fdeefbd3145d0a2e32d8f736d0c1a7b0a96b2880b0187"
+  },
+  "ociSecurityMaintenance": {
+    "reason": "DOTNET_10_0_13_SECURITY_PATCH",
+    "previousRuntime": "mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:48e51f2f6798897be7ac4e775c049ed8fe60d3190f637e1f9c9dc7513efa659c",
+    "functionalScopeChanged": false
   }
 }

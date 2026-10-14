@@ -50,7 +50,10 @@ public static class ProductWorkspaceEndpoints
     public static void AddProductWorkspace(this WebApplicationBuilder builder)
     {
         if (!builder.Configuration.GetValue<bool>("Monergy:Product:Enabled")) return;
-        builder.Services.AddSingleton<CustomerOwnerClient>();
+        // The gateway's shared HttpClient is also used by readiness and proxy endpoints.
+        // Product owner calls retain their stricter timeout, response bound and no-proxy handler.
+        builder.Services.AddSingleton(provider => new CustomerOwnerClient(
+            provider.GetRequiredService<IConfiguration>()));
         builder.Services.AddSingleton<ProductEvidenceClient>();
     }
 
