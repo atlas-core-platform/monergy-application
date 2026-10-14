@@ -35,11 +35,16 @@ public sealed record ProductEvidenceReceipt(
     DateTimeOffset AcceptedAt,
     string DataDurability);
 
+public sealed record ProductEvidenceLibrary(
+    IReadOnlyList<CustomerEvidenceItem> Items,
+    string DataDurability);
+
 public static class ProductWorkspaceEndpoints
 {
     private static readonly string[] ProductCapabilities =
     [
         "evidence.document.upload",
+        "evidence.document.read",
         "financial-profile.profile.read",
         "search.query.execute",
         "reporting.report.generate",
@@ -84,6 +89,36 @@ public static class ProductWorkspaceEndpoints
                 "Local UAT",
                 "Runtime only",
                 false));
+        });
+        app.MapGet("/product-api/v1/evidence", async (
+            HttpContext http,
+            CustomerOwnerClient owners,
+            TenantAccessClient access,
+            ProductEvidenceClient evidence) =>
+        {
+            var session = await owners.SessionAsync(http).ConfigureAwait(false);
+            var customer = await owners.OwnedCustomerAsync(session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
+            var decision = await access.EvaluateCustomerAsync(http, "evidence.document.read", customer.CustomerId).ConfigureAwait(false);
+            if (decision.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+
+            var now = DateTimeOffset.UtcNow;
+            var requestId = "request-evidence-library-" + Guid.NewGuid().ToString("N");
+            var request = new ContractRequest<ListCustomerEvidence>(
+                App02ContractNames.ListCustomerEvidence,
+                ContractGuard.CurrentVersion,
+                requestId,
+                "correlation-evidence-library-" + Guid.NewGuid().ToString("N"),
+                null,
+                new TrustedSecurityContext(
+                    new ActorContext(session.ActorId, "Customer", now, session.AuthenticationContextId),
+                    new WorkloadContext("customer-web", "local-uat-workspace"),
+                    new AccessContext("customer-advice", null, decision.DecisionId, customer.CustomerId)),
+                null,
+                new ListCustomerEvidence(customer.CustomerId, 100));
+            var library = await evidence.ListAsync(
+                session.TenantId, session.AuthenticationContextId, request, http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(new ProductEvidenceLibrary(library.Items, "Runtime only"));
         });
         app.MapPost("/product-api/v1/evidence", async (
             ProductEvidenceSubmission submission,
@@ -176,6 +211,8 @@ public static class ProductWorkspaceEndpoints
 
 public sealed class ProductEvidenceClient : IDisposable
 {
+    private static readonly HashSet<string> LibraryContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    { "application/pdf", "image/png", "image/jpeg", "text/plain" };
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true };
     private readonly HttpClient client = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
@@ -241,6 +278,52 @@ public sealed class ProductEvidenceClient : IDisposable
         }
         catch (JsonException) { throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503); }
     }
+
+    public async Task<CustomerEvidenceLibrary> ListAsync(
+        string tenantId,
+        string sessionId,
+        ContractRequest<ListCustomerEvidence> body,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, "contracts/app-02/evidence-list/v1"));
+        request.Headers.Add("X-Monergy-Tenant", tenantId);
+        request.Headers.Add("X-Monergy-Session", sessionId);
+        request.Content = JsonContent.Create(body, options: ContractJson.Options);
+        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if ((int)response.StatusCode is >= 500 or >= 300 and < 400 or 404)
+            throw new TenantBoundaryException("EVIDENCE_OWNER_UNAVAILABLE", 503);
+        if ((int)response.StatusCode is 401 or 403)
+            throw new TenantBoundaryException("ACCESS_DENIED", 403);
+        ContractResult<CustomerEvidenceLibrary> result;
+        try
+        {
+            result = await response.Content.ReadFromJsonAsync<ContractResult<CustomerEvidenceLibrary>>(
+                ContractJson.Options, cancellationToken).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503);
+        }
+        catch (JsonException) { throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503); }
+        if (!string.Equals(result.ContractName, body.ContractName, StringComparison.Ordinal) ||
+            !string.Equals(result.ContractVersion, body.ContractVersion, StringComparison.Ordinal) ||
+            !string.Equals(result.RequestId, body.RequestId, StringComparison.Ordinal) ||
+            !string.Equals(result.CorrelationId, body.CorrelationId, StringComparison.Ordinal) ||
+            result.Outcome != ContractOutcome.Success || result.Data is null ||
+            !string.Equals(result.Data.CustomerId, body.Payload.CustomerId, StringComparison.Ordinal) ||
+            result.Data.Items.Count > body.Payload.Limit || result.Data.Items.Any(item => !ValidLibraryItem(item)))
+            throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503);
+        return result.Data;
+    }
+
+    private static bool ValidLibraryItem(CustomerEvidenceItem item) =>
+        TenantAccessClient.Identifier(item.DocumentId, 160) &&
+        TenantAccessClient.Identifier(item.DocumentVersionId, 160) &&
+        TenantAccessClient.Identifier(item.EvidenceId, 160) &&
+        item.Version >= 1 &&
+        !string.IsNullOrWhiteSpace(item.SourceName) && item.SourceName.Length <= 160 &&
+        !string.IsNullOrWhiteSpace(item.OriginalFileName) && item.OriginalFileName.Length <= 180 &&
+        !item.OriginalFileName.Contains('/') && !item.OriginalFileName.Contains('\\') &&
+        LibraryContentTypes.Contains(item.ContentType) && item.ContentLength >= 1 &&
+        item.ContentSha256.Length == 64 && item.ContentSha256.All(char.IsAsciiHexDigit) &&
+        item.ReceivedAt != default && item.CreatedAt != default;
 
     public void Dispose() => client.Dispose();
 
