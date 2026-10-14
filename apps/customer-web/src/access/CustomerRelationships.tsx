@@ -79,8 +79,10 @@ function AssignedCustomers({ api }: { api: AccessApi }) {
         undefined,
         controller.signal,
       );
-      const people = await api.all('members', controller.signal, page.policyVersion);
-      const directory = await api.resourceDirectory('customer', controller.signal);
+      const [people, directory] = await Promise.all([
+        api.all('members', controller.signal, page.policyVersion),
+        api.resourceDirectory('customer', controller.signal),
+      ]);
       if (!controller.signal.aborted) {
         setData({ page, people, customers: directory.items });
         setError('');
@@ -138,12 +140,19 @@ function AssignedCustomers({ api }: { api: AccessApi }) {
               customerId: draft.customerId,
             },
       );
+      // Relationship mutations do not change the member or customer directories. Reload only the
+      // authoritative relationship page before confirming success so the next action cannot race a
+      // three-request background refresh.
+      const page = await api.request<AccessPage>('administration/customer-relationships?limit=100');
+      setData({ ...data, page });
       setNotice(
         draft.id
           ? 'Customer assignment removed. This relationship no longer authorizes access.'
           : 'Customer assigned. Access still requires role permissions and current customer Consent.',
       );
-      refresh();
+      setDraft(null);
+      setReview(false);
+      setBlocked(false);
     } catch (failure) {
       setError(displayError(failure));
       setBlocked(true);
