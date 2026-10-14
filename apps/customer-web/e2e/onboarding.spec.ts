@@ -201,6 +201,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
     expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   };
   const writes: unknown[] = [];
+  const library: unknown[] = [];
   await page.route('**/*-api/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/identity-api/local/v1/tenant-sessions') {
@@ -217,6 +218,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
           customerDetail: 'Primary UAT customer',
           capabilities: [
             'evidence.document.upload',
+            'evidence.document.read',
             'search.query.execute',
             'reporting.report.generate',
           ],
@@ -228,19 +230,30 @@ test('customer entry stays isolated from administration and confirms reviewed ev
       return;
     }
     if (path === '/product-api/v1/evidence') {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ json: { items: library, dataDurability: 'Runtime only' } });
+        return;
+      }
       const body = route.request().postDataJSON() as { operationId: string };
       writes.push(body);
+      const accepted = {
+        documentId: `document-${body.operationId}`,
+        documentVersionId: `document-version-${body.operationId}`,
+        evidenceId: `evidence-${body.operationId}`,
+        version: 1,
+        sourceName: 'Customer upload',
+        originalFileName: 'statement.txt',
+        contentType: 'text/plain',
+        contentLength: 17,
+        contentSha256: 'b'.repeat(64),
+        receivedAt: '2026-10-14T00:00:00Z',
+        createdAt: '2026-10-14T00:00:00Z',
+      };
+      library.unshift(accepted);
       await route.fulfill({
         json: {
           operationId: body.operationId,
-          documentId: `document-${body.operationId}`,
-          documentVersionId: `document-version-${body.operationId}`,
-          evidenceId: `evidence-${body.operationId}`,
-          version: 1,
-          originalFileName: 'statement.txt',
-          contentType: 'text/plain',
-          contentLength: 17,
-          contentSha256: 'b'.repeat(64),
+          ...accepted,
           acceptedAt: '2026-10-14T00:00:00Z',
           dataDurability: 'Runtime only',
         },
@@ -271,8 +284,11 @@ test('customer entry stays isolated from administration and confirms reviewed ev
   expect(writes).toHaveLength(0);
   await review.getByRole('button', { name: 'Upload evidence' }).click();
   const receipt = page.locator('article.product-receipt').filter({ hasText: 'statement.txt' });
-  await expect(receipt.getByText('CONFIRMED', { exact: true })).toBeVisible();
-  await expect(receipt).toContainText('document-version-');
+  await expect(receipt.getByText('VERIFIED', { exact: true })).toBeVisible();
+  await receipt.getByRole('button', { name: 'View provenance for statement.txt' }).click();
+  const provenance = page.getByRole('dialog', { name: 'Evidence provenance' });
+  await expect(provenance).toContainText('document-version-');
+  await expect(provenance).toContainText('Raw document content is not exposed');
   expect(writes).toHaveLength(1);
   await page.screenshot({ path: '.artifacts/customer-evidence-intake.png', fullPage: true });
 });
