@@ -4,7 +4,13 @@ import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { useWorkspaceSession } from './workspaceSession';
 import './access.css';
 
-export function WorkspaceEntry({ children }: { children: ReactNode }) {
+export function WorkspaceEntry({
+  children,
+  area = 'administration',
+}: {
+  children: ReactNode;
+  area?: 'administration' | 'product';
+}) {
   const { status, session, message, connect, retry, cancel } = useWorkspaceSession();
   const [form] = Form.useForm<{ tenantId: string; key: string }>();
   if (status === 'authorized' && session) return children;
@@ -22,18 +28,25 @@ export function WorkspaceEntry({ children }: { children: ReactNode }) {
       </header>
       <main className="access-public-body">
         <section className="access-public-intro">
-          <p className="workspace-eyebrow">ACCESS MANAGEMENT</p>
+          <p className="workspace-eyebrow">
+            {area === 'administration' ? 'ACCESS MANAGEMENT' : 'FINANCIAL WORKSPACE'}
+          </p>
           <h1>
-            Clear access.
+            {area === 'administration' ? 'Clear access.' : 'Financial clarity.'}
             <br />
-            Confident decisions.
+            {area === 'administration' ? 'Confident decisions.' : 'Grounded in evidence.'}
           </h1>
-          <p>Manage the people, roles and permissions that keep your workspace in control.</p>
+          <p>
+            {area === 'administration'
+              ? 'Manage the people, roles and permissions that keep your workspace in control.'
+              : 'Bring your financial information together in a private, traceable workspace.'}
+          </p>
           <div className="access-public-assurance">
             <WorkspaceIcon name="shield" size={18} />
             <span>
-              Administration becomes available after your identity and tenant access have been
-              verified.
+              {area === 'administration'
+                ? 'Administration becomes available after your identity and tenant authority have been verified.'
+                : 'Your workspace becomes available after your identity, customer ownership and product access have been verified.'}
             </span>
           </div>
         </section>
@@ -54,7 +67,8 @@ export function WorkspaceEntry({ children }: { children: ReactNode }) {
           {status === 'disconnected' ? (
             <>
               <p>
-                Administration is paused. Reconnecting checks your existing session with its owner.
+                {area === 'administration' ? 'Administration' : 'Your financial workspace'} is
+                paused. Reconnecting checks your existing session with its owner.
               </p>
               <Button
                 type="primary"
@@ -83,7 +97,11 @@ export function WorkspaceEntry({ children }: { children: ReactNode }) {
               <Form.Item
                 name="tenantId"
                 label="Tenant"
-                extra="The workspace you want to administer."
+                extra={
+                  area === 'administration'
+                    ? 'The workspace you want to administer.'
+                    : 'The financial workspace you want to open.'
+                }
                 rules={[
                   { required: true, message: 'Enter your tenant.' },
                   {
@@ -117,7 +135,9 @@ export function WorkspaceEntry({ children }: { children: ReactNode }) {
                   <p className="access-connection-status" role="status">
                     {status === 'connecting'
                       ? 'Verifying your identity…'
-                      : 'Verifying tenant administrator access…'}
+                      : area === 'administration'
+                        ? 'Verifying tenant administrator access…'
+                        : 'Resolving your customer workspace and product access…'}
                   </p>
                   <Button block type="text" onClick={cancel}>
                     Cancel connection
@@ -132,7 +152,8 @@ export function WorkspaceEntry({ children }: { children: ReactNode }) {
         </section>
       </main>
       <footer className="access-public-footer">
-        Monergy · Access Management<span>Local UAT connection</span>
+        Monergy · {area === 'administration' ? 'Access Management' : 'Financial Workspace'}
+        <span>Local UAT connection</span>
       </footer>
     </div>
   );

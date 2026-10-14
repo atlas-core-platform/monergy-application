@@ -93,12 +93,17 @@ if (-not (Test-Path $profileFile)) {
         foreach ($actorId in $localActors) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
     }
     $new = @{ instanceId=[Guid]::NewGuid().ToString('N'); postgresPassword=(Secret); databases=$databases; identities=$identities; tokens=@{}; port=$Port; onboarding=[bool]$EnableOnboarding }
-    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','customerContext','consent')) { $new.tokens[$name] = Secret }
+    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','customerContext','consent','evidenceIntake')) { $new.tokens[$name] = Secret }
     Save-Json 'profile.json' $new
 }
 $state = Get-Content $profileFile -Raw | ConvertFrom-Json
 $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
+if ($Action -in @('Prepare','Start') -and $onboarding -and $null -eq $state.tokens.PSObject.Properties['evidenceIntake']) {
+    $state.tokens | Add-Member -NotePropertyName evidenceIntake -NotePropertyValue (Secret)
+    Save-Json 'profile.json' $state
+    Protect-Files
+}
 if ($Action -eq 'Credentials') {
     $identity = $state.identities | Where-Object { $_.tenantId -eq $Tenant -and $_.actorId -eq $Actor }
     if ($null -eq $identity) { throw 'This actor has no key in the selected profile.' }
@@ -158,7 +163,10 @@ if ($Action -in @('Prepare','Start')) {
             $config.Monergy.AccessIntegration=$integration
         } elseif ($service -in @('evidence','financial-profile','financial-rules','search-retrieval','reporting','integration-gateway')) {
             $config.Monergy.ReferenceAdapters='true'
-            if ($onboarding -and $service -eq 'evidence') { $config.Monergy.OnboardingFixtures='true' }
+            if ($onboarding -and $service -eq 'evidence') {
+                $config.Monergy.OnboardingFixtures='true'
+                $config.Monergy.ProductIntake=@{ Enabled='true'; EvidenceToken=$state.tokens.evidenceIntake }
+            }
         }
         Save-Json "$service.json" $config
     }
@@ -173,7 +181,16 @@ if ($Action -in @('Prepare','Start')) {
         }
         Save-Json "delivery-$tenantId.json" $delivery
     }
-    Save-Json 'workspace.json' @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' } } }
+    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' } } }
+    if ($onboarding) {
+        $workspace.Monergy.AccessIntegration=@{
+            Enabled='true'; CustomerRelationships='true'; AccessManagementUrl='http://127.0.0.1:5088/'
+            CustomerIdentityUrl='http://127.0.0.1:5101/'; CustomerContextToken=$state.tokens.customerContext
+            CustomerIdentityToken=$state.tokens.context; MembershipToken=$state.tokens.membership
+        }
+        $workspace.Monergy.Product=@{ Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake }
+    }
+    Save-Json 'workspace.json' $workspace
     $runtimeUid = if ($windows) { '1654' } else { (& id -u).Trim() }
     $path = $folder.Replace('\','/')
     Save-Text 'compose.env' "UAT_CONFIG_ROOT='$path'`nUAT_PORT=$($state.port)`nUAT_UID=$runtimeUid`n"
@@ -217,7 +234,33 @@ if ($Action -eq 'Start' -and -not (Test-Path (Join-Path $folder 'members-initial
     Save-Text 'members-initialized' $state.instanceId
     Protect-Files
 }
-Write-Host "Local UAT is ready: $url/access"
+if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'product-members-initialized'))) {
+    foreach ($tenantId in @('T001','T002')) {
+        $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        try {
+            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $roles = Invoke-RestMethod "$url/access-api/v1/administration/roles?limit=100" -Headers $headers -TimeoutSec 15
+            $customerRole = $roles.items | Where-Object code -eq 'customer'
+            $advisorRole = $roles.items | Where-Object code -eq 'financial-advisor'
+            if ($null -eq $customerRole -or $null -eq $advisorRole) { throw 'The default product access pack is incomplete.' }
+            foreach ($binding in @(@{ actor='A100'; role=$customerRole.id },@{ actor='A200'; role=$customerRole.id },@{ actor='A300'; role=$advisorRole.id })) {
+                $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
+                $member = $members.items | Where-Object actorId -eq $binding.actor
+                if ($null -ne $member -and $null -eq $member.businessRoleId) {
+                    Invoke-RestMethod "$url/access-api/v1/administration/members/$($binding.actor)" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;businessRoleId=$binding.role;active=$true;tenantAdmin=$false}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+                }
+            }
+        } finally {
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+        }
+    }
+    Save-Text 'product-members-initialized' $state.instanceId
+    Protect-Files
+}
+Write-Host "Local customer workspace is ready: $url/"
+Write-Host "Local access administration is ready: $url/access"
 Write-Host 'Administration, identities, sessions and access audit persist across Stop/Start.'
 Write-Host 'Business reference data is illustrative and may reset. Production readiness remains blocked.'
-Write-Host 'Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Tenant T001 -Actor A900'
+Write-Host "Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A900"
+if ($onboarding) { Write-Host "Show the customer key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A100" }

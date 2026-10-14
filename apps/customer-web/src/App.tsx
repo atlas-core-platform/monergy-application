@@ -4,7 +4,7 @@ import type { ComponentProps } from 'react';
 import { FoundationProvider, WorkspaceShell } from '@monergy/ui-foundation';
 
 import { accessDestinations, accessModule } from './workspace/accessNavigation';
-import { destinations } from './workspace/destinations';
+import { destinations, productModule } from './workspace/destinations';
 import WorkspaceHome from './workspace/WorkspaceHome';
 import './workspace/workspace-home.css';
 import { localUat, useWorkspaceSession } from './access/workspaceSession';
@@ -17,6 +17,7 @@ const TenantSetupGate = lazy(() =>
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const SearchExperience = lazy(() => import('./search/SearchExperience'));
 const ReportsExperience = lazy(() => import('./reports/ReportsExperience'));
+const EvidenceExperience = lazy(() => import('./product/EvidenceExperience'));
 const AccessExperience = lazy(() => import('./access/AccessExperience'));
 const { Paragraph, Text, Title } = Typography;
 
@@ -108,6 +109,18 @@ function ToolchainFoundation() {
 
 function RouteContent() {
   if (window.location.pathname === '/') return <WorkspaceHome />;
+  if (window.location.pathname === '/evidence')
+    return (
+      <Suspense
+        fallback={
+          <main className="access-loading" aria-busy="true">
+            Loading evidence…
+          </main>
+        }
+      >
+        <EvidenceExperience />
+      </Suspense>
+    );
   if (
     window.location.pathname === '/access' ||
     window.location.pathname.startsWith('/access/') ||
@@ -177,18 +190,25 @@ function RouteContent() {
 }
 
 export function App() {
+  const area =
+    window.location.pathname === '/access' ||
+    window.location.pathname.startsWith('/access/') ||
+    window.location.pathname === '/operations'
+      ? 'administration'
+      : 'product';
   return (
-    <WorkspaceSessionProvider>
+    <WorkspaceSessionProvider area={area} key={area}>
       <WorkspaceApplication />
     </WorkspaceSessionProvider>
   );
 }
 function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
-  const { session, signOut } = useWorkspaceSession();
+  const { session, authorization, signOut } = useWorkspaceSession();
+  const product = authorization?.area === 'product' ? authorization.context : null;
   return (
     <WorkspaceShell
       {...props}
-      context={session ? `Tenant ${session.tenantId}` : undefined}
+      context={product?.customerName ?? (session ? `Tenant ${session.tenantId}` : undefined)}
       actions={
         session ? (
           <Button
@@ -205,7 +225,6 @@ function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
   );
 }
 function WorkspaceApplication() {
-  const { status } = useWorkspaceSession();
   const [path, setPath] = useState(window.location.pathname);
   useEffect(() => {
     const pop = () => {
@@ -227,9 +246,16 @@ function WorkspaceApplication() {
       if (
         url.origin !== window.location.origin ||
         !(
-          ['/', '/access', '/reports', '/search', '/vs02', '/foundation', '/operations'].includes(
-            url.pathname,
-          ) || url.pathname.startsWith('/access/')
+          [
+            '/',
+            '/evidence',
+            '/access',
+            '/reports',
+            '/search',
+            '/vs02',
+            '/foundation',
+            '/operations',
+          ].includes(url.pathname) || url.pathname.startsWith('/access/')
         )
       )
         return;
@@ -245,8 +271,9 @@ function WorkspaceApplication() {
       document.removeEventListener('click', navigate);
     };
   }, []);
-  const inAccess = path === '/access' || path.startsWith('/access/');
-  const navigation = inAccess ? accessDestinations : destinations;
+  const inAdministration =
+    path === '/access' || path.startsWith('/access/') || path === '/operations';
+  const navigation = inAdministration ? accessDestinations : destinations;
   const current =
     navigation.find(
       (destination) =>
@@ -254,20 +281,20 @@ function WorkspaceApplication() {
         (path === '/access/users/history' && destination.id === 'users'),
     ) ?? navigation[0];
   useEffect(() => {
-    document.title = inAccess
+    document.title = inAdministration
       ? `${current?.label ?? 'Overview'} · Access Management · Monergy`
-      : 'Monergy Workspace';
-  }, [inAccess, current?.label]);
-  const gated = inAccess || path === '/operations' || localUat;
-  const midnight = inAccess || path === '/operations' || (localUat && status !== 'authorized');
+      : `${current?.label ?? 'Overview'} · Monergy`;
+  }, [inAdministration, current?.label]);
+  const productProtected = ['/', '/evidence', '/search', '/reports'].includes(path);
+  const gated = inAdministration || productProtected || localUat;
   useEffect(() => {
-    document.documentElement.dataset.monergyTheme = midnight ? 'midnight' : 'light';
-  }, [midnight]);
+    document.documentElement.dataset.monergyTheme = 'midnight';
+  }, []);
   const shell = (
     <SessionShell
-      appearance={midnight ? 'midnight' : 'light'}
+      appearance="midnight"
       destinations={navigation}
-      module={inAccess ? accessModule : undefined}
+      module={inAdministration ? accessModule : productModule}
       onNavigate={(id) => {
         const href = navigation.find((item) => item.id === id)?.href;
         if (!href) return;
@@ -286,18 +313,22 @@ function WorkspaceApplication() {
     </SessionShell>
   );
   return (
-    <FoundationProvider appearance={midnight ? 'midnight' : 'light'}>
+    <FoundationProvider appearance="midnight">
       {gated ? (
-        <WorkspaceEntry>
-          <Suspense
-            fallback={
-              <main aria-busy="true" className="access-loading">
-                Checking workspace setup…
-              </main>
-            }
-          >
-            <TenantSetupGate>{shell}</TenantSetupGate>
-          </Suspense>
+        <WorkspaceEntry area={inAdministration ? 'administration' : 'product'}>
+          {inAdministration ? (
+            <Suspense
+              fallback={
+                <main aria-busy="true" className="access-loading">
+                  Checking workspace setup…
+                </main>
+              }
+            >
+              <TenantSetupGate>{shell}</TenantSetupGate>
+            </Suspense>
+          ) : (
+            shell
+          )}
         </WorkspaceEntry>
       ) : (
         shell

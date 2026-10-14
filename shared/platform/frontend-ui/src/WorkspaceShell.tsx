@@ -24,7 +24,15 @@ interface WorkspaceShellProps extends PropsWithChildren {
   appearance?: 'light' | 'midnight';
   onNavigate?: (id: string) => void;
   actions?: ReactNode;
-  module?: { name: string; homeHref: string; guide: ReactNode };
+  module?: {
+    name: string;
+    homeHref: string;
+    guide: ReactNode;
+    navigationLabel?: string;
+    findLabel?: string;
+    guideLabel?: string;
+    guideTitle?: string;
+  };
 }
 
 export function WorkspaceShell({
@@ -38,6 +46,12 @@ export function WorkspaceShell({
   module,
   children,
 }: WorkspaceShellProps) {
+  const navigationLabel =
+    module?.navigationLabel ?? (module ? 'Jump to an access page' : 'Jump to a workspace');
+  const findLabel = module?.findLabel ?? (module ? 'Find an access page' : 'Find a workspace');
+  const guideLabel = module?.guideLabel ?? (module ? 'Access management guide' : 'Workspace guide');
+  const guideTitle =
+    module?.guideTitle ?? (module ? 'Your access management guide' : 'A connected way to work');
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
@@ -219,10 +233,8 @@ export function WorkspaceShell({
             <button
               type="button"
               className="mw-quick-jump"
-              aria-label={module ? 'Jump to an access page' : 'Jump to a workspace'}
-              title={
-                collapsed ? (module ? 'Jump to an access page' : 'Jump to a workspace') : undefined
-              }
+              aria-label={navigationLabel}
+              title={collapsed ? navigationLabel : undefined}
               onClick={() => {
                 setQuery('');
                 setCommandOpen(true);
@@ -270,7 +282,7 @@ export function WorkspaceShell({
             <div className="mw-top-actions">
               <button
                 className="mw-search-trigger"
-                aria-label={module ? 'Find an access page' : 'Find a workspace'}
+                aria-label={findLabel}
                 type="button"
                 onClick={() => {
                   setQuery('');
@@ -285,7 +297,7 @@ export function WorkspaceShell({
               <button
                 className="mw-icon-button"
                 type="button"
-                aria-label={module ? 'Access management guide' : 'Workspace guide'}
+                aria-label={guideLabel}
                 onClick={() => {
                   setHelpOpen(true);
                 }}
@@ -315,7 +327,7 @@ export function WorkspaceShell({
           {navigation}
         </Drawer>
         <Modal
-          title={module ? 'Jump to an access page' : 'Jump to a workspace'}
+          title={navigationLabel}
           className="mw-command-dialog"
           open={commandOpen}
           onCancel={() => {
@@ -329,7 +341,7 @@ export function WorkspaceShell({
         >
           <Input
             ref={input}
-            aria-label={module ? 'Find an access page' : 'Find a workspace'}
+            aria-label={findLabel}
             placeholder="Search pages…"
             value={query}
             onChange={(event) => {
@@ -365,7 +377,7 @@ export function WorkspaceShell({
         </Modal>
         <Drawer
           onKeyDown={appearance === 'midnight' ? containDialogTab : undefined}
-          title={module ? 'Your access management guide' : 'A connected way to work'}
+          title={guideTitle}
           open={helpOpen}
           onClose={() => {
             setHelpOpen(false);

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 const member = {
   actorId: 'A100',
@@ -14,96 +15,132 @@ const session = {
   subjectVersion: 1,
   expiresAt: '2027-01-01T00:00:00Z',
 };
+const productSession = {
+  ...session,
+  actorId: 'A100',
+  authenticationContextId: 'browser-product-session',
+};
+const productContext = {
+  tenantId: 'T001',
+  actorId: 'A100',
+  customerId: 'reference-customer',
+  customerName: 'Alex Morgan',
+  customerDetail: 'Personal workspace',
+  capabilities: [
+    'evidence.document.upload',
+    'financial-profile.profile.read',
+    'search.query.execute',
+    'reporting.report.generate',
+  ],
+  environment: 'Local UAT',
+  dataDurability: 'Runtime only',
+  productionAccepted: false,
+};
+
+async function connectProduct(page: Page, path = '/') {
+  await page.route('**/identity-api/**', async (route) => {
+    await route.fulfill({
+      json: route.request().url().endsWith('/revoke') ? true : productSession,
+    });
+  });
+  await page.route('**/product-api/v1/context', async (route) => {
+    await route.fulfill({ json: productContext });
+  });
+  await page.goto(path);
+  await page.getByLabel('Local access key').fill('browser-product-fixture-only');
+  await page.getByRole('button', { name: 'Connect workspace' }).click();
+  await expect(page.getByRole('heading', { name: 'Start with what you know.' })).toBeVisible();
+}
+
+test('product direct routes isolate the protected shell until authorization succeeds', async ({
+  page,
+}) => {
+  await page.goto('/evidence');
+  await expect(page.getByRole('heading', { name: 'Connect to your workspace' })).toBeVisible();
+  await expect(
+    page.getByRole('navigation', { name: 'Financial Workspace navigation' }),
+  ).not.toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Bring your financial documents into view.' }),
+  ).not.toBeVisible();
+});
 
 test('workspace navigation, command palette and guide support keyboard and reduced motion', async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'A clearer view of everything.' })).toBeVisible();
-  await expect(page).toHaveTitle('Monergy Workspace');
+  await connectProduct(page);
+  await expect(page.getByRole('heading', { name: 'Start with what you know.' })).toBeVisible();
+  await expect(page).toHaveTitle('Overview · Monergy');
   await expect(page.locator('.workspace-art-chip').first()).toHaveCSS('animation-name', 'none');
   await page.getByRole('button', { name: 'Collapse sidebar' }).click();
   await expect(page.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute(
     'aria-expanded',
     'false',
   );
-  const compactAccess = page
-    .getByRole('navigation', { name: 'Workspace navigation' })
-    .getByRole('link', { name: 'Access management' });
-  await expect(compactAccess).toBeVisible();
-  await expect(compactAccess.locator('svg')).toBeVisible();
-  await page.getByRole('button', { name: 'Jump to a workspace', exact: true }).click();
-  await expect(page.getByRole('textbox', { name: 'Find a workspace' })).toBeFocused();
+  const compactEvidence = page
+    .getByRole('navigation', { name: 'Financial Workspace navigation' })
+    .getByRole('link', { name: 'Evidence' });
+  await expect(compactEvidence).toBeVisible();
+  await expect(compactEvidence.locator('svg')).toBeVisible();
+  await page.getByRole('button', { name: 'Jump to a financial page', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Find a financial page' })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(
-    page.getByRole('button', { name: 'Jump to a workspace', exact: true }),
+    page.getByRole('button', { name: 'Jump to a financial page', exact: true }),
   ).toBeFocused();
   await page.keyboard.press('Control+k');
-  await expect(page.getByRole('dialog', { name: 'Jump to a workspace' })).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Find a workspace' })).toBeFocused();
-  await page.getByRole('textbox', { name: 'Find a workspace' }).fill('access');
-  await page.getByRole('dialog').getByRole('button', { name: 'Access management' }).click();
-  await expect(page).toHaveURL(/\/access$/);
-  await expect(page.getByRole('button', { name: 'Connect workspace' })).toBeVisible();
-  await expect(page.locator('.mw-shell')).toHaveCount(0);
-  await page.route('**/identity-api/**', (route) => route.fulfill({ json: session }));
-  await page.route('**/access-api/**', (route) =>
-    route.fulfill({
-      json: route.request().url().endsWith('/administration/context')
-        ? {
-            tenantId: session.tenantId,
-            actorId: session.actorId,
-            authority: 'TenantAdmin',
-            policyVersion: 7,
-          }
-        : { policyVersion: 7, items: [], nextCursor: null },
-    }),
-  );
-  await page.getByLabel('Local access key').fill('fixture-only');
-  await page.getByRole('button', { name: 'Connect workspace' }).click();
-  const guide = page.getByRole('button', { name: 'Access management guide' });
+  await expect(page.getByRole('dialog', { name: 'Jump to a financial page' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Find a financial page' })).toBeFocused();
+  await page.getByRole('textbox', { name: 'Find a financial page' }).fill('evidence');
+  await page.getByRole('dialog').getByRole('button', { name: 'Evidence' }).click();
+  await expect(page).toHaveURL(/\/evidence$/);
+  await expect(
+    page.getByRole('heading', { name: 'Bring your financial documents into view.' }),
+  ).toBeVisible();
+  const guide = page.getByRole('button', { name: 'Financial workspace guide' });
   await guide.focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('dialog', { name: 'Your access management guide' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Your financial workspace guide' })).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(guide).toBeFocused();
   await expect(page.locator('#workspace-content')).toHaveCSS('animation-name', 'none');
 });
 
 test('mobile navigation and access form remain within the viewport', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: 'Collapse sidebar' }).click();
   await page.setViewportSize({ width: 390, height: 844 });
+  await connectProduct(page);
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await expect(
-    page.getByRole('dialog').locator('.mw-nav-label').filter({ hasText: 'Access management' }),
+    page.getByRole('dialog').locator('.mw-nav-label').filter({ hasText: 'Evidence' }),
   ).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Open navigation' })).toBeFocused();
   await page.getByRole('button', { name: 'Open navigation' }).click();
-  await page.getByRole('dialog').getByRole('link', { name: 'Access management' }).click();
-  await expect(page.getByRole('heading', { name: 'Connect to your workspace' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('link', { name: 'Evidence' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Bring your financial documents into view.' }),
+  ).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
   await page.screenshot({
-    path: '.artifacts/ui/access-mobile.png',
+    path: '.artifacts/ui/customer-evidence-mobile.png',
     fullPage: true,
     animations: 'disabled',
   });
 });
 
-test('all sidebar destinations remain reachable on a short desktop viewport', async ({ page }) => {
+test('all product destinations remain reachable on a short desktop viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 480 });
-  await page.goto('/');
-  const navigation = page.getByRole('navigation', { name: 'Workspace navigation' });
-  const foundation = navigation.getByRole('link', { name: 'Engineering foundation' });
-  await foundation.focus();
-  await expect(foundation).toBeInViewport();
+  await connectProduct(page);
+  const navigation = page.getByRole('navigation', { name: 'Financial Workspace navigation' });
+  const reports = navigation.getByRole('link', { name: 'Reports' });
+  await reports.focus();
+  await expect(reports).toBeInViewport();
   await page.keyboard.press('Enter');
-  await expect(page).toHaveURL(/\/foundation$/);
-  await expect(navigation.getByRole('link', { name: 'Engineering foundation' })).toHaveAttribute(
+  await expect(page).toHaveURL(/\/reports$/);
+  await expect(navigation.getByRole('link', { name: 'Reports' })).toHaveAttribute(
     'aria-current',
     'page',
   );

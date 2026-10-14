@@ -189,3 +189,88 @@ test('compact setup reflows at mobile width and supports reduced motion', async 
   await page.keyboard.press('Space');
   await expect(page.getByLabel('I have reviewed the organization details')).toBeChecked();
 });
+
+test('customer entry stays isolated from administration and confirms reviewed evidence', async ({
+  page,
+}) => {
+  const customerSession = {
+    tenantId: 'T001',
+    actorId: 'A100',
+    authenticationContextId: 'customer-product-fixture',
+    subjectVersion: 2,
+    expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+  };
+  const writes: unknown[] = [];
+  await page.route('**/*-api/**', async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/identity-api/local/v1/tenant-sessions') {
+      await route.fulfill({ json: customerSession });
+      return;
+    }
+    if (path === '/product-api/v1/context') {
+      await route.fulfill({
+        json: {
+          tenantId: 'T001',
+          actorId: 'A100',
+          customerId: 'reference-customer',
+          customerName: 'Reference Customer',
+          customerDetail: 'Primary UAT customer',
+          capabilities: [
+            'evidence.document.upload',
+            'search.query.execute',
+            'reporting.report.generate',
+          ],
+          environment: 'Local UAT',
+          dataDurability: 'Runtime only',
+          productionAccepted: false,
+        },
+      });
+      return;
+    }
+    if (path === '/product-api/v1/evidence') {
+      const body = route.request().postDataJSON() as { operationId: string };
+      writes.push(body);
+      await route.fulfill({
+        json: {
+          operationId: body.operationId,
+          documentId: `document-${body.operationId}`,
+          documentVersionId: `document-version-${body.operationId}`,
+          evidenceId: `evidence-${body.operationId}`,
+          version: 1,
+          originalFileName: 'statement.txt',
+          contentType: 'text/plain',
+          contentLength: 17,
+          contentSha256: 'b'.repeat(64),
+          acceptedAt: '2026-10-14T00:00:00Z',
+          dataDurability: 'Runtime only',
+        },
+      });
+      return;
+    }
+    await route.fulfill({ status: 404, json: { error: 'NOT_FOUND' } });
+  });
+  await page.goto('/');
+  await expect(page.locator('.mw-shell')).toHaveCount(0);
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+  await page.getByLabel('Local access key').fill('customer-fixture');
+  await page.getByRole('button', { name: 'Connect workspace' }).click();
+  await expect(page.getByRole('heading', { name: 'Start with what you know.' })).toBeVisible();
+  const navigation = page.getByRole('navigation', { name: 'Financial Workspace navigation' });
+  await expect(navigation.getByRole('link', { name: 'Evidence' })).toBeVisible();
+  for (const name of ['Access management', 'System Expert', 'Engineering foundation'])
+    await expect(navigation.getByRole('link', { name, exact: true })).toHaveCount(0);
+  await navigation.getByRole('link', { name: 'Evidence' }).click();
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'statement.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('customer evidence'),
+  });
+  const review = page.getByRole('dialog', { name: 'Review evidence upload' });
+  await expect(review).toContainText('Reference Customer');
+  await expect(review).toContainText('Current LOCAL/UAT runtime only');
+  expect(writes).toHaveLength(0);
+  await review.getByRole('button', { name: 'Upload evidence' }).click();
+  await expect(page.getByText('CONFIRMED')).toBeVisible();
+  expect(writes).toHaveLength(1);
+  await page.screenshot({ path: '.artifacts/customer-evidence-intake.png', fullPage: true });
+});

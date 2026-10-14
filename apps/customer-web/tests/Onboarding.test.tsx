@@ -38,6 +38,7 @@ function mount(api: AccessApi) {
           status: 'authorized',
           session,
           api,
+          authorization: { area: 'administration', authority: 'TenantAdmin', policyVersion: 7 },
           message: '',
           recovery: null,
           connect: () => Promise.resolve(),

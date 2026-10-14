@@ -5,7 +5,7 @@ using Monergy.UatGateway;
 var builder = WebApplication.CreateBuilder(args);
 if (!builder.Environment.IsDevelopment() || builder.Configuration["Monergy:ExecutionZone"] is not ("LOCAL" or "CI_EPHEMERAL"))
     throw new InvalidOperationException("The Docker UAT workspace requires Development LOCAL/CI.");
-builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 262_144);
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 1_500_000);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.RespectRequiredConstructorParameters = true;
@@ -13,6 +13,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow;
 });
 builder.AddTenantSetup();
+builder.AddProductWorkspace();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
 builder.Services.AddSingleton(new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
 { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1_048_576 });
@@ -34,6 +35,7 @@ app.Use(async (http, next) =>
 app.UseStaticFiles();
 app.UseRouting();
 app.MapTenantSetup();
+app.MapProductWorkspace();
 app.MapGet("/health/live", () => Results.Ok(new { profile = "local-uat", productionAccepted = false }));
 app.MapGet("/health/ready", async (HttpClient client, CancellationToken ct) =>
 {
@@ -97,10 +99,10 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
         await ProxyAsync(http, client, new Uri(target + http.Request.QueryString)).ConfigureAwait(false);
         return;
     }
-    if (!HttpMethods.IsGet(http.Request.Method) || path.StartsWith("/uat-api/", StringComparison.Ordinal) || path.Contains("api/", StringComparison.Ordinal) || path.StartsWith("/contracts/", StringComparison.Ordinal))
+    if (!HttpMethods.IsGet(http.Request.Method) || path.StartsWith("/uat-api/", StringComparison.Ordinal) || path.StartsWith("/product-api/", StringComparison.Ordinal) || path.Contains("api/", StringComparison.Ordinal) || path.StartsWith("/contracts/", StringComparison.Ordinal))
     { http.Response.StatusCode = 404; return; }
     // Static files are handled earlier; only known SPA destinations get the shell.
-    if (path is not ("/" or "/access" or "/access/users" or "/access/users/history" or
+    if (path is not ("/" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
         "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
         "/access/activity" or "/access/sessions" or "/operations" or
         "/search" or "/reports" or "/vs02" or "/foundation"))
