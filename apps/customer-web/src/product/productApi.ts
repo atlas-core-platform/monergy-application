@@ -14,8 +14,34 @@ export interface ProductEvidenceReceipt {
   dataDurability: 'Runtime only';
 }
 
+export interface ProductEvidenceItem {
+  documentId: string;
+  documentVersionId: string;
+  evidenceId: string;
+  version: number;
+  sourceName: string;
+  originalFileName: string;
+  contentType: string;
+  contentLength: number;
+  contentSha256: string;
+  receivedAt: string;
+  createdAt: string;
+}
+
+export interface ProductEvidenceLibrary {
+  items: ProductEvidenceItem[];
+  dataDurability: 'Runtime only';
+}
+
 export const evidenceTypes = ['application/pdf', 'image/png', 'image/jpeg', 'text/plain'];
 export const maximumEvidenceBytes = 1_048_576;
+
+export function listEvidence(
+  api: AccessApi,
+  signal?: AbortSignal,
+): Promise<ProductEvidenceLibrary> {
+  return api.product<ProductEvidenceLibrary>('v1/evidence', 'GET', undefined, signal);
+}
 
 export async function submitEvidence(
   api: AccessApi,
