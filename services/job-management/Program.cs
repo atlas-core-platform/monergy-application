@@ -29,6 +29,8 @@ app.MapHealthChecks("/health/ready");
 if (ReferenceAdapterGuard.IsSelected(builder.Configuration) &&
     builder.Configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled"))
 {
+    if (!JobAuditDeliveryOptions.Selected(builder.Configuration))
+        throw new InvalidOperationException("Document processing requires governed Job Audit delivery.");
     var registry = app.Services.GetRequiredService<ReferenceJobExecutionTargetRegistry>();
     registry.Register("Document Intelligence Service", "document-processing",
         app.Services.GetRequiredService<HttpDocumentProcessingTarget>());

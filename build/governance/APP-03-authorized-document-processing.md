@@ -14,6 +14,7 @@ This slice does not implement OCR, a production AI provider, financial advice, o
 4. Document Intelligence independently re-evaluates execution authority and requests the exact immutable content version from Evidence over a separate workload credential.
 5. The reference extractor accepts structured UTF-8 text only and emits candidate income/expense facts with source location, confidence, evidence/version identity, and extractor/validator versions.
 6. The product reads job and processing status through the same owner chain. Raw content and content references are not returned to the browser.
+7. Job Management delivers CID-058/CID-059/CID-060 outbox events to the tenant-bound Audit owner and marks them dispatched only after validating the canonical receipt.
 
 Access Management remains the policy owner. Customer self-access requires ownership and the processing capability; it does not fabricate self-consent. Advisor execution remains governed by the existing relationship-and-Consent evaluation and is not exposed by this customer UI slice.
 
@@ -21,7 +22,7 @@ Access Management remains the policy owner. Customer self-access requires owners
 
 - The protected shell and existing session validation remain unchanged.
 - Browser input is limited to an opaque operation ID and a route document-version ID. Customer and evidence bindings are server-resolved.
-- Gateway, Job Management, Document Intelligence, and Evidence use distinct LOCAL/UAT workload credentials.
+- Gateway, Job Management, Document Intelligence, Evidence, and Job-to-Audit delivery use distinct LOCAL/UAT workload credentials.
 - Tenant identity is bound to the trusted workload identity and checked at every internal hop.
 - Job Management and Document Intelligence each fail closed when current authorization cannot be confirmed.
 - Evidence resolves the exact customer-owned version and verifies the stored source hash before extraction.
@@ -49,7 +50,10 @@ The Docker acceptance proves:
 - exact Evidence version resolution;
 - successful structured-text extraction with lineage;
 - status visibility and response minimization;
+- canonical tenant-bound Job Audit delivery with duplicate-safe owner receipts;
 - stable component and browser journeys.
+
+Hosted acceptance uses the single manually dispatched **Candidate readiness** workflow. It evaluates the complete branch delta from the current `main` merge base and selects the owner-integration and Docker UAT lanes for this candidate. After merge, only lightweight candidate-identity integrity runs; the application suite is not duplicated.
 
 ## Explicit exclusions
 

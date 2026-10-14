@@ -47,9 +47,11 @@ $scopePath = Join-Path $RepositoryRoot 'build/governance/d15-scope-lock.json'
 $mapPath = Join-Path $RepositoryRoot 'build/governance/ci-impact-map.json'
 $classifierPath = Join-Path $RepositoryRoot 'build/ci/Get-CiImpact.ps1'
 $workflowPath = Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml'
+$mergeWorkflowPath = Join-Path $RepositoryRoot '.github/workflows/merge-integrity.yml'
 $scope = Get-Content -LiteralPath $scopePath -Raw -Encoding utf8 | ConvertFrom-Json
 $map = Get-Content -LiteralPath $mapPath -Raw -Encoding utf8 | ConvertFrom-Json
 $workflow = Get-Content -LiteralPath $workflowPath -Raw -Encoding utf8
+$mergeWorkflow = Get-Content -LiteralPath $mergeWorkflowPath -Raw -Encoding utf8
 
 function Get-Impact([string[]]$Paths, [string]$Mode = 'PullRequest') {
     $root = Join-Path $RepositoryRoot '.artifacts/d15/self-test'
@@ -154,7 +156,7 @@ if ($SelfTest) {
         '13 Shared contract primitives fan out to all governed services' =
             (Test-ExactSet @($sharedContractPrimitives.services) @($map.services.id))
         '14 Frontend change enables component and browser verification' =
-            $frontend.gates.frontendTests -and $frontend.gates.browser
+            $frontend.gates.frontendTests -and $frontend.gates.browser -and $frontend.gates.localUat -and -not $frontend.gates.ownerIntegration
         '15 Migration change enables physical persistence verification' =
             $migration.gates.persistence -and $migration.verifiers -contains 'D09'
         '16 Container and runtime pins select appropriate OCI security scope' =
@@ -163,20 +165,26 @@ if ($SelfTest) {
             $fullOciPlan.scope -ceq 'FULL' -and @($fullOciPlan.selectedServices).Count -eq 12
         '17 Package lock enables dependency security verification' = $package.gates.dependencySecurity
         '18 Workflow-only change excludes unrelated product suites' =
-            @($workflowOnly.services).Count -eq 0 -and (Test-NoBusinessVerifier $workflowOnly)
+            @($workflowOnly.services).Count -eq 0 -and (Test-NoBusinessVerifier $workflowOnly) -and
+            -not $workflowOnly.gates.localUat -and -not $workflowOnly.gates.ownerIntegration
         '19 Documentation-only change excludes heavyweight gates' =
             $documentation.documentationOnly -and -not $documentation.gates.browser -and -not $documentation.gates.persistence -and -not $documentation.gates.oci
         '20 Unmapped runtime path fails safe to full regression' =
             $unmapped.fullRegression -and $unmapped.unmappedPaths -contains 'runtime/new-host/Program.cs'
         '21 FULL_REGRESSION selects all historical and systemic gates' =
             $full.fullRegression -and @($full.services).Count -eq 12 -and @($full.verifiers).Count -eq 16 -and @($full.ociServices).Count -eq 12 -and
-            $full.gates.browser -and $full.gates.persistence -and $full.gates.jobAudit -and $full.gates.d11
+            $full.gates.browser -and $full.gates.persistence -and $full.gates.jobAudit -and $full.gates.d11 -and
+            $full.gates.ownerIntegration -and $full.gates.localUat
         '22 Ordinary CI-only PR is not selected by deliverable number' =
             $workflowOnly.effectiveMode -ceq 'PullRequest' -and -not $workflowOnly.fullRegression -and (Test-NoBusinessVerifier $workflowOnly)
         '23 Main merge-integrity remains narrower than FULL_REGRESSION' =
             $merge.effectiveMode -ceq 'MergeIntegrity' -and -not $merge.fullRegression -and @($merge.verifiers).Count -lt @($full.verifiers).Count
-        '24 Direct-push detection remains represented' =
-            $workflow.Contains('Direct push to main detected') -and $workflow.Contains('/commits/$env:MONERGY_COMMIT_SHA/pulls')
+        '24 Candidate range uses the complete branch delta and post-merge is integrity-only' =
+            $workflow.Contains('git merge-base origin/main $head') -and
+            -not ($workflow -match '(?m)^\s*push:\s*$') -and
+            $mergeWorkflow.Contains('head_sha=$head') -and
+            $mergeWorkflow.Contains('has no successful Candidate readiness run') -and
+            -not $mergeWorkflow.Contains('Invoke-Toolchain')
         '25 D13 and D14 verifier changes route only their corresponding verifier' =
             (Test-ExactSet @($d13Verifier.verifiers) @('D13')) -and
             (Test-ExactSet @($d14Verifier.verifiers) @('D14'))
@@ -218,9 +226,9 @@ $checks['Universal gate retains restore format lint build architecture secret an
         Where-Object { $workflow.Contains($_) } |
         Measure-Object | Select-Object -ExpandProperty Count | ForEach-Object { $_ -eq 7 }
 $checks['Conditional heavy gates are driven by classifier outputs'] =
-    @('run_browser','run_persistence','run_job_audit','run_d11','run_oci','run_dependency_security') |
+    @('run_browser','run_persistence','run_job_audit','run_d11','run_oci','run_dependency_security','run_owner_integration','run_local_uat') |
         Where-Object { $workflow.Contains($_) } |
-    Measure-Object | Select-Object -ExpandProperty Count | ForEach-Object { $_ -eq 6 }
+    Measure-Object | Select-Object -ExpandProperty Count | ForEach-Object { $_ -eq 8 }
 $ociSource = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/hosted-oci-evidence.ps1') -Raw -Encoding utf8
 $checks['OCI evidence supports impacted subsets and complete default capability'] =
     $ociSource.Contains('[string[]]$ServiceId') -and
@@ -228,8 +236,15 @@ $checks['OCI evidence supports impacted subsets and complete default capability'
     $ociSource.Contains('if ($requested.Count -eq 0)') -and
     $ociSource.Contains('selectedServices = @($services.id)') -and
     $ociSource.Contains('$matrix.buildPass -ne $services.Count')
-$checks['Direct-push detection remains a warning compensating control'] =
-    $workflow.Contains('Direct push to main detected') -and $workflow.Contains('/commits/$env:MONERGY_COMMIT_SHA/pulls')
+$checks['Candidate workflow is manual-only with a complete main merge-base range'] =
+    $workflow.Contains('git merge-base origin/main $head') -and
+    -not ($workflow -match '(?m)^\s*push:\s*$')
+$checks['Post-merge workflow verifies identity without rebuilding or retesting'] =
+    $mergeWorkflow.Contains('/commits/$env:MONERGY_MERGE_SHA/pulls') -and
+    $mergeWorkflow.Contains('head_sha=$head') -and
+    -not $mergeWorkflow.Contains('Invoke-Toolchain') -and
+    -not $mergeWorkflow.Contains('docker') -and
+    -not $mergeWorkflow.Contains('playwright')
 
 foreach ($entry in $checks.GetEnumerator()) {
     Write-Output "[$(if ($entry.Value) { 'PASS' } else { 'FAIL' })] $($entry.Key)"

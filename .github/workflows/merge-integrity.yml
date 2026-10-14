@@ -1,0 +1,47 @@
+name: Merge integrity
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: merge-integrity-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  attest:
+    name: Confirm approved candidate identity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify merge provenance and exact candidate evidence
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MONERGY_REPOSITORY: ${{ github.repository }}
+          MONERGY_MERGE_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $headers = @{
+            Authorization = "Bearer $env:GH_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $pulls = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:MONERGY_REPOSITORY/commits/$env:MONERGY_MERGE_SHA/pulls")
+          $merged = @($pulls | Where-Object { $_.merged_at -and $_.base.ref -eq 'main' })
+          if ($merged.Count -ne 1) { throw 'The main update is not attributable to exactly one merged pull request.' }
+          $pull = $merged[0]
+          $head = [string]$pull.head.sha
+          $runs = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:MONERGY_REPOSITORY/actions/workflows/bootstrap.yml/runs?event=workflow_dispatch&head_sha=$head&status=completed&per_page=20"
+          $accepted = @($runs.workflow_runs | Where-Object { $_.conclusion -eq 'success' })
+          if ($accepted.Count -eq 0) { throw "PR #$($pull.number) head $head has no successful Candidate readiness run." }
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Merge integrity confirmed'
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Pull request: #$($pull.number)"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Candidate head: ``$head``"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Candidate readiness: [run $($accepted[0].run_number)]($($accepted[0].html_url))"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Merged commit: ``$env:MONERGY_MERGE_SHA``"

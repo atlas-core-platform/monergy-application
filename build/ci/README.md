@@ -13,11 +13,14 @@ orders them into the five D05 logical stages. GitHub Actions is the approved
 hosted execution platform for this repository; the gate semantics remain
 portable and vendor-neutral.
 
-Automatic Actions run only on pushes to `main` after merge; opening or updating
-a pull request does not start verification. This policy applies to both
-`bootstrap.yml` and `access-owner-integration.yml`. Manual dispatch remains
-available for targeted verification. Passing post-merge runs provide the hosted
-verification evidence for the merged revision.
+Opening or updating a pull request does not start verification. The existing
+`bootstrap.yml` entry point is a single manually dispatched **Candidate
+readiness** workflow. It classifies the complete `merge-base(main,
+candidate)...candidate` range, runs the universal baseline once, and selects
+only the affected browser, physical, owner-integration, Docker UAT,
+dependency-security and OCI lanes. The former standalone owner-integration and
+Docker-UAT workflows are now internal jobs instead of additional operator
+workflows.
 
 `.github/workflows/bootstrap.yml` keeps a universal clean baseline: locked
 restore, format, lint/source security, build,
@@ -36,11 +39,13 @@ physical persistence, D11 runtime or complete OCI lanes. The older D05
 acceptance-manifest paths remain separately classified to D05 so their historical
 semantics cannot be changed without rerunning that verifier.
 
-On each push to `main`, the workflow checks whether the commit is associated
-with a merged pull request. A direct push is surfaced as a GitHub Actions warning
-and job-summary finding. Under the accepted GitHub Free exception this is a
-detection control, not prevention; pull requests, no force-push, and no branch
-deletion remain mandatory policy.
+On each push to `main`, `merge-integrity.yml` performs only a lightweight
+identity check. It requires exactly one associated merged pull request and a
+successful Candidate-readiness run for that pull request's exact head SHA. It
+does not restore, lint, compile, test, build containers, run browsers or scan
+images again. Under the accepted GitHub Free exception this is a fail-closed
+detection control rather than branch protection; pull requests, no force-push,
+and no branch deletion remain mandatory policy.
 
 Historical D13 and D14 verifiers inspect their accepted Feature semantics and
 governed boundaries only. Current workflow topology is verified by D15, so

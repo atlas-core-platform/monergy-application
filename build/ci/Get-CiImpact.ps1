@@ -177,6 +177,36 @@ $selectedVerifiers = @(Get-Sorted $verifiers)
 $selectedOci = @(Get-Sorted $ociServices)
 $selectedFlags = @(Get-Sorted $flags)
 $effectiveMode = if ($fullRegression) { 'FullRegression' } else { $Mode }
+$ownerIntegrationPatterns = @(
+    'contracts/**',
+    'shared/platform/**',
+    'services/customer-identity/**',
+    'services/consent/**',
+    'services/audit/**',
+    'tests/persistence/Monergy.AccessIntegration.Tests/**',
+    'build/am05/**',
+    'build/local/Monergy.LocalAccessAuditHost/**',
+    'build/uat/**'
+)
+$localUatPatterns = @(
+    'apps/**',
+    'contracts/**',
+    'shared/**',
+    'services/**',
+    'build/uat/**',
+    'build/local/Monergy.LocalAccessAuditHost/**',
+    'Directory.Build.*',
+    'Directory.Packages.props',
+    'global.json',
+    'package.json',
+    'pnpm-lock.yaml'
+)
+$ownerIntegration = $fullRegression -or @($paths | Where-Object {
+    Test-AnyPattern $_ $ownerIntegrationPatterns
+}).Count -gt 0
+$localUat = $fullRegression -or @($paths | Where-Object {
+    Test-AnyPattern $_ $localUatPatterns
+}).Count -gt 0
 $result = [ordered]@{
     schemaVersion = '1.0.0'
     requestedMode = $Mode
@@ -200,6 +230,8 @@ $result = [ordered]@{
         d11 = $selectedFlags -contains 'd11'
         oci = $selectedOci.Count -gt 0
         dependencySecurity = $selectedFlags -contains 'dependencySecurity'
+        ownerIntegration = $ownerIntegration
+        localUat = $localUat
         impactPolicy = $true
         directPushDetection = $Mode -ceq 'MergeIntegrity'
     }
@@ -224,6 +256,8 @@ if ($EmitGitHubOutputs) {
         run_d11 = $result.gates.d11.ToString().ToLowerInvariant()
         run_oci = $result.gates.oci.ToString().ToLowerInvariant()
         run_dependency_security = $result.gates.dependencySecurity.ToString().ToLowerInvariant()
+        run_owner_integration = $result.gates.ownerIntegration.ToString().ToLowerInvariant()
+        run_local_uat = $result.gates.localUat.ToString().ToLowerInvariant()
         oci_services = (ConvertTo-Json -InputObject @($selectedOci) -Compress)
     }
     foreach ($entry in $outputs.GetEnumerator()) {

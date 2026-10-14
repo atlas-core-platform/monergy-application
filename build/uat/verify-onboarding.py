@@ -72,7 +72,7 @@ def ready():
 
 def sql(database, query):
     # Cluster-owner fixture injection only, bounded to this disposable CI instance.
-    assert database in {'uat_consent_t001', 'uat_customer_identity_t001', 'uat_am_t001'}
+    assert database in {'uat_consent_t001', 'uat_customer_identity_t001', 'uat_am_t001', 'uat_audit_t001'}
     return subprocess.run(compose_command + ['exec', '-T', 'postgres', 'psql', '-U', 'postgres', '-d', database, '-At', '-v', 'ON_ERROR_STOP=1', '-c', query],
                           check=True, capture_output=True, text=True, timeout=30).stdout.strip()
 
@@ -164,6 +164,13 @@ assert [(fact['factType'], fact['label']) for fact in processing['facts']] == [
     ('INCOME', 'Employment income'), ('EXPENSE', 'Housing')]
 assert all(fact['documentVersionId'] == product_receipt['documentVersionId'] for fact in processing['facts'])
 assert all('content' not in fact and 'contentReference' not in fact for fact in processing['facts'])
+job_audit_count = '0'
+for _ in range(20):
+    job_audit_count = sql('uat_audit_t001', "SELECT count(*) FROM audit.evidence WHERE source_event_id LIKE 'job-processing-cccccccccccccccccccccccccccccccc:CID-05%';")
+    if job_audit_count == '2':
+        break
+    time.sleep(.25)
+assert job_audit_count == '2', job_audit_count
 replayed = call(processing_path, 'POST', {'operationId': processing_operation}, customer)
 assert replayed['job']['jobId'] == processing['job']['jobId']
 
@@ -292,7 +299,7 @@ assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
-           'validated': ['setup review and replay', 'server-resolved customer product entry', 'idempotent customer evidence intake', 'customer-scoped evidence library and provenance', 'authorized durable document processing and source-fact review',
+           'validated': ['setup review and replay', 'server-resolved customer product entry', 'idempotent customer evidence intake', 'customer-scoped evidence library and provenance', 'authorized durable document processing, source-fact review and canonical Job Audit delivery',
                          'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
                          'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
            'limitations': ['Business data uses owner reference adapters.', 'The processor accepts structured LOCAL/UAT text and does not claim OCR or production AI.', 'Candidate facts do not update the financial profile.', 'Consent outbox delivery is not claimed.']}

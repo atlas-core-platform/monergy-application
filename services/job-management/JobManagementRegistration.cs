@@ -21,6 +21,16 @@ public static class JobManagementRegistration
         services.AddSingleton<IJobExecutionTargetResolver>(provider =>
             provider.GetRequiredService<ReferenceJobExecutionTargetRegistry>());
         services.AddSingleton<JobOutboxDispatcher>();
+        if (JobAuditDeliveryOptions.Selected(configuration))
+        {
+            services.AddHttpClient<HttpJobAuditEventConsumer>(client =>
+            {
+                client.BaseAddress = JobAuditDeliveryOptions.Endpoint(configuration);
+                client.Timeout = TimeSpan.FromSeconds(5);
+            });
+            services.AddTransient<IGovernedEventConsumer<AuditableEvent>>(provider =>
+                provider.GetRequiredService<HttpJobAuditEventConsumer>());
+        }
         return services;
     }
 

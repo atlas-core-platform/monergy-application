@@ -93,7 +93,7 @@ if (-not (Test-Path $profileFile)) {
         foreach ($actorId in $localActors) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
     }
     $new = @{ instanceId=[Guid]::NewGuid().ToString('N'); postgresPassword=(Secret); databases=$databases; identities=$identities; tokens=@{}; port=$Port; onboarding=[bool]$EnableOnboarding }
-    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','customerContext','consent','evidenceIntake','evidenceProcessing','jobControl','documentControl')) { $new.tokens[$name] = Secret }
+    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','jobAuditEvent','customerContext','consent','evidenceIntake','evidenceProcessing','jobControl','documentControl')) { $new.tokens[$name] = Secret }
     Save-Json 'profile.json' $new
 }
 $state = Get-Content $profileFile -Raw | ConvertFrom-Json
@@ -101,7 +101,7 @@ $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$s
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
 if ($Action -in @('Prepare','Start') -and $onboarding) {
     $tokensChanged = $false
-    foreach ($name in @('evidenceIntake','evidenceProcessing','jobControl','documentControl')) {
+    foreach ($name in @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent')) {
         if ($null -eq $state.tokens.PSObject.Properties[$name]) {
             $state.tokens | Add-Member -NotePropertyName $name -NotePropertyValue (Secret)
             $tokensChanged = $true
@@ -162,7 +162,7 @@ if ($Action -in @('Prepare','Start')) {
                 $integration.ConsentDatabases=@{}
                 foreach ($db in $state.databases | Where-Object service -eq 'consent') { $integration.ConsentDatabases[$db.tenant] = Connection $db 'runtime' }
             } else {
-                $integration.AuditEventToken=$state.tokens.auditEvent; $integration.AuditDatabases=@{}
+                $integration.AuditEventToken=$state.tokens.auditEvent; $integration.JobAuditEventToken=$state.tokens.jobAuditEvent; $integration.AuditDatabases=@{}
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.AuditDatabases[$db.tenant] = Connection $db 'runtime' }
             }
             $config.Monergy.AccessIntegration=$integration
@@ -180,6 +180,9 @@ if ($Action -in @('Prepare','Start')) {
                 $config.Monergy.DocumentProcessing=@{
                     Enabled='true'; DocumentIntelligenceUrl='http://127.0.0.1:5112/'
                     DocumentIntelligenceToken=$state.tokens.documentControl; ControlToken=$state.tokens.jobControl
+                }
+                $config.Monergy.AuditDelivery=@{
+                    Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.jobAuditEvent
                 }
             }
         }
