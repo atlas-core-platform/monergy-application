@@ -105,19 +105,46 @@ test('real tenant administration, sessions, canonical audit and service readines
     await expect(page.getByRole('region', { name: 'Review customer access' })).toContainText(
       'Reference Customer',
     );
-    await page
-      .getByRole('dialog')
-      .getByRole('button', { name: 'Assign customer', exact: true })
-      .click();
+    const assignmentDialog = page.getByRole('dialog', {
+      name: 'Review customer assignment',
+      exact: true,
+    });
+    const assignmentResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname ===
+          '/access-api/v1/administration/customer-relationships' &&
+        response.request().method() === 'POST',
+    );
+    await assignmentDialog.getByRole('button', { name: 'Assign customer', exact: true }).click();
+    expect((await assignmentResponse).ok()).toBe(true);
     await expect(
       page.getByText(
         'Customer assigned. Access still requires role permissions and current customer Consent.',
       ),
     ).toBeVisible();
-    await page
-      .getByRole('button', { name: 'Review removal for Reference Customer and a300@example.test' })
-      .click();
-    await page.getByRole('button', { name: 'Remove assignment', exact: true }).click();
+    const reviewRemoval = page.getByRole('button', {
+      name: 'Review removal for Reference Customer and a300@example.test',
+    });
+    await expect(reviewRemoval).toBeVisible();
+    await reviewRemoval.click();
+    const removalDialog = page.getByRole('dialog', {
+      name: 'Review customer removal',
+      exact: true,
+    });
+    await expect(removalDialog).toBeVisible();
+    const removeAssignment = removalDialog.getByRole('button', {
+      name: 'Remove assignment',
+      exact: true,
+    });
+    await expect(removeAssignment).toBeEnabled();
+    const removalResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname.startsWith(
+          '/access-api/v1/administration/customer-relationships/',
+        ) && response.request().method() === 'DELETE',
+    );
+    await removeAssignment.click();
+    expect((await removalResponse).ok()).toBe(true);
     await expect(
       page.getByText('Customer assignment removed. This relationship no longer authorizes access.'),
     ).toBeVisible();
