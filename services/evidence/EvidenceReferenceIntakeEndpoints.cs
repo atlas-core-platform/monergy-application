@@ -33,6 +33,11 @@ public static class EvidenceReferenceIntakeEndpoints
         TenantAccessIntegration.ValidateToken(processingToken);
         if (string.Equals(token, processingToken, StringComparison.Ordinal))
             throw new InvalidOperationException("Evidence intake and processing require separate workload credentials.");
+        var customerTenants = configuration.GetSection("Monergy:TenantBoundary:CustomerTenants").GetChildren()
+            .ToDictionary(entry => entry.Key, entry => entry.Value ?? "", StringComparer.Ordinal);
+        if (customerTenants.Count == 0 || customerTenants.Any(entry =>
+                !TenantAccessClient.Identifier(entry.Key, 128) || !TenantAccessClient.Identifier(entry.Value, 64)))
+            throw new InvalidOperationException("Evidence processing requires valid operator-owned customer/tenant bindings.");
         endpoints.MapPost("/internal/local/v1/evidence/content", (
             HttpRequest request,
             ReferenceEvidenceContentRequest input,
@@ -68,6 +73,11 @@ public static class EvidenceReferenceIntakeEndpoints
             if (!TenantAccessClient.Identifier(input.DocumentVersionId, 160) ||
                 !TenantAccessClient.Identifier(input.CustomerId, 128))
                 return Results.BadRequest(new { error = "EVIDENCE_PROCESSING_SOURCE_INVALID" });
+            var tenants = request.Headers["X-Monergy-Tenant"];
+            if (tenants.Count != 1 || !TenantAccessClient.Identifier(tenants[0], 64) ||
+                !customerTenants.TryGetValue(input.CustomerId, out var owningTenant) ||
+                !string.Equals(tenants[0], owningTenant, StringComparison.Ordinal))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
             var version = await repository.GetVersionAsync(input.DocumentVersionId, cancellationToken).ConfigureAwait(false);
             if (version is null || !string.Equals(version.CustomerId, input.CustomerId, StringComparison.Ordinal))
                 return Results.NotFound(new { error = "EVIDENCE_PROCESSING_SOURCE_NOT_FOUND" });
