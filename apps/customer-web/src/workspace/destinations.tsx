@@ -28,8 +28,9 @@ export const productModule = {
       </p>
       <h3>Follow the source</h3>
       <p>
-        Evidence identities, document versions and source hashes make later financial information
-        traceable. A confirmed upload does not imply extraction or financial advice.
+        Open any verified item in the Evidence library to inspect its owner-issued identities,
+        version and source hash. Raw document content is not exposed in the library. A confirmed
+        upload does not imply extraction or financial advice.
       </p>
       <h3>Know this environment</h3>
       <p>
