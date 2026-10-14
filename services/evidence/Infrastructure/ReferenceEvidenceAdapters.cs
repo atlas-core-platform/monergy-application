@@ -81,6 +81,24 @@ public sealed class InMemoryEvidenceRepository : IEvidenceRepository
         }
     }
 
+    public Task<IReadOnlyList<EvidenceVersionRecord>> ListCustomerAsync(
+        string customerId,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            return Task.FromResult<IReadOnlyList<EvidenceVersionRecord>>(
+                versions.Values
+                    .Where(version => string.Equals(version.CustomerId, customerId, StringComparison.Ordinal))
+                    .OrderByDescending(version => version.CreatedAt)
+                    .ThenByDescending(version => version.DocumentVersionId, StringComparer.Ordinal)
+                    .Take(limit)
+                    .ToArray());
+        }
+    }
+
     public IReadOnlyList<object> DrainOutbox()
     {
         lock (sync)
