@@ -31,9 +31,22 @@ public static class JobManagementRegistration
         ReferenceAdapterGuard.EnsureAllowed(configuration);
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IJobRepository, InMemoryJobRepository>();
-        services.AddSingleton<ReferenceJobExecutionPolicy>();
-        services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
-        services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
+        if (configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled"))
+        {
+            services.AddSingleton<TenantAccessClient>();
+            services.AddSingleton<OwnerBackedJobExecutionPolicy>();
+            services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<OwnerBackedJobExecutionPolicy>());
+            services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<OwnerBackedJobExecutionPolicy>());
+            services.AddSingleton<DocumentProcessingJobRegistry>();
+            services.AddSingleton<HttpDocumentProcessingTarget>();
+            services.AddSingleton<IJobExecutionTarget>(provider => provider.GetRequiredService<HttpDocumentProcessingTarget>());
+        }
+        else
+        {
+            services.AddSingleton<ReferenceJobExecutionPolicy>();
+            services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
+            services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
+        }
         services.AddSingleton<JobManagementApplication>();
         return services.AddWorkerInfrastructure(configuration);
     }

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Worker">
+<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <AssemblyName>Monergy.Services.JobManagement</AssemblyName>
     <RootNamespace>Monergy.Services.JobManagement</RootNamespace>

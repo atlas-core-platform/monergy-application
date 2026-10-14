@@ -68,7 +68,7 @@ app.MapGet("/uat-api/v1/readiness", async (HttpContext http, TenantAccessClient 
         new { id = "identity", state = "Blocked", detail = "Production identity provider, MFA and invitation delivery are not configured." },
         new { id = "transport", state = "Blocked", detail = "Workload identity, TLS and the production event transport require integration." },
         new { id = "operations", state = "Blocked", detail = "Managed secrets, backups, restore drills, monitoring, HA/DR and capacity acceptance remain required." },
-        new { id = "business", state = "Blocked", detail = "Consent supports a bounded local onboarding profile. AI remains a scaffold; Document Intelligence and Job Management lack live business consumers. Service health and permission checks do not prove those journeys." },
+        new { id = "business", state = "Blocked", detail = "The LOCAL structured-text processor is connected through Evidence, Job Management and Document Intelligence. Production OCR/AI providers, durable business persistence and financial-profile adoption remain unselected; this journey does not constitute Production acceptance." },
         new { id = "governance", state = "Blocked", detail = "Historical D01–D16 and SG release acceptance remain unchanged. Local UAT does not confer Production approval." },
     }
     });

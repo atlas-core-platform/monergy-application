@@ -87,10 +87,23 @@ public sealed class TenantAccessClient : IDisposable
     public async Task<CustomerAccessDecision> EvaluateCustomerAsync(HttpContext http, string capability, string customer)
     {
         var (tenant, session) = Headers(http);
+        return await EvaluateCustomerAsync(tenant, session, capability, customer, http.RequestAborted).ConfigureAwait(false);
+    }
+
+    public async Task<CustomerAccessDecision> EvaluateCustomerAsync(
+        string tenant,
+        string session,
+        string capability,
+        string customer,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Identifier(tenant, 64) || !Identifier(session, 160) || !Identifier(capability, 160) ||
+            !Identifier(customer, 128))
+            throw new TenantBoundaryException("TENANT_ACCESS_REQUEST_INVALID", 400);
         const string purpose = "customer-advice"; // Owner-selected; never taken from browser input.
         using var request = Request(HttpMethod.Post, "v1/authorization/customer-evaluations", tenant, session);
         request.Content = JsonContent.Create(new CustomerAccessRequest(capability, customer, purpose));
-        var result = await SendAsync<CustomerAccessDecision>(request, http.RequestAborted).ConfigureAwait(false);
+        var result = await SendAsync<CustomerAccessDecision>(request, cancellationToken).ConfigureAwait(false);
         if (result.TenantId != tenant || result.CustomerId != customer || result.CapabilityId != capability || result.Purpose != purpose ||
             !Identifier(result.ActorId, 128) || !Identifier(result.DecisionId, 128) || result.Outcome is not ("Allow" or "Deny") ||
             result.EvaluatedAt < DateTimeOffset.UtcNow.AddSeconds(-10) || result.EvaluatedAt > DateTimeOffset.UtcNow.AddSeconds(5) ||

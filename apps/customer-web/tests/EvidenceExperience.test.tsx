@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AccessApi } from '../src/access/accessApi';
@@ -16,7 +16,11 @@ const session = {
 
 function mount(
   api: AccessApi,
-  capabilities = ['evidence.document.upload', 'evidence.document.read'],
+  capabilities = [
+    'evidence.document.upload',
+    'evidence.document.read',
+    'document-intelligence.document.process',
+  ],
 ) {
   render(
     <FoundationProvider appearance="midnight">
@@ -196,4 +200,87 @@ it('keeps the library hidden without evidence read authority', () => {
     screen.getByText('Evidence library access is not included in your current role'),
   ).toBeVisible();
   expect(request).not.toHaveBeenCalled();
+});
+
+it('reviews authorized structured-text processing and displays source facts without profile mutation', async () => {
+  const api = new AccessApi(session);
+  const item = {
+    documentId: 'document-003',
+    documentVersionId: 'document-version-003',
+    evidenceId: 'evidence-003',
+    version: 1,
+    sourceName: 'Customer upload',
+    originalFileName: 'financial-facts.txt',
+    contentType: 'text/plain',
+    contentLength: 96,
+    contentSha256: 'e'.repeat(64),
+    receivedAt: '2026-10-14T00:00:00Z',
+    createdAt: '2026-10-14T00:00:00Z',
+  };
+  const result = {
+    job: {
+      jobId: `job-processing-${'c'.repeat(32)}`,
+      jobName: 'document-processing',
+      ownerService: 'Document Intelligence Service',
+      payloadReference: item.documentVersionId,
+      customerId: 'reference-customer',
+      state: 'Completed',
+      attempt: 1,
+      failureCode: null,
+      retryable: false,
+      updatedAt: '2026-10-14T00:00:01Z',
+    },
+    processing: {
+      processingId: `processing-${'c'.repeat(32)}`,
+      documentVersionId: item.documentVersionId,
+      state: 'Completed',
+      failureCode: null,
+      retryable: false,
+      updatedAt: '2026-10-14T00:00:01Z',
+    },
+    facts: [
+      {
+        sourceFactId: 'source-fact-001',
+        customerId: 'reference-customer',
+        factType: 'INCOME',
+        label: 'Employment income',
+        candidateValue: 125000,
+        currency: 'USD',
+        effectiveDate: '2026-10-01',
+        sourceLocation: 'line 1',
+        confidence: 0.98,
+        evidenceId: item.evidenceId,
+        documentVersionId: item.documentVersionId,
+        extractionVersion: 'fixture-extractor/1.0.0',
+        validationVersion: 'canonical-source-fact/1.0.0',
+      },
+    ],
+    dataDurability: 'Runtime only',
+    processingMode: 'Structured text reference processor',
+  };
+  const request = vi.spyOn(api, 'product').mockImplementation((path, method) => {
+    if (path === 'v1/evidence' && method === 'GET')
+      return Promise.resolve({ items: [item], dataDurability: 'Runtime only' });
+    if (path.endsWith('/processing') && method === 'POST') return Promise.resolve(result);
+    return Promise.reject(new Error(`Unexpected request: ${String(method)} ${path}`));
+  });
+  vi.spyOn(crypto, 'randomUUID').mockReturnValue('cccccccc-cccc-cccc-cccc-cccccccccccc');
+  mount(api);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'View provenance for financial-facts.txt' }));
+  const provenance = screen.getByRole('dialog', { name: 'Evidence provenance' });
+  await user.click(within(provenance).getByRole('button', { name: 'Review processing' }));
+  const review = await screen.findByRole('dialog', { name: 'Review document processing' });
+  expect(review).toHaveTextContent('Candidate facts only');
+  expect(review).toHaveTextContent('does not update your financial profile');
+  await user.click(within(review).getByRole('button', { name: 'Start processing' }));
+  expect(await screen.findByText('Employment income')).toBeVisible();
+  expect(review).toHaveTextContent('$125,000.00');
+  expect(review).toHaveTextContent('98% confidence');
+  expect(request).toHaveBeenCalledWith(
+    `v1/evidence/${item.documentVersionId}/processing`,
+    'POST',
+    { operationId: 'c'.repeat(32) },
+    expect.any(AbortSignal),
+  );
 });

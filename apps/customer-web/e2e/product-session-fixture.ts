@@ -39,6 +39,7 @@ export async function connectProductWorkspace(
     capabilities: options.capabilities ?? [
       'evidence.document.upload',
       'evidence.document.read',
+      'document-intelligence.document.process',
       'financial-profile.profile.read',
       'search.query.execute',
       'reporting.report.generate',
