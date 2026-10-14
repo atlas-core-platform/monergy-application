@@ -67,4 +67,43 @@ public sealed class EvidenceApplicationTests
             security: Vs02TestContext.Security("customer-002")));
         Assert.Equal(ContractErrorCategory.NotFound, denied.Error?.Category);
     }
+
+    [Fact]
+    public async Task ListsOnlyCurrentCustomerEvidenceWithBoundedInput()
+    {
+        var repository = new InMemoryEvidenceRepository();
+        var content = new ReferenceEvidenceContentStore();
+        content.Seed(Vs02TestContext.ContentReference, Vs02TestContext.ContentSha256, "text/plain", Vs02TestContext.Fixture);
+        var telemetry = new CapturingTelemetry();
+        var app = new EvidenceApplication(repository, content, telemetry, TimeProvider.System);
+        await app.CreateDocumentVersionAsync(Vs02TestContext.Request(
+            Vs02ContractNames.CreateDocumentVersion,
+            Vs02TestContext.CreateVersionPayload(),
+            "request-library-create",
+            "idempotency-library-create"));
+
+        var listed = await app.ListCustomerEvidenceAsync(Vs02TestContext.Request(
+            App02ContractNames.ListCustomerEvidence,
+            new ListCustomerEvidence(Vs02TestContext.CustomerId, 25),
+            "request-library-list"));
+        var denied = await app.ListCustomerEvidenceAsync(Vs02TestContext.Request(
+            App02ContractNames.ListCustomerEvidence,
+            new ListCustomerEvidence("customer-002", 25),
+            "request-library-denied"));
+        var unbounded = await app.ListCustomerEvidenceAsync(Vs02TestContext.Request(
+            App02ContractNames.ListCustomerEvidence,
+            new ListCustomerEvidence(Vs02TestContext.CustomerId, 101),
+            "request-library-unbounded"));
+
+        Assert.Equal(ContractOutcome.Success, listed.Outcome);
+        var item = Assert.Single(listed.Data!.Items);
+        Assert.Equal("document-version-001", item.DocumentVersionId);
+        Assert.Equal("financial-statement.txt", item.OriginalFileName);
+        Assert.Equal(Vs02TestContext.ContentSha256, item.ContentSha256);
+        Assert.DoesNotContain(item.GetType().GetProperties(), property => property.Name == "ContentReference");
+        Assert.Equal(ContractErrorCategory.AccessDenied, denied.Error?.Category);
+        Assert.Equal(ContractErrorCategory.ValidationError, unbounded.Error?.Category);
+        Assert.Contains(telemetry.Signals, signal =>
+            signal.Operation == App02ContractNames.ListCustomerEvidence && signal.Outcome == "LISTED");
+    }
 }
