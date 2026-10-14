@@ -53,6 +53,13 @@ export async function connectProductWorkspace(
   await page.route('**/product-api/v1/context', async (route) => {
     await route.fulfill({ json: context });
   });
+  await page.route('**/product-api/v1/evidence', async (route) => {
+    if (route.request().method() !== 'GET') {
+      await route.fulfill({ status: 405, json: { error: 'METHOD_NOT_ALLOWED' } });
+      return;
+    }
+    await route.fulfill({ json: { items: [], dataDurability: 'Runtime only' } });
+  });
   await page.goto(path);
   await completeProductWorkspaceConnection(page);
 }
