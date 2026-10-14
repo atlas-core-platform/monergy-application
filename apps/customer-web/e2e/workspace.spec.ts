@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test';
-import { connectProductWorkspace } from './product-session-fixture';
+import {
+  completeProductWorkspaceConnection,
+  connectProductWorkspace,
+} from './product-session-fixture';
 
 const member = {
   actorId: 'A100',
@@ -26,6 +29,19 @@ test('product direct routes isolate the protected shell until authorization succ
   await expect(
     page.getByRole('heading', { name: 'Bring your financial documents into view.' }),
   ).not.toBeVisible();
+});
+
+test('product reload returns to public entry before fresh verification', async ({ page }) => {
+  await connectProductWorkspace(page);
+  await expect(page.getByRole('heading', { name: 'Start with what you know.' })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Connect to your workspace' })).toBeVisible();
+  await expect(page.locator('.mw-shell')).toHaveCount(0);
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+
+  await completeProductWorkspaceConnection(page);
+  await expect(page.getByRole('heading', { name: 'Start with what you know.' })).toBeVisible();
 });
 
 test('workspace navigation, command palette and guide support keyboard and reduced motion', async ({

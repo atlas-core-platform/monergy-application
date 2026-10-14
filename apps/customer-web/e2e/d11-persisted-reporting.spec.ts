@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import { expect, test } from '@playwright/test';
-import { connectProductWorkspace } from './product-session-fixture';
+import {
+  completeProductWorkspaceConnection,
+  connectProductWorkspace,
+} from './product-session-fixture';
 
 test('D11 persisted reporting uses real services, reopens and exports exact content', async ({
   page,
@@ -39,6 +42,7 @@ test('D11 persisted reporting uses real services, reopens and exports exact cont
   expect(createHash('sha256').update(bytes).digest('hex').toUpperCase()).toBe(expectedHash);
 
   await page.reload();
+  await completeProductWorkspaceConnection(page);
   await expect(reportIdCell).toHaveText(reportId ?? '');
   await page.getByRole('button', { name: 'Reopen persisted report' }).click();
   await expect(exportHashCell).toHaveText(expectedHash ?? '');

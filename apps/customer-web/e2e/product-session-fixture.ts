@@ -9,6 +9,14 @@ interface ProductSessionFixtureOptions {
   capabilities?: string[];
 }
 
+export async function completeProductWorkspaceConnection(page: Page) {
+  await expect(page.locator('.mw-shell')).toHaveCount(0);
+  await expect(page.getByRole('navigation')).toHaveCount(0);
+  await page.getByLabel('Local access key').fill('browser-product-fixture-only');
+  await page.getByRole('button', { name: 'Connect workspace' }).click();
+  await expect(page.locator('.mw-shell')).toBeVisible();
+}
+
 export async function connectProductWorkspace(
   page: Page,
   path = '/',
@@ -45,7 +53,5 @@ export async function connectProductWorkspace(
     await route.fulfill({ json: context });
   });
   await page.goto(path);
-  await page.getByLabel('Local access key').fill('browser-product-fixture-only');
-  await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(page.locator('.mw-shell')).toBeVisible();
+  await completeProductWorkspaceConnection(page);
 }
