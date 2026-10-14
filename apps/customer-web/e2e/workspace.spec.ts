@@ -77,6 +77,8 @@ test('workspace navigation, command palette and guide support keyboard and reduc
   await expect(
     page.getByRole('heading', { name: 'Bring your financial documents into view.' }),
   ).toBeVisible();
+  await expect(page.getByText('Your verified evidence library is ready.')).toBeVisible();
+  await expect(page.locator('.mw-shell')).toBeVisible();
   const guide = page.getByRole('button', { name: 'Financial workspace guide' });
   await guide.focus();
   await page.keyboard.press('Enter');
