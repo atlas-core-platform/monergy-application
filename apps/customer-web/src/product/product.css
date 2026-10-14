@@ -188,6 +188,16 @@
   color: var(--mw-muted);
   font-size: var(--monergy-text-small);
 }
+.product-library-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 190px auto;
+  gap: 8px;
+  margin-top: 17px;
+}
+.product-library-alert,
+.product-library-loading {
+  margin-top: 17px;
+}
 .product-empty {
   min-height: 105px;
   margin-top: 17px;
@@ -213,23 +223,46 @@
   gap: 8px;
 }
 .product-receipt {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
+  display: block;
+  overflow: hidden;
   border: 1px solid var(--mw-line);
   border-radius: 9px;
   background: var(--monergy-midnight-sidebar);
 }
-.product-receipt > div:nth-child(2) {
+.product-receipt-action {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  transition:
+    background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+.product-receipt-action:hover {
+  background: var(--monergy-midnight-elevated);
+}
+.product-receipt-action:focus-visible {
+  outline: 2px solid var(--mw-primary);
+  outline-offset: -2px;
+}
+.product-receipt-copy {
   min-width: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .product-receipt strong {
   font-size: 13px;
 }
-.product-receipt p {
-  margin: 4px 0 0;
+.product-receipt-copy > span,
+.product-receipt-meta small {
   color: var(--mw-muted);
   font-size: var(--monergy-text-small);
 }
@@ -245,6 +278,15 @@
   text-overflow: ellipsis;
   color: var(--mw-muted);
   font-size: 10px;
+}
+.product-identifier,
+.product-hash {
+  overflow-wrap: anywhere;
+  font-family: var(--monergy-font-mono, ui-monospace, monospace);
+  font-size: 11px;
+}
+.product-provenance > .ant-tag {
+  margin: 0 0 12px;
 }
 .product-drawer-actions {
   display: flex;
@@ -308,6 +350,12 @@
   .product-heading {
     flex-direction: column;
   }
+  .product-library-controls {
+    grid-template-columns: 1fr 180px;
+  }
+  .product-library-controls .ant-btn {
+    grid-column: 1 / -1;
+  }
 }
 @media (max-width: 560px) {
   .product-panel,
@@ -320,6 +368,12 @@
   .product-trust-row {
     display: grid;
   }
+  .product-library-controls {
+    grid-template-columns: 1fr;
+  }
+  .product-library-controls .ant-btn {
+    grid-column: auto;
+  }
   .product-receipt {
     align-items: flex-start;
   }
@@ -328,7 +382,8 @@
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .product-drop-zone .ant-upload.ant-upload-drag {
+  .product-drop-zone .ant-upload.ant-upload-drag,
+  .product-receipt-action {
     transition: none;
   }
 }
