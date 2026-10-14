@@ -50,6 +50,11 @@ public interface IEvidenceRepository
     Task<IReadOnlyList<EvidenceVersionRecord>> GetDocumentAsync(string documentId, CancellationToken cancellationToken);
 
     Task<EvidenceVersionRecord?> GetVersionAsync(string versionId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<EvidenceVersionRecord>> ListCustomerAsync(
+        string customerId,
+        int limit,
+        CancellationToken cancellationToken);
 }
 
 public interface IEvidenceContentStore
@@ -200,6 +205,65 @@ public sealed class EvidenceApplication(
                 version.ContentSha256,
                 version.ReceivedAt)).ToArray());
         return ContractResult<EvidenceMetadata>.Succeeded(request, metadata);
+    }
+
+    public async Task<ContractResult<CustomerEvidenceLibrary>> ListCustomerEvidenceAsync(
+        ContractRequest<ListCustomerEvidence> request,
+        CancellationToken cancellationToken = default)
+    {
+        var contextError = ContractGuard.Validate(request, App02ContractNames.ListCustomerEvidence);
+        if (contextError is not null)
+        {
+            return Reject<CustomerEvidenceLibrary, ListCustomerEvidence>(request, contextError);
+        }
+
+        if (!string.Equals(request.Payload.CustomerId, request.Security.Access.CustomerId, StringComparison.Ordinal))
+        {
+            return ContractResult<CustomerEvidenceLibrary>.Rejected(
+                request, "evidence.customer.denied", ContractErrorCategory.AccessDenied, "Evidence access is denied.");
+        }
+
+        if (!TenantAccessClient.Identifier(request.Payload.CustomerId, 128) || request.Payload.Limit is < 1 or > 100)
+        {
+            return ContractResult<CustomerEvidenceLibrary>.Rejected(
+                request, "evidence.library.invalid", ContractErrorCategory.ValidationError, "The evidence library request is invalid.");
+        }
+
+        var versions = await repository.ListCustomerAsync(
+            request.Payload.CustomerId,
+            request.Payload.Limit,
+            cancellationToken);
+        if (versions.Any(version => !string.Equals(version.CustomerId, request.Payload.CustomerId, StringComparison.Ordinal)))
+        {
+            return ContractResult<CustomerEvidenceLibrary>.Rejected(
+                request, "evidence.library.owner-mismatch", ContractErrorCategory.AccessDenied, "Evidence access is denied.");
+        }
+
+        var library = new CustomerEvidenceLibrary(
+            request.Payload.CustomerId,
+            versions.Select(version => new CustomerEvidenceItem(
+                version.DocumentId,
+                version.DocumentVersionId,
+                version.EvidenceId,
+                version.Version,
+                version.SourceName,
+                version.OriginalFileName,
+                version.ContentType,
+                version.ContentLength,
+                version.ContentSha256,
+                version.ReceivedAt,
+                version.CreatedAt)).ToArray());
+        telemetry.Record(new LifecycleSignal(
+            "Evidence Service",
+            App02ContractNames.ListCustomerEvidence,
+            "LISTED",
+            request.RequestId,
+            request.CorrelationId,
+            request.CausationId,
+            "customer-evidence-library",
+            request.Payload.CustomerId,
+            repository.AdapterKind));
+        return ContractResult<CustomerEvidenceLibrary>.Succeeded(request, library);
     }
 
     public async Task<ContractResult<EvidenceReference>> GetEvidenceReferenceAsync(

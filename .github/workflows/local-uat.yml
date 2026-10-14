@@ -67,6 +67,7 @@ jobs:
             .artifacts/onboarding-setup.png
             .artifacts/onboarding-relationship-review.png
             .artifacts/uat-diagnostics.log
+            .artifacts/uat-test-results/**
           if-no-files-found: warn
       - name: Stop disposable CI profile
         if: always()

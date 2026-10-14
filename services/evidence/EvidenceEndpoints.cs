@@ -22,6 +22,11 @@ public static class EvidenceEndpoints
             EvidenceApplication application,
             CancellationToken cancellationToken) =>
             ToResult(await application.GetEvidenceReferenceAsync(request, cancellationToken)));
+        endpoints.MapPost("/contracts/app-02/evidence-list/v1", async (
+            ContractRequest<ListCustomerEvidence> request,
+            EvidenceApplication application,
+            CancellationToken cancellationToken) =>
+            ToResult(await application.ListCustomerEvidenceAsync(request, cancellationToken)));
         return endpoints;
     }
 

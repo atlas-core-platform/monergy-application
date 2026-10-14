@@ -38,6 +38,7 @@ export async function connectProductWorkspace(
     customerDetail: options.customerDetail ?? 'Personal workspace',
     capabilities: options.capabilities ?? [
       'evidence.document.upload',
+      'evidence.document.read',
       'financial-profile.profile.read',
       'search.query.execute',
       'reporting.report.generate',

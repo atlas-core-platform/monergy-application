@@ -159,6 +159,7 @@ public sealed class TenantBoundaryMiddleware(RequestDelegate next, TenantBoundar
     {
         ("evidence", "/contracts/cid-020/v1") => ("evidence.document.upload", "document", "documentId"),
         ("evidence", "/contracts/cid-021/v1") => ("evidence.document.read", "document", "documentId"),
+        ("evidence", "/contracts/app-02/evidence-list/v1") => ("evidence.document.read", "customer", "$customer"),
         ("financial-profile", "/contracts/cid-030/v1" or "/contracts/cid-032/v1" or "/contracts/cid-033/v1") => ("financial-profile.profile.read", "customer", "$customer"),
         ("financial-profile", "/contracts/cid-031/v1") => ("financial-profile.profile.update", "customer", "$customer"),
         ("financial-rules", "/contracts/cid-037/v1" or "/contracts/cid-038/v1" or "/contracts/cid-039/v1") => ("financial-rules.calculation.execute", "customer", "$customer"),

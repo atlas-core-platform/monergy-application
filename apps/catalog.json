@@ -5,7 +5,7 @@
       "name": "Customer Web",
       "folder": "customer-web",
       "status": "LOCAL_UAT_PRODUCT_CANDIDATE",
-      "featureImplementation": "APP-01_SECURE_CUSTOMER_EVIDENCE_INTAKE"
+      "featureImplementation": "APP-02_SECURE_EVIDENCE_LIBRARY"
     },
     {
       "name": "Administration Web",

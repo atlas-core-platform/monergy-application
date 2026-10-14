@@ -9,7 +9,7 @@ internal static class Topology
         new("customer-identity", "Customer & Identity", "http://127.0.0.1:5101", "/internal/health/ready", "Durable local sessions and identity provisioning"),
         new("audit", "Audit", "http://127.0.0.1:5102", "/internal/health/ready", "Durable canonical access audit"),
         new("consent", "Consent", "http://127.0.0.1:5110", "/health/ready", "Service scaffold; no live consent journey"),
-        new("evidence", "Evidence", "http://127.0.0.1:5111", "/health/ready", "Guarded reference business adapters"),
+        new("evidence", "Evidence", "http://127.0.0.1:5111", "/health/ready", "Guarded intake, customer library and provenance"),
         new("document-intelligence", "Document Intelligence", "http://127.0.0.1:5112", "/health/ready", "Worker boundary; business consumer not connected"),
         new("financial-profile", "Financial Profile", "http://127.0.0.1:5113", "/health/ready", "Guarded reference business adapters"),
         new("financial-rules", "Financial Rules", "http://127.0.0.1:5114", "/health/ready", "Guarded reference business adapters"),

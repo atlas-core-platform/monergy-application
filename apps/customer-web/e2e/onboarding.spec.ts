@@ -141,6 +141,14 @@ test('first login reviews organization and access before mounting navigation', a
 test('named customer assignment reviews its effect and supports immediate removal', async ({
   page,
 }) => {
+  const reads = { relationships: 0, members: 0, directory: 0 };
+  page.on('request', (request) => {
+    if (request.method() !== 'GET') return;
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith('/customer-relationships')) reads.relationships++;
+    if (path.endsWith('/members')) reads.members++;
+    if (path.includes('/resource-directory/customer')) reads.directory++;
+  });
   const writes = await fixture(page, true);
   await connect(page, '/access/resources');
   await expect(
@@ -161,6 +169,7 @@ test('named customer assignment reviews its effect and supports immediate remova
   await page.screenshot({ path: '.artifacts/onboarding-relationship-review.png', fullPage: true });
   await dialog.getByRole('button', { name: 'Assign customer', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(reads).toEqual({ relationships: 2, members: 1, directory: 1 });
   expect(writes[0]?.body).toEqual({
     expectedPolicyVersion: 7,
     actorId: 'advisor-private-reference',
@@ -169,10 +178,16 @@ test('named customer assignment reviews its effect and supports immediate remova
   await page
     .getByRole('button', { name: 'Review removal for Priya Shah and maya@aster.example' })
     .click();
-  await page.getByRole('button', { name: 'Remove assignment', exact: true }).click();
+  const removalDialog = page.getByRole('dialog', {
+    name: 'Review customer removal',
+    exact: true,
+  });
+  await expect(removalDialog).toBeVisible();
+  await removalDialog.getByRole('button', { name: 'Remove assignment', exact: true }).click();
   await expect(
     page.getByText('Customer assignment removed. This relationship no longer authorizes access.'),
   ).toBeVisible();
+  expect(reads).toEqual({ relationships: 3, members: 1, directory: 1 });
   expect(writes).toHaveLength(2);
 });
 
@@ -201,6 +216,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
     expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
   };
   const writes: unknown[] = [];
+  const library: unknown[] = [];
   await page.route('**/*-api/**', async (route) => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/identity-api/local/v1/tenant-sessions') {
@@ -217,6 +233,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
           customerDetail: 'Primary UAT customer',
           capabilities: [
             'evidence.document.upload',
+            'evidence.document.read',
             'search.query.execute',
             'reporting.report.generate',
           ],
@@ -228,19 +245,30 @@ test('customer entry stays isolated from administration and confirms reviewed ev
       return;
     }
     if (path === '/product-api/v1/evidence') {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ json: { items: library, dataDurability: 'Runtime only' } });
+        return;
+      }
       const body = route.request().postDataJSON() as { operationId: string };
       writes.push(body);
+      const accepted = {
+        documentId: `document-${body.operationId}`,
+        documentVersionId: `document-version-${body.operationId}`,
+        evidenceId: `evidence-${body.operationId}`,
+        version: 1,
+        sourceName: 'Customer upload',
+        originalFileName: 'statement.txt',
+        contentType: 'text/plain',
+        contentLength: 17,
+        contentSha256: 'b'.repeat(64),
+        receivedAt: '2026-10-14T00:00:00Z',
+        createdAt: '2026-10-14T00:00:00Z',
+      };
+      library.unshift(accepted);
       await route.fulfill({
         json: {
           operationId: body.operationId,
-          documentId: `document-${body.operationId}`,
-          documentVersionId: `document-version-${body.operationId}`,
-          evidenceId: `evidence-${body.operationId}`,
-          version: 1,
-          originalFileName: 'statement.txt',
-          contentType: 'text/plain',
-          contentLength: 17,
-          contentSha256: 'b'.repeat(64),
+          ...accepted,
           acceptedAt: '2026-10-14T00:00:00Z',
           dataDurability: 'Runtime only',
         },
@@ -271,8 +299,11 @@ test('customer entry stays isolated from administration and confirms reviewed ev
   expect(writes).toHaveLength(0);
   await review.getByRole('button', { name: 'Upload evidence' }).click();
   const receipt = page.locator('article.product-receipt').filter({ hasText: 'statement.txt' });
-  await expect(receipt.getByText('CONFIRMED', { exact: true })).toBeVisible();
-  await expect(receipt).toContainText('document-version-');
+  await expect(receipt.getByText('VERIFIED', { exact: true })).toBeVisible();
+  await receipt.getByRole('button', { name: 'View provenance for statement.txt' }).click();
+  const provenance = page.getByRole('dialog', { name: 'Evidence provenance' });
+  await expect(provenance).toContainText('document-version-');
+  await expect(provenance).toContainText('Raw document content is not exposed');
   expect(writes).toHaveLength(1);
   await page.screenshot({ path: '.artifacts/customer-evidence-intake.png', fullPage: true });
 });
