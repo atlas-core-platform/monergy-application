@@ -17,6 +17,9 @@ export default defineConfig({
     browserName: 'chromium',
     headless: true,
     viewport: { width: 1440, height: 1000 },
+    launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
+      : undefined,
     trace: 'off',
     video: 'off',
   },
