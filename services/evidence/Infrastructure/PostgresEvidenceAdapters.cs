@@ -134,6 +134,21 @@ public sealed class PostgresEvidenceRepository : IEvidenceRepository, IAsyncDisp
         return await FindVersionAsync(connection, null, versionId, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<EvidenceVersionRecord>> ListCustomerAsync(
+        string customerId,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var values = await connection.QueryAsync<VersionRow>(new CommandDefinition($"""
+            SELECT {VersionColumns} FROM evidence.document_versions
+            WHERE customer_id=@customerId
+            ORDER BY created_at DESC, document_version_id DESC
+            LIMIT @limit;
+            """, new { customerId, limit }, cancellationToken: cancellationToken));
+        return values.Select(ToRecord).ToArray();
+    }
+
     public ValueTask DisposeAsync() => dataSource.DisposeAsync();
 
     private static async Task<EvidenceVersionRecord?> FindVersionAsync(
