@@ -141,6 +141,14 @@ test('first login reviews organization and access before mounting navigation', a
 test('named customer assignment reviews its effect and supports immediate removal', async ({
   page,
 }) => {
+  const reads = { relationships: 0, members: 0, directory: 0 };
+  page.on('request', (request) => {
+    if (request.method() !== 'GET') return;
+    const path = new URL(request.url()).pathname;
+    if (path.endsWith('/customer-relationships')) reads.relationships++;
+    if (path.endsWith('/members')) reads.members++;
+    if (path.includes('/resource-directory/customer')) reads.directory++;
+  });
   const writes = await fixture(page, true);
   await connect(page, '/access/resources');
   await expect(
@@ -161,6 +169,7 @@ test('named customer assignment reviews its effect and supports immediate remova
   await page.screenshot({ path: '.artifacts/onboarding-relationship-review.png', fullPage: true });
   await dialog.getByRole('button', { name: 'Assign customer', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(reads).toEqual({ relationships: 2, members: 1, directory: 1 });
   expect(writes[0]?.body).toEqual({
     expectedPolicyVersion: 7,
     actorId: 'advisor-private-reference',
@@ -169,10 +178,16 @@ test('named customer assignment reviews its effect and supports immediate remova
   await page
     .getByRole('button', { name: 'Review removal for Priya Shah and maya@aster.example' })
     .click();
-  await page.getByRole('button', { name: 'Remove assignment', exact: true }).click();
+  const removalDialog = page.getByRole('dialog', {
+    name: 'Review customer removal',
+    exact: true,
+  });
+  await expect(removalDialog).toBeVisible();
+  await removalDialog.getByRole('button', { name: 'Remove assignment', exact: true }).click();
   await expect(
     page.getByText('Customer assignment removed. This relationship no longer authorizes access.'),
   ).toBeVisible();
+  expect(reads).toEqual({ relationships: 3, members: 1, directory: 1 });
   expect(writes).toHaveLength(2);
 });
 
