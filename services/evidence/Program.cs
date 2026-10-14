@@ -25,6 +25,10 @@ if (referenceAdapters || physicalPersistence)
 {
     app.MapEvidenceContracts();
 }
+if (referenceAdapters && builder.Configuration.GetValue<bool>("Monergy:ProductIntake:Enabled"))
+{
+    app.MapEvidenceReferenceIntake(builder.Configuration);
+}
 if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Profile"], "persisted-reporting",
     StringComparison.Ordinal))
 {

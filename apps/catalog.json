@@ -4,8 +4,8 @@
     {
       "name": "Customer Web",
       "folder": "customer-web",
-      "status": "TOOLCHAIN_VERIFICATION_SHELL",
-      "featureImplementation": "NONE"
+      "status": "LOCAL_UAT_PRODUCT_CANDIDATE",
+      "featureImplementation": "APP-01_SECURE_CUSTOMER_EVIDENCE_INTAKE"
     },
     {
       "name": "Administration Web",

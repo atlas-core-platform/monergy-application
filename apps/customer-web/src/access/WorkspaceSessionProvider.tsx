@@ -2,11 +2,26 @@ import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AccessApi, AccessApiError, establishSession } from './accessApi';
 import type { TenantSession } from './accessApi';
-import { Context, sessionMemory } from './workspaceSession';
-import type { WorkspaceSessionState } from './workspaceSession';
+import { Context, productContextMemory, sessionMemory } from './workspaceSession';
+import type {
+  ProductWorkspaceContext,
+  WorkspaceAuthorization,
+  WorkspaceSessionState,
+} from './workspaceSession';
 
-type Snapshot = Pick<WorkspaceSessionState, 'status' | 'session' | 'api' | 'message' | 'recovery'>;
-const empty: Snapshot = { status: 'public', session: null, api: null, message: '', recovery: null };
+type WorkspaceArea = 'administration' | 'product';
+type Snapshot = Pick<
+  WorkspaceSessionState,
+  'status' | 'session' | 'api' | 'authorization' | 'message' | 'recovery'
+>;
+const empty: Snapshot = {
+  status: 'public',
+  session: null,
+  api: null,
+  authorization: null,
+  message: '',
+  recovery: null,
+};
 const identifier = (value: unknown, maximum: number): value is string =>
   typeof value === 'string' &&
   value.length <= maximum &&
@@ -26,7 +41,32 @@ function validSession(value: unknown, tenant: string): value is TenantSession {
     Date.parse(current.expiresAt) > Date.now()
   );
 }
-async function verify(current: TenantSession, signal: AbortSignal) {
+async function verify(
+  current: TenantSession,
+  area: WorkspaceArea,
+  signal: AbortSignal,
+): Promise<WorkspaceAuthorization> {
+  if (area === 'product') {
+    const context = await new AccessApi(current).product<ProductWorkspaceContext | null>(
+      'v1/context',
+      'GET',
+      undefined,
+      signal,
+    );
+    if (
+      !validSession(current, current.tenantId) ||
+      context?.tenantId !== current.tenantId ||
+      context.actorId !== current.actorId ||
+      !identifier(context.customerId, 128) ||
+      !context.customerName.trim() ||
+      !Array.isArray(context.capabilities) ||
+      context.capabilities.some((capability) => !identifier(capability, 160)) ||
+      context.productionAccepted ||
+      context.dataDurability !== 'Runtime only'
+    )
+      throw new AccessApiError(503, 'PRODUCT_CONTEXT_INVALID');
+    return { area: 'product', context };
+  }
   const context = await new AccessApi(current).request<{
     tenantId: string;
     actorId: string;
@@ -42,14 +82,21 @@ async function verify(current: TenantSession, signal: AbortSignal) {
     context.policyVersion < 1
   )
     throw new AccessApiError(503, 'OWNER_CONTEXT_INVALID');
+  return { area: 'administration', authority: 'TenantAdmin', policyVersion: context.policyVersion };
 }
 
 // Also used by isolated component hosts, without creating nested session owners.
-export function WorkspaceSessionProvider({ children }: { children: ReactNode }) {
+export function WorkspaceSessionProvider({
+  children,
+  area = 'administration',
+}: {
+  children: ReactNode;
+  area?: WorkspaceArea;
+}) {
   const parent = useContext(Context);
-  return parent ? children : <SessionOwner>{children}</SessionOwner>;
+  return parent ? children : <SessionOwner area={area}>{children}</SessionOwner>;
 }
-function SessionOwner({ children }: { children: ReactNode }) {
+function SessionOwner({ children, area }: { children: ReactNode; area: WorkspaceArea }) {
   const [state, setState] = useState<Snapshot>(empty);
   const epoch = useRef(0);
   const request = useRef<AbortController | null>(null);
@@ -61,6 +108,7 @@ function SessionOwner({ children }: { children: ReactNode }) {
     request.current?.abort();
     request.current = null;
     sessionMemory.current = null;
+    productContextMemory.current = null;
     return epoch.current;
   }, []);
   const leave = useCallback(
@@ -75,7 +123,7 @@ function SessionOwner({ children }: { children: ReactNode }) {
     [stop],
   );
   const publish = useCallback(
-    (current: TenantSession, id: number) => {
+    (current: TenantSession, authorization: WorkspaceAuthorization, id: number) => {
       if (!mounted.current || id !== epoch.current) return;
       const controller = new AbortController();
       request.current = controller;
@@ -106,10 +154,13 @@ function SessionOwner({ children }: { children: ReactNode }) {
       )
         recovery.current = null;
       sessionMemory.current = current;
+      productContextMemory.current =
+        authorization.area === 'product' ? authorization.context : null;
       setState({
         status: 'authorized',
         session: current,
         api,
+        authorization,
         message: '',
         recovery: recovery.current,
       });
@@ -130,8 +181,8 @@ function SessionOwner({ children }: { children: ReactNode }) {
           throw new AccessApiError(503, 'SESSION_RESPONSE_INVALID');
         if (id !== epoch.current || !mounted.current) return;
         setState({ ...empty, status: 'verifying' });
-        await verify(issued, controller.signal);
-        publish(issued, id);
+        const authorization = await verify(issued, area, controller.signal);
+        publish(issued, authorization, id);
       } catch (failure) {
         if (id !== epoch.current || !mounted.current) return;
         candidate.current = null;
@@ -139,7 +190,9 @@ function SessionOwner({ children }: { children: ReactNode }) {
           ...empty,
           message:
             failure instanceof AccessApiError && failure.status === 403
-              ? 'Tenant administrator access is required.'
+              ? area === 'administration'
+                ? 'Tenant administrator access is required.'
+                : 'A customer workspace and product role are required.'
               : failure instanceof AccessApiError && failure.status === 401
                 ? 'Unable to connect. Check your tenant and local access key, then try again.'
                 : 'Workspace verification could not be completed. Check the connection and try again.',
@@ -154,7 +207,7 @@ function SessionOwner({ children }: { children: ReactNode }) {
           void new AccessApi(issued).endSession().catch(() => undefined);
       }
     },
-    [stop, publish],
+    [stop, publish, area],
   );
   const retry = useCallback(async () => {
     const current = candidate.current;
@@ -167,8 +220,8 @@ function SessionOwner({ children }: { children: ReactNode }) {
     request.current = controller;
     setState({ ...empty, status: 'verifying' });
     try {
-      await verify(current, controller.signal);
-      publish(current, id);
+      const authorization = await verify(current, area, controller.signal);
+      publish(current, authorization, id);
     } catch (failure) {
       if (id !== epoch.current || !mounted.current) return;
       const denied = failure instanceof AccessApiError && [401, 403].includes(failure.status);
@@ -179,7 +232,7 @@ function SessionOwner({ children }: { children: ReactNode }) {
         !denied,
       );
     }
-  }, [stop, leave, publish]);
+  }, [stop, leave, publish, area]);
   const signOut = useCallback(async () => {
     const current = candidate.current;
     leave('');

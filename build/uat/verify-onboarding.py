@@ -2,6 +2,7 @@
 Run after verify-uat.py. This is destructive fixture work, never a retained UAT profile.
 """
 import datetime
+import base64
 import hashlib
 import json
 import os
@@ -106,6 +107,29 @@ for actor in ('A100', 'A200', 'A300'):
 customer = login('A100')
 second_customer = login('A200')
 advisor = login('A300')
+
+# Product entry resolves the customer from the trusted session and never from a browser-selected ID.
+call('/product-api/v1/context', status=401)
+call('/product-api/v1/context', session=owner, status=403)
+product_context = call('/product-api/v1/context', session=customer)
+assert product_context['customerId'] == 'reference-customer' and product_context['actorId'] == 'A100'
+assert product_context['dataDurability'] == 'Runtime only' and product_context['productionAccepted'] is False
+assert 'evidence.document.upload' in product_context['capabilities']
+assert call('/product-api/v1/context', session=second_customer)['customerId'] == 'C001'
+product_operation = 'a' * 32
+product_upload = {'operationId': product_operation, 'originalFileName': 'customer-statement.txt',
+                  'contentType': 'text/plain', 'contentBase64': base64.b64encode(b'Customer supplied UAT evidence.').decode()}
+call('/product-api/v1/evidence', 'POST', product_upload, status=401)
+call('/product-api/v1/evidence', 'POST', product_upload, owner, status=403)
+call('/product-api/v1/evidence', 'POST', {**product_upload, 'operationId': 'b' * 32,
+     'contentType': 'application/pdf'}, customer, status=400)
+product_receipt = call('/product-api/v1/evidence', 'POST', product_upload, customer)
+assert product_receipt['documentId'] == 'document-' + product_operation and product_receipt['version'] == 1
+assert product_receipt['dataDurability'] == 'Runtime only' and 'contentReference' not in product_receipt
+assert call('/product-api/v1/evidence', 'POST', product_upload, customer) == product_receipt
+call('/product-api/v1/evidence', 'POST', {**product_upload, 'contentBase64': base64.b64encode(b'Different content.').decode()}, customer, status=409)
+product_metadata = {'documentId': product_receipt['documentId'], 'customerId': 'reference-customer'}
+assert call('/contracts/cid-021/v1', 'POST', envelope(customer, 'GetEvidenceMetadata', product_metadata), customer)['data']['versions'][0]['originalFileName'] == 'customer-statement.txt'
 
 # Setup is tenant/admin bound; a receipt cannot be fabricated or saved against a stale review.
 call('/uat-api/v1/setup', status=401)
@@ -232,7 +256,8 @@ assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
-           'validated': ['setup review and replay', 'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
+           'validated': ['setup review and replay', 'server-resolved customer product entry', 'idempotent customer evidence intake',
+                         'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
                          'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
            'limitations': ['Business data uses owner reference adapters.', 'AI and unsupported business consumers are not claimed.', 'Consent outbox delivery is not claimed.']}
 (root / '.artifacts/onboarding-acceptance.json').write_text(json.dumps(summary, indent=2) + '\n')

@@ -7,6 +7,8 @@ using Microsoft.Extensions.Configuration;
 namespace Monergy.Platform;
 
 public sealed record CustomerOwnerContext(string TenantId, string CustomerId, string? OwnerActorId, long Version, bool Active);
+public sealed record CustomerOwnerWorkspace(string TenantId, string CustomerId, string DisplayName,
+    string? SecondaryLabel, string OwnerActorId, long Version, bool Active);
 public sealed record CustomerOwnerSession(string TenantId, string ActorId, string AuthenticationContextId, long SubjectVersion, DateTimeOffset ExpiresAt);
 public sealed record CustomerOwnerMembership(string TenantId, string ActorId, bool Active, long SubjectVersion, long PolicyVersion);
 
@@ -22,16 +24,22 @@ public sealed class CustomerOwnerClient : IDisposable
     private readonly string contextToken;
     private readonly string sessionToken;
     private readonly string membershipToken;
+    private readonly bool ownsClient;
 
     public CustomerOwnerClient(IConfiguration configuration) : this(configuration,
-        new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false }))
+        new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
+        { Timeout = TimeSpan.FromSeconds(5), MaxResponseContentBufferSize = 16_384 }, true)
     { }
 
     public CustomerOwnerClient(IConfiguration configuration, HttpClient httpClient)
+        : this(configuration, httpClient, false)
+    { }
+
+    private CustomerOwnerClient(IConfiguration configuration, HttpClient httpClient, bool ownsClient)
     {
         TenantAccessIntegration.EnsureAllowed(configuration);
-        client = httpClient;
-        client.Timeout = TimeSpan.FromSeconds(5); client.MaxResponseContentBufferSize = 16_384;
+        client = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        this.ownsClient = ownsClient;
         identity = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:CustomerIdentityUrl"));
         access = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:AccessManagementUrl"));
         contextToken = TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:CustomerContextToken");
@@ -50,6 +58,24 @@ public sealed class CustomerOwnerClient : IDisposable
         if (value.TenantId != tenant || value.CustomerId != customer || value.Version < 1 || !value.Active)
             throw new TenantBoundaryException("CUSTOMER_UNAVAILABLE", 503);
         return value;
+    }
+
+    public async Task<CustomerOwnerWorkspace?> OwnedCustomerAsync(string tenant, string actor, CancellationToken ct)
+    {
+        if (!TenantAccessClient.Identifier(actor, 128)) throw new TenantBoundaryException("INVALID_ACTOR", 400);
+        try
+        {
+            var value = await SendAsync<CustomerOwnerWorkspace>(identity,
+                "internal/v1/customer-owner/" + Uri.EscapeDataString(actor), tenant, contextToken, null, ct).ConfigureAwait(false);
+            if (value.TenantId != tenant || value.OwnerActorId != actor || value.Version < 1 || !value.Active ||
+                !TenantAccessClient.Identifier(value.CustomerId, 128) || string.IsNullOrWhiteSpace(value.DisplayName))
+                throw new TenantBoundaryException("CUSTOMER_OWNER_RESPONSE_INVALID", 503);
+            return value;
+        }
+        catch (TenantBoundaryException failure) when (failure.Status == 404)
+        {
+            return null;
+        }
     }
 
     public async Task<CustomerOwnerSession> SessionAsync(HttpContext http)
@@ -92,5 +118,8 @@ public sealed class CustomerOwnerClient : IDisposable
         { throw new TenantBoundaryException("CUSTOMER_OWNER_UNAVAILABLE", 503); }
     }
 
-    public void Dispose() => client.Dispose();
+    public void Dispose()
+    {
+        if (ownsClient) client.Dispose();
+    }
 }

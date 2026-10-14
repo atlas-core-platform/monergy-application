@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using Monergy.Services.Evidence.Application;
 
 namespace Monergy.Services.Evidence.Infrastructure;
@@ -100,11 +102,29 @@ public sealed class InMemoryEvidenceRepository : IEvidenceRepository
 
 public sealed class ReferenceEvidenceContentStore : IEvidenceContentStore
 {
-    private readonly ConcurrentDictionary<string, (EvidenceContentDescriptor Descriptor, string Content)> content =
+    private readonly ConcurrentDictionary<string, (EvidenceContentDescriptor Descriptor, byte[] Content)> content =
         new(StringComparer.Ordinal);
 
     public void Seed(string reference, string sha256, string contentType, string value) =>
-        content[reference] = (new EvidenceContentDescriptor(reference, sha256, contentType), value);
+        content[reference] = (new EvidenceContentDescriptor(reference, sha256, contentType,
+            Encoding.UTF8.GetByteCount(value)), Encoding.UTF8.GetBytes(value));
+
+    public EvidenceContentDescriptor Stage(string operationId, byte[] value, string contentType)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var reference = "reference://customer-intake/" + operationId;
+        var descriptor = new EvidenceContentDescriptor(reference,
+            Convert.ToHexStringLower(SHA256.HashData(value)), contentType, value.LongLength);
+        if (!content.TryAdd(reference, (descriptor, value.ToArray())))
+        {
+            var current = content[reference].Descriptor;
+            if (current.Sha256 != descriptor.Sha256 || current.ContentType != descriptor.ContentType ||
+                current.ContentLength != descriptor.ContentLength)
+                throw new InvalidOperationException("Reference evidence operation identifies different content.");
+            return current;
+        }
+        return descriptor;
+    }
 
     public Task<EvidenceContentDescriptor?> GetDescriptorAsync(string reference, CancellationToken cancellationToken)
     {
@@ -115,6 +135,8 @@ public sealed class ReferenceEvidenceContentStore : IEvidenceContentStore
     public Task<string?> ReadAsync(string reference, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(content.TryGetValue(reference, out var item) ? item.Content : null);
+        return Task.FromResult(content.TryGetValue(reference, out var item)
+            ? Encoding.UTF8.GetString(item.Content)
+            : null);
     }
 }

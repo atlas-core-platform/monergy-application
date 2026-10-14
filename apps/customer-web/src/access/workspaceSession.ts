@@ -1,9 +1,24 @@
 import { createContext, useContext } from 'react';
 import type { AccessApi, TenantSession } from './accessApi';
+export interface ProductWorkspaceContext {
+  tenantId: string;
+  actorId: string;
+  customerId: string;
+  customerName: string;
+  customerDetail?: string | null;
+  capabilities: string[];
+  environment: string;
+  dataDurability: string;
+  productionAccepted: boolean;
+}
+export type WorkspaceAuthorization =
+  | { area: 'administration'; authority: 'TenantAdmin'; policyVersion: number }
+  | { area: 'product'; context: ProductWorkspaceContext };
 export interface WorkspaceSessionState {
   status: 'public' | 'connecting' | 'verifying' | 'authorized' | 'disconnected';
   session: TenantSession | null;
   api: AccessApi | null;
+  authorization: WorkspaceAuthorization | null;
   message: string;
   recovery: { tenantId: string; actorId: string; operationId: string } | null;
   connect: (tenantId: string, key: string) => Promise<void>;
@@ -13,6 +28,7 @@ export interface WorkspaceSessionState {
 }
 export const Context = createContext<WorkspaceSessionState | null>(null);
 export const sessionMemory: { current: TenantSession | null } = { current: null };
+export const productContextMemory: { current: ProductWorkspaceContext | null } = { current: null };
 export const localUat =
   (import.meta.env as Record<string, unknown>).VITE_MONERGY_LOCAL_UAT === 'true';
 export function useWorkspaceSession(): WorkspaceSessionState {
@@ -36,8 +52,11 @@ export function tenantContract<
     !Number.isFinite(Date.parse(current.expiresAt)) ||
     Date.parse(current.expiresAt) <= Date.now()
   )
-    throw new Error('Connect your local tenant in People & access before continuing.');
-  const customerId = current.tenantId === 'T001' ? 'reference-customer' : 'other-customer';
+    throw new Error('Connect to your Monergy workspace before continuing.');
+  const product = productContextMemory.current;
+  if (product?.tenantId !== current.tenantId || product.actorId !== current.actorId)
+    throw new Error('Connect to your Monergy workspace before continuing.');
+  const customerId = product.customerId;
   return {
     body: {
       ...body,

@@ -217,6 +217,18 @@ export class AccessApi {
       },
     });
   }
+  product<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/product-api/' + path, {
+      method,
+      signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Monergy-Tenant': this.session.tenantId,
+        'X-Monergy-Session': this.session.authenticationContextId,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  }
   resourceDirectory(resourceType: string, signal?: AbortSignal): Promise<ResourceDirectory> {
     if (!/^[a-z][a-z0-9-]{0,63}$/.test(resourceType))
       return Promise.reject(new AccessApiError(400, 'INVALID_RESOURCE_TYPE'));

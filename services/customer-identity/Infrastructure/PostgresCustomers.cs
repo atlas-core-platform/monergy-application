@@ -25,4 +25,28 @@ public sealed class PostgresCustomers(PostgresTenantSessions sessions) : ITenant
             FROM customer_identity.customers WHERE active ORDER BY display_name,customer_id LIMIT 1000;
             """, cancellationToken: cancellationToken)).ConfigureAwait(false)).ToArray();
     }
+
+    public async Task<CustomerWorkspaceContext?> ReadOwnedAsync(
+        string tenantId,
+        string actorId,
+        CancellationToken cancellationToken)
+    {
+        if (!TenantAccessClient.Identifier(actorId, 128))
+            throw new TenantBoundaryException("INVALID_ACTOR", 400);
+        await using var connection = await sessions.OpenAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        var matches = (await connection.QueryAsync<CustomerWorkspaceContext>(new CommandDefinition("""
+            SELECT @TenantId AS TenantId,customer_id AS CustomerId,display_name AS DisplayName,
+                secondary_label AS SecondaryLabel,owner_actor_id AS OwnerActorId,version AS Version,active AS Active
+            FROM customer_identity.customers
+            WHERE owner_actor_id=@ActorId AND active
+            ORDER BY customer_id
+            LIMIT 2;
+            """, new { TenantId = tenantId, ActorId = actorId }, cancellationToken: cancellationToken)).ConfigureAwait(false)).ToArray();
+        return matches.Length switch
+        {
+            0 => null,
+            1 => matches[0],
+            _ => throw new TenantBoundaryException("CUSTOMER_CONTEXT_AMBIGUOUS", 409),
+        };
+    }
 }

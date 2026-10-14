@@ -1,10 +1,16 @@
 import { createHash } from 'node:crypto';
 import { expect, test } from '@playwright/test';
+import { connectProductWorkspace } from './product-session-fixture';
 
 test('D11 persisted reporting uses real services, reopens and exports exact content', async ({
   page,
 }) => {
-  await page.goto('/reports');
+  await connectProductWorkspace(page, '/reports', {
+    customerId: 'd11-customer-a',
+    customerName: 'D11 synthetic customer A',
+    customerDetail: 'Persisted reporting verification',
+    capabilities: ['reporting.report.generate'],
+  });
   await expect(page.getByText('SERVICE-OWNED SOURCES · LOCAL ONLY')).toBeVisible();
   await expect(page.getByText('MWP-03-D11 · SYNTHETIC')).toBeVisible();
 

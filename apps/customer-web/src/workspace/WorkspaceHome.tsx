@@ -1,72 +1,81 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import type { WorkspaceIconName } from '@monergy/ui-foundation';
-import { Collapse } from 'antd';
+import { Tag } from 'antd';
+import { useWorkspaceSession } from '../access/workspaceSession';
 
-const areas: {
+const journeys: {
   title: string;
   description: string;
   href: string;
   icon: WorkspaceIconName;
-  number: string;
-  label: string;
+  capability: string;
+  action: string;
 }[] = [
   {
-    title: 'Evidence & provenance',
-    description:
-      'Follow a document from source evidence to financial facts, with its provenance in view.',
-    href: '/vs02',
+    title: 'Add financial evidence',
+    description: 'Upload a source document and receive a traceable evidence version.',
+    href: '/evidence',
     icon: 'evidence',
-    number: '01',
-    label: 'Explore evidence',
+    capability: 'evidence.document.upload',
+    action: 'Add evidence',
   },
   {
-    title: 'Search & discovery',
-    description: 'Find authorized information and follow each result back to its source.',
+    title: 'Search trusted information',
+    description: 'Find authorized information and follow each result to its source.',
     href: '/search',
     icon: 'search',
-    number: '02',
-    label: 'Open search',
+    capability: 'search.query.execute',
+    action: 'Open search',
   },
   {
-    title: 'Financial reports',
-    description: 'Bring financial facts together and explore the evidence behind a report.',
+    title: 'Build a financial report',
+    description: 'Bring available financial facts together with their provenance.',
     href: '/reports',
     icon: 'reports',
-    number: '03',
-    label: 'Explore reports',
+    capability: 'reporting.report.generate',
+    action: 'Open reports',
   },
 ];
 
 export default function WorkspaceHome() {
+  const { authorization } = useWorkspaceSession();
+  const context = authorization?.area === 'product' ? authorization.context : null;
+  const capabilities = new Set(context?.capabilities ?? journeys.map((item) => item.capability));
+  const available = journeys.filter((item) => capabilities.has(item.capability));
   return (
-    <main className="workspace-home">
+    <main className="workspace-home product-home">
       <div className="workspace-page-heading">
         <div>
-          <p className="workspace-eyebrow">YOUR MONERGY WORKSPACE</p>
-          <h1>A clearer view of everything.</h1>
+          <p className="workspace-eyebrow">FINANCIAL WORKSPACE</p>
+          <h1>Good {new Date().getUTCHours() < 12 ? 'morning' : 'to see you'}.</h1>
           <p className="workspace-subtitle">
-            Your workflows, people and platform knowledge. Connected in one place.
+            {context?.customerName ?? 'Your Monergy workspace'} · Move from source evidence to
+            financial clarity, with every step traceable.
           </p>
         </div>
-        <span className="workspace-date">LOCAL EXPERIENCE</span>
+        <Tag className="product-environment">LOCAL UAT · RUNTIME DATA</Tag>
       </div>
+
       <section className="workspace-hero" aria-labelledby="workspace-hero-title">
         <div className="workspace-hero-copy">
-          <span className="workspace-pill">BUILT AROUND YOUR TEAM</span>
-          <h2 id="workspace-hero-title">
-            The right access.
-            <br />A confident start.
-          </h2>
+          <span className="workspace-pill">YOUR NEXT BEST STEP</span>
+          <h2 id="workspace-hero-title">Start with what you know.</h2>
           <p>
-            Bring people into your workspace, organize their roles, and make every permission
-            intentional.
+            Add a financial document. Monergy will verify the source, register its identity and keep
+            its provenance ready for the journeys that follow.
           </p>
-          <a className="workspace-primary-link" href="/access">
-            Manage your workspace <WorkspaceIcon name="arrow" size={18} />
-          </a>
+          {capabilities.has('evidence.document.upload') ? (
+            <a className="workspace-primary-link" href="/evidence">
+              Add financial evidence <WorkspaceIcon name="arrow" size={18} />
+            </a>
+          ) : (
+            <span className="workspace-unavailable">
+              Your current role does not include evidence upload.
+            </span>
+          )}
           <span className="workspace-hero-note">
             <WorkspaceIcon name="shield" size={14} />
-            Tenant-scoped. Verified by your services.
+            Customer ownership and access are checked by the authoritative services.
           </span>
         </div>
         <div className="workspace-hero-art" aria-hidden="true">
@@ -74,115 +83,103 @@ export default function WorkspaceHome() {
           <div className="workspace-orbit workspace-orbit-outer" />
           <div className="workspace-orbit workspace-orbit-inner" />
           <div className="workspace-art-core">
-            <WorkspaceIcon name="access" size={42} />
+            <WorkspaceIcon name="evidence" size={39} />
           </div>
           <div className="workspace-art-chip chip-people">
             <span>
-              <WorkspaceIcon name="users" />
+              <WorkspaceIcon name="evidence" />
             </span>
             <div>
-              <strong>People</strong>
-              <small>A place for every teammate</small>
+              <strong>Source</strong>
+              <small>Your original evidence</small>
             </div>
           </div>
           <div className="workspace-art-chip chip-permissions">
             <span>
-              <WorkspaceIcon name="shield" />
+              <WorkspaceIcon name="check" />
             </span>
             <div>
-              <strong>Permissions</strong>
-              <small>Purposeful by design</small>
+              <strong>Verified</strong>
+              <small>Identity and hash recorded</small>
             </div>
           </div>
           <div className="workspace-art-chip chip-workspace">
             <span>
-              <WorkspaceIcon name="layers" />
+              <WorkspaceIcon name="changes" />
             </span>
             <div>
-              <strong>One workspace</strong>
-              <small>Shared clarity</small>
+              <strong>Traceable</strong>
+              <small>Provenance stays connected</small>
             </div>
           </div>
         </div>
       </section>
+
       <section aria-labelledby="workspace-areas-title">
         <div className="workspace-section-heading">
           <div>
-            <p className="workspace-eyebrow">MOVE WORK FORWARD</p>
-            <h2 id="workspace-areas-title">Explore your workspace</h2>
+            <p className="workspace-eyebrow">AVAILABLE TO YOU</p>
+            <h2 id="workspace-areas-title">Continue your financial journey</h2>
           </div>
-          <span>Familiar tools. A connected experience.</span>
+          <span>
+            {available.length} of {journeys.length} journeys available
+          </span>
         </div>
-        <div className="workspace-area-grid">
-          {areas.map((area) => (
-            <a className="workspace-area-card" href={area.href} key={area.title}>
-              <div className="workspace-card-top">
-                <span className="workspace-card-icon">
-                  <WorkspaceIcon name={area.icon} size={23} />
+        {available.length ? (
+          <div className="workspace-area-grid">
+            {available.map((area, index) => (
+              <a className="workspace-area-card" href={area.href} key={area.title}>
+                <div className="workspace-card-top">
+                  <span className="workspace-card-icon">
+                    <WorkspaceIcon name={area.icon} size={21} />
+                  </span>
+                  <span className="workspace-card-number">0{index + 1}</span>
+                </div>
+                <h3>{area.title}</h3>
+                <p>{area.description}</p>
+                <span className="workspace-card-action">
+                  {area.action}
+                  <WorkspaceIcon name="arrow" size={17} />
                 </span>
-                <span className="workspace-card-number">{area.number}</span>
-              </div>
-              <h3>{area.title}</h3>
-              <p>{area.description}</p>
-              <span className="workspace-card-action">
-                {area.label}
-                <WorkspaceIcon name="arrow" size={17} />
-              </span>
-            </a>
-          ))}
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div className="workspace-access-empty">
+            <WorkspaceIcon name="shield" size={23} />
+            <div>
+              <strong>Your workspace is connected, but no product journeys are assigned.</strong>
+              <p>Ask a Tenant Administrator to assign an appropriate business role.</p>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="workspace-boundary" aria-labelledby="workspace-boundary-title">
+        <span className="workspace-card-icon">
+          <WorkspaceIcon name="shield" size={20} />
+        </span>
+        <div>
+          <p className="workspace-eyebrow">CLEAR BOUNDARIES</p>
+          <h2 id="workspace-boundary-title">
+            You are working as {context?.customerName ?? 'a customer'}.
+          </h2>
+          <p>
+            Monergy resolves this customer from your verified identity. The browser does not choose
+            or infer the customer record.
+          </p>
+        </div>
+        <div className="workspace-boundary-facts">
+          <span>
+            <small>Environment</small>
+            {context?.environment ?? 'Preview'}
+          </span>
+          <span>
+            <small>Data durability</small>
+            {context?.dataDurability ?? 'Reference'}
+          </span>
         </div>
       </section>
-      <div className="workspace-bottom-grid">
-        <section className="workspace-expert-card" aria-labelledby="expert-card-title">
-          <span className="workspace-expert-symbol">
-            <WorkspaceIcon name="expert" size={30} />
-          </span>
-          <div>
-            <p className="workspace-eyebrow">PLATFORM INTELLIGENCE</p>
-            <h2 id="expert-card-title">Understand the bigger picture.</h2>
-            <p>Ask System Expert about services, decisions and the connections behind Monergy.</p>
-            <a href="http://127.0.0.1:4310/">
-              Open System Expert <WorkspaceIcon name="arrow" size={16} />
-            </a>
-          </div>
-        </section>
-        <section className="workspace-context-card" aria-labelledby="workspace-context-title">
-          <h2 id="workspace-context-title">Designed for clear decisions</h2>
-          <Collapse
-            ghost
-            items={[
-              {
-                key: 'boundaries',
-                label: 'What does this workspace connect?',
-                children: (
-                  <p>
-                    Access administration connects to local Customer & Identity and Access
-                    Management services. Evidence, search and reports retain their existing
-                    reference experiences.
-                  </p>
-                ),
-              },
-              {
-                key: 'expert',
-                label: 'Where does System Expert fit?',
-                children: (
-                  <p>
-                    System Expert is a separate local knowledge application. It uses the same
-                    workspace standards and does not participate in business transactions.
-                  </p>
-                ),
-              },
-            ]}
-          />
-        </section>
-      </div>
-      <footer className="workspace-home-footer">
-        <span>MONERGY</span>
-        <p>Clarity in every connection.</p>
-        <a href="/foundation">
-          Engineering foundation <WorkspaceIcon name="arrow" size={13} />
-        </a>
-      </footer>
     </main>
   );
 }
