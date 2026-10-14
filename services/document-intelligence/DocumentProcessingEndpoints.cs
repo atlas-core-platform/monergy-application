@@ -47,7 +47,7 @@ public static class DocumentProcessingEndpoints
         if (tenant.Count != 1 || !TenantAccessClient.Identifier(tenant[0], 64))
             throw new TenantBoundaryException("TRUSTED_TENANT_CONTEXT_REQUIRED", 403);
         _ = LocalTenantSecurityContext.RequireTenant(
-            security, tenant[0], "local-uat-workspace", "job-management");
+            security.Workload?.WorkloadIdentityId, tenant[0], "local-uat-workspace", "job-management");
     }
 
     private static async Task<IResult> ToViewAsync(

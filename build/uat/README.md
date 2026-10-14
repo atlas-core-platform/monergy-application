@@ -2,7 +2,7 @@
 
 This profile runs the shared administration workspace and 13 service boundaries on your computer. Access Management, Customer & Identity and Audit use separate PostgreSQL databases for each tenant. Policies, imported identities, sessions, delivery receipts and canonical access audit persist across Stop/Start.
 
-Business reference adapters remain illustrative. Consent and AI are scaffolds; Document Intelligence and Job Management have no connected business consumers. Search and Reporting enforce current AM decisions before their reference business operations. Reporting reference data is volatile. The VS-02 simulator is deliberately unavailable in this profile until its complete tenant-aware worker journey is connected. This profile is not Production acceptance or a replacement for the separately verified D11 persisted-reporting profile.
+Business reference adapters remain illustrative. AI remains a scaffold. Consent, Evidence, Job Management and Document Intelligence provide the guarded LOCAL/UAT customer-processing journey; Search and Reporting enforce current AM decisions before their reference business operations. The processor accepts structured text only, candidate facts do not update Financial Profile, and runtime business data remains non-production. Reporting reference data is volatile. This profile is not Production acceptance or a replacement for the separately verified D11 persisted-reporting profile.
 
 ## Start on Windows
 

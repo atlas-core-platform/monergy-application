@@ -29,13 +29,13 @@ public sealed class BoundaryTests
             ["consent"] = "Microsoft.NET.Sdk.Web",
             ["integration-gateway"] = "Microsoft.NET.Sdk.Web",
             ["evidence"] = "Microsoft.NET.Sdk.Web",
-            ["document-intelligence"] = "Microsoft.NET.Sdk.Worker",
+            ["document-intelligence"] = "Microsoft.NET.Sdk.Web",
             ["financial-profile"] = "Microsoft.NET.Sdk.Web",
             ["financial-rules"] = "Microsoft.NET.Sdk.Web",
             ["search-retrieval"] = "Microsoft.NET.Sdk.Web",
             ["ai-intelligence"] = "Microsoft.NET.Sdk.Web",
             ["reporting"] = "Microsoft.NET.Sdk.Web",
-            ["job-management"] = "Microsoft.NET.Sdk.Worker",
+            ["job-management"] = "Microsoft.NET.Sdk.Web",
             ["audit"] = "Microsoft.NET.Sdk.Worker",
         };
 

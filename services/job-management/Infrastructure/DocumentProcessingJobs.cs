@@ -54,7 +54,8 @@ public sealed class OwnerBackedJobExecutionPolicy(TenantAccessClient access) : I
     {
         try
         {
-            var tenant = LocalTenantSecurityContext.RequireTenant(context, null, "local-uat-workspace");
+            var tenant = LocalTenantSecurityContext.RequireTenant(
+                context.Workload?.WorkloadIdentityId, null, "local-uat-workspace");
             var decision = await access.EvaluateCustomerAsync(
                 tenant,
                 context.Actor.AuthenticationContextId,
@@ -112,7 +113,8 @@ public sealed class HttpDocumentProcessingTarget : IJobExecutionTarget, IDisposa
         var intent = registry.Get(job.JobId);
         if (intent is null || intent.CustomerId != job.CustomerId || intent.DocumentVersionId != job.PayloadReference)
             return JobExecutionResult.Failed("job.document-processing.intent-unavailable", false);
-        var tenant = LocalTenantSecurityContext.RequireTenant(job.Security, null, "local-uat-workspace");
+        var tenant = LocalTenantSecurityContext.RequireTenant(
+            job.Security.Workload?.WorkloadIdentityId, null, "local-uat-workspace");
         var security = job.Security with
         {
             Workload = new WorkloadContext("job-management", "job-management:" + tenant),
@@ -166,7 +168,8 @@ public sealed class HttpDocumentProcessingTarget : IJobExecutionTarget, IDisposa
         var intent = registry.Get(job.JobId);
         if (intent is null || intent.CustomerId != job.CustomerId || intent.DocumentVersionId != job.PayloadReference)
             return null;
-        var tenant = LocalTenantSecurityContext.RequireTenant(security, null, "local-uat-workspace");
+        var tenant = LocalTenantSecurityContext.RequireTenant(
+            security.Workload?.WorkloadIdentityId, null, "local-uat-workspace");
         var ownerSecurity = security with
         {
             Workload = new WorkloadContext("job-management", "job-management:" + tenant),

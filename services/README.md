@@ -2,9 +2,10 @@
 
 `catalog.json` is the ownership inventory for the twelve deployable R3 services.
 Each folder now contains an independently compilable .NET 10 executable scaffold
-and an independent Linux OCI definition. Eight boundaries use ASP.NET Core HTTP
-hosts; Document Intelligence, Reporting, Job Management and Audit use Worker
-Service hosts because their accepted primary responsibilities are asynchronous.
+and an independent Linux OCI definition. Eleven boundaries use ASP.NET Core HTTP
+hosts; Audit retains a Worker Service host. Document Intelligence and Job
+Management expose workload-only HTTP control planes while retaining their
+asynchronous processing responsibilities.
 Seven non-participating boundaries retain health/startup behavior only. D03
 adds bounded implementation accepted at `SIMULATOR` to Evidence, Document
 Intelligence, Financial Profile, Job Management and Audit. Those services share

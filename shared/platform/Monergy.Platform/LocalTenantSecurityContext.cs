@@ -1,16 +1,13 @@
-using Monergy.Contracts;
-
 namespace Monergy.Platform;
 
 public static class LocalTenantSecurityContext
 {
     public static string RequireTenant(
-        TrustedSecurityContext security,
+        string? workloadIdentityId,
         string? expectedTenant = null,
         params string[] allowedWorkloads)
     {
-        ArgumentNullException.ThrowIfNull(security);
-        var identity = security.Workload?.WorkloadIdentityId ?? string.Empty;
+        var identity = workloadIdentityId ?? string.Empty;
         var separator = identity.LastIndexOf(':');
         if (separator < 1 || separator == identity.Length - 1)
             throw new TenantBoundaryException("TRUSTED_TENANT_CONTEXT_REQUIRED", 403);

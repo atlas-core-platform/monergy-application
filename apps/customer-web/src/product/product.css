@@ -452,10 +452,10 @@
   color: var(--mw-muted);
   font-size: var(--monergy-text-small);
 }
-.product-fact-value {
+.product-fact-card > .product-fact-value {
   flex-direction: column;
-  align-items: flex-end !important;
-  gap: 3px !important;
+  align-items: flex-end;
+  gap: 3px;
   text-align: right;
 }
 @media (max-width: 900px) {
@@ -506,8 +506,8 @@
   .product-fact-card > div {
     flex-wrap: wrap;
   }
-  .product-fact-value {
-    align-items: flex-start !important;
+  .product-fact-card > .product-fact-value {
+    align-items: flex-start;
     text-align: left;
   }
 }

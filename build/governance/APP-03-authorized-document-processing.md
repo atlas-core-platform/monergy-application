@@ -38,6 +38,8 @@ The UI is keyboard operable, responsive, compatible with reduced motion, and doe
 
 The local profile upgrades through the Access Management administration API by retaining the existing `evidence-read` permission and adding a narrowly scoped `document-processing` permission to the default customer role. Existing tenant policy is not replaced. Runtime content, jobs, processing records, and facts remain ephemeral.
 
+Document Intelligence and Job Management retain their asynchronous domain responsibilities but use ASP.NET Core Web hosts for the authenticated workload-only execute and status control planes required by this integrated slice. This is a hosting-shape change, not an ownership transfer; neither service exposes these controls directly to the browser.
+
 The Docker acceptance proves:
 
 - authentication and capability denial;

@@ -44,7 +44,7 @@ public sealed class HttpEvidenceContentReader : IEvidenceContentReader, IDisposa
         CancellationToken cancellationToken)
     {
         var tenant = LocalTenantSecurityContext.RequireTenant(
-            security, null, "local-uat-workspace", "job-management");
+            security.Workload?.WorkloadIdentityId, null, "local-uat-workspace", "job-management");
         using var request = new HttpRequestMessage(HttpMethod.Post,
             new Uri(evidence, "internal/local/v1/evidence/processing-source"));
         request.Headers.Add("X-Monergy-Tenant", tenant);
@@ -95,7 +95,7 @@ public sealed class OwnerBackedExecutionPolicy(TenantAccessClient access) : IExe
         try
         {
             var tenant = LocalTenantSecurityContext.RequireTenant(
-                security, null, "local-uat-workspace", "job-management");
+                security.Workload?.WorkloadIdentityId, null, "local-uat-workspace", "job-management");
             var decision = await access.EvaluateCustomerAsync(
                 tenant,
                 security.Actor.AuthenticationContextId,
