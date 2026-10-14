@@ -6,6 +6,7 @@ using Monergy.Contracts;
 using Monergy.Platform;
 using Monergy.Services.JobManagement.Application;
 using Monergy.Services.JobManagement.Infrastructure;
+using Xunit;
 
 namespace Monergy.JobManagement.Tests;
 
