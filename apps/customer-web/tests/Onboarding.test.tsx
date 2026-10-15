@@ -123,10 +123,11 @@ it('requires an explicit owner adoption before a v1 organization can complete se
     },
   };
   const owner = vi.spyOn(api, 'owner').mockResolvedValue(v1);
+  let currentPolicyVersion = 7;
   vi.spyOn(api, 'all').mockImplementation(() => Promise.resolve([]));
   const request = vi.spyOn(api, 'request').mockImplementation((path, method) => {
     if (path === 'administration/customer-relationships?limit=100' && method === 'GET')
-      return Promise.resolve({ policyVersion: 7, items: [] });
+      return Promise.resolve({ policyVersion: currentPolicyVersion, items: [] });
     if (path === 'administration/default-access-pack/plan' && method === 'GET')
       return Promise.resolve({
         installedVersion: '1.0',
@@ -138,6 +139,7 @@ it('requires an explicit owner adoption before a v1 organization can complete se
         conflicts: [],
       });
     if (path === 'administration/default-access-pack/adopt' && method === 'POST') {
+      currentPolicyVersion = 8;
       owner.mockResolvedValue({
         ...ready,
         policyVersion: 8,
