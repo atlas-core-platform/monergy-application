@@ -2,7 +2,7 @@ import type { WorkspaceDestination } from '@monergy/ui-foundation';
 
 export const destinations: WorkspaceDestination[] = [
   { id: 'home', label: 'Overview', icon: 'home', href: '/', group: 'Your finances' },
-  { id: 'evidence', label: 'Evidence', icon: 'evidence', href: '/evidence' },
+  { id: 'evidence', label: 'Documents', icon: 'evidence', href: '/evidence' },
   { id: 'search', label: 'Search', icon: 'search', href: '/search' },
   { id: 'reports', label: 'Reports', icon: 'reports', href: '/reports' },
 ];
@@ -16,26 +16,26 @@ export const productModule = {
   guideTitle: 'Your financial workspace guide',
   guide: (
     <>
-      <h2>Turn source documents into clear financial information.</h2>
+      <h2>Turn documents into clear financial information.</h2>
       <p>
-        Start in Evidence to add a financial document. Search and Reports only return information
+        Start in Documents to add a financial record. Search and Reports only return information
         your current customer access allows.
       </p>
-      <h3>Add evidence</h3>
+      <h3>Add documents</h3>
       <p>
-        Drop or choose a supported file, review exactly what will be registered, and wait for a
-        confirmation from the Evidence service.
+        Drop or choose a supported file, review what will be uploaded, and wait for Monergy to
+        confirm the document version.
       </p>
       <h3>Follow the source</h3>
       <p>
-        Open any verified item in the Evidence library to inspect its owner-issued identities,
-        version and source hash. Raw document content is not exposed in the library. A confirmed
-        upload does not imply extraction or financial advice.
+        Open Document details to see when a document was uploaded and, when needed, expand Technical
+        details for its immutable identifiers and integrity hash. A confirmed upload does not mean
+        the information has been added to your Financial Passport.
       </p>
       <h3>Know this environment</h3>
       <p>
-        The current customer application is a LOCAL/UAT slice. Uploaded content is retained only for
-        the running reference environment; Production retention and release remain separate.
+        This is a test environment and its data may be reset. Production retention and release
+        remain separately governed.
       </p>
     </>
   ),
