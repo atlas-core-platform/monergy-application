@@ -32,50 +32,16 @@ jobs:
             Accept = 'application/vnd.github+json'
             'X-GitHub-Api-Version' = '2022-11-28'
           }
-
-          function Get-SuccessfulCandidateRuns([string]$branch) {
-            $encoded = [Uri]::EscapeDataString($branch)
-            $uri = "https://api.github.com/repos/$env:MONERGY_REPOSITORY/actions/workflows/bootstrap.yml/runs?event=workflow_dispatch&branch=$encoded&status=completed&per_page=100"
-            $response = Invoke-RestMethod -Headers $headers -Uri $uri
-            return @($response.workflow_runs | Where-Object { $_.conclusion -eq 'success' })
-          }
-
-          function Test-ApprovedCleanupOnly([string]$candidate, [string]$head) {
-            if ($candidate -eq $head) { return $true }
-            $compare = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:MONERGY_REPOSITORY/compare/$candidate...$head"
-            if ($compare.status -ne 'ahead' -or [string]$compare.merge_base_commit.sha -ne $candidate) { return $false }
-            $files = @($compare.files)
-            return $files.Count -eq 1 -and
-              [string]$files[0].filename -eq '.github/workflows/t1-auto-candidate-dispatch.yml' -and
-              [string]$files[0].status -eq 'removed'
-          }
-
           $pulls = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:MONERGY_REPOSITORY/commits/$env:MONERGY_MERGE_SHA/pulls")
           $merged = @($pulls | Where-Object { $_.merged_at -and $_.base.ref -eq 'main' })
           if ($merged.Count -ne 1) { throw 'The main update is not attributable to exactly one merged pull request.' }
-
           $pull = $merged[0]
           $head = [string]$pull.head.sha
-          $accepted = @(Get-SuccessfulCandidateRuns ([string]$pull.head.ref))
-
-          $evidence = $accepted | Where-Object { [string]$_.head_sha -eq $head } | Select-Object -First 1
-          $mode = 'exact-head'
-          if ($null -eq $evidence) {
-            $evidence = $accepted |
-              Where-Object { Test-ApprovedCleanupOnly ([string]$_.head_sha) $head } |
-              Sort-Object run_number -Descending |
-              Select-Object -First 1
-            $mode = 'approved-cleanup-only'
-          }
-
-          if ($null -eq $evidence) {
-            throw "PR #$($pull.number) head $head has no successful Candidate readiness run and no approved cleanup-only delta from one."
-          }
-
+          $runs = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/$env:MONERGY_REPOSITORY/actions/workflows/bootstrap.yml/runs?event=workflow_dispatch&head_sha=$head&status=completed&per_page=20"
+          $accepted = @($runs.workflow_runs | Where-Object { $_.conclusion -eq 'success' })
+          if ($accepted.Count -eq 0) { throw "PR #$($pull.number) head $head has no successful Candidate readiness run." }
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '## Merge integrity confirmed'
           Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Pull request: #$($pull.number)"
-          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- PR head: $head"
-          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Candidate evidence SHA: $($evidence.head_sha)"
-          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Evidence mode: $mode"
-          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Candidate readiness: run $($evidence.run_number) — $($evidence.html_url)"
-          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Merged commit: $env:MONERGY_MERGE_SHA"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Candidate head: ``$head``"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Candidate readiness: [run $($accepted[0].run_number)]($($accepted[0].html_url))"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- Merged commit: ``$env:MONERGY_MERGE_SHA``"
