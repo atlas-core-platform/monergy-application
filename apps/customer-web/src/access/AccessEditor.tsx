@@ -360,7 +360,7 @@ export function AccessEditor({
           identity: values.businessRoleId ?? '',
         },
         { label: 'Account status', value: values.active ? 'Active' : 'Disabled' },
-        { label: 'Tenant administrator', value: values.tenantAdmin ? 'Yes' : 'No' },
+        { label: 'Organization Administrator', value: values.tenantAdmin ? 'Yes' : 'No' },
       ];
     if (area === 'groups' && mode === 'people')
       return [
@@ -856,7 +856,7 @@ export function AccessEditor({
                     <h3 id="user-authority">Administrative authority</h3>
                     <Form.Item
                       name="tenantAdmin"
-                      label="Tenant administrator"
+                      label="Organization Administrator"
                       valuePropName="checked"
                     >
                       <Switch />
