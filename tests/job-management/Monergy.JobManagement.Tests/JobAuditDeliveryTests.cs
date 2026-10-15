@@ -13,7 +13,7 @@ namespace Monergy.JobManagement.Tests;
 public sealed class JobAuditDeliveryTests
 {
     [Fact]
-    public async Task Governed_consumer_resolves_tenant_and_validates_owner_receipt()
+    public async Task GovernedConsumerResolvesTenantAndValidatesOwnerReceipt()
     {
         var repository = new InMemoryJobRepository();
         var request = JobTestContext.Schedule("job-audit-delivery", "job-audit-key");
