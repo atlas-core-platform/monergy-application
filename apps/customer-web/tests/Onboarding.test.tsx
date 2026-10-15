@@ -25,6 +25,13 @@ const ready: TenantSetupState = {
   initialAdministratorEmail: 'admin@example.test',
   state: 'ReadyForAdmin',
   customerRelationships: true,
+  accessPack: {
+    installedVersion: '2.0',
+    installedIdentity: 'monergy-default-access-pack/2.0',
+    installedAt: '2026-10-15T00:00:00Z',
+    policyVersion: 7,
+    ready: true,
+  },
 };
 afterEach(() => {
   cleanup();
