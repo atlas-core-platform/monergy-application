@@ -305,8 +305,13 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
             $adapterPath = Join-Path $serviceRoot 'JobManagementHttpAdapterWorker.cs'
             $adapter = if (Test-Path -LiteralPath $adapterPath) { Get-Content -LiteralPath $adapterPath -Raw } else { '' }
             $workerPrimaryValid = $workerPrimaryValid -and
+                $program.Contains('AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false)') -and
                 $program.Contains('AddHostedService<JobManagementHttpAdapterWorker>') -and
                 $adapter.Contains('WebApplication.CreateSlimBuilder()') -and
+                $adapter.Contains('builder.WebHost.UseUrls(urls)') -and
+                $adapter.Contains('ownerServices.GetRequiredService<TenantBoundaryOptions>()') -and
+                $adapter.Contains('ownerServices.GetRequiredService<TenantAccessClient>()') -and
+                $adapter.Contains('app.UseMiddleware<TenantBoundaryMiddleware>()') -and
                 $adapter.Contains('ownerServices.GetRequiredService<JobManagementApplication>()') -and
                 $adapter.Contains('ownerServices.GetRequiredService<IJobRepository>()') -and
                 $adapter.Contains('MapDocumentProcessingJobs(configuration)')
@@ -315,8 +320,13 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
             $adapterPath = Join-Path $serviceRoot 'DocumentIntelligenceHttpAdapterWorker.cs'
             $adapter = if (Test-Path -LiteralPath $adapterPath) { Get-Content -LiteralPath $adapterPath -Raw } else { '' }
             $workerPrimaryValid = $workerPrimaryValid -and
+                $program.Contains('AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false)') -and
                 $program.Contains('AddHostedService<DocumentIntelligenceHttpAdapterWorker>') -and
                 $adapter.Contains('WebApplication.CreateSlimBuilder()') -and
+                $adapter.Contains('builder.WebHost.UseUrls(urls)') -and
+                $adapter.Contains('ownerServices.GetRequiredService<TenantBoundaryOptions>()') -and
+                $adapter.Contains('ownerServices.GetRequiredService<TenantAccessClient>()') -and
+                $adapter.Contains('app.UseMiddleware<TenantBoundaryMiddleware>()') -and
                 $adapter.Contains('ownerServices.GetRequiredService<DocumentProcessingApplication>()') -and
                 $adapter.Contains('ownerServices.GetRequiredService<IDocumentProcessingRepository>()') -and
                 $adapter.Contains('MapDocumentProcessing(configuration)')
