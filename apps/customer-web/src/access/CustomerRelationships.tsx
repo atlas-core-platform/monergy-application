@@ -170,7 +170,7 @@ function AssignedCustomers({ api }: { api: AccessApi }) {
     <>
       <header className="access-page-header">
         <div>
-          <p className="workspace-eyebrow">RESOURCE ACCESS</p>
+          <p className="workspace-eyebrow">CUSTOMER ACCESS</p>
           <h1>Assigned customers</h1>
           <p>
             Connect advisors to named customers. Their role determines what they can do; customer
@@ -196,7 +196,7 @@ function AssignedCustomers({ api }: { api: AccessApi }) {
         showIcon
         className="access-notice"
         title="One relationship, consistent customer boundaries"
-        description="An assignment applies to supported customer workflows. Verified customers receive self-access only where their role permits it. Neither administrator authority nor a group grants financial access."
+        description="An assignment applies to supported customer workflows. Verified customers receive self-access only where their role permits it. Neither Organization Administrator authority nor a team grants financial access."
       />
       {notice && <Alert type="success" showIcon title={notice} className="access-notice" />}
       {error && !draft && (
