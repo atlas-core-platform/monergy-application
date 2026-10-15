@@ -29,7 +29,7 @@ export function WorkspaceEntry({
       <main className="access-public-body">
         <section className="access-public-intro">
           <p className="workspace-eyebrow">
-            {area === 'administration' ? 'ACCESS MANAGEMENT' : 'FINANCIAL WORKSPACE'}
+            {area === 'administration' ? 'ORGANIZATION SETTINGS' : 'FINANCIAL WORKSPACE'}
           </p>
           <h1>
             {area === 'administration' ? 'Clear access.' : 'Financial clarity.'}
@@ -152,7 +152,7 @@ export function WorkspaceEntry({
         </section>
       </main>
       <footer className="access-public-footer">
-        Monergy · {area === 'administration' ? 'Access Management' : 'Financial Workspace'}
+        Monergy · {area === 'administration' ? 'Organization Settings' : 'Financial Workspace'}
         <span>Test environment connection</span>
       </footer>
     </div>
