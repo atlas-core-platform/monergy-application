@@ -18,7 +18,7 @@ public sealed class FileTenantSetup(string path) : ITenantSetupReadiness
     public async Task<TenantSetupReceipt?> GetAsync(string tenantId, CancellationToken ct)
     {
         await using var lease = await LeaseAsync(ct).ConfigureAwait(false);
-        return (await ReadAllAsync(ct).ConfigureAwait(false)).SingleOrDefault(receipt => receipt.TenantId == tenantId);
+        return (await ReadAllAsync(ct).ConfigureAwait(false)).LastOrDefault(receipt => receipt.TenantId == tenantId);
     }
 
     public async Task<TenantSetupReceipt> CompleteAsync(TenantRegistryRecord tenant, string trustedActor, long currentPolicyVersion,
@@ -30,17 +30,20 @@ public sealed class FileTenantSetup(string path) : ITenantSetupReadiness
         if (!Identifier(trustedActor) || !Identifier(request.RequestId) || request.ExpectedPolicyVersion < 1 ||
             !request.OrganizationReviewed || !request.AccessReviewed)
             throw new InvalidOperationException("TENANT_SETUP_REVIEW_REQUIRED");
+        if (currentPolicyVersion != request.ExpectedPolicyVersion)
+            throw new InvalidOperationException("TENANT_SETUP_POLICY_CHANGED");
         var hash = Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { tenant.TenantId, trustedActor, request }, Json)));
         await using var lease = await LeaseAsync(ct).ConfigureAwait(false);
         var receipts = await ReadAllAsync(ct).ConfigureAwait(false);
-        var prior = receipts.SingleOrDefault(receipt => receipt.TenantId == tenant.TenantId);
-        if (prior is not null)
+        var prior = receipts.LastOrDefault(receipt => receipt.TenantId == tenant.TenantId);
+        if (prior is not null && prior.ReviewedPolicyVersion == currentPolicyVersion)
         {
-            if (prior.RequestId != request.RequestId || prior.ContentHash != hash)
+            if (prior.RequestId != request.RequestId || prior.ContentHash != hash || prior.ActorId != trustedActor)
                 throw new InvalidOperationException("TENANT_SETUP_ALREADY_COMPLETED");
             return prior;
         }
-        if (currentPolicyVersion != request.ExpectedPolicyVersion) throw new InvalidOperationException("TENANT_SETUP_POLICY_CHANGED");
+        if (prior is not null && prior.ReviewedPolicyVersion > currentPolicyVersion)
+            throw new InvalidOperationException("TENANT_SETUP_POLICY_CHANGED");
         var receipt = new TenantSetupReceipt(tenant.TenantId, trustedActor, request.RequestId, hash, currentPolicyVersion,
             "setup-" + Guid.NewGuid().ToString("N"), clock.GetUtcNow());
         receipts.Add(receipt);
@@ -72,7 +75,8 @@ public sealed class FileTenantSetup(string path) : ITenantSetupReadiness
             ?? throw new InvalidOperationException("TENANT_SETUP_STORE_INVALID");
         if (receipts.Any(item => !Identifier(item.TenantId) || !Identifier(item.ActorId) || !Identifier(item.RequestId) ||
                 !Identifier(item.ReceiptReference) || item.ReviewedPolicyVersion < 1 || item.ContentHash.Length != 64) ||
-            receipts.Select(item => item.TenantId).Distinct(StringComparer.Ordinal).Count() != receipts.Count)
+            receipts.Select(item => item.ReceiptReference).Distinct(StringComparer.Ordinal).Count() != receipts.Count ||
+            receipts.Select(item => (item.TenantId, item.ReviewedPolicyVersion)).Distinct().Count() != receipts.Count)
             throw new InvalidOperationException("TENANT_SETUP_STORE_INVALID");
         return receipts;
     }
