@@ -92,6 +92,99 @@ it('requires both reviews and waits for server activation before showing the wor
   expect(await screen.findByText('Protected workspace')).toBeVisible();
 });
 
+
+it('requires an explicit owner adoption before a v1 organization can complete setup', async () => {
+  const api = new AccessApi(session);
+  const v1 = {
+    ...ready,
+    accessPack: {
+      installedVersion: '1.0',
+      installedIdentity: 'monergy-default-access-pack/1.0',
+      installedAt: '2026-10-14T00:00:00Z',
+      policyVersion: 7,
+      ready: false,
+    },
+  };
+  const owner = vi.spyOn(api, 'owner').mockResolvedValue(v1);
+  vi.spyOn(api, 'all').mockResolvedValue([]);
+  const request = vi.spyOn(api, 'request').mockImplementation((path, method) => {
+    if (path === 'administration/default-access-pack/plan' && method === 'GET')
+      return Promise.resolve({
+        installedVersion: '1.0',
+        targetVersion: '2.0',
+        policyVersion: 7,
+        planHash: 'a'.repeat(64),
+        alreadyInstalled: false,
+        changes: [{ kind: 'ADD_ROLE', objectId: 'default-role-dsa-case-manager', before: null, after: 'configured' }],
+        conflicts: [],
+      });
+    if (path === 'administration/default-access-pack/adopt' && method === 'POST') {
+      owner.mockResolvedValue(ready);
+      return Promise.resolve({
+        packVersion: '2.0',
+        policyVersion: 8,
+        operationId: 'setup-pack-fixture',
+        planHash: 'a'.repeat(64),
+        replayed: false,
+      });
+    }
+    return Promise.reject(new Error(`Unexpected request ${method ?? 'GET'} ${path}`));
+  });
+
+  mount(api);
+  const user = userEvent.setup();
+  const adopt = await screen.findByRole('button', { name: 'Apply recommended access update' });
+  expect(screen.getByRole('button', { name: 'Complete setup' })).toBeDisabled();
+  await user.click(adopt);
+  await waitFor(() => {
+    expect(request).toHaveBeenCalledWith(
+      'administration/default-access-pack/adopt',
+      'POST',
+      expect.objectContaining({
+        expectedPolicyVersion: 7,
+        planHash: 'a'.repeat(64),
+      }),
+    );
+  });
+  expect(await screen.findByText('Recommended access model ready')).toBeVisible();
+});
+
+it('does not overwrite a customized v1 access model', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'owner').mockResolvedValue({
+    ...ready,
+    state: 'Active',
+    receiptReference: 'existing-setup',
+    accessPack: {
+      installedVersion: '1.0',
+      installedIdentity: 'monergy-default-access-pack/1.0',
+      installedAt: '2026-10-14T00:00:00Z',
+      policyVersion: 7,
+      ready: false,
+    },
+  });
+  vi.spyOn(api, 'all').mockResolvedValue([]);
+  const request = vi.spyOn(api, 'request').mockResolvedValue({
+    installedVersion: '1.0',
+    targetVersion: '2.0',
+    policyVersion: 7,
+    planHash: 'b'.repeat(64),
+    alreadyInstalled: false,
+    changes: [],
+    conflicts: ['SEEDED_ROLE_CUSTOMIZED:default-role-customer'],
+  });
+
+  mount(api);
+  const user = userEvent.setup();
+  expect(await screen.findByText('Your customized access needs review')).toBeVisible();
+  expect(
+    screen.queryByRole('button', { name: 'Apply recommended access update' }),
+  ).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'Continue with current access' }));
+  expect(await screen.findByText('Protected workspace')).toBeVisible();
+  expect(request).toHaveBeenCalledTimes(1);
+});
+
 it('does not accept setup from another tenant or an active response without a receipt', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'owner').mockResolvedValue({ ...ready, tenantId: 'T002', state: 'Active' });
