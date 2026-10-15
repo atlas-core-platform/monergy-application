@@ -65,11 +65,33 @@ function mount(api: AccessApi) {
 
 function mockSetupCollections(api: AccessApi, roles: AccessRecord[] = []) {
   vi.spyOn(api, 'all').mockImplementation((area) =>
-    Promise.resolve(area === 'roles' ? roles : []),
+    Promise.resolve(
+      area === 'roles'
+        ? roles
+        : area === 'members'
+          ? [
+              {
+                actorId: 'A900',
+                normalizedEmail: 'admin@example.test',
+                tenantAdmin: true,
+                businessRoleId: null,
+              },
+            ]
+          : area === 'groups'
+            ? [{ id: 'team-1', label: 'Advisory Team', memberCount: 1 }]
+            : [],
+    ),
   );
+  vi.spyOn(api, 'resourceDirectory').mockResolvedValue({
+    resourceType: 'customer',
+    items: [{ resourceId: 'customer-1', displayName: 'Priya Shah' }],
+  });
   return vi.spyOn(api, 'request').mockImplementation((path, method) => {
     if (path === 'administration/customer-relationships?limit=100' && method === 'GET')
-      return Promise.resolve({ policyVersion: 7, items: [] });
+      return Promise.resolve({
+        policyVersion: 7,
+        items: [{ id: 'relationship-1', actorId: 'A900', customerId: 'customer-1' }],
+      });
     return Promise.reject(new Error(`Unexpected request ${method ?? 'GET'} ${path}`));
   });
 }
@@ -97,6 +119,10 @@ it('requires both reviews and waits for server activation before showing the wor
   await user.click(screen.getByLabelText('I have reviewed the organization details'));
   expect(complete).toBeDisabled();
   await user.click(screen.getByLabelText('I understand how roles and customer access work'));
+  expect(screen.getAllByText('admin@example.test').length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/Advisory Team/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/Priya Shah — admin@example.test/).length).toBeGreaterThan(0);
+  expect(screen.getByText('External services — Not configured · Optional')).toBeVisible();
   await user.click(complete);
   await waitFor(() => {
     expect(save).toHaveBeenCalledTimes(1);
@@ -125,6 +151,7 @@ it('requires an explicit owner adoption before a v1 organization can complete se
   const owner = vi.spyOn(api, 'owner').mockResolvedValue(v1);
   let currentPolicyVersion = 7;
   vi.spyOn(api, 'all').mockImplementation(() => Promise.resolve([]));
+  vi.spyOn(api, 'resourceDirectory').mockResolvedValue({ resourceType: 'customer', items: [] });
   const request = vi.spyOn(api, 'request').mockImplementation((path, method) => {
     if (path === 'administration/customer-relationships?limit=100' && method === 'GET')
       return Promise.resolve({ policyVersion: currentPolicyVersion, items: [] });
@@ -135,7 +162,14 @@ it('requires an explicit owner adoption before a v1 organization can complete se
         policyVersion: 7,
         planHash: 'a'.repeat(64),
         alreadyInstalled: false,
-        changes: [{ kind: 'ADD_ROLE', objectId: 'default-role-dsa-case-manager', before: null, after: 'configured' }],
+        changes: [
+          {
+            kind: 'ADD_ROLE',
+            objectId: 'default-role-dsa-case-manager',
+            before: null,
+            after: 'dsa-case-manager|DSA / Case Manager|',
+          },
+        ],
         conflicts: [],
       });
     if (path === 'administration/default-access-pack/adopt' && method === 'POST') {
@@ -161,8 +195,17 @@ it('requires an explicit owner adoption before a v1 organization can complete se
 
   mount(api);
   const user = userEvent.setup();
-  const adopt = await screen.findByRole('button', { name: 'Apply recommended access update' });
-  expect(screen.getByRole('button', { name: 'Complete setup' })).toBeDisabled();
+  const adopt = await screen.findByRole('button', { name: 'Apply reviewed access update' });
+  expect(screen.getByText('Add recommended role: DSA / Case Manager')).toBeVisible();
+  expect(adopt).toBeDisabled();
+  expect(
+    request.mock.calls.filter(
+      ([requestPath, method]) =>
+        requestPath === 'administration/default-access-pack/adopt' && method === 'POST',
+    ),
+  ).toHaveLength(0);
+  await user.click(screen.getByLabelText('I have reviewed the recommended access changes'));
+  expect(adopt).toBeEnabled();
   await user.click(adopt);
   await waitFor(() => {
     expect(request).toHaveBeenCalledWith(
@@ -212,7 +255,7 @@ it('does not overwrite a customized v1 access model', async () => {
   const user = userEvent.setup();
   expect(await screen.findByText('Your customized access needs review')).toBeVisible();
   expect(
-    screen.queryByRole('button', { name: 'Apply recommended access update' }),
+    screen.queryByRole('button', { name: 'Apply reviewed access update' }),
   ).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Continue with current access' }));
   expect(await screen.findByText('Protected workspace')).toBeVisible();
