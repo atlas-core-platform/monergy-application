@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { FoundationProvider, WorkspaceIcon } from '@monergy/ui-foundation';
 import { AccessApiError, displayError } from './accessApi';
-import type { AccessRecord } from './accessApi';
+import type { AccessRecord, ResourceDirectoryItem } from './accessApi';
 import { localUat, useWorkspaceSession } from './workspaceSession';
 import { OnboardingContext } from './onboarding';
 import type {
@@ -25,12 +25,14 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
     roles: AccessRecord[];
     people: AccessRecord[];
     teams: AccessRecord[];
-    assignmentCount: number;
+    assignments: AccessRecord[];
+    customers: ResourceDirectoryItem[];
     packPlan: DefaultAccessPackPlan | null;
   } | null>(null);
   const [revision, setRevision] = useState(0);
   const [organizationReviewed, setOrganizationReviewed] = useState(false);
   const [accessReviewed, setAccessReviewed] = useState(false);
+  const [accessUpdateReviewed, setAccessUpdateReviewed] = useState(false);
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -78,8 +80,12 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
           policyVersion: state.policyVersion ?? 0,
           items: [],
         };
+        let customerDirectory: { resourceType: string; items: ResourceDirectoryItem[] } = {
+          resourceType: 'customer',
+          items: [],
+        };
         if (state.enabled && state.state !== 'Active') {
-          [roles, people, teams, assignments] = await Promise.all([
+          [roles, people, teams, assignments, customerDirectory] = await Promise.all([
             api.all('roles', controller.signal, state.policyVersion),
             api.all('members', controller.signal, state.policyVersion),
             api.all('groups', controller.signal, state.policyVersion),
@@ -91,6 +97,9 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                   controller.signal,
                 )
               : Promise.resolve({ policyVersion: state.policyVersion ?? 0, items: [] }),
+            state.customerRelationships
+              ? api.resourceDirectory('customer', controller.signal)
+              : Promise.resolve({ resourceType: 'customer', items: [] }),
           ]);
           if (assignments.policyVersion !== state.policyVersion)
             throw new AccessApiError(409, 'POLICY_VERSION_CONFLICT');
@@ -118,7 +127,8 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
             roles,
             people,
             teams,
-            assignmentCount: assignments.items.length,
+            assignments: assignments.items,
+            customers: customerDirectory.items,
             packPlan,
           });
           setError('');
@@ -152,13 +162,15 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
     setSnapshot(null);
     setOrganizationReviewed(false);
     setAccessReviewed(false);
+    setAccessUpdateReviewed(false);
+    setContinueWithExistingPolicy(false);
     setRequestId(crypto.randomUUID());
     setError('');
     setRevision((value) => value + 1);
   };
 
   const adoptAccessPack = async () => {
-    if (!packPlan || packPlan.conflicts.length > 0 || busy) return;
+    if (!packPlan || packPlan.conflicts.length > 0 || !accessUpdateReviewed || busy) return;
     setBusy(true);
     setError('');
     try {
@@ -205,6 +217,32 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
 
   const existingActive = state?.state === 'Active';
   const accessUpdateBlocked = Boolean(packPlan?.conflicts.length);
+  const roleLabel = (roleId?: string | null) =>
+    snapshot?.roles.find((role) => role.id === roleId)?.label ?? 'No business role';
+  const personLabel = (actorId?: string) =>
+    snapshot?.people.find((person) => person.actorId === actorId)?.normalizedEmail ??
+    'Person unavailable';
+  const customerLabel = (customerId?: string) =>
+    snapshot?.customers.find((customer) => customer.resourceId === customerId)?.displayName ??
+    'Customer unavailable';
+  const changeLabel = (change: DefaultAccessPackPlan['changes'][number]) => {
+    const before = change.before?.split('|');
+    const after = change.after?.split('|');
+    switch (change.kind) {
+      case 'ADD_ROLE':
+        return `Add recommended role: ${after?.[1] ?? 'configured role'}`;
+      case 'UPDATE_ROLE':
+        return `Update recommended role: ${before?.[1] ?? 'current role'} → ${after?.[1] ?? 'recommended role'}`;
+      case 'ADD_PERMISSION':
+        return `Add access permission: ${after?.[1] ?? 'recommended permission'}`;
+      case 'UPDATE_PERMISSION':
+        return `Update access permission: ${before?.[1] ?? 'current permission'} → ${after?.[1] ?? 'recommended permission'}`;
+      case 'SET_PACK_VERSION':
+        return `Recommended access model: version ${change.before ?? 'current'} → ${change.after ?? packPlan?.targetVersion ?? '2.0'}`;
+      default:
+        return 'Update the recommended access configuration';
+    }
+  };
   const roleGuidance: Record<string, string> = {
     customer: 'Use customer-owned documents and supported customer journeys.',
     'financial-advisor':
@@ -298,24 +336,51 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                     description="Monergy will not overwrite customized starter roles or permissions automatically. Review your existing access settings before adopting the recommended template."
                   />
                 ) : (
-                  <Alert
-                    showIcon
-                    type="info"
-                    title="Recommended access update available"
-                    description={`Update from version ${pack?.installedVersion ?? 'not installed'} to ${packPlan?.targetVersion ?? '2.0'}. Existing member assignments and organization-owned custom access are preserved by the owner.`}
-                    action={
-                      <Button
-                        type="primary"
-                        loading={busy}
-                        disabled={!packPlan || busy}
-                        onClick={() => {
-                          void adoptAccessPack();
+                  <>
+                    <Alert
+                      showIcon
+                      type="info"
+                      title="Recommended access update available"
+                      description={`Review the changes from version ${pack?.installedVersion ?? 'not installed'} to ${packPlan?.targetVersion ?? '2.0'}. Existing people, customer assignments and organization-owned custom access remain unchanged unless the reviewed plan says otherwise.`}
+                    />
+                    <section aria-label="Recommended access update review">
+                      <h3>Review changes</h3>
+                      <ul className="onboarding-roles">
+                        {(packPlan?.changes.length ?? 0) > 0 ? (
+                          packPlan?.changes.map((change, index) => (
+                            <li key={`${change.kind}-${index}`}>
+                              <span>{changeLabel(change)}</span>
+                            </li>
+                          ))
+                        ) : (
+                          <li>
+                            <span>No access-object changes are required.</span>
+                          </li>
+                        )}
+                      </ul>
+                      <Checkbox
+                        checked={accessUpdateReviewed}
+                        disabled={busy || !packPlan}
+                        onChange={(event) => {
+                          setAccessUpdateReviewed(event.target.checked);
                         }}
                       >
-                        Apply recommended access update
-                      </Button>
-                    }
-                  />
+                        I have reviewed the recommended access changes
+                      </Checkbox>
+                      <div>
+                        <Button
+                          type="primary"
+                          loading={busy}
+                          disabled={!packPlan || !accessUpdateReviewed || busy}
+                          onClick={() => {
+                            void adoptAccessPack();
+                          }}
+                        >
+                          Apply reviewed access update
+                        </Button>
+                      </div>
+                    </section>
+                  </>
                 )}
                 {existingActive && !pack?.ready && (
                   <Button
@@ -439,24 +504,34 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                         </span>
                       }
                     >
-                      <Descriptions
-                        column={1}
-                        size="small"
-                        items={[
-                          {
-                            key: 'people',
-                            label: 'People',
-                            children: String(snapshot.people.length),
-                          },
-                          {
-                            key: 'teams',
-                            label: 'Teams',
-                            children: snapshot.teams.length
-                              ? String(snapshot.teams.length)
-                              : 'None configured — optional',
-                          },
-                        ]}
-                      />
+                      <div aria-label="People configured for this organization">
+                        {snapshot.people.length ? (
+                          <ul>
+                            {snapshot.people.map((person) => (
+                              <li key={person.actorId ?? person.id}>
+                                <strong>{person.normalizedEmail ?? 'Person unavailable'}</strong>
+                                {' — '}
+                                {person.tenantAdmin ? 'Organization Administrator' : roleLabel(person.businessRoleId)}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>No additional people configured — optional</p>
+                        )}
+                      </div>
+                      <div aria-label="Teams configured for this organization">
+                        {snapshot.teams.length ? (
+                          <ul>
+                            {snapshot.teams.map((team) => (
+                              <li key={team.id}>
+                                {team.label ?? team.code ?? 'Team'} · {team.memberCount ?? 0} members
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p>None configured — optional</p>
+                        )}
+                      </div>
                       <p className="access-form-hint">
                         Teams organize people and do not grant access. You can continue without a
                         team.
@@ -469,10 +544,19 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                         </span>
                       }
                     >
-                      <p>
-                        <strong>{snapshot.assignmentCount}</strong>{' '}
-                        {snapshot.assignmentCount === 1 ? 'assignment' : 'assignments'} configured.
-                      </p>
+                      {snapshot.assignments.length ? (
+                        <ul aria-label="Configured customer assignments">
+                          {snapshot.assignments.map((assignment) => (
+                            <li key={assignment.id}>
+                              <strong>{customerLabel(assignment.customerId)}</strong>
+                              {' — '}
+                              {personLabel(assignment.actorId)}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>No customer assignments configured — optional</p>
+                      )}
                       <p className="access-form-hint">
                         Customer assignments are required only for delegated customer workflows.
                         Customer self-access follows verified ownership.
@@ -486,17 +570,77 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                     <Alert
                       type="info"
                       showIcon
-                      title="No external service is required to activate this organization"
-                      description="This test environment supports document/manual workflows without an external provider connection. Unsupported or unconfigured providers are not shown as connected."
+                      title="External services — Not configured · Optional"
+                      description="No external service is required to activate this organization. This test environment supports document/manual workflows without an external provider connection; unsupported services are not presented as connected."
                     />
                   </Card>
 
                   <Card>
                     <div className="onboarding-step">07</div>
                     <h2>Review and complete setup</h2>
-                    <p>
-                      Recommended access is owner-confirmed. Review any omitted teams, customer
-                      assignments or external services above before activating the organization.
+                    <Descriptions
+                      column={1}
+                      size="small"
+                      items={[
+                        { key: 'organization', label: 'Organization', children: state.organizationName },
+                        {
+                          key: 'administrator',
+                          label: 'Organization Administrator',
+                          children: state.initialAdministratorEmail,
+                        },
+                        {
+                          key: 'access',
+                          label: 'Recommended access',
+                          children: pack?.ready ? 'Version 2.0 confirmed' : 'Needs attention',
+                        },
+                        {
+                          key: 'people',
+                          label: 'People',
+                          children: snapshot.people.length
+                            ? snapshot.people
+                                .map(
+                                  (person) =>
+                                    `${person.normalizedEmail ?? 'Person unavailable'} (${
+                                      person.tenantAdmin
+                                        ? 'Organization Administrator'
+                                        : roleLabel(person.businessRoleId)
+                                    })`,
+                                )
+                                .join(', ')
+                            : 'No additional people configured',
+                        },
+                        {
+                          key: 'teams',
+                          label: 'Teams',
+                          children: snapshot.teams.length
+                            ? snapshot.teams
+                                .map((team) => team.label ?? team.code ?? 'Team')
+                                .join(', ')
+                            : 'None configured — optional',
+                        },
+                        {
+                          key: 'assignments',
+                          label: 'Customer assignments',
+                          children: snapshot.assignments.length
+                            ? snapshot.assignments
+                                .map(
+                                  (assignment) =>
+                                    `${customerLabel(assignment.customerId)} — ${personLabel(assignment.actorId)}`,
+                                )
+                                .join(', ')
+                            : 'None configured — optional',
+                        },
+                        {
+                          key: 'services',
+                          label: 'External services',
+                          children: 'Not configured — optional',
+                        },
+                      ]}
+                    />
+                    <p className="access-form-hint">
+                      Recommended access is owner-confirmed. Teams, customer assignments and external
+                      services shown as optional may be completed later when a supported workflow
+                      requires them.
                     </p>
                   </Card>
 
