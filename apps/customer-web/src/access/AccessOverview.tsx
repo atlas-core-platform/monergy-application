@@ -44,10 +44,10 @@ export function AccessOverview({
       <header className="access-page-header">
         <div>
           <h1>Access overview</h1>
-          <p>Manage users, configure business access and review changes in this tenant.</p>
+          <p>Manage people, configure business access and review changes in this organization.</p>
         </div>
         <Button href="/access/users" type="primary" icon={<WorkspaceIcon name="users" size={17} />}>
-          Manage users
+          Manage people
         </Button>
       </header>
       {error && (
@@ -72,10 +72,10 @@ export function AccessOverview({
         {(
           [
             {
-              label: 'Users',
+              label: 'People',
               href: '/access/users',
               icon: 'users',
-              detail: 'People in this tenant',
+              detail: 'People in this organization',
             },
             {
               label: 'Roles',
@@ -84,7 +84,7 @@ export function AccessOverview({
               detail: 'Reusable access assignments',
             },
             {
-              label: 'Permissions',
+              label: 'Access Permissions',
               href: '/access/permissions',
               icon: 'check',
               detail: 'Defined actions and scope',
@@ -146,10 +146,10 @@ export function AccessOverview({
               ],
               [
                 '02',
-                'Add and manage users',
-                'Create one user or import a team, then assign a business role.',
+                'Add and manage people',
+                'Add one person or import a team, then assign a business role.',
                 '/access/users',
-                'Open users',
+                'Open people',
               ],
               [
                 '03',
@@ -180,7 +180,7 @@ export function AccessOverview({
               business role. They receive no role-based business permissions.
             </p>
           ) : (
-            <p>Review role assignments in Users to understand each person’s configured access.</p>
+            <p>Review role assignments in People to understand each person’s configured access.</p>
           )}
           <a href="/access/users">
             Review assignments <WorkspaceIcon name="arrow" size={15} />
@@ -195,7 +195,7 @@ export function AccessOverview({
             <strong>Groups organize people.</strong> Joining a group does not grant access.
           </p>
           <p>
-            <strong>Administration is separate.</strong> Tenant administrators manage access;
+            <strong>Administration is separate.</strong> Organization Administrators manage access;
             business data still requires a role.
           </p>
         </aside>
