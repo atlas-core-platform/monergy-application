@@ -74,8 +74,8 @@ export default function EvidenceExperience() {
         if (!signal?.aborted) {
           setLibraryError(
             failure instanceof AccessApiError && failure.status === 403
-              ? 'You don\'t have access to these documents. Contact your organization administrator.'
-              : 'We couldn\'t load your documents. Try again.',
+              ? "You don't have access to these documents. Contact your organization administrator."
+              : "We couldn't load your documents. Try again.",
           );
         }
       } finally {
@@ -142,10 +142,10 @@ export default function EvidenceExperience() {
     } catch (failure) {
       setError(
         failure instanceof AccessApiError && failure.status === 403
-          ? 'You don\'t have permission to upload documents. Contact your organization administrator.'
+          ? "You don't have permission to upload documents. Contact your organization administrator."
           : failure instanceof AccessApiError && failure.status === 409
-            ? 'We couldn\'t confirm this upload because the same request was used for different content. Choose the file again.'
-            : 'We couldn\'t confirm the upload. Try again to check the same request.',
+            ? "We couldn't confirm this upload because the same request was used for different content. Choose the file again."
+            : "We couldn't confirm the upload. Try again to check the same request.",
       );
     } finally {
       setBusy(false);
@@ -181,7 +181,7 @@ export default function EvidenceExperience() {
       }
       if (!['Completed', 'Failed', 'Cancelled'].includes(view.job.state))
         setProcessingError(
-          'We\'re still extracting details. Close this view and reopen the document to check again.',
+          "We're still extracting details. Close this view and reopen the document to check again.",
         );
     } catch (failure) {
       setProcessingError(
@@ -189,7 +189,7 @@ export default function EvidenceExperience() {
           ? 'You no longer have access to extract details from this document.'
           : failure instanceof AccessApiError && failure.status === 422
             ? 'Extracting details is currently available only for structured text files.'
-            : 'We couldn\'t extract details from this document. Your financial profile has not changed.',
+            : "We couldn't extract details from this document. Your financial profile has not changed.",
       );
     } finally {
       controller.abort();
@@ -454,7 +454,6 @@ export default function EvidenceExperience() {
                 <dt>Uploaded</dt>
                 <dd>{formatDate(selectedEvidence.createdAt)}</dd>
               </div>
-
             </dl>
             <details className="product-review-note">
               <summary>Technical details</summary>
