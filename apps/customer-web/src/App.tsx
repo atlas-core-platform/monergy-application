@@ -127,7 +127,7 @@ function RouteContent() {
     window.location.pathname === '/operations'
   )
     return (
-      <Suspense fallback={<main aria-busy="true">Loading access management…</main>}>
+      <Suspense fallback={<main aria-busy="true">Loading Organization Settings…</main>}>
         <AccessExperience path={window.location.pathname} embedded />
       </Suspense>
     );
@@ -207,7 +207,7 @@ function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
   return (
     <WorkspaceShell
       {...props}
-      context={product?.customerName ?? (session ? `Tenant ${session.tenantId}` : undefined)}
+      context={product?.customerName ?? (session ? 'Organization Settings' : undefined)}
       actions={
         session ? (
           <Button
@@ -281,7 +281,7 @@ function WorkspaceApplication() {
     ) ?? navigation[0];
   useEffect(() => {
     document.title = inAdministration
-      ? `${current?.label ?? 'Overview'} · Access Management · Monergy`
+      ? `${current?.label ?? 'Overview'} · Organization Settings · Monergy`
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
   const productProtected = ['/', '/evidence', '/search', '/reports'].includes(path);
