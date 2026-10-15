@@ -117,10 +117,14 @@ export function AccessEditor({
   };
   const noun =
     area === 'members'
-      ? 'user'
-      : area === 'resource-grants'
-        ? 'resource access'
-        : area.slice(0, -1);
+      ? 'person'
+      : area === 'groups'
+        ? 'team'
+        : area === 'permissions'
+          ? 'access permission'
+          : area === 'resource-grants'
+            ? 'resource access'
+            : area.slice(0, -1);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -360,7 +364,7 @@ export function AccessEditor({
           identity: values.businessRoleId ?? '',
         },
         { label: 'Account status', value: values.active ? 'Active' : 'Disabled' },
-        { label: 'Tenant administrator', value: values.tenantAdmin ? 'Yes' : 'No' },
+        { label: 'Organization Administrator', value: values.tenantAdmin ? 'Yes' : 'No' },
       ];
     if (area === 'groups' && mode === 'people')
       return [
@@ -402,7 +406,7 @@ export function AccessEditor({
               value: list(
                 (values.grants ?? []).map(
                   (grant) =>
-                    `${capabilityName(grant.capabilityId)} · ${grant.scope === 'Tenant' ? 'Tenant-wide' : 'Specific resources'}`,
+                    `${capabilityName(grant.capabilityId)} · ${grant.scope === 'Tenant' ? 'Organization-wide' : 'Specific resources'}`,
                 ),
               ),
             },
@@ -480,7 +484,7 @@ export function AccessEditor({
                           <li key={`${grant.capabilityId}:${grant.scope}`}>
                             {capabilityName(grant.capabilityId)} ·{' '}
                             {grant.scope === 'Tenant'
-                              ? 'Tenant-wide'
+                              ? 'Organization-wide'
                               : 'Specific resources (requires assignment)'}
                           </li>
                         ))}
@@ -534,7 +538,7 @@ export function AccessEditor({
                 : `Review new ${noun}`
             : record
               ? area === 'members'
-                ? 'Manage user'
+                ? 'Manage person'
                 : (record.label ?? 'Resource access')
               : `Create ${noun}`
         }
@@ -642,10 +646,10 @@ export function AccessEditor({
               <Alert
                 type="warning"
                 showIcon
-                title="Effect on this user"
+                title="Effect on this person"
                 description={
                   <>
-                    <p>Saving changes invalidates this user’s existing sessions.</p>
+                    <p>Saving changes invalidates this person’s existing sessions.</p>
                     {original?.businessRoleId !== confirmation.values?.businessRoleId && (
                       <p>
                         Changing the business role removes customer assignments and individual
@@ -653,11 +657,11 @@ export function AccessEditor({
                       </p>
                     )}
                     {!confirmation.values?.active && (
-                      <p>This user will be unable to access the tenant until reactivated.</p>
+                      <p>This person will be unable to access the organization until reactivated.</p>
                     )}
                     {confirmation.values?.tenantAdmin && (
                       <p>
-                        This user will be able to administer users and access across this tenant.
+                        This person will be able to administer people and access across this organization.
                       </p>
                     )}
                   </>
@@ -671,7 +675,7 @@ export function AccessEditor({
             {area === 'members'
               ? 'Edit account access, then review the exact changes before saving.'
               : area === 'groups'
-                ? 'Groups organize people. They do not grant roles or business access.'
+                ? 'Teams organize people. They do not grant roles or business access.'
                 : 'Make access clear and intentional. Review your change before saving.'}
           </p>
 
@@ -778,7 +782,7 @@ export function AccessEditor({
                           >
                             <Select
                               options={[
-                                { value: 'Tenant', label: 'Tenant-wide' },
+                                { value: 'Tenant', label: 'Organization-wide' },
                                 { value: 'Resource', label: 'Specific resources' },
                               ]}
                             />
@@ -814,7 +818,7 @@ export function AccessEditor({
                     <dl className="access-identity">
                       <dt>Email address</dt>
                       <dd>{record?.normalizedEmail ?? 'Not available'}</dd>
-                      <dt>User reference</dt>
+                      <dt>Person reference</dt>
                       <dd>{record?.actorId}</dd>
                     </dl>
                     <p className="access-form-hint">Identity details are read-only here.</p>
@@ -832,7 +836,7 @@ export function AccessEditor({
                       <Switch />
                     </Form.Item>
                     <p className="access-form-hint">
-                      An inactive user cannot access this tenant. Saving a change invalidates
+                      An inactive person cannot access this organization. Saving a change invalidates
                       existing sessions.
                     </p>
                   </section>
@@ -847,7 +851,7 @@ export function AccessEditor({
                       />
                     </Form.Item>
                     <p className="access-form-hint">
-                      One business role per user. Changing it removes customer assignments and
+                      One business role per person. Changing it removes customer assignments and
                       individual resource grants.
                     </p>
                     {configuredPermissions}
@@ -856,21 +860,21 @@ export function AccessEditor({
                     <h3 id="user-authority">Administrative authority</h3>
                     <Form.Item
                       name="tenantAdmin"
-                      label="Tenant administrator"
+                      label="Organization Administrator"
                       valuePropName="checked"
                     >
                       <Switch />
                     </Form.Item>
                     <p className="access-form-hint">
-                      Allows administration of this tenant. Business data still requires a business
+                      Allows administration of this organization. Business data still requires a business
                       role and applicable resource grants.
                     </p>
                   </section>
                   <section className="access-editor-section" aria-labelledby="user-groups">
-                    <h3 id="user-groups">Group membership</h3>
+                    <h3 id="user-groups">Team membership</h3>
                     <p className="access-form-hint">
-                      Review and manage existing membership in <a href="/access/groups">Groups</a>.
-                      Group membership does not grant access.
+                      Review and manage existing membership in <a href="/access/groups">Teams</a>.
+                      Team membership does not grant access.
                     </p>
                   </section>
                 </>
