@@ -355,7 +355,10 @@ public sealed class BoundaryTests
     private static bool HasIgnoredSegment(string path)
     {
         var relative = Path.GetRelativePath(RepositoryRoot, path).Replace('\\', '/');
-        return relative.Split('/').Any(segment => segment is ".git" or ".artifacts" or ".toolcache" or "bin" or "node_modules" or "obj");
+        if (relative.StartsWith("build/uat/dependencies/source/", StringComparison.Ordinal))
+            return true;
+        return relative.Split('/').Any(segment =>
+            segment is ".git" or ".artifacts" or ".toolcache" or "bin" or "node_modules" or "obj");
     }
 
     private static bool IsUnderRoot(string path, string root) =>
