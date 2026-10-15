@@ -1,9 +1,6 @@
 name: Candidate readiness
 
 on:
-  push:
-    branches:
-      - delivery/t1-app03-topology-and-language
   workflow_dispatch:
     inputs:
       verification_mode:
