@@ -103,6 +103,13 @@ export default function EvidenceExperience() {
       controller.abort();
     };
   }, [loadLibrary]);
+  useEffect(() => {
+    if (!canRead || evidence.length === 0 || selectedEvidence) return;
+    const documentVersion = new URLSearchParams(window.location.search).get('documentVersion');
+    if (!documentVersion) return;
+    const source = evidence.find((item) => item.documentVersionId === documentVersion);
+    if (source) setSelectedEvidence(source);
+  }, [canRead, evidence, selectedEvidence]);
   const visibleEvidence = useMemo(() => {
     const term = query.trim().toLocaleLowerCase();
     return evidence.filter(
