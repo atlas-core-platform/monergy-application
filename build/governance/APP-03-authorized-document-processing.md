@@ -31,15 +31,15 @@ Access Management remains the policy owner. Customer self-access requires owners
 
 ## User experience
 
-Processing is a progressive action within Evidence, not a new navigation domain. The provenance drawer exposes **Review processing** only for supported evidence and authorized users. A separate review drawer explains the execution boundary before scheduling, presents owner progress, and labels all extracted values as non-authoritative candidates.
+Processing remains a progressive action within **Documents**, not a new navigation domain. The product uses customer language such as **Document details**, **Extract details**, and **Information to review** while preserving technical identifiers only under secondary details. System processing, human review and professional verification remain distinct concepts.
 
-The UI is keyboard operable, responsive, compatible with reduced motion, and does not imply that a candidate changed the financial profile.
+Progress indicators are indeterminate unless the underlying operation reports measured progress. Raw owner names, internal failure codes and job-engine terminology are not primary customer copy. The UI remains keyboard operable, responsive, compatible with reduced motion, and does not imply that extracted information changed the financial profile.
 
 ## LOCAL/UAT composition
 
-The local profile upgrades through the Access Management administration API by retaining the existing `evidence-read` permission and adding a narrowly scoped `document-processing` permission to the default customer role. Existing tenant policy is not replaced. Runtime content, jobs, processing records, and facts remain ephemeral.
+For this T1-02 corrective UAT only, the existing LOCAL application fixture continues to add the narrowly scoped `document-processing` permission to its customer test role through the Access Management administration API so APP-03 can be exercised end to end. That fixture state and the `product-policy-v2-initialized` marker are **not** a Default Access Pack v2 receipt. T1-01 keeps the document-processing permission defined but unmapped until this corrected APP-03 candidate is accepted; T1-03 will consume the reviewed Access Management owner flow rather than relabel this fixture. Runtime content, jobs, processing records, and facts remain ephemeral.
 
-Document Intelligence and Job Management retain their asynchronous domain responsibilities but use ASP.NET Core Web hosts for the authenticated workload-only execute and status control planes required by this integrated slice. This is a hosting-shape change, not an ownership transfer; neither service exposes these controls directly to the browser.
+Document Intelligence and Job Management retain **Microsoft.NET.Sdk.Worker** primary hosts and Generic Host lifecycles. Each may expose a bounded secondary loopback HTTP adapter for health plus the authenticated LOCAL/UAT workload-only execute/status controls required by this integrated slice. The adapter reuses the outer worker's authoritative application/repository/registry instances; it does not create a second business-state owner or transfer ownership. Neither service exposes these controls directly to the browser.
 
 The Docker acceptance proves:
 

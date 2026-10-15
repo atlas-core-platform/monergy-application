@@ -347,21 +347,22 @@ test('customer entry stays isolated from administration and confirms reviewed ev
     mimeType: 'text/plain',
     buffer: Buffer.from('customer evidence'),
   });
-  const review = page.getByRole('dialog', { name: 'Review evidence upload' });
+  const review = page.getByRole('dialog', { name: 'Review document upload' });
   await expect(review).toContainText('Reference Customer');
-  await expect(review).toContainText('Current LOCAL/UAT runtime only');
+  await expect(review).toContainText('Test environment · Temporary data');
   expect(writes).toHaveLength(0);
-  await review.getByRole('button', { name: 'Upload evidence' }).click();
+  await review.getByRole('button', { name: 'Upload document' }).click();
   const receipt = page.locator('article.product-receipt').filter({ hasText: 'statement.txt' });
-  await expect(receipt.getByText('VERIFIED', { exact: true })).toBeVisible();
-  await receipt.getByRole('button', { name: 'View provenance for statement.txt' }).click();
-  const provenance = page.getByRole('dialog', { name: 'Evidence provenance' });
-  await expect(provenance).toContainText('document-version-');
-  await expect(provenance).toContainText('Raw document content is not exposed');
-  await provenance.getByRole('button', { name: 'Review processing' }).click();
-  const processing = page.getByRole('dialog', { name: 'Review document processing' });
-  await expect(processing).toContainText('Candidate facts only');
-  await processing.getByRole('button', { name: 'Start processing' }).click();
+  await expect(receipt.getByText('UPLOADED', { exact: true })).toBeVisible();
+  await receipt.getByRole('button', { name: 'View document details for statement.txt' }).click();
+  const details = page.getByRole('dialog', { name: 'Document details' });
+  await expect(details).toContainText('Technical details');
+  await details.getByText('Technical details').click();
+  await expect(details).toContainText('document-version-');
+  await details.getByRole('button', { name: 'Extract details' }).click();
+  const processing = page.getByRole('dialog', { name: 'Extract and review details' });
+  await expect(processing).toContainText('Review before adding anything to your financial profile');
+  await processing.getByRole('button', { name: 'Extract details' }).click();
   await expect(processing).toContainText('Employment income');
   await expect(processing).toContainText('98% confidence');
   expect(writes).toHaveLength(1);

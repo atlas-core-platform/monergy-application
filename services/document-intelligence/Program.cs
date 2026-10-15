@@ -1,23 +1,25 @@
 using Monergy.Platform;
 using Monergy.Services.DocumentIntelligence;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 const string serviceName = "Document Intelligence Service";
 
-var builder = WebApplication.CreateBuilder(args);
-builder.AddMonergyPlatform(serviceName);
+var builder = Host.CreateApplicationBuilder(args);
+builder.AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false);
 builder.Services.AddHealthChecks();
-if (ReferenceAdapterGuard.IsSelected(builder.Configuration))
+var referenceAdapter = ReferenceAdapterGuard.IsSelected(builder.Configuration);
+var documentProcessing =
+    referenceAdapter &&
+    !string.IsNullOrWhiteSpace(builder.Configuration["Monergy:DocumentProcessing:ControlToken"]);
+var secondaryHttp = TenantBoundaryOptions.Selected(builder.Configuration) || documentProcessing;
+
+if (referenceAdapter)
 {
     builder.Services.AddDocumentIntelligenceReferenceAdapters(builder.Configuration);
 }
 builder.Services.AddHostedService<StartupWorker>();
+if (secondaryHttp)
+    builder.Services.AddHostedService<DocumentIntelligenceHttpAdapterWorker>();
 
-var app = builder.Build();
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
-app.MapHealthChecks("/health/ready");
-if (ReferenceAdapterGuard.IsSelected(builder.Configuration))
-    app.MapDocumentProcessing(builder.Configuration);
-await app.RunAsync();
+await builder.Build().RunAsync();
 
 public partial class Program;

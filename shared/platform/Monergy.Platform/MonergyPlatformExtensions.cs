@@ -11,7 +11,10 @@ namespace Monergy.Platform;
 
 public static class MonergyPlatformExtensions
 {
-    public static TBuilder AddMonergyPlatform<TBuilder>(this TBuilder builder, string serviceName)
+    public static TBuilder AddMonergyPlatform<TBuilder>(
+        this TBuilder builder,
+        string serviceName,
+        bool hostWorkerTenantBoundary = true)
         where TBuilder : IHostApplicationBuilder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
@@ -21,8 +24,10 @@ public static class MonergyPlatformExtensions
             builder.Services.AddSingleton(TenantBoundaryOptions.Read(builder.Configuration, builder.Environment, serviceName));
             builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
             builder.Services.AddHttpContextAccessor();
-            if (builder is WebApplicationBuilder) builder.Services.AddTransient<IStartupFilter, TenantBoundaryStartupFilter>();
-            else builder.Services.AddHostedService<TenantBoundaryWorkerHost>();
+            if (builder is WebApplicationBuilder)
+                builder.Services.AddTransient<IStartupFilter, TenantBoundaryStartupFilter>();
+            else if (hostWorkerTenantBoundary)
+                builder.Services.AddHostedService<TenantBoundaryWorkerHost>();
         }
 
         builder.Logging.ClearProviders();

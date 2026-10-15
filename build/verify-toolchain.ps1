@@ -44,6 +44,12 @@ function Test-ProhibitedImport {
     $Content -match '(?m)import\s+\*\s+as\s+'
 }
 
+function Test-WorkerPrimaryProgram {
+    param([string]$Content)
+    $Content.Contains('Host.CreateApplicationBuilder(args)') -and
+        -not $Content.Contains('WebApplication.CreateBuilder(args)')
+}
+
 function Test-HostedOciMatrix {
     param([pscustomobject]$Matrix)
     @($Matrix.rows).Count -eq 12 -and
@@ -76,6 +82,8 @@ if ($SelfTest) {
         'trailing important utility rejected' = (Test-ProhibitedStyle '<div className="text-red-600!" />')
         'wildcard Ant import rejected' = (Test-ProhibitedImport "import * as Ant from 'antd'")
         'named Ant import accepted' = (-not (Test-ProhibitedImport "import { Button } from 'antd'"))
+        'generic worker primary host accepted' = (Test-WorkerPrimaryProgram 'var builder = Host.CreateApplicationBuilder(args);')
+        'web primary host rejected for worker' = (-not (Test-WorkerPrimaryProgram 'var builder = WebApplication.CreateBuilder(args);'))
         'exact set rejects duplicate' = (-not (Test-ExactSet @('a', 'a') @('a', 'b')))
         'complete OCI matrix accepted' = (Test-HostedOciMatrix ([pscustomobject]@{
             expectedServices = 12; buildPass = 12; sbomPass = 12; scanPass = 12; digestCount = 12; published = $false
@@ -137,9 +145,9 @@ Add-Check 'Committed pnpm lock' (Test-Path -LiteralPath (Join-Path $RepositoryRo
 
 $expectedServices = [ordered]@{
     'customer-identity' = 'Microsoft.NET.Sdk.Web'; 'consent' = 'Microsoft.NET.Sdk.Web'; 'integration-gateway' = 'Microsoft.NET.Sdk.Web'
-    'evidence' = 'Microsoft.NET.Sdk.Web'; 'document-intelligence' = 'Microsoft.NET.Sdk.Web'; 'financial-profile' = 'Microsoft.NET.Sdk.Web'
+    'evidence' = 'Microsoft.NET.Sdk.Web'; 'document-intelligence' = 'Microsoft.NET.Sdk.Worker'; 'financial-profile' = 'Microsoft.NET.Sdk.Web'
     'financial-rules' = 'Microsoft.NET.Sdk.Web'; 'search-retrieval' = 'Microsoft.NET.Sdk.Web'; 'ai-intelligence' = 'Microsoft.NET.Sdk.Web'
-    'reporting' = 'Microsoft.NET.Sdk.Web'; 'job-management' = 'Microsoft.NET.Sdk.Web'; 'audit' = 'Microsoft.NET.Sdk.Worker'
+    'reporting' = 'Microsoft.NET.Sdk.Web'; 'job-management' = 'Microsoft.NET.Sdk.Worker'; 'audit' = 'Microsoft.NET.Sdk.Worker'
 }
 $catalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 Add-Check 'Twelve canonical services' (Test-ExactSet @($catalog.services.id) @($expectedServices.Keys)) '12/12 R3 service identities'
@@ -234,6 +242,7 @@ $hostSplitValid = $true
 $serviceReferenceValid = $true
 $migrationOwnershipValid = $true
 $healthOnlyValid = $true
+$workerPrimaryValid = $true
 foreach ($entry in $expectedServices.GetEnumerator()) {
     $serviceRoot = Join-Path $RepositoryRoot "services/$($entry.Key)"
     $projectPath = @(Get-ChildItem -LiteralPath $serviceRoot -Filter '*.csproj' -File)
@@ -291,8 +300,46 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
         }
     } else {
         $healthOnlyValid = $healthOnlyValid -and $program.Contains('AddHostedService<StartupWorker>') -and $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\('
+        $workerPrimaryValid = $workerPrimaryValid -and (Test-WorkerPrimaryProgram $program)
+        if ($entry.Key -ceq 'job-management') {
+            $adapterPath = Join-Path $serviceRoot 'JobManagementHttpAdapterWorker.cs'
+            $adapter = if (Test-Path -LiteralPath $adapterPath) { Get-Content -LiteralPath $adapterPath -Raw } else { '' }
+            $workerPrimaryValid = $workerPrimaryValid -and
+                $program.Contains('AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false)') -and
+                $program.Contains('AddHostedService<JobManagementHttpAdapterWorker>') -and
+                $adapter.Contains('WebApplication.CreateSlimBuilder()') -and
+                $adapter.Contains('TenantAccessIntegration.LoopbackRoot') -and
+                $adapter.Contains('builder.WebHost.UseUrls(endpoint.ToString())') -and
+                $adapter.Contains('ownerServices.GetRequiredService<TenantBoundaryOptions>()') -and
+                $adapter.Contains('ownerServices.GetRequiredService<TenantAccessClient>()') -and
+                $adapter.Contains('app.UseMiddleware<TenantBoundaryMiddleware>()') -and
+                $adapter.Contains('ownerServices.GetRequiredService<HealthCheckService>()') -and
+                $adapter.Contains('app.MapHealthChecks("/health/ready")') -and
+                $adapter.Contains('ownerServices.GetRequiredService<JobManagementApplication>()') -and
+                $adapter.Contains('ownerServices.GetRequiredService<IJobRepository>()') -and
+                $adapter.Contains('MapDocumentProcessingJobs(configuration)')
+        }
+        if ($entry.Key -ceq 'document-intelligence') {
+            $adapterPath = Join-Path $serviceRoot 'DocumentIntelligenceHttpAdapterWorker.cs'
+            $adapter = if (Test-Path -LiteralPath $adapterPath) { Get-Content -LiteralPath $adapterPath -Raw } else { '' }
+            $workerPrimaryValid = $workerPrimaryValid -and
+                $program.Contains('AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false)') -and
+                $program.Contains('AddHostedService<DocumentIntelligenceHttpAdapterWorker>') -and
+                $adapter.Contains('WebApplication.CreateSlimBuilder()') -and
+                $adapter.Contains('TenantAccessIntegration.LoopbackRoot') -and
+                $adapter.Contains('builder.WebHost.UseUrls(endpoint.ToString())') -and
+                $adapter.Contains('ownerServices.GetRequiredService<TenantBoundaryOptions>()') -and
+                $adapter.Contains('ownerServices.GetRequiredService<TenantAccessClient>()') -and
+                $adapter.Contains('app.UseMiddleware<TenantBoundaryMiddleware>()') -and
+                $adapter.Contains('ownerServices.GetRequiredService<HealthCheckService>()') -and
+                $adapter.Contains('app.MapHealthChecks("/health/ready")') -and
+                $adapter.Contains('ownerServices.GetRequiredService<DocumentProcessingApplication>()') -and
+                $adapter.Contains('ownerServices.GetRequiredService<IDocumentProcessingRepository>()') -and
+                $adapter.Contains('MapDocumentProcessing(configuration)')
+        }
     }
 }
+Add-Check 'Worker primary lifecycle and bounded secondary adapters' $workerPrimaryValid 'All primary workers use Generic Host; Job Management and Document Intelligence expose bounded secondary HTTP adapters using outer business instances'
 Add-Check 'Evidence-based responsibility split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 9 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 3) 'Catalog retains nine HTTP and three primary worker responsibilities; governed control-plane adapters do not transfer ownership'
 Add-Check 'No service-to-service project references' $serviceReferenceValid 'Every service references Platform exactly once, Contracts zero or one time, and no other project; service/test/app and duplicate references are forbidden'
 Add-Check $(if ($D10ForwardRegression) { 'D10-bounded service-owned migrations' } elseif ($D09ForwardRegression) { 'D09-bounded service-owned migrations' } else { 'Empty service-owned migrations' }) $migrationOwnershipValid $(if ($D10ForwardRegression) { 'Historical D09 and Job Management cohort; separately hash-verified LOCAL owner migrations excluded from historical counts' } elseif ($D09ForwardRegression) { 'Historical five-service cohort plus separately hash-verified LOCAL owner overlays' } else { 'Historical baseline remains empty after separately hash-verified LOCAL owner overlays' })

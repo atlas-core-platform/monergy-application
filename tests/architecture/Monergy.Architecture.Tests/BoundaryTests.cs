@@ -29,13 +29,13 @@ public sealed class BoundaryTests
             ["consent"] = "Microsoft.NET.Sdk.Web",
             ["integration-gateway"] = "Microsoft.NET.Sdk.Web",
             ["evidence"] = "Microsoft.NET.Sdk.Web",
-            ["document-intelligence"] = "Microsoft.NET.Sdk.Web",
+            ["document-intelligence"] = "Microsoft.NET.Sdk.Worker",
             ["financial-profile"] = "Microsoft.NET.Sdk.Web",
             ["financial-rules"] = "Microsoft.NET.Sdk.Web",
             ["search-retrieval"] = "Microsoft.NET.Sdk.Web",
             ["ai-intelligence"] = "Microsoft.NET.Sdk.Web",
             ["reporting"] = "Microsoft.NET.Sdk.Web",
-            ["job-management"] = "Microsoft.NET.Sdk.Web",
+            ["job-management"] = "Microsoft.NET.Sdk.Worker",
             ["audit"] = "Microsoft.NET.Sdk.Worker",
         };
 
@@ -56,6 +56,44 @@ public sealed class BoundaryTests
             var project = LoadServiceProject(serviceId);
             Assert.Equal(ExpectedSdk[serviceId], project.Root?.Attribute("Sdk")?.Value);
         }
+    }
+
+    [Fact]
+    public void WorkerPrimaryHostsUseGenericHostAndBoundedSecondaryAdapters()
+    {
+        foreach (var serviceId in new[] { "document-intelligence", "job-management", "audit" })
+        {
+            var program = File.ReadAllText(Path.Combine(ServicesRoot, serviceId, "Program.cs"));
+            Assert.Contains("Host.CreateApplicationBuilder(args)", program, StringComparison.Ordinal);
+            Assert.DoesNotContain("WebApplication.CreateBuilder(args)", program, StringComparison.Ordinal);
+        }
+
+        var documentProgram = File.ReadAllText(Path.Combine(ServicesRoot, "document-intelligence", "Program.cs"));
+        var documentAdapter = File.ReadAllText(Path.Combine(
+            ServicesRoot, "document-intelligence", "DocumentIntelligenceHttpAdapterWorker.cs"));
+        Assert.Contains("AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false)", documentProgram, StringComparison.Ordinal);
+        Assert.Contains("AddHostedService<DocumentIntelligenceHttpAdapterWorker>()", documentProgram, StringComparison.Ordinal);
+        Assert.Contains("TenantAccessIntegration.LoopbackRoot", documentAdapter, StringComparison.Ordinal);
+        Assert.Contains("builder.WebHost.UseUrls(endpoint.ToString())", documentAdapter, StringComparison.Ordinal);
+        Assert.Contains("app.UseMiddleware<TenantBoundaryMiddleware>()", documentAdapter, StringComparison.Ordinal);
+        Assert.Contains("ownerServices.GetRequiredService<HealthCheckService>()", documentAdapter, StringComparison.Ordinal);
+        Assert.Contains("app.MapHealthChecks(\"/health/ready\")", documentAdapter, StringComparison.Ordinal);
+        Assert.Contains("ownerServices.GetRequiredService<DocumentProcessingApplication>()", documentAdapter, StringComparison.Ordinal);
+        Assert.Contains("ownerServices.GetRequiredService<IDocumentProcessingRepository>()", documentAdapter, StringComparison.Ordinal);
+
+        var jobProgram = File.ReadAllText(Path.Combine(ServicesRoot, "job-management", "Program.cs"));
+        var jobAdapter = File.ReadAllText(Path.Combine(
+            ServicesRoot, "job-management", "JobManagementHttpAdapterWorker.cs"));
+        Assert.Contains("AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false)", jobProgram, StringComparison.Ordinal);
+        Assert.Contains("AddHostedService<JobManagementHttpAdapterWorker>()", jobProgram, StringComparison.Ordinal);
+        Assert.Contains("TenantAccessIntegration.LoopbackRoot", jobAdapter, StringComparison.Ordinal);
+        Assert.Contains("builder.WebHost.UseUrls(endpoint.ToString())", jobAdapter, StringComparison.Ordinal);
+        Assert.Contains("app.UseMiddleware<TenantBoundaryMiddleware>()", jobAdapter, StringComparison.Ordinal);
+        Assert.Contains("ownerServices.GetRequiredService<HealthCheckService>()", jobAdapter, StringComparison.Ordinal);
+        Assert.Contains("app.MapHealthChecks(\"/health/ready\")", jobAdapter, StringComparison.Ordinal);
+        Assert.Contains("ownerServices.GetRequiredService<JobManagementApplication>()", jobAdapter, StringComparison.Ordinal);
+        Assert.Contains("ownerServices.GetRequiredService<IJobRepository>()", jobAdapter, StringComparison.Ordinal);
+        Assert.Contains("ownerServices.GetRequiredService<DocumentProcessingJobRegistry>()", jobAdapter, StringComparison.Ordinal);
     }
 
     [Fact]

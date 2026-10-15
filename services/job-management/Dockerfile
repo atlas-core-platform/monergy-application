@@ -21,7 +21,7 @@ RUN dotnet publish "services/job-management/Monergy.Services.JobManagement.cspro
     --output /app/publish \
     /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0.13-noble-chiseled@sha256:75e4232c875a07e46e447ca0a56a61f7cd72d9fb361639018a19e9fc605c6827 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble-chiseled@sha256:84def277556c2843a44fdeefbd3145d0a2e32d8f736d0c1a7b0a96b2880b0187 AS final
 WORKDIR /app
 COPY --from=build --chown=$APP_UID:$APP_UID /app/publish .
 USER $APP_UID

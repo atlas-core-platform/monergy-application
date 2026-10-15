@@ -1,41 +1,49 @@
 using Monergy.Platform;
 using Monergy.Services.JobManagement;
 using Monergy.Services.JobManagement.Infrastructure;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 const string serviceName = "Job Management Service";
 
-var builder = WebApplication.CreateBuilder(args);
-builder.AddMonergyPlatform(serviceName);
+var builder = Host.CreateApplicationBuilder(args);
+builder.AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false);
 builder.Services.AddHealthChecks();
-if (PhysicalPersistenceGuard.IsSelected(builder.Configuration))
+
+var physicalPersistence = PhysicalPersistenceGuard.IsSelected(builder.Configuration);
+var referenceAdapter = ReferenceAdapterGuard.IsSelected(builder.Configuration);
+var documentProcessing =
+    referenceAdapter &&
+    builder.Configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled");
+var secondaryHttp = TenantBoundaryOptions.Selected(builder.Configuration) || documentProcessing;
+
+if (physicalPersistence)
 {
     builder.Services.AddJobManagementPhysicalPersistence(builder.Configuration);
 }
-else if (ReferenceAdapterGuard.IsSelected(builder.Configuration))
+else if (referenceAdapter)
 {
     builder.Services.AddJobManagementReferenceAdapters(builder.Configuration);
 }
+
 builder.Services.AddHostedService<StartupWorker>();
-if (PhysicalPersistenceGuard.IsSelected(builder.Configuration) || ReferenceAdapterGuard.IsSelected(builder.Configuration))
+if (physicalPersistence || referenceAdapter)
 {
     builder.Services.AddHostedService<DurableJobExecutionWorker>();
     builder.Services.AddHostedService<JobOutboxDispatchWorker>();
 }
+if (secondaryHttp)
+    builder.Services.AddHostedService<JobManagementHttpAdapterWorker>();
 
-var app = builder.Build();
-app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
-app.MapHealthChecks("/health/ready");
-if (ReferenceAdapterGuard.IsSelected(builder.Configuration) &&
-    builder.Configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled"))
+if (documentProcessing && !JobAuditDeliveryOptions.Selected(builder.Configuration))
+    throw new InvalidOperationException("Document processing requires governed Job Audit delivery.");
+
+var host = builder.Build();
+if (documentProcessing)
 {
-    if (!JobAuditDeliveryOptions.Selected(builder.Configuration))
-        throw new InvalidOperationException("Document processing requires governed Job Audit delivery.");
-    var registry = app.Services.GetRequiredService<ReferenceJobExecutionTargetRegistry>();
+    var registry = host.Services.GetRequiredService<ReferenceJobExecutionTargetRegistry>();
     registry.Register("Document Intelligence Service", "document-processing",
-        app.Services.GetRequiredService<HttpDocumentProcessingTarget>());
-    app.MapDocumentProcessingJobs(builder.Configuration);
+        host.Services.GetRequiredService<HttpDocumentProcessingTarget>());
 }
-await app.RunAsync();
+
+await host.RunAsync();
 
 public partial class Program;
