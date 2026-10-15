@@ -37,7 +37,7 @@ Progress indicators are indeterminate unless the underlying operation reports me
 
 ## LOCAL/UAT composition
 
-The local profile upgrades through the Access Management administration API by retaining the existing `evidence-read` permission and adding a narrowly scoped `document-processing` permission to the default customer role. Existing tenant policy is not replaced. Runtime content, jobs, processing records, and facts remain ephemeral.
+For this T1-02 corrective UAT only, the existing LOCAL application fixture continues to add the narrowly scoped `document-processing` permission to its customer test role through the Access Management administration API so APP-03 can be exercised end to end. That fixture state and the `product-policy-v2-initialized` marker are **not** a Default Access Pack v2 receipt. T1-01 keeps the document-processing permission defined but unmapped until this corrected APP-03 candidate is accepted; T1-03 will consume the reviewed Access Management owner flow rather than relabel this fixture. Runtime content, jobs, processing records, and facts remain ephemeral.
 
 Document Intelligence and Job Management retain **Microsoft.NET.Sdk.Worker** primary hosts and Generic Host lifecycles. Each may expose a bounded secondary loopback HTTP adapter for health plus the authenticated LOCAL/UAT workload-only execute/status controls required by this integrated slice. The adapter reuses the outer worker's authoritative application/repository/registry instances; it does not create a second business-state owner or transfer ownership. Neither service exposes these controls directly to the browser.
 
