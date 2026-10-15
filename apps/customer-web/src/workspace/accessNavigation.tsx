@@ -1,12 +1,12 @@
 import type { WorkspaceDestination } from '@monergy/ui-foundation';
 
 export const accessDestinations: WorkspaceDestination[] = [
-  { id: 'overview', label: 'Overview', icon: 'home', href: '/access', group: 'Administration' },
-  { id: 'users', label: 'Users', icon: 'users', href: '/access/users' },
+  { id: 'overview', label: 'Overview', icon: 'home', href: '/access', group: 'Organization' },
+  { id: 'users', label: 'People', icon: 'users', href: '/access/users' },
   { id: 'roles', label: 'Roles', icon: 'shield', href: '/access/roles' },
-  { id: 'permissions', label: 'Permissions', icon: 'check', href: '/access/permissions' },
-  { id: 'groups', label: 'Groups', icon: 'layers', href: '/access/groups' },
-  { id: 'resources', label: 'Resource Access', icon: 'map', href: '/access/resources' },
+  { id: 'permissions', label: 'Access Permissions', icon: 'check', href: '/access/permissions' },
+  { id: 'groups', label: 'Teams', icon: 'layers', href: '/access/groups' },
+  { id: 'resources', label: 'Customer Assignments', icon: 'map', href: '/access/resources' },
   {
     id: 'activity',
     label: 'Access Activity',
@@ -17,31 +17,33 @@ export const accessDestinations: WorkspaceDestination[] = [
   { id: 'sessions', label: 'Security & Sessions', icon: 'access', href: '/access/sessions' },
 ];
 export const accessModule = {
-  name: 'Access Management',
+  name: 'Organization Access',
   homeHref: '/access',
   guide: (
     <>
       <h2>Give the right people the right access.</h2>
-      <p>Create users, assign a business role, and review access changes within your tenant.</p>
-      <h3>Start with Users</h3>
+      <p>Create people, assign a business role, and review access changes within your organization.</p>
+      <h3>Start with People</h3>
       <p>
-        Create one user or import a CSV for a team. Open a user to change their role, status or
-        administrator authority. Onboarding history shows incomplete requests and recovery options.
+        Create one person or import a team. Open a person to change their role, status or
+        Organization Administrator authority. Onboarding history shows incomplete requests and
+        recovery options.
       </p>
       <h3>Build access with roles</h3>
       <p>
-        Permissions describe allowed actions. A role combines permissions, and each user can have
-        one business role. Resource Access assigns specific resources when the role requires them.
+        Access Permissions describe allowed actions. A role combines permissions, and each person
+        can have one business role. Customer Assignments connect authorized professionals to named
+        customers when the workflow requires that relationship.
       </p>
-      <h3>Keep organization separate</h3>
+      <h3>Keep organization separate from access</h3>
       <p>
-        Groups organize users; they do not grant access. Tenant administrator authority controls
-        administration and does not itself grant business permissions.
+        Teams organize people; joining a team does not grant access. Organization Administrator
+        authority manages access settings and does not itself grant financial access.
       </p>
       <h3>Review before you save</h3>
       <p>
         Changes show a summary before they are applied. Access Activity records changes. Security &
-        Sessions lets you revoke all sessions for a user.
+        Sessions lets you revoke all sessions for a person.
       </p>
       <h3>Navigate your way</h3>
       <p>
