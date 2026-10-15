@@ -12,12 +12,12 @@ const journeys: {
   action: string;
 }[] = [
   {
-    title: 'Add financial evidence',
-    description: 'Upload a source document and receive a traceable evidence version.',
+    title: 'Add financial documents',
+    description: 'Upload a financial document and keep its source details connected.',
     href: '/evidence',
     icon: 'evidence',
     capability: 'evidence.document.upload',
-    action: 'Add evidence',
+    action: 'Add document',
   },
   {
     title: 'Search trusted information',
@@ -29,7 +29,7 @@ const journeys: {
   },
   {
     title: 'Build a financial report',
-    description: 'Bring available financial facts together with their provenance.',
+    description: 'Bring available financial information together with its sources.',
     href: '/reports',
     icon: 'reports',
     capability: 'reporting.report.generate',
@@ -49,11 +49,11 @@ export default function WorkspaceHome() {
           <p className="workspace-eyebrow">FINANCIAL WORKSPACE</p>
           <h1>Good {new Date().getUTCHours() < 12 ? 'morning' : 'to see you'}.</h1>
           <p className="workspace-subtitle">
-            {context?.customerName ?? 'Your Monergy workspace'} · Move from source evidence to
-            financial clarity, with every step traceable.
+            {context?.customerName ?? 'Your Monergy workspace'} · Move from your documents to
+            financial clarity, with the source available when you need it.
           </p>
         </div>
-        <Tag className="product-environment">LOCAL UAT · RUNTIME DATA</Tag>
+        <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
       </div>
 
       <section className="workspace-hero" aria-labelledby="workspace-hero-title">
@@ -61,16 +61,16 @@ export default function WorkspaceHome() {
           <span className="workspace-pill">YOUR NEXT BEST STEP</span>
           <h2 id="workspace-hero-title">Start with what you know.</h2>
           <p>
-            Add a financial document. Monergy will verify the source, register its identity and keep
-            its provenance ready for the journeys that follow.
+            Add a financial document. Monergy keeps it connected to its source details so later
+            information can be explained and reviewed.
           </p>
           {capabilities.has('evidence.document.upload') ? (
             <a className="workspace-primary-link" href="/evidence">
-              Add financial evidence <WorkspaceIcon name="arrow" size={18} />
+              Add document <WorkspaceIcon name="arrow" size={18} />
             </a>
           ) : (
             <span className="workspace-unavailable">
-              Your current role does not include evidence upload.
+              Your current access does not include document upload.
             </span>
           )}
           <span className="workspace-hero-note">
@@ -90,8 +90,8 @@ export default function WorkspaceHome() {
               <WorkspaceIcon name="evidence" />
             </span>
             <div>
-              <strong>Source</strong>
-              <small>Your original evidence</small>
+              <strong>Document</strong>
+              <small>Your original file</small>
             </div>
           </div>
           <div className="workspace-art-chip chip-permissions">
@@ -99,8 +99,8 @@ export default function WorkspaceHome() {
               <WorkspaceIcon name="check" />
             </span>
             <div>
-              <strong>Verified</strong>
-              <small>Identity and hash recorded</small>
+              <strong>Uploaded</strong>
+              <small>File integrity recorded</small>
             </div>
           </div>
           <div className="workspace-art-chip chip-workspace">
@@ -108,8 +108,8 @@ export default function WorkspaceHome() {
               <WorkspaceIcon name="changes" />
             </span>
             <div>
-              <strong>Traceable</strong>
-              <small>Provenance stays connected</small>
+              <strong>Source linked</strong>
+              <small>Where this came from stays available</small>
             </div>
           </div>
         </div>
@@ -149,7 +149,7 @@ export default function WorkspaceHome() {
             <WorkspaceIcon name="shield" size={23} />
             <div>
               <strong>Your workspace is connected, but no product journeys are assigned.</strong>
-              <p>Ask a Tenant Administrator to assign an appropriate business role.</p>
+              <p>Contact your Organization Administrator to review your business role.</p>
             </div>
           </div>
         )}
