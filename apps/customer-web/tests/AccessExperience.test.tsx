@@ -52,8 +52,8 @@ describe('tenant administration trust boundaries', () => {
     );
     mount();
     await connect();
-    expect(await screen.findByText('Tenant administrator access is required.')).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Import users' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Organization Administrator access is required.')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Import people' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Local access key')).toHaveValue('');
   });
 
@@ -97,7 +97,7 @@ describe('tenant administration trust boundaries', () => {
       // rc-component test IDs can collide with the status Select; real browser tests assert dialog names.
       const editor = within(await screen.findByRole('dialog'));
       expect(editor.getByText('person@example.test', { exact: true })).toBeVisible();
-      await user.click(await editor.findByRole('switch', { name: 'Tenant administrator' }));
+      await user.click(await editor.findByRole('switch', { name: 'Organization Administrator' }));
       await user.click(editor.getByRole('button', { name: 'Review change' }));
       // rc-component uses a fixed title ID in NODE_ENV=test; the browser test
       // separately verifies the dialog's accessible name with real unique IDs.
@@ -106,7 +106,7 @@ describe('tenant administration trust boundaries', () => {
       if (!dialog) throw new Error('Review title must belong to a dialog.');
       const review = within(dialog);
       const authority = within(review.getByRole('region', { name: 'Review changes' }))
-        .getByText('Tenant administrator')
+        .getByText('Organization Administrator')
         .closest('.access-review-row');
       expect(authority).toHaveTextContent('ChangedCurrentNoProposedYes');
       expect(writes).toEqual([]);
@@ -114,7 +114,7 @@ describe('tenant administration trust boundaries', () => {
       expect(
         await screen.findByText(/workspace changed or this operation conflicts/),
       ).toBeVisible();
-      expect(screen.getByRole('switch', { name: 'Tenant administrator' })).toBeChecked();
+      expect(screen.getByRole('switch', { name: 'Organization Administrator' })).toBeChecked();
       expect(writes).toEqual([
         { expectedPolicyVersion: 7, businessRoleId: null, active: true, tenantAdmin: true },
       ]);
@@ -189,9 +189,9 @@ describe('tenant administration trust boundaries', () => {
       );
       mount();
       const user = await connect();
-      await user.click(await screen.findByRole('button', { name: 'Import users' }));
+      await user.click(await screen.findByRole('button', { name: 'Import people' }));
       const drawer = within(await screen.findByRole('dialog'));
-      expect(drawer.getByText('Import users', { exact: true })).toBeVisible();
+      expect(drawer.getByText('Import people', { exact: true })).toBeVisible();
       await user.click(drawer.getByText('Paste CSV instead'));
       fireEvent.change(await drawer.findByRole('textbox', { name: 'CSV contents' }), {
         target: { value: 'email,role_code,group_codes\ninvalid,,' },
@@ -207,7 +207,7 @@ describe('tenant administration trust boundaries', () => {
       await user.click(drawer.getByRole('button', { name: 'Validate entire file' }));
       await user.click(await drawer.findByRole('button', { name: 'Confirm onboarding' }));
       await user.click(await screen.findByRole('button', { name: 'Onboard people' }));
-      expect(await screen.findByText('User access activated.')).toBeVisible();
+      expect(await screen.findByText('Person access activated.')).toBeVisible();
       const staged = calls.find((call) => call.url.endsWith('/commit'));
       const processed = calls.find((call) => call.url.endsWith('/process'));
       expect(processed?.url.replace('/process', '')).toBe(staged?.url.replace('/commit', ''));
