@@ -174,7 +174,7 @@ test('real tenant administration, sessions, canonical audit and service readines
   await page.getByLabel('Close', { exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: /Release readiness/ }).click();
-  await expect(page.getByText('Local UAT · Production acceptance pending')).toBeVisible();
+  await expect(page.getByText('Test environment · Production acceptance pending')).toBeVisible();
   await page.getByLabel('Close', { exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.screenshot({ path: '.artifacts/uat-workspace.png', fullPage: true });
