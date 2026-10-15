@@ -71,29 +71,30 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
         )
           throw new AccessApiError(503, 'SETUP_RESPONSE_INVALID');
 
-        const setupData =
-          state.enabled && state.state !== 'Active'
-            ? await Promise.all([
-                api.all('roles', controller.signal, state.policyVersion),
-                api.all('members', controller.signal, state.policyVersion),
-                api.all('groups', controller.signal, state.policyVersion),
-                state.customerRelationships
-                  ? api.request<{ policyVersion: number; items: AccessRecord[] }>(
-                      'administration/customer-relationships?limit=100',
-                      'GET',
-                      undefined,
-                      controller.signal,
-                    )
-                  : Promise.resolve({ policyVersion: state.policyVersion ?? 0, items: [] }),
-              ])
-            : [[], [], [], { policyVersion: state.policyVersion ?? 0, items: [] }] as const;
-        const [roles, people, teams, assignments] = setupData;
-        if (
-          state.enabled &&
-          state.state !== 'Active' &&
-          assignments.policyVersion !== state.policyVersion
-        )
-          throw new AccessApiError(409, 'POLICY_VERSION_CONFLICT');
+        let roles: AccessRecord[] = [];
+        let people: AccessRecord[] = [];
+        let teams: AccessRecord[] = [];
+        let assignments: { policyVersion: number; items: AccessRecord[] } = {
+          policyVersion: state.policyVersion ?? 0,
+          items: [],
+        };
+        if (state.enabled && state.state !== 'Active') {
+          [roles, people, teams, assignments] = await Promise.all([
+            api.all('roles', controller.signal, state.policyVersion),
+            api.all('members', controller.signal, state.policyVersion),
+            api.all('groups', controller.signal, state.policyVersion),
+            state.customerRelationships
+              ? api.request<{ policyVersion: number; items: AccessRecord[] }>(
+                  'administration/customer-relationships?limit=100',
+                  'GET',
+                  undefined,
+                  controller.signal,
+                )
+              : Promise.resolve({ policyVersion: state.policyVersion ?? 0, items: [] }),
+          ]);
+          if (assignments.policyVersion !== state.policyVersion)
+            throw new AccessApiError(409, 'POLICY_VERSION_CONFLICT');
+        }
         const packPlan =
           state.enabled && pack && !pack.ready
             ? await api.request<DefaultAccessPackPlan>(
