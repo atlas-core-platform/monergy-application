@@ -19,6 +19,7 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
     private readonly Dictionary<FinancialNormalizationIdentity, FinancialNormalizationSave> idempotency = [];
     private readonly Dictionary<FinancialNormalizationIdentity, string> idempotencyPayloads = [];
     private readonly List<object> outbox = [];
+    private readonly HashSet<string> dispatchedAuditEvents = new(StringComparer.Ordinal);
 
     public Task<FinancialNormalizationSave> NormalizeAsync(
         FinancialNormalizationIdentity idempotencyIdentity,
@@ -187,6 +188,45 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
         {
             provenance.TryGetValue(provenanceId, out var value);
             return Task.FromResult(value);
+        }
+    }
+
+    public Task<IReadOnlyList<AuditableEvent>> PendingAuditEventsAsync(CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            IReadOnlyList<AuditableEvent> events = outbox
+                .OfType<DomainEvent<FinancialFactChangedPayload>>()
+                .Where(source => !dispatchedAuditEvents.Contains(source.EventId))
+                .Select(source => new AuditableEvent(
+                    source.ContractId,
+                    source.EventId,
+                    source.EventName,
+                    source.EventVersion,
+                    source.OccurredAt,
+                    source.CorrelationId,
+                    source.CausationId,
+                    source.Producer,
+                    source.SubjectType,
+                    source.SubjectId))
+                .ToArray();
+            return Task.FromResult(events);
+        }
+    }
+
+    public Task MarkAuditEventDispatchedAsync(
+        string eventId,
+        DateTimeOffset dispatchedAt,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            if (!outbox.OfType<DomainEvent<FinancialFactChangedPayload>>().Any(source => source.EventId == eventId))
+                throw new InvalidOperationException("Financial Profile audit event was not found.");
+            dispatchedAuditEvents.Add(eventId);
+            return Task.CompletedTask;
         }
     }
 

@@ -7,7 +7,7 @@ using Npgsql;
 
 namespace Monergy.Services.Audit.Infrastructure;
 
-public sealed class PostgresTenantAccessAudit : ITenantAccessAuditRepository, ITenantJobAuditRepository, IAsyncDisposable
+public sealed class PostgresTenantAccessAudit : ITenantAccessAuditRepository, ITenantJobAuditRepository, ITenantFinancialAuditRepository, IAsyncDisposable
 {
     private readonly Dictionary<string, NpgsqlDataSource> sources = new(StringComparer.Ordinal);
 
@@ -79,6 +79,49 @@ public sealed class PostgresTenantAccessAudit : ITenantAccessAuditRepository, IT
     }
 
     public async Task<TenantJobAuditReceipt> AppendJobEventAsync(
+        string tenantId,
+        AuditableEvent source,
+        CancellationToken cancellationToken)
+    {
+        var auditEvidenceId = "audit-" + source.EventId;
+        await using var connection = await OpenAsync(tenantId, cancellationToken).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        var inserted = await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO audit.inbox(source_event_id,received_at)
+            VALUES (@EventId,clock_timestamp())
+            ON CONFLICT (source_event_id) DO NOTHING;
+            """, source, transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
+        if (inserted == 1)
+        {
+            await connection.ExecuteAsync(new CommandDefinition("""
+                INSERT INTO audit.evidence(audit_evidence_id,source_contract_id,source_event_id,event_name,producer,
+                    subject_type,subject_id,occurred_at,correlation_id,causation_id,recorded_at)
+                VALUES (@AuditEvidenceId,@ContractId,@EventId,@EventName,@Producer,
+                    @SubjectType,@SubjectId,@OccurredAt,@CorrelationId,@CausationId,clock_timestamp());
+                """, new
+            {
+                AuditEvidenceId = auditEvidenceId,
+                source.ContractId,
+                source.EventId,
+                source.EventName,
+                source.Producer,
+                source.SubjectType,
+                source.SubjectId,
+                source.OccurredAt,
+                source.CorrelationId,
+                source.CausationId,
+            }, transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
+        }
+        var recordedEvidenceId = await connection.QuerySingleAsync<string>(new CommandDefinition("""
+            SELECT audit_evidence_id FROM audit.evidence WHERE source_event_id=@EventId;
+            """, source, transaction, cancellationToken: cancellationToken)).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        return new("Audit Service LOCAL/UAT composition", tenantId, source.EventId,
+            source.ContractId, source.EventName, source.EventVersion, source.Producer,
+            source.SubjectType, source.SubjectId, recordedEvidenceId, inserted == 1);
+    }
+
+    public async Task<TenantFinancialAuditReceipt> AppendFinancialEventAsync(
         string tenantId,
         AuditableEvent source,
         CancellationToken cancellationToken)

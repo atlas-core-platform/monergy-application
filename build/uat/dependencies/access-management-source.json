@@ -4,10 +4,10 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "4d368b98e90e17bbefb3abeb007fa069501665f5",
-  "sourceTree": "e095991ef924a2cdb41824e9c25e78fd10eb7203",
-  "verificationStatus": "OWNER_HOSTED_VERIFIED_ACCEPTED_T1_01",
-  "candidatePullRequest": "https://github.com/atlas-core-platform/monergy-access-management-service/pull/11",
+  "commit": "c0e2091b1beaec00f9ea07d328b5f846d31f2f0d",
+  "sourceTree": "fe57e0d5dc046938477dfb987cf5043462924dc1",
+  "verificationStatus": "WORK_MODE_T1_05_CANDIDATE_NO_HOSTED_CI",
+  "candidatePullRequest": null,
   "files": [
     {
       "path": "Directory.Build.props",
@@ -59,7 +59,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/DefaultAccessPack.cs",
-      "gitBlobSha": "1c8e2351fcd0e41f800d59a152e440ffe32d2046"
+      "gitBlobSha": "244eee13f0d25c20f86c2b0eba61c50b9b70fd34"
     },
     {
       "path": "src/Monergy.AccessManagement/EventDeliveryProtocol.cs",
@@ -87,7 +87,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessAdministration.cs",
-      "gitBlobSha": "0b90c176c8336718cdffccc3e560463958320e96"
+      "gitBlobSha": "cfa89a1fc9fda56c73137cb98f2f48265a307404"
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessPolicyStore.cs",
@@ -173,6 +173,5 @@
       "path": "tools/Monergy.AccessManagement.Migrations/packages.lock.json",
       "gitBlobSha": "45328e64d43da453a7accddb94584e1d7fe5f2a6"
     }
-  ],
-  "verifiedRun": "https://github.com/atlas-core-platform/monergy-access-management-service/actions/runs/38693750372"
+  ]
 }

@@ -46,8 +46,8 @@ async function fixture(page: Page, initiallyActive = false) {
           receiptReference: active ? 'setup-fixture-receipt' : null,
           customerRelationships: true,
           accessPack: {
-            installedVersion: '2.0',
-            installedIdentity: 'monergy-default-access-pack/2.0',
+            installedVersion: '2.1',
+            installedIdentity: 'monergy-default-access-pack/2.1',
             installedAt: '2026-10-15T00:00:00Z',
             policyVersion,
             ready: true,

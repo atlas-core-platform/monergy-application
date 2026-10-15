@@ -1,10 +1,11 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
-import { Alert, Button, Drawer, Input, Select, Skeleton, Spin, Tag, Upload } from 'antd';
+import { Alert, Button, Checkbox, Drawer, Input, Select, Skeleton, Spin, Tag, Upload } from 'antd';
 import type { UploadProps } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import {
+  addProcessingFactsToFinancialProfile,
   evidenceTypes,
   getDocumentProcessing,
   listEvidence,
@@ -13,6 +14,7 @@ import {
   submitEvidence,
   type ProductEvidenceItem,
   type ProductEvidenceReceipt,
+  type ProductFinancialPromotionResult,
   type ProductProcessingView,
 } from './productApi';
 import './product.css';
@@ -44,6 +46,8 @@ export default function EvidenceExperience() {
   const canRead = product?.capabilities.includes('evidence.document.read') ?? false;
   const canProcess =
     product?.capabilities.includes('document-intelligence.document.process') ?? false;
+  const canUpdateFinancial =
+    product?.capabilities.includes('financial-profile.profile.update') ?? false;
   const [candidate, setCandidate] = useState<File | null>(null);
   const [operationId, setOperationId] = useState('');
   const [evidence, setEvidence] = useState<ProductEvidenceItem[]>([]);
@@ -57,6 +61,11 @@ export default function EvidenceExperience() {
   const [processing, setProcessing] = useState<ProductProcessingView | null>(null);
   const [processingBusy, setProcessingBusy] = useState(false);
   const [processingError, setProcessingError] = useState('');
+  const [selectedSourceFactIds, setSelectedSourceFactIds] = useState<string[]>([]);
+  const [promotionBusy, setPromotionBusy] = useState(false);
+  const [promotionError, setPromotionError] = useState('');
+  const [promotionResult, setPromotionResult] =
+    useState<ProductFinancialPromotionResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const loadLibrary = useCallback(
@@ -152,10 +161,13 @@ export default function EvidenceExperience() {
     }
   };
   const closeProcessing = () => {
-    if (processingBusy) return;
+    if (processingBusy || promotionBusy) return;
     setProcessingEvidence(null);
     setProcessing(null);
     setProcessingError('');
+    setSelectedSourceFactIds([]);
+    setPromotionError('');
+    setPromotionResult(null);
   };
   const processDocument = async () => {
     if (!api || !processingEvidence || processingBusy || !canProcess) return;
@@ -189,11 +201,51 @@ export default function EvidenceExperience() {
           ? 'You no longer have access to extract details from this document.'
           : failure instanceof AccessApiError && failure.status === 422
             ? 'Extracting details is currently available only for structured text files.'
-            : "We couldn't extract details from this document. Your financial profile has not changed.",
+            : "We couldn't extract details from this document. Your financial information has not changed.",
       );
     } finally {
       controller.abort();
       setProcessingBusy(false);
+    }
+  };
+  const toggleSourceFact = (sourceFactId: string, checked: boolean) => {
+    setPromotionError('');
+    setPromotionResult(null);
+    setSelectedSourceFactIds((current) =>
+      checked ? [...current, sourceFactId] : current.filter((id) => id !== sourceFactId),
+    );
+  };
+  const addReviewedFacts = async () => {
+    if (
+      !api ||
+      !processing?.job ||
+      processing.job.state !== 'Completed' ||
+      selectedSourceFactIds.length === 0 ||
+      promotionBusy ||
+      !canUpdateFinancial
+    )
+      return;
+    setPromotionBusy(true);
+    setPromotionError('');
+    setPromotionResult(null);
+    try {
+      const result = await addProcessingFactsToFinancialProfile(
+        api,
+        processing.job.jobId,
+        crypto.randomUUID().replaceAll('-', ''),
+        selectedSourceFactIds,
+      );
+      setPromotionResult(result);
+    } catch (failure) {
+      setPromotionError(
+        failure instanceof AccessApiError && failure.status === 403
+          ? 'Your access to update financial information changed. Ask your organization administrator to review the current Customer access package.'
+          : failure instanceof AccessApiError && failure.status === 409
+            ? 'Your financial information or this review changed before it could be confirmed. Close this view, refresh, and review the document again.'
+            : "We couldn't add the selected information. Your financial information has not been confirmed as changed.",
+      );
+    } finally {
+      setPromotionBusy(false);
     }
   };
 
@@ -493,6 +545,9 @@ export default function EvidenceExperience() {
                   setSelectedEvidence(null);
                   setProcessing(null);
                   setProcessingError('');
+                  setSelectedSourceFactIds([]);
+                  setPromotionError('');
+                  setPromotionResult(null);
                 }}
               >
                 Extract details
@@ -516,12 +571,12 @@ export default function EvidenceExperience() {
         open={Boolean(processingEvidence)}
         onClose={closeProcessing}
         destroyOnHidden
-        mask={{ closable: !processingBusy }}
-        closable={!processingBusy}
+        mask={{ closable: !processingBusy && !promotionBusy }}
+        closable={!processingBusy && !promotionBusy}
         size="large"
         footer={
           <div className="product-drawer-actions">
-            <Button onClick={closeProcessing} disabled={processingBusy}>
+            <Button onClick={closeProcessing} disabled={processingBusy || promotionBusy}>
               Close
             </Button>
             {!processing?.job && (
@@ -532,6 +587,23 @@ export default function EvidenceExperience() {
                 onClick={() => void processDocument()}
               >
                 Extract details
+              </Button>
+            )}
+            {processing?.job.state === 'Completed' &&
+              processing.facts.length > 0 &&
+              !promotionResult && (
+                <Button
+                  type="primary"
+                  loading={promotionBusy}
+                  disabled={!canUpdateFinancial || selectedSourceFactIds.length === 0}
+                  onClick={() => void addReviewedFacts()}
+                >
+                  Add selected information
+                </Button>
+              )}
+            {promotionResult && (
+              <Button type="primary" href="/finances">
+                View financial information
               </Button>
             )}
           </div>
@@ -562,9 +634,32 @@ export default function EvidenceExperience() {
             <Alert
               showIcon
               type="info"
-              title="Review before adding anything to your financial profile"
-              description="Monergy can find supported income and expense details in this document. Review them against the document first. Your financial profile is not changed by this step."
+              title="Review before adding anything to your financial information"
+              description="Monergy can find supported income and expense details in this document. Review them against the document first. Your financial information is not changed by this step."
             />
+            {!canUpdateFinancial && processing?.job.state === 'Completed' && (
+              <Alert
+                showIcon
+                type="warning"
+                title="Adding financial information isn't included in your current access"
+                description="Your organization administrator can review the current Customer access package. Extracted details remain review-only until updating financial information is included in your access."
+              />
+            )}
+            {promotionError && <Alert showIcon type="error" title={promotionError} />}
+            {promotionResult && (
+              <Alert
+                showIcon
+                type="success"
+                title="Your financial information was updated"
+                description={
+                  String(promotionResult.confirmed) +
+                  ' reviewed ' +
+                  (promotionResult.confirmed === 1 ? 'item confirmed' : 'items confirmed') +
+                  ' · profile revision ' +
+                  String(promotionResult.profile.revision)
+                }
+              />
+            )}
             {processingBusy && (
               <div className="product-processing-progress" aria-live="polite">
                 <Spin size="small" />
@@ -593,9 +688,30 @@ export default function EvidenceExperience() {
                 </div>
                 <div className="product-fact-list">
                   {processing.facts.map((fact) => (
-                    <article key={fact.sourceFactId} className="product-fact-card">
+                    <article
+                      key={fact.sourceFactId}
+                      className={
+                        selectedSourceFactIds.includes(fact.sourceFactId)
+                          ? 'product-fact-card selected'
+                          : 'product-fact-card'
+                      }
+                    >
+                      <Checkbox
+                        checked={selectedSourceFactIds.includes(fact.sourceFactId)}
+                        disabled={promotionBusy || Boolean(promotionResult)}
+                        onChange={(event) =>
+                          toggleSourceFact(fact.sourceFactId, event.target.checked)
+                        }
+                        aria-label={'Add ' + fact.label + ' to financial information'}
+                      />
                       <div>
-                        <Tag>{fact.factType}</Tag>
+                        <Tag>
+                          {fact.factType === 'INCOME'
+                            ? 'Income'
+                            : fact.factType === 'EXPENSE'
+                              ? 'Expense'
+                              : fact.factType}
+                        </Tag>
                         <strong>{fact.label}</strong>
                         <span>
                           {fact.sourceLocation} · {fact.effectiveDate}
@@ -615,7 +731,7 @@ export default function EvidenceExperience() {
                 </div>
                 <p className="product-review-note">
                   Each item stays linked to the document location it came from. Review the details
-                  carefully; nothing here has been added to your financial profile.
+                  carefully. Select only the items you have reviewed, then use Add selected information. Nothing is added before that confirmation.
                 </p>
               </section>
             ) : (

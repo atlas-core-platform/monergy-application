@@ -93,15 +93,19 @@ if (-not (Test-Path $profileFile)) {
         foreach ($actorId in $localActors) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
     }
     $new = @{ instanceId=[Guid]::NewGuid().ToString('N'); postgresPassword=(Secret); databases=$databases; identities=$identities; tokens=@{}; port=$Port; onboarding=[bool]$EnableOnboarding }
-    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','jobAuditEvent','customerContext','consent','evidenceIntake','evidenceProcessing','jobControl','documentControl')) { $new.tokens[$name] = Secret }
+    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','jobAuditEvent','financialAuditEvent','customerContext','consent','evidenceIntake','evidenceProcessing','jobControl','documentControl')) { $new.tokens[$name] = Secret }
     Save-Json 'profile.json' $new
 }
 $state = Get-Content $profileFile -Raw | ConvertFrom-Json
 $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
-if ($Action -in @('Prepare','Start') -and $onboarding) {
+if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
-    foreach ($name in @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent')) {
+    $requiredTokens = @('financialAuditEvent')
+    if ($onboarding) {
+        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent')
+    }
+    foreach ($name in $requiredTokens) {
         if ($null -eq $state.tokens.PSObject.Properties[$name]) {
             $state.tokens | Add-Member -NotePropertyName $name -NotePropertyValue (Secret)
             $tokensChanged = $true
@@ -162,7 +166,7 @@ if ($Action -in @('Prepare','Start')) {
                 $integration.ConsentDatabases=@{}
                 foreach ($db in $state.databases | Where-Object service -eq 'consent') { $integration.ConsentDatabases[$db.tenant] = Connection $db 'runtime' }
             } else {
-                $integration.AuditEventToken=$state.tokens.auditEvent; $integration.JobAuditEventToken=$state.tokens.jobAuditEvent; $integration.AuditDatabases=@{}
+                $integration.AuditEventToken=$state.tokens.auditEvent; $integration.JobAuditEventToken=$state.tokens.jobAuditEvent; $integration.FinancialAuditEventToken=$state.tokens.financialAuditEvent; $integration.AuditDatabases=@{}
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.AuditDatabases[$db.tenant] = Connection $db 'runtime' }
             }
             $config.Monergy.AccessIntegration=$integration
@@ -175,6 +179,10 @@ if ($Action -in @('Prepare','Start')) {
                 $config.Monergy.DocumentProcessing=@{
                     EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceProcessing
                     ControlToken=$state.tokens.documentControl
+                }
+            } elseif ($onboarding -and $service -eq 'financial-profile') {
+                $config.Monergy.AuditDelivery=@{
+                    Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.financialAuditEvent
                 }
             } elseif ($onboarding -and $service -eq 'job-management') {
                 $config.Monergy.DocumentProcessing=@{
@@ -209,6 +217,7 @@ if ($Action -in @('Prepare','Start')) {
         $workspace.Monergy.Product=@{
             Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake
             JobManagementUrl='http://127.0.0.1:5118/'; JobManagementToken=$state.tokens.jobControl
+            FinancialProfileUrl='http://127.0.0.1:5113/'
         }
     }
     Save-Json 'workspace.json' $workspace
@@ -262,27 +271,14 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($pack.installedVersion -ne '2.0' -or $pack.installedIdentity -ne 'monergy-default-access-pack/2.0') {
-                throw 'The Access Management owner has not confirmed Default Access Pack v2.'
+            if ($pack.installedVersion -notin @('2.0','2.1')) {
+                throw 'The Access Management owner has not confirmed a supported Default Access Pack.'
             }
 
             $roles = Invoke-RestMethod "$url/access-api/v1/administration/roles?limit=100" -Headers $headers -TimeoutSec 15
             $customerRole = $roles.items | Where-Object code -eq 'customer'
             $advisorRole = $roles.items | Where-Object code -eq 'financial-advisor'
-            if ($null -eq $customerRole -or $null -eq $advisorRole) { throw 'The owner-confirmed Default Access Pack v2 role set is incomplete.' }
-
-            $permissions = Invoke-RestMethod "$url/access-api/v1/administration/permissions?limit=100" -Headers $headers -TimeoutSec 15
-            $processingPermission = $permissions.items | Where-Object code -eq 'document-processing'
-            if ($null -eq $processingPermission) { throw 'The owner-confirmed document-processing permission is missing.' }
-
-            # APP-03 has now been accepted. This LOCAL/UAT customization enables that
-            # accepted journey for the customer fixture. It is not part of the v2 pack receipt.
-            if ($processingPermission.id -notin @($customerRole.permissionIds)) {
-                $permissionIds = @($customerRole.permissionIds) + $processingPermission.id
-                Invoke-RestMethod "$url/access-api/v1/administration/roles/$($customerRole.id)" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{
-                    expectedPolicyVersion=$roles.policyVersion; code=$customerRole.code; label=$customerRole.label; permissionIds=$permissionIds
-                }|ConvertTo-Json -Depth 5) -TimeoutSec 15 | Out-Null
-            }
+            if ($null -eq $customerRole -or $null -eq $advisorRole) { throw 'The owner-confirmed Default Access Pack role set is incomplete.' }
 
             foreach ($binding in @(@{ actor='A100'; role=$customerRole.id },@{ actor='A200'; role=$customerRole.id },@{ actor='A300'; role=$advisorRole.id })) {
                 $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15

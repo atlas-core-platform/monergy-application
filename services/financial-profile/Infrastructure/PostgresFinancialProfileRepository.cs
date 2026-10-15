@@ -212,6 +212,54 @@ public sealed class PostgresFinancialProfileRepository : IFinancialProfileReposi
         return json is null ? null : JsonSerializer.Deserialize<FinancialProvenance>(json, ContractJson.Options);
     }
 
+    public async Task<IReadOnlyList<AuditableEvent>> PendingAuditEventsAsync(
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = await connection.QueryAsync<AuditOutboxRow>(new CommandDefinition("""
+            SELECT contract_id AS ContractId,event_id AS EventId,event_name AS EventName,
+                   event_version AS EventVersion,occurred_at AS OccurredAt,
+                   correlation_id AS CorrelationId,causation_id AS CausationId,
+                   producer AS Producer,subject_type AS SubjectType,subject_id AS SubjectId
+            FROM financial_profile.outbox
+            WHERE dispatched_at IS NULL AND contract_id IN ('CID-034','CID-035')
+            ORDER BY created_at,event_id
+            LIMIT 100;
+            """, cancellationToken: cancellationToken));
+        return rows.Select(row => new AuditableEvent(
+            row.ContractId,
+            row.EventId,
+            row.EventName,
+            row.EventVersion,
+            new DateTimeOffset(DateTime.SpecifyKind(row.OccurredAt, DateTimeKind.Utc)),
+            row.CorrelationId,
+            row.CausationId,
+            row.Producer,
+            row.SubjectType,
+            row.SubjectId)).ToArray();
+    }
+
+    public async Task MarkAuditEventDispatchedAsync(
+        string eventId,
+        DateTimeOffset dispatchedAt,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var affected = await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE financial_profile.outbox
+            SET dispatched_at=@DispatchedAt
+            WHERE event_id=@EventId
+              AND contract_id IN ('CID-034','CID-035')
+              AND dispatched_at IS NULL;
+            """, new
+        {
+            EventId = eventId,
+            DispatchedAt = dispatchedAt,
+        }, cancellationToken: cancellationToken));
+        if (affected is not (0 or 1))
+            throw new InvalidOperationException("Financial Profile audit dispatch marker is invalid.");
+    }
+
     public ValueTask DisposeAsync() => dataSource.DisposeAsync();
 
     private static async Task InsertOutboxAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
@@ -246,6 +294,20 @@ public sealed class PostgresFinancialProfileRepository : IFinancialProfileReposi
     private static string BusinessKey(string profileId, string factType, string label) => $"{profileId}|{factType}|{label}";
     private static string StableId(string prefix, string value) =>
         $"{prefix}-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant()[..24]}";
+
+    private sealed class AuditOutboxRow
+    {
+        public string ContractId { get; set; } = string.Empty;
+        public string EventId { get; set; } = string.Empty;
+        public string EventName { get; set; } = string.Empty;
+        public string EventVersion { get; set; } = string.Empty;
+        public DateTime OccurredAt { get; set; }
+        public string CorrelationId { get; set; } = string.Empty;
+        public string? CausationId { get; set; }
+        public string Producer { get; set; } = string.Empty;
+        public string SubjectType { get; set; } = string.Empty;
+        public string SubjectId { get; set; } = string.Empty;
+    }
 
     private sealed record IdempotencyRow(string PayloadFingerprint, string ResultPayload);
     private sealed record NormalizationSnapshot(FinancialFactRecord[] Facts,

@@ -17,13 +17,19 @@ builder.AddMonergyPlatform("Audit Service");
 builder.Services.AddSingleton<PostgresTenantAccessAudit>();
 builder.Services.AddSingleton<ITenantAccessAuditRepository>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
 builder.Services.AddSingleton<ITenantJobAuditRepository>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
+builder.Services.AddSingleton<ITenantFinancialAuditRepository>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
 builder.Services.AddSingleton<TenantAccessAudit>();
 builder.Services.AddSingleton<TenantJobAudit>();
+builder.Services.AddSingleton<TenantFinancialAudit>();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
 var token = TenantAccessIntegration.Required(builder.Configuration, "Monergy:AccessIntegration:AuditEventToken");
 TenantAccessIntegration.ValidateToken(token);
 var jobToken = TenantAccessIntegration.Required(builder.Configuration, "Monergy:AccessIntegration:JobAuditEventToken");
 TenantAccessIntegration.ValidateToken(jobToken);
+var financialToken = TenantAccessIntegration.Required(builder.Configuration, "Monergy:AccessIntegration:FinancialAuditEventToken");
+TenantAccessIntegration.ValidateToken(financialToken);
+if (new[] { token, jobToken, financialToken }.Distinct(StringComparer.Ordinal).Count() != 3)
+    throw new InvalidOperationException("Audit event producers require separate workload credentials.");
 var loseReceipt = builder.Configuration["Monergy:AccessIntegration:VerificationLoseReceiptOnce"] == "true" ? 1 : 0;
 var app = builder.Build();
 app.MapGet("/local/v1/administration/access-events", async (HttpContext http, string? after,
@@ -71,6 +77,22 @@ app.MapPost("/reference/events/job-audit", async (AuditableEvent message, HttpCo
         return Results.Ok(receipt);
     }
     catch (ArgumentException) { return Results.BadRequest(new { error = "JOB_AUDIT_EVENT_INVALID" }); }
+    catch (TenantAccessException exception) { return Results.Json(new { error = exception.Code }, statusCode: exception.StatusCode); }
+    catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
+});
+app.MapPost("/reference/events/financial-audit", async (AuditableEvent message, HttpContext http, TenantFinancialAudit audit) =>
+{
+    if (!TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Reference-Transport"].ToString(), financialToken))
+        return (IResult)Results.StatusCode(403);
+    try
+    {
+        var receipt = await audit.ConsumeAsync(
+            http.Request.Headers["X-Monergy-Reference-Tenant"].ToString(),
+            message,
+            http.RequestAborted).ConfigureAwait(false);
+        return Results.Ok(receipt);
+    }
+    catch (ArgumentException) { return Results.BadRequest(new { error = "FINANCIAL_AUDIT_EVENT_INVALID" }); }
     catch (TenantAccessException exception) { return Results.Json(new { error = exception.Code }, statusCode: exception.StatusCode); }
     catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
 });

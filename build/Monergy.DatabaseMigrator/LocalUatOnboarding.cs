@@ -134,7 +134,8 @@ internal static partial class LocalUatBootstrap
                             WHERE i.singleton
                               AND i.tenant_id=@tenant
                               AND i.initial_admin_actor_id='A900'
-                              AND i.default_access_pack_version IN ('1.0','2.0'))
+                              AND i.default_access_pack_version IS NOT NULL
+                              AND h.pack_identity='monergy-default-access-pack/' || i.default_access_pack_version)
                             AND EXISTS(
                                 SELECT 1 FROM am.access_subjects
                                 WHERE actor_id='A900'
