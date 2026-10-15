@@ -105,7 +105,7 @@ test('user review preserves drafts, explains consequences, traps focus and resto
   await opener.click();
   const drawer = page.getByRole('dialog');
   await expect(drawer.getByRole('heading', { name: 'Identity', exact: true })).toBeVisible();
-  await drawer.getByRole('switch', { name: 'Tenant administrator' }).click();
+  await drawer.getByRole('switch', { name: 'Organization Administrator' }).click();
   await drawer.getByRole('switch', { name: 'Active membership' }).click();
   await drawer.getByRole('button', { name: 'Review change' }).click();
   await expect(drawer.getByRole('heading', { name: 'Confirm access change' })).toBeFocused();
@@ -116,7 +116,7 @@ test('user review preserves drafts, explains consequences, traps focus and resto
   ).toBeVisible();
   await drawer.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(drawer.getByRole('button', { name: 'Review change' })).toBeFocused();
-  await expect(drawer.getByRole('switch', { name: 'Tenant administrator' })).toBeChecked();
+  await expect(drawer.getByRole('switch', { name: 'Organization Administrator' })).toBeChecked();
   await expect(drawer.getByRole('switch', { name: 'Active membership' })).not.toBeChecked();
   await drawer.getByRole('combobox', { name: 'Business role' }).click();
   await page.getByTitle('Reviewer', { exact: true }).click();
@@ -139,7 +139,7 @@ test('user review preserves drafts, explains consequences, traps focus and resto
   await expect(opener).toBeFocused();
   // Reopen and submit through the same governed payload.
   await opener.click();
-  await drawer.getByRole('switch', { name: 'Tenant administrator' }).click();
+  await drawer.getByRole('switch', { name: 'Organization Administrator' }).click();
   await drawer.getByRole('button', { name: 'Review change' }).click();
   await drawer.getByRole('button', { name: 'Save changes' }).click();
   await expect(drawer).toHaveCount(0);
@@ -194,11 +194,11 @@ for (const status of [409, 500]) {
     });
     await page.getByRole('button', { name: `Open ${member.normalizedEmail}` }).click();
     const drawer = page.getByRole('dialog');
-    await drawer.getByRole('switch', { name: 'Tenant administrator' }).click();
+    await drawer.getByRole('switch', { name: 'Organization Administrator' }).click();
     await drawer.getByRole('button', { name: 'Review change' }).click();
     await drawer.getByRole('button', { name: 'Save changes' }).click();
     await expect(drawer.getByRole('button', { name: 'Review change' })).toBeDisabled();
-    await expect(drawer.getByRole('switch', { name: 'Tenant administrator' })).toBeChecked();
+    await expect(drawer.getByRole('switch', { name: 'Organization Administrator' })).toBeChecked();
     await drawer.getByRole('button', { name: 'Reload current records' }).click();
     await expect(drawer.getByRole('button', { name: 'Review change' })).toBeDisabled();
     await expect(drawer.getByRole('button', { name: 'Reload current records' })).toBeEnabled();
@@ -229,7 +229,7 @@ test('permission, group and resource editing keep existing contracts and review 
   });
   const nav = page.getByRole('navigation');
   const drawer = page.getByRole('dialog');
-  await nav.getByRole('link', { name: 'Permissions', exact: true }).click();
+  await nav.getByRole('link', { name: 'Access Permissions', exact: true }).click();
   await page.getByRole('button', { name: 'Open Read records' }).click();
   await drawer.getByLabel('Name', { exact: true }).fill('Read assigned records');
   await drawer.getByLabel('Scope', { exact: true }).click();
@@ -239,7 +239,7 @@ test('permission, group and resource editing keep existing contracts and review 
   expect(writes).toHaveLength(0);
   await drawer.getByRole('button', { name: 'Save changes' }).click();
   await expect(drawer).toHaveCount(0);
-  await nav.getByRole('link', { name: 'Groups', exact: true }).click();
+  await nav.getByRole('link', { name: 'Teams', exact: true }).click();
   await page.getByRole('button', { name: 'Open Advisory team' }).click();
   await drawer.getByRole('tab', { name: 'People in this group' }).click();
   await drawer.locator('.ant-select-selection-item-remove').click();
@@ -249,7 +249,8 @@ test('permission, group and resource editing keep existing contracts and review 
   );
   await drawer.getByRole('button', { name: 'Save changes' }).click();
   await expect(drawer).toHaveCount(0);
-  await nav.getByRole('link', { name: 'Resource Access', exact: true }).click();
+  await nav.getByRole('link', { name: 'Customer Assignments', exact: true }).click();
+  await page.getByRole('tab', { name: 'Advanced resource grants', exact: true }).click();
   await page.getByRole('button', { name: 'Create resource access', exact: true }).click();
   await drawer.getByLabel('Person', { exact: true }).click();
   await page.getByTitle(member.normalizedEmail, { exact: true }).click();
@@ -321,7 +322,7 @@ test('loaded-record filtering and enlarged text retain actions and honest counts
   await page.evaluate(() => {
     document.documentElement.style.fontSize = '200%';
   });
-  await expect(page.getByRole('button', { name: 'Create user', exact: true })).toHaveCSS(
+  await expect(page.getByRole('button', { name: 'Create person', exact: true })).toHaveCSS(
     'font-size',
     '26px',
   );
@@ -329,7 +330,7 @@ test('loaded-record filtering and enlarged text retain actions and honest counts
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
     .toBe(true);
-  await page.getByRole('button', { name: 'Create user', exact: true }).click();
+  await page.getByRole('button', { name: 'Create person', exact: true }).click();
   await expect(page.getByLabel('Email address')).toBeVisible();
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
