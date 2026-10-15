@@ -18,8 +18,8 @@ import './access.css';
 const areas: { value: AccessArea; label: string; description: string }[] = [
   {
     value: 'members',
-    label: 'Users',
-    description: 'Create user accounts and manage their role, status and administrator authority.',
+    label: 'People',
+    description: 'Add people and manage their role, status and administrator authority.',
   },
   {
     value: 'roles',
@@ -28,12 +28,12 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   },
   {
     value: 'permissions',
-    label: 'Permissions',
-    description: 'Choose the capabilities each permission allows.',
+    label: 'Access Permissions',
+    description: 'Choose the actions and scope each permission allows.',
   },
   {
     value: 'groups',
-    label: 'Groups',
+    label: 'Teams',
     description: 'Organize people without changing their access.',
   },
   {
@@ -43,9 +43,9 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   },
   {
     value: 'resource-grants',
-    label: 'Resource Access',
+    label: 'Customer Access',
     description:
-      'Assign specific resources to users whose role includes a resource-scoped capability.',
+      'Assign named customers to people where an implemented workflow requires that relationship.',
   },
 ];
 
@@ -85,7 +85,7 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
       {!embedded && (
         <div className="access-context-bar">
           <span>
-            <WorkspaceIcon name="shield" size={15} /> Tenant <strong>{session.tenantId}</strong>
+            <WorkspaceIcon name="shield" size={15} /> Organization <strong>{session.tenantId}</strong>
             <span className="access-context-divider">/</span>Administrator
           </span>
           <Button
@@ -303,7 +303,7 @@ function Administration({
     {
       title:
         area === 'members'
-          ? 'User'
+          ? 'Person'
           : area === 'imports'
             ? 'Import'
             : area === 'resource-grants'
@@ -363,7 +363,7 @@ function Administration({
             key: 'authority',
             render: (_: unknown, record: AccessRecord) => (
               <span className="access-secondary">
-                {record.tenantAdmin ? 'Tenant administrator' : 'No'}
+                {record.tenantAdmin ? 'Organization Administrator' : 'No'}
               </span>
             ),
           },
@@ -460,9 +460,9 @@ function Administration({
             }}
           >
             {area === 'members'
-              ? 'Create user'
+              ? 'Add person'
               : area === 'imports'
-                ? 'Import users'
+                ? 'Import people'
                 : `Create ${area === 'resource-grants' ? 'resource access' : area.slice(0, -1)}`}
           </Button>
         </Space>
@@ -505,7 +505,7 @@ function Administration({
             prefix={<WorkspaceIcon name="search" size={17} />}
             aria-label="Filter loaded records"
             placeholder={
-              area === 'members' ? 'Filter loaded users by email or role' : 'Filter loaded records…'
+              area === 'members' ? 'Filter loaded people by email or role' : 'Filter loaded records…'
             }
             value={query}
             onChange={(event) => {
@@ -591,7 +591,7 @@ function Administration({
         <div className="access-bottom-note">
           <WorkspaceIcon name="shield" size={17} />
           <p>
-            Tenant administrators manage access. Business permissions come from the person’s
+            Organization Administrators manage access. Business permissions come from the person’s
             assigned role and applicable resource grants.
           </p>
         </div>
