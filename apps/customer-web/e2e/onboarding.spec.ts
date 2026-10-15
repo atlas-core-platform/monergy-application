@@ -343,7 +343,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
   await expect(page.getByRole('navigation')).toHaveCount(0);
   await page.getByLabel('Local access key').fill('customer-fixture');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'Start with what you know.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Start with what you already have.' })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Financial Workspace navigation' });
   await expect(navigation.getByRole('link', { name: 'Documents' })).toBeVisible();
   for (const name of ['Access management', 'System Expert', 'Engineering foundation'])
