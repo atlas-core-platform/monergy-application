@@ -1,8 +1,15 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
-async function fixture(page: Page, initiallyActive = false) {
+type AccessPolicyState = 'Ready' | 'UpdateAvailable' | 'Customized' | 'Blocked';
+
+async function fixture(
+  page: Page,
+  initiallyActive = false,
+  initialAccessPolicy: AccessPolicyState = 'Ready',
+) {
   let active = initiallyActive;
+  let accessPolicyState = initialAccessPolicy;
   let policyVersion = 7;
   let assignments: { id: string; actorId: string; customerId: string }[] = [];
   const writes: { path: string; body: unknown }[] = [];
@@ -27,6 +34,29 @@ async function fixture(page: Page, initiallyActive = false) {
       });
       return;
     }
+    if (path === '/uat-api/v1/setup/access-policy/adopt') {
+      if (method !== 'POST') {
+        await route.fulfill({ status: 405 });
+        return;
+      }
+      writes.push({ path, body: route.request().postDataJSON() });
+      if (accessPolicyState !== 'UpdateAvailable') {
+        await route.fulfill({ status: 409, json: { error: 'ACCESS_POLICY_CONFLICT' } });
+        return;
+      }
+      accessPolicyState = 'Ready';
+      policyVersion++;
+      await route.fulfill({
+        json: {
+          state: 'Ready',
+          changeCount: 0,
+          roleChangeCount: 0,
+          permissionChangeCount: 0,
+          conflictCount: 0,
+        },
+      });
+      return;
+    }
     if (path === '/uat-api/v1/setup') {
       if (method === 'POST') {
         writes.push({ path, body: route.request().postDataJSON() });
@@ -44,6 +74,14 @@ async function fixture(page: Page, initiallyActive = false) {
           initialAdministratorEmail: 'admin@aster.example',
           state: active ? 'Active' : 'ReadyForAdmin',
           receiptReference: active ? 'setup-fixture-receipt' : null,
+          accessPolicy: {
+            state: accessPolicyState,
+            changeCount: accessPolicyState === 'UpdateAvailable' ? 9 : 0,
+            roleChangeCount: accessPolicyState === 'UpdateAvailable' ? 8 : 0,
+            permissionChangeCount: accessPolicyState === 'UpdateAvailable' ? 1 : 0,
+            conflictCount:
+              accessPolicyState === 'Customized' || accessPolicyState === 'Blocked' ? 1 : 0,
+          },
           customerRelationships: true,
         },
       });
@@ -97,10 +135,22 @@ async function fixture(page: Page, initiallyActive = false) {
       : path.endsWith('/roles')
         ? [
             {
+              id: 'customer-role',
+              code: 'customer',
+              label: 'Customer',
+              permissionIds: ['read', 'upload', 'process'],
+            },
+            {
               id: 'advisor-role',
-              code: 'advisor',
-              label: 'Financial Advisor',
-              permissionIds: ['profile', 'search'],
+              code: 'financial-advisor',
+              label: 'Financial Advisor / Relationship Manager',
+              permissionIds: [],
+            },
+            {
+              id: 'valuer-role',
+              code: 'property-valuer',
+              label: 'Property Valuer',
+              permissionIds: [],
             },
           ]
         : [];
@@ -110,23 +160,23 @@ async function fixture(page: Page, initiallyActive = false) {
 }
 async function connect(page: Page, path = '/access') {
   await page.goto(path);
-  await page.getByLabel('Local access key').fill('fixture-only');
+  await page.getByLabel('Test access key').fill('fixture-only');
   await page.getByRole('button', { name: 'Connect workspace', exact: true }).click();
 }
 
 test('first login reviews organization and access before mounting navigation', async ({ page }) => {
   const writes = await fixture(page);
   await connect(page);
-  await expect(page.getByRole('heading', { name: 'A clear start for your team.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome to Monergy — set up your organization.' })).toBeVisible();
   await expect(page.locator('.mw-shell')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Complete setup' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Complete organization setup' })).toBeDisabled();
   await page.screenshot({ path: '.artifacts/onboarding-setup.png', fullPage: true });
   await page.getByLabel('I have reviewed the organization details').check();
-  await page.getByLabel('I understand how roles and customer access work').check();
+  await page.getByLabel('I have reviewed how roles and customer access work').check();
   expect(writes).toHaveLength(0);
-  await page.getByRole('button', { name: 'Complete setup' }).click();
+  await page.getByRole('button', { name: 'Complete organization setup' }).click();
   await expect(
-    page.getByRole('navigation', { name: 'Access Management navigation' }),
+    page.getByRole('navigation', { name: 'Organization & Access navigation' }),
   ).toBeVisible();
   expect(writes).toHaveLength(1);
   expect(writes[0]?.body).toMatchObject({
@@ -136,6 +186,36 @@ test('first login reviews organization and access before mounting navigation', a
   });
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('navigation')).toHaveCount(0);
+});
+
+test('clean existing access requires an explicit recommended-access update before activation', async ({
+  page,
+}) => {
+  const writes = await fixture(page, false, 'UpdateAvailable');
+  await connect(page);
+
+  await expect(
+    page.getByRole('heading', { name: 'Welcome to Monergy — set up your organization.' }),
+  ).toBeVisible();
+  const apply = page.getByRole('button', { name: 'Apply recommended access' });
+  await expect(apply).toBeVisible();
+  await expect(
+    page.getByLabel('I have reviewed how roles and customer access work'),
+  ).toBeDisabled();
+
+  await apply.click();
+  await expect(page.getByText('Recommended access is ready')).toBeVisible();
+  expect(writes).toHaveLength(1);
+  expect(writes[0]?.path).toBe('/uat-api/v1/setup/access-policy/adopt');
+  expect(writes[0]?.body).toMatchObject({ requestId: expect.any(String) });
+
+  await page.getByLabel('I have reviewed the organization details').check();
+  await page.getByLabel('I have reviewed how roles and customer access work').check();
+  await page.getByRole('button', { name: 'Complete organization setup' }).click();
+  await expect(
+    page.getByRole('navigation', { name: 'Organization & Access navigation' }),
+  ).toBeVisible();
+  expect(writes).toHaveLength(2);
 });
 
 test('named customer assignment reviews its effect and supports immediate removal', async ({
@@ -196,7 +276,7 @@ test('compact setup reflows at mobile width and supports reduced motion', async 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await fixture(page);
   await connect(page);
-  await expect(page.getByRole('heading', { name: 'A clear start for your team.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome to Monergy — set up your organization.' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -205,7 +285,7 @@ test('compact setup reflows at mobile width and supports reduced motion', async 
   await expect(page.getByLabel('I have reviewed the organization details')).toBeChecked();
 });
 
-test('customer entry stays isolated from administration and confirms reviewed evidence', async ({
+test('customer entry stays isolated from administration and reviews uploaded documents', async ({
   page,
 }) => {
   const customerSession = {
@@ -238,8 +318,8 @@ test('customer entry stays isolated from administration and confirms reviewed ev
             'search.query.execute',
             'reporting.report.generate',
           ],
-          environment: 'Local UAT',
-          dataDurability: 'Runtime only',
+          environment: 'Test environment',
+          dataDurability: 'Temporary data',
           productionAccepted: false,
         },
       });
@@ -247,7 +327,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
     }
     if (path === '/product-api/v1/evidence') {
       if (route.request().method() === 'GET') {
-        await route.fulfill({ json: { items: library, dataDurability: 'Runtime only' } });
+        await route.fulfill({ json: { items: library, dataDurability: 'Temporary data' } });
         return;
       }
       const body = route.request().postDataJSON() as { operationId: string };
@@ -271,7 +351,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
           operationId: body.operationId,
           ...accepted,
           acceptedAt: '2026-10-14T00:00:00Z',
-          dataDurability: 'Runtime only',
+          dataDurability: 'Temporary data',
         },
       });
       return;
@@ -323,7 +403,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
               validationVersion: 'canonical-source-fact/1.0.0',
             },
           ],
-          dataDurability: 'Runtime only',
+          dataDurability: 'Temporary data',
           processingMode: 'Structured text reference processor',
         },
       });
@@ -334,14 +414,14 @@ test('customer entry stays isolated from administration and confirms reviewed ev
   await page.goto('/');
   await expect(page.locator('.mw-shell')).toHaveCount(0);
   await expect(page.getByRole('navigation')).toHaveCount(0);
-  await page.getByLabel('Local access key').fill('customer-fixture');
+  await page.getByLabel('Test access key').fill('customer-fixture');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Start with what you know.' })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Financial Workspace navigation' });
-  await expect(navigation.getByRole('link', { name: 'Evidence' })).toBeVisible();
+  await expect(navigation.getByRole('link', { name: 'Documents' })).toBeVisible();
   for (const name of ['Access management', 'System Expert', 'Engineering foundation'])
     await expect(navigation.getByRole('link', { name, exact: true })).toHaveCount(0);
-  await navigation.getByRole('link', { name: 'Evidence' }).click();
+  await navigation.getByRole('link', { name: 'Documents' }).click();
   await page.locator('input[type="file"]').setInputFiles({
     name: 'statement.txt',
     mimeType: 'text/plain',
