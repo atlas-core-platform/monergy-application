@@ -650,3 +650,19 @@
     grid-column: 2;
   }
 }
+
+
+/* T1-07 source trace navigation */
+.product-financial-source > a {
+  color: var(--mw-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+.product-financial-source > a:hover {
+  text-decoration: underline;
+}
+.product-financial-source > a:focus-visible {
+  outline: 2px solid var(--mw-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
