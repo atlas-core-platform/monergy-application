@@ -12,6 +12,7 @@ public static class TenantSetupEndpoints
             TenantAccessIntegration.Required(builder.Configuration, "Monergy:Onboarding:RegistryPath")));
         builder.Services.AddSingleton(_ => new FileTenantSetup(
             TenantAccessIntegration.Required(builder.Configuration, "Monergy:Onboarding:SetupPath")));
+        builder.Services.AddSingleton<AccessPackSetupClient>();
         builder.Services.AddSingleton(provider => new TenantOnboardingOrchestrator(provider.GetRequiredService<ITenantRegistry>(),
             Enum.GetValues<TenantProvisioningStep>().Select(step => new ActivationOnlyOperation(step)), TimeProvider.System,
             provider.GetRequiredService<FileTenantSetup>()));
@@ -28,6 +29,8 @@ public static class TenantSetupEndpoints
             var tenant = await registry.GetAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false)
                 ?? throw new TenantBoundaryException("TENANT_ONBOARDING_UNAVAILABLE", 503);
             var receipt = await http.RequestServices.GetRequiredService<FileTenantSetup>().GetAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false);
+            var accessPolicy = await http.RequestServices.GetRequiredService<AccessPackSetupClient>()
+                .ReadViewAsync(http).ConfigureAwait(false);
             return (object)new
             {
                 enabled = true,
@@ -40,16 +43,30 @@ public static class TenantSetupEndpoints
                 tenant.InitialAdministratorEmail,
                 state = tenant.State.ToString(),
                 receiptReference = receipt?.ReceiptReference,
+                accessPolicy,
                 customerRelationships = true
             };
         }));
         if (!enabled) return;
+        app.MapPost("/uat-api/v1/setup/access-policy/adopt", (
+            SetupAccessPolicyAdoption request,
+            HttpContext http,
+            TenantAccessClient access,
+            AccessPackSetupClient accessPack) => InvokeAsync(async () =>
+        {
+            _ = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
+            return await accessPack.AdoptAsync(http, request).ConfigureAwait(false);
+        }));
         app.MapPost("/uat-api/v1/setup", (TenantSetupSubmission request, HttpContext http, TenantAccessClient access,
             ITenantRegistry registry, FileTenantSetup setup, TenantOnboardingOrchestrator orchestrator) => InvokeAsync(async () =>
         {
             var admin = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
             var tenant = await registry.GetAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false)
                 ?? throw new TenantBoundaryException("TENANT_ONBOARDING_UNAVAILABLE", 503);
+            var accessPolicy = await http.RequestServices.GetRequiredService<AccessPackSetupClient>()
+                .ReadViewAsync(http).ConfigureAwait(false);
+            if (!AccessPackSetupClient.AllowsActivation(accessPolicy))
+                throw new InvalidOperationException("TENANT_ACCESS_POLICY_REVIEW_REQUIRED");
             var receipt = await setup.CompleteAsync(tenant, admin.ActorId, admin.PolicyVersion, request, TimeProvider.System, http.RequestAborted).ConfigureAwait(false);
             var active = await orchestrator.ActivateAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false);
             return new { receipt.ReceiptReference, state = active.State.ToString() };
@@ -58,6 +75,10 @@ public static class TenantSetupEndpoints
             TenantOnboardingOrchestrator orchestrator) => InvokeAsync(async () =>
         {
             var admin = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
+            var accessPolicy = await http.RequestServices.GetRequiredService<AccessPackSetupClient>()
+                .ReadViewAsync(http).ConfigureAwait(false);
+            if (!AccessPackSetupClient.AllowsActivation(accessPolicy))
+                throw new InvalidOperationException("TENANT_ACCESS_POLICY_REVIEW_REQUIRED");
             var active = await orchestrator.ActivateAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false);
             return new { active.SetupReceiptReference, state = active.State.ToString() };
         }));
