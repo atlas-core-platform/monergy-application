@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Monergy.Contracts;
 using Monergy.Platform;
 using Monergy.Services.JobManagement.Application;
