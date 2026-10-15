@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { LocalTenantSetup } from '../src/access/TenantSetup';
 import { AccessApi, AccessApiError } from '../src/access/accessApi';
+import type { AccessRecord } from '../src/access/accessApi';
 import { Context } from '../src/access/workspaceSession';
 import type { TenantSetupState } from '../src/access/onboarding';
 
@@ -62,11 +63,27 @@ function mount(api: AccessApi) {
   );
 }
 
+function mockSetupCollections(api: AccessApi, roles: AccessRecord[] = []) {
+  vi.spyOn(api, 'all').mockImplementation((area) =>
+    Promise.resolve(area === 'roles' ? roles : []),
+  );
+  return vi.spyOn(api, 'request').mockImplementation((path, method) => {
+    if (path === 'administration/customer-relationships?limit=100' && method === 'GET')
+      return Promise.resolve({ policyVersion: 7, items: [] });
+    return Promise.reject(new Error(`Unexpected request ${method ?? 'GET'} ${path}`));
+  });
+}
+
 it('requires both reviews and waits for server activation before showing the workspace', async () => {
   const api = new AccessApi(session);
   const owner = vi.spyOn(api, 'owner').mockResolvedValue(ready);
-  vi.spyOn(api, 'all').mockResolvedValue([
-    { id: 'role', label: 'Financial Advisor', permissionIds: ['permission'] },
+  mockSetupCollections(api, [
+    {
+      id: 'role',
+      code: 'financial-advisor',
+      label: 'Financial Advisor / Relationship Manager',
+      permissionIds: ['permission'],
+    },
   ]);
   const save = vi.spyOn(api, 'setup').mockImplementation(() => {
     owner.mockResolvedValue({ ...ready, state: 'Active', receiptReference: 'setup-receipt' });
@@ -106,8 +123,10 @@ it('requires an explicit owner adoption before a v1 organization can complete se
     },
   };
   const owner = vi.spyOn(api, 'owner').mockResolvedValue(v1);
-  vi.spyOn(api, 'all').mockResolvedValue([]);
+  vi.spyOn(api, 'all').mockImplementation(() => Promise.resolve([]));
   const request = vi.spyOn(api, 'request').mockImplementation((path, method) => {
+    if (path === 'administration/customer-relationships?limit=100' && method === 'GET')
+      return Promise.resolve({ policyVersion: 7, items: [] });
     if (path === 'administration/default-access-pack/plan' && method === 'GET')
       return Promise.resolve({
         installedVersion: '1.0',
@@ -119,7 +138,14 @@ it('requires an explicit owner adoption before a v1 organization can complete se
         conflicts: [],
       });
     if (path === 'administration/default-access-pack/adopt' && method === 'POST') {
-      owner.mockResolvedValue(ready);
+      owner.mockResolvedValue({
+        ...ready,
+        policyVersion: 8,
+        accessPack: {
+          ...ready.accessPack!,
+          policyVersion: 8,
+        },
+      });
       return Promise.resolve({
         packVersion: '2.0',
         policyVersion: 8,
@@ -163,15 +189,21 @@ it('does not overwrite a customized v1 access model', async () => {
       ready: false,
     },
   });
-  vi.spyOn(api, 'all').mockResolvedValue([]);
-  const request = vi.spyOn(api, 'request').mockResolvedValue({
-    installedVersion: '1.0',
-    targetVersion: '2.0',
-    policyVersion: 7,
-    planHash: 'b'.repeat(64),
-    alreadyInstalled: false,
-    changes: [],
-    conflicts: ['SEEDED_ROLE_CUSTOMIZED:default-role-customer'],
+  vi.spyOn(api, 'all').mockImplementation(() => Promise.resolve([]));
+  const request = vi.spyOn(api, 'request').mockImplementation((path, method) => {
+    if (path === 'administration/customer-relationships?limit=100' && method === 'GET')
+      return Promise.resolve({ policyVersion: 7, items: [] });
+    if (path === 'administration/default-access-pack/plan' && method === 'GET')
+      return Promise.resolve({
+        installedVersion: '1.0',
+        targetVersion: '2.0',
+        policyVersion: 7,
+        planHash: 'b'.repeat(64),
+        alreadyInstalled: false,
+        changes: [],
+        conflicts: ['SEEDED_ROLE_CUSTOMIZED:default-role-customer'],
+      });
+    return Promise.reject(new Error(`Unexpected request ${method ?? 'GET'} ${path}`));
   });
 
   mount(api);
@@ -196,7 +228,7 @@ it('does not accept setup from another tenant or an active response without a re
 it('preserves a policy conflict until an explicit refresh and does not repeat the write', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'owner').mockResolvedValue(ready);
-  vi.spyOn(api, 'all').mockResolvedValue([]);
+  mockSetupCollections(api);
   const save = vi
     .spyOn(api, 'setup')
     .mockRejectedValue(new AccessApiError(409, 'TENANT_SETUP_POLICY_CHANGED'));
@@ -217,7 +249,7 @@ it('can resume activation from an existing receipt without creating another revi
   const owner = vi
     .spyOn(api, 'owner')
     .mockResolvedValue({ ...ready, receiptReference: 'saved-receipt' });
-  vi.spyOn(api, 'all').mockResolvedValue([]);
+  mockSetupCollections(api);
   const save = vi.spyOn(api, 'setup').mockImplementation(() => {
     owner.mockResolvedValue({ ...ready, state: 'Active', receiptReference: 'saved-receipt' });
     return Promise.resolve({ state: 'Active' });
