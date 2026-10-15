@@ -62,7 +62,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('reviews the exact file before submitting and shows the owner-confirmed receipt', async () => {
+it('reviews the exact file before submitting and shows the upload confirmation', async () => {
   const api = new AccessApi(session);
   const receipt = {
     operationId: 'a'.repeat(32),
@@ -100,19 +100,19 @@ it('reviews the exact file before submitting and shows the owner-confirmed recei
   vi.spyOn(crypto, 'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
   mount(api);
   const user = userEvent.setup();
-  expect(await screen.findByText('Your verified evidence library is ready.')).toBeVisible();
+  expect(await screen.findByText('No documents yet.')).toBeVisible();
   const input = document.querySelector('input[type="file"]');
   expect(input).toBeInstanceOf(HTMLInputElement);
   await user.upload(
     input as HTMLInputElement,
     new File(['account evidence'], 'statement.txt', { type: 'text/plain' }),
   );
-  const drawer = await screen.findByRole('dialog', { name: 'Review evidence upload' });
+  const drawer = await screen.findByRole('dialog', { name: 'Review document upload' });
   expect(drawer).toHaveTextContent('statement.txt');
   expect(drawer).toHaveTextContent('Reference Customer');
-  expect(drawer).toHaveTextContent('Current LOCAL/UAT runtime only');
+  expect(drawer).toHaveTextContent('Test environment · Temporary data');
   expect(submit.mock.calls.filter((call) => call[1] === 'POST')).toHaveLength(0);
-  await user.click(screen.getByRole('button', { name: 'Upload evidence' }));
+  await user.click(screen.getByRole('button', { name: 'Upload document' }));
   await waitFor(() => {
     expect(submit).toHaveBeenCalledTimes(3);
   });
@@ -123,27 +123,27 @@ it('reviews the exact file before submitting and shows the owner-confirmed recei
     originalFileName: 'statement.txt',
     contentType: 'text/plain',
   });
-  expect(await screen.findByText('VERIFIED')).toBeVisible();
+  expect(await screen.findByText('UPLOADED')).toBeVisible();
   await waitFor(() => {
     expect(
-      screen.queryByRole('dialog', { name: 'Review evidence upload' }),
+      screen.queryByRole('dialog', { name: 'Review document upload' }),
     ).not.toBeInTheDocument();
   });
-  await user.click(screen.getByRole('button', { name: 'View provenance for statement.txt' }));
-  expect(screen.getByRole('dialog', { name: 'Evidence provenance' })).toHaveTextContent(
-    `document-version-${'a'.repeat(32)}`,
-  );
+  await user.click(screen.getByRole('button', { name: 'View document details for statement.txt' }));
+  const details = screen.getByRole('dialog', { name: 'Document details' });
+  await user.click(within(details).getByText('Technical details'));
+  expect(details).toHaveTextContent(`document-version-${'a'.repeat(32)}`);
 });
 
 it('does not expose upload when the current role lacks the capability', () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockResolvedValue({ items: [], dataDurability: 'Runtime only' });
   mount(api, ['evidence.document.read']);
-  expect(screen.getByText('Evidence upload is not included in your current role')).toBeVisible();
+  expect(screen.getByText('Document upload is not included in your current access')).toBeVisible();
   expect(document.querySelector('input[type="file"]')).toBeDisabled();
 });
 
-it('loads, filters and inspects the owner-confirmed evidence library', async () => {
+it('loads, filters and inspects the document library', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockResolvedValue({
     dataDurability: 'Runtime only',
@@ -181,15 +181,16 @@ it('loads, filters and inspects the owner-confirmed evidence library', async () 
 
   expect(await screen.findByText('annual-statement.pdf')).toBeVisible();
   expect(screen.getByText('income.txt')).toBeVisible();
-  await user.type(screen.getByLabelText('Find evidence'), 'annual');
+  await user.type(screen.getByLabelText('Find documents'), 'annual');
   expect(screen.getByText('annual-statement.pdf')).toBeVisible();
   expect(screen.queryByText('income.txt')).not.toBeInTheDocument();
   await user.click(
-    screen.getByRole('button', { name: 'View provenance for annual-statement.pdf' }),
+    screen.getByRole('button', { name: 'View document details for annual-statement.pdf' }),
   );
-  const drawer = await screen.findByRole('dialog', { name: 'Evidence provenance' });
+  const drawer = await screen.findByRole('dialog', { name: 'Document details' });
+  expect(drawer).toHaveTextContent('Technical details');
+  await user.click(within(drawer).getByText('Technical details'));
   expect(drawer).toHaveTextContent('document-version-001');
-  expect(drawer).toHaveTextContent('Raw document content is not exposed');
 });
 
 it('keeps the library hidden without evidence read authority', () => {
@@ -197,12 +198,12 @@ it('keeps the library hidden without evidence read authority', () => {
   const request = vi.spyOn(api, 'product');
   mount(api, ['evidence.document.upload']);
   expect(
-    screen.getByText('Evidence library access is not included in your current role'),
+    screen.getByText('You don't have access to these documents'),
   ).toBeVisible();
   expect(request).not.toHaveBeenCalled();
 });
 
-it('reviews authorized structured-text processing and displays source facts without profile mutation', async () => {
+it('reviews authorized structured-text processing and displays extracted information without profile mutation', async () => {
   const api = new AccessApi(session);
   const item = {
     documentId: 'document-003',
@@ -268,14 +269,14 @@ it('reviews authorized structured-text processing and displays source facts with
   mount(api);
   const user = userEvent.setup();
   await user.click(
-    await screen.findByRole('button', { name: 'View provenance for financial-facts.txt' }),
+    await screen.findByRole('button', { name: 'View document details for financial-facts.txt' }),
   );
-  const provenance = screen.getByRole('dialog', { name: 'Evidence provenance' });
-  await user.click(within(provenance).getByRole('button', { name: 'Review processing' }));
-  const review = await screen.findByRole('dialog', { name: 'Review document processing' });
-  expect(review).toHaveTextContent('Candidate facts only');
-  expect(review).toHaveTextContent('does not update your financial profile');
-  await user.click(within(review).getByRole('button', { name: 'Start processing' }));
+  const provenance = screen.getByRole('dialog', { name: 'Document details' });
+  await user.click(within(provenance).getByRole('button', { name: 'Extract details' }));
+  const review = await screen.findByRole('dialog', { name: 'Extract and review details' });
+  expect(review).toHaveTextContent('Review before adding anything to your financial profile');
+  expect(review).toHaveTextContent('Your financial profile is not changed by this step');
+  await user.click(within(review).getByRole('button', { name: 'Extract details' }));
   expect(await screen.findByText('Employment income')).toBeVisible();
   expect(review).toHaveTextContent('$125,000.00');
   expect(review).toHaveTextContent('98% confidence');
