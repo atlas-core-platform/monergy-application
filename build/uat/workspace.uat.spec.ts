@@ -25,7 +25,7 @@ test('local UAT direct routes and invalid credentials never expose the protected
   await page.getByRole('button', { name: 'Connect workspace', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Unable to connect');
   await expect(page.locator('.mw-shell')).toHaveCount(0);
-  await page.getByLabel('Tenant', { exact: true }).fill('T002');
+  await page.getByLabel('Organization', { exact: true }).fill('T002');
   await page
     .getByLabel('Local access key')
     .fill(
