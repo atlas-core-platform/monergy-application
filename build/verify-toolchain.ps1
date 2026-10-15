@@ -313,6 +313,8 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
                 $adapter.Contains('ownerServices.GetRequiredService<TenantBoundaryOptions>()') -and
                 $adapter.Contains('ownerServices.GetRequiredService<TenantAccessClient>()') -and
                 $adapter.Contains('app.UseMiddleware<TenantBoundaryMiddleware>()') -and
+                $adapter.Contains('ownerServices.GetRequiredService<HealthCheckService>()') -and
+                $adapter.Contains('app.MapHealthChecks("/health/ready")') -and
                 $adapter.Contains('ownerServices.GetRequiredService<JobManagementApplication>()') -and
                 $adapter.Contains('ownerServices.GetRequiredService<IJobRepository>()') -and
                 $adapter.Contains('MapDocumentProcessingJobs(configuration)')
@@ -329,6 +331,8 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
                 $adapter.Contains('ownerServices.GetRequiredService<TenantBoundaryOptions>()') -and
                 $adapter.Contains('ownerServices.GetRequiredService<TenantAccessClient>()') -and
                 $adapter.Contains('app.UseMiddleware<TenantBoundaryMiddleware>()') -and
+                $adapter.Contains('ownerServices.GetRequiredService<HealthCheckService>()') -and
+                $adapter.Contains('app.MapHealthChecks("/health/ready")') -and
                 $adapter.Contains('ownerServices.GetRequiredService<DocumentProcessingApplication>()') -and
                 $adapter.Contains('ownerServices.GetRequiredService<IDocumentProcessingRepository>()') -and
                 $adapter.Contains('MapDocumentProcessing(configuration)')
