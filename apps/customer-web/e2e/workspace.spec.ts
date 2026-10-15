@@ -310,7 +310,7 @@ test('access routes keep the session and exclude platform navigation across deep
     await route.fulfill({ json: { policyVersion: 7, items: [], nextCursor: null } });
   });
   await page.goto('/access/roles');
-  const navigation = page.getByRole('navigation', { name: 'Access Management navigation' });
+  const navigation = page.getByRole('navigation', { name: 'Organization Settings navigation' });
   for (const name of [
     'Documents',
     'Search',
@@ -348,14 +348,14 @@ test('access routes keep the session and exclude platform navigation across deep
   await expect(
     page.getByRole('heading', { name: 'Access Permissions', exact: true }),
   ).toBeVisible();
-  await page.getByRole('link', { name: 'Access Management home' }).click();
+  await page.getByRole('link', { name: 'Organization Settings home' }).click();
   await expect(page).toHaveURL(/\/access$/);
   await expect(page.getByRole('heading', { name: 'Access overview' })).toBeVisible();
   expect(signIns).toBe(1);
   await page.goto('/access/not-a-page');
   await page.getByLabel('Local access key').fill('browser-fixture-only');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(page.getByText('This access management page does not exist.')).toBeVisible();
+  await expect(page.getByText('This Organization Settings page does not exist.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Monergy frontend foundation' })).toHaveCount(0);
 });
 
