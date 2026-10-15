@@ -62,7 +62,7 @@ test('real tenant administration, sessions, canonical audit and service readines
     await page.getByRole('button', { name: 'Complete setup' }).click();
   }
   await expect(page.getByRole('heading', { name: 'Access overview', exact: true })).toBeVisible();
-  const navigation = page.getByRole('navigation', { name: 'Access Management navigation' });
+  const navigation = page.getByRole('navigation', { name: 'Organization Settings navigation' });
   await expect(navigation.getByRole('link', { name: 'System Expert' })).toHaveCount(0);
   await navigation.getByRole('link', { name: 'People', exact: true }).click();
   await page.getByRole('button', { name: 'Create person', exact: true }).click();
