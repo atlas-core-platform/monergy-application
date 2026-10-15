@@ -19,11 +19,23 @@ public sealed class TenantSetupTests
             await Assert.ThrowsAsync<InvalidOperationException>(() => store.CompleteAsync(tenant, "A900", 7, request with { AccessReviewed = false }, TimeProvider.System, default));
             var receipt = await store.CompleteAsync(tenant, "A900", 7, request, TimeProvider.System, default);
             var reopened = new FileTenantSetup(Path.Combine(folder, "setup.json"));
-            Assert.Equal(receipt, await reopened.CompleteAsync(tenant, "A900", 8, request, TimeProvider.System, default));
-            Assert.Equal(receipt.ReceiptReference, (await reopened.ReadAsync("T001", default)).ReceiptReference);
+            Assert.Equal(receipt, await reopened.CompleteAsync(tenant, "A900", 7, request, TimeProvider.System, default));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                reopened.CompleteAsync(tenant, "A900", 8, request, TimeProvider.System, default));
+
+            var revised = await reopened.CompleteAsync(
+                tenant,
+                "A900",
+                8,
+                new("review-2", 8, true, true),
+                TimeProvider.System,
+                default);
+            Assert.NotEqual(receipt.ReceiptReference, revised.ReceiptReference);
+            Assert.Equal(8, revised.ReviewedPolicyVersion);
+            Assert.Equal(revised.ReceiptReference, (await reopened.ReadAsync("T001", default)).ReceiptReference);
             Assert.False((await reopened.ReadAsync("T002", default)).Ready);
-            await Assert.ThrowsAsync<InvalidOperationException>(() => reopened.CompleteAsync(tenant, "A901", 7, request, TimeProvider.System, default));
-            await Assert.ThrowsAsync<InvalidOperationException>(() => reopened.CompleteAsync(tenant, "A900", 8, request with { ExpectedPolicyVersion = 8 }, TimeProvider.System, default));
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                reopened.CompleteAsync(tenant, "A901", 8, new("review-3", 8, true, true), TimeProvider.System, default));
         }
         finally { Directory.Delete(folder, true); }
     }
