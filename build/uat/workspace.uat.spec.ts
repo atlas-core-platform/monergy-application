@@ -64,25 +64,25 @@ test('real tenant administration, sessions, canonical audit and service readines
   await expect(page.getByRole('heading', { name: 'Access overview', exact: true })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Access Management navigation' });
   await expect(navigation.getByRole('link', { name: 'System Expert' })).toHaveCount(0);
-  await navigation.getByRole('link', { name: 'Users', exact: true }).click();
-  await page.getByRole('button', { name: 'Create user', exact: true }).click();
+  await navigation.getByRole('link', { name: 'People', exact: true }).click();
+  await page.getByRole('button', { name: 'Create person', exact: true }).click();
   await page.getByLabel('Email address').fill('uat-single@example.test');
   await page.getByRole('combobox', { name: 'Business role' }).click();
   await page.getByTitle('Disposable UAT tester', { exact: true }).click();
-  await page.getByRole('button', { name: 'Review user', exact: true }).click();
+  await page.getByRole('button', { name: 'Review person', exact: true }).click();
   await expect(
     page.getByRole('region', { name: 'Review onboarding' }).getByText('uat-single@example.test'),
   ).toBeVisible();
   await page
-    .getByRole('dialog', { name: 'Review new user', exact: true })
-    .getByRole('button', { name: 'Create user', exact: true })
+    .getByRole('dialog', { name: 'Review new person', exact: true })
+    .getByRole('button', { name: 'Create person', exact: true })
     .click();
-  await expect(page.getByText('User created.')).toBeVisible();
+  await expect(page.getByText('Person created.')).toBeVisible();
   await page.getByLabel('Close', { exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  const users = page.getByRole('region', { name: 'Users', exact: true });
+  const users = page.getByRole('region', { name: 'People', exact: true });
   await expect(users.getByText('uat-single@example.test', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Import users', exact: true }).click();
+  await page.getByRole('button', { name: 'Import people', exact: true }).click();
   await page.getByText('Paste CSV instead').click();
   await page
     .getByRole('textbox', { name: 'CSV contents' })
@@ -90,12 +90,12 @@ test('real tenant administration, sessions, canonical audit and service readines
   await page.getByRole('button', { name: 'Validate entire file' }).click();
   await page.getByRole('button', { name: 'Confirm onboarding' }).click();
   await page.getByRole('button', { name: 'Onboard people', exact: true }).click();
-  await expect(page.getByText('User access activated.')).toBeVisible();
+  await expect(page.getByText('Person access activated.')).toBeVisible();
   await page.getByLabel('Close', { exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(users.getByText('uat-onboard@example.test', { exact: true })).toBeVisible();
   if (profile.onboarding) {
-    await navigation.getByRole('link', { name: 'Resource Access', exact: true }).click();
+    await navigation.getByRole('link', { name: 'Customer Assignments', exact: true }).click();
     await page.getByRole('button', { name: 'Assign customer', exact: true }).click();
     await page.getByRole('combobox', { name: 'Advisor', exact: true }).click();
     await page.getByTitle('a300@example.test', { exact: true }).click();
