@@ -27,7 +27,7 @@ test('product direct routes isolate the protected shell until authorization succ
     page.getByRole('navigation', { name: 'Financial Workspace navigation' }),
   ).not.toBeVisible();
   await expect(
-    page.getByRole('heading', { name: 'Bring your financial documents into view.' }),
+    page.getByRole('heading', { name: 'Keep your financial documents together.' }),
   ).not.toBeVisible();
 });
 
@@ -75,9 +75,9 @@ test('workspace navigation, command palette and guide support keyboard and reduc
   await page.getByRole('dialog').getByRole('button', { name: 'Evidence' }).click();
   await expect(page).toHaveURL(/\/evidence$/);
   await expect(
-    page.getByRole('heading', { name: 'Bring your financial documents into view.' }),
+    page.getByRole('heading', { name: 'Keep your financial documents together.' }),
   ).toBeVisible();
-  await expect(page.getByText('Your verified evidence library is ready.')).toBeVisible();
+  await expect(page.getByText('No documents yet.')).toBeVisible();
   await expect(page.locator('.mw-shell')).toBeVisible();
   const guide = page.getByRole('button', { name: 'Financial workspace guide' });
   await guide.focus();
@@ -100,7 +100,7 @@ test('mobile navigation and access form remain within the viewport', async ({ pa
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await page.getByRole('dialog').getByRole('link', { name: 'Evidence' }).click();
   await expect(
-    page.getByRole('heading', { name: 'Bring your financial documents into view.' }),
+    page.getByRole('heading', { name: 'Keep your financial documents together.' }),
   ).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
