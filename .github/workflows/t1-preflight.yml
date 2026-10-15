@@ -1,0 +1,73 @@
+name: T1 temporary preflight
+
+on:
+  push:
+    branches:
+      - delivery/t1-integrated-onboarding-documents
+
+permissions:
+  contents: write
+
+concurrency:
+  group: t1-temporary-preflight
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    if: github.actor != 'github-actions[bot]' || contains(github.event.head_commit.message, 'temporary preflight')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.401
+
+      - name: Set up Node 24
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+
+      - name: Enable pinned pnpm
+        shell: bash
+        run: |
+          corepack enable
+          corepack install --global pnpm@12.4.1
+
+      - name: Restore
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Restore
+
+      - name: Format check
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task FormatCheck
+
+      - name: Lint and typecheck
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Lint
+
+      - name: Build
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Build
+
+      - name: Test
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Test
+
+      - name: Architecture tests
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task ArchitectureTest
+
+      - name: Remove temporary helper after successful preflight
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/t1-preflight.yml
+          git commit -m "T1-03: remove temporary preflight helper"
+          git push origin HEAD:delivery/t1-integrated-onboarding-documents
