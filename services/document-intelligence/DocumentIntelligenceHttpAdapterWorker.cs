@@ -36,7 +36,9 @@ public sealed class DocumentIntelligenceHttpAdapterWorker(
             builder.Services.AddSingleton(ownerServices.GetRequiredService<TenantBoundaryOptions>());
             builder.Services.AddSingleton(ownerServices.GetRequiredService<TenantAccessClient>());
         }
-        var documentProcessing = ReferenceAdapterGuard.IsSelected(configuration);
+        var documentProcessing =
+            ReferenceAdapterGuard.IsSelected(configuration) &&
+            !string.IsNullOrWhiteSpace(configuration["Monergy:DocumentProcessing:ControlToken"]);
         if (documentProcessing)
         {
             builder.Services.AddSingleton(ownerServices.GetRequiredService<DocumentProcessingApplication>());
