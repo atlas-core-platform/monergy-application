@@ -1,4 +1,5 @@
 name: T1 temporary preflight
+# manual rerun on repaired source
 
 on:
   push:
