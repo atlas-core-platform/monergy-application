@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Monergy.Platform;
 using Monergy.Services.DocumentIntelligence.Application;
@@ -28,6 +30,7 @@ public sealed class DocumentIntelligenceHttpAdapterWorker(
             adapterUrl ?? throw new InvalidOperationException("Worker HTTP adapter requires an explicit loopback URL."));
         builder.WebHost.UseUrls(endpoint.ToString());
 
+        builder.Services.AddSingleton(ownerServices.GetRequiredService<HealthCheckService>());
         if (tenantBoundary)
         {
             builder.Services.AddSingleton(ownerServices.GetRequiredService<TenantBoundaryOptions>());
@@ -43,8 +46,8 @@ public sealed class DocumentIntelligenceHttpAdapterWorker(
         await using var app = builder.Build();
         if (tenantBoundary)
             app.UseMiddleware<TenantBoundaryMiddleware>();
-        app.MapGet("/health/live", () => Results.Ok(new { status = "live", primaryHost = "worker" }));
-        app.MapGet("/health/ready", () => Results.Ok(new { status = "ready", primaryHost = "worker" }));
+        app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
+        app.MapHealthChecks("/health/ready");
         if (documentProcessing)
             app.MapDocumentProcessing(configuration);
 
