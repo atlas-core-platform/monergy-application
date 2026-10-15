@@ -75,7 +75,7 @@ export function AccessOverview({
               label: 'People',
               href: '/access/users',
               icon: 'users',
-              detail: 'People in this tenant',
+              detail: 'People in this organization',
             },
             {
               label: 'Roles',
