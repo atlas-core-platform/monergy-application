@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -20,6 +21,15 @@ public sealed class JobManagementHttpAdapterWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var builder = WebApplication.CreateSlimBuilder();
+        if (configuration["urls"] is { Length: > 0 } urls)
+            builder.WebHost.UseUrls(urls);
+
+        var tenantBoundary = TenantBoundaryOptions.Selected(configuration);
+        if (tenantBoundary)
+        {
+            builder.Services.AddSingleton(ownerServices.GetRequiredService<TenantBoundaryOptions>());
+            builder.Services.AddSingleton(ownerServices.GetRequiredService<TenantAccessClient>());
+        }
         var documentProcessing =
             ReferenceAdapterGuard.IsSelected(configuration) &&
             configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled");
@@ -34,6 +44,8 @@ public sealed class JobManagementHttpAdapterWorker(
         }
 
         await using var app = builder.Build();
+        if (tenantBoundary)
+            app.UseMiddleware<TenantBoundaryMiddleware>();
         app.MapGet("/health/live", () => Results.Ok(new { status = "live", primaryHost = "worker" }));
         app.MapGet("/health/ready", () => Results.Ok(new { status = "ready", primaryHost = "worker" }));
         if (documentProcessing)
