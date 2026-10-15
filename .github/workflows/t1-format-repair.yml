@@ -49,7 +49,7 @@ jobs:
             apps/customer-web/src/workspace/WorkspaceHome.tsx \
             apps/customer-web/tests/Onboarding.test.tsx \
             build/uat/workspace.uat.spec.ts
-          git diff --quiet -- \
+          if git diff --quiet -- \
             apps/customer-web/e2e/onboarding.spec.ts \
             apps/customer-web/e2e/workspace.spec.ts \
             apps/customer-web/src/access/AccessEditor.tsx \
@@ -63,10 +63,10 @@ jobs:
             apps/customer-web/src/workspace/accessNavigation.tsx \
             apps/customer-web/src/workspace/WorkspaceHome.tsx \
             apps/customer-web/tests/Onboarding.test.tsx \
-            build/uat/workspace.uat.spec.ts && {
+            build/uat/workspace.uat.spec.ts; then
               echo "Pinned Prettier produced no candidate changes."
               exit 1
-            }
+          fi
 
       - name: Commit formatter output and remove this helper
         shell: bash
