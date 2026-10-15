@@ -23,6 +23,9 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<{
     state: TenantSetupState;
     roles: AccessRecord[];
+    people: AccessRecord[];
+    teams: AccessRecord[];
+    assignmentCount: number;
     packPlan: DefaultAccessPackPlan | null;
   } | null>(null);
   const [revision, setRevision] = useState(0);
@@ -68,10 +71,29 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
         )
           throw new AccessApiError(503, 'SETUP_RESPONSE_INVALID');
 
-        const roles =
+        const setupData =
           state.enabled && state.state !== 'Active'
-            ? await api.all('roles', controller.signal, state.policyVersion)
-            : [];
+            ? await Promise.all([
+                api.all('roles', controller.signal, state.policyVersion),
+                api.all('members', controller.signal, state.policyVersion),
+                api.all('groups', controller.signal, state.policyVersion),
+                state.customerRelationships
+                  ? api.request<{ policyVersion: number; items: AccessRecord[] }>(
+                      'administration/customer-relationships?limit=100',
+                      'GET',
+                      undefined,
+                      controller.signal,
+                    )
+                  : Promise.resolve({ policyVersion: state.policyVersion ?? 0, items: [] }),
+              ])
+            : [[], [], [], { policyVersion: state.policyVersion ?? 0, items: [] }] as const;
+        const [roles, people, teams, assignments] = setupData;
+        if (
+          state.enabled &&
+          state.state !== 'Active' &&
+          assignments.policyVersion !== state.policyVersion
+        )
+          throw new AccessApiError(409, 'POLICY_VERSION_CONFLICT');
         const packPlan =
           state.enabled && pack && !pack.ready
             ? await api.request<DefaultAccessPackPlan>(
@@ -90,7 +112,14 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
           throw new AccessApiError(503, 'SETUP_RESPONSE_INVALID');
 
         if (!controller.signal.aborted) {
-          setSnapshot({ state, roles, packPlan });
+          setSnapshot({
+            state,
+            roles,
+            people,
+            teams,
+            assignmentCount: assignments.items.length,
+            packPlan,
+          });
           setError('');
         }
       })
@@ -175,6 +204,19 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
 
   const existingActive = state?.state === 'Active';
   const accessUpdateBlocked = Boolean(packPlan?.conflicts.length);
+  const roleGuidance: Record<string, string> = {
+    customer: 'Use customer-owned documents and supported customer journeys.',
+    'financial-advisor':
+      'Client access requires an assigned customer, implemented permissions and current customer Consent.',
+    'operations-support':
+      'Operational support access becomes available only through implemented support operations.',
+    'dsa-case-manager': 'Case-management tasks remain unavailable until the case owner is implemented.',
+    'lender-professional': 'Lending tasks remain unavailable until application/lender owners are implemented.',
+    'financial-professional':
+      'Professional verification tasks remain unavailable until governed engagements are implemented.',
+    'property-valuer': 'Valuation tasks remain unavailable until governed valuation assignments are implemented.',
+    'legal-advisor': 'Legal-review tasks remain unavailable until governed legal matters are implemented.',
+  };
 
   return (
     <FoundationProvider appearance="midnight">
@@ -199,7 +241,9 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
           <div className="onboarding-heading">
             <p className="workspace-eyebrow">ORGANIZATION SETUP</p>
             <h1 id="setup-title">
-              {existingActive ? 'A Monergy access update is available.' : 'Set up your organization.'}
+              {existingActive
+                ? 'A Monergy access update is available.'
+                : 'Welcome to Monergy — Set up your organization'}
             </h1>
             <p>
               {existingActive
@@ -337,7 +381,13 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                       <ul className="onboarding-roles">
                         {snapshot.roles.map((role) => (
                           <li key={role.id}>
-                            <strong>{role.label}</strong>
+                            <div>
+                              <strong>{role.label}</strong>
+                              <small>
+                                {roleGuidance[role.code ?? ''] ??
+                                  'Tasks depend on implemented permissions and assignments.'}
+                              </small>
+                            </div>
                             <span>
                               {(role.permissionIds?.length ?? 0) > 0
                                 ? 'Access ready'
@@ -378,6 +428,75 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                     >
                       Create person
                     </Button>
+                  </Card>
+
+                  <div className="onboarding-grid">
+                    <Card
+                      title={
+                        <span>
+                          <span className="onboarding-step">04</span>People and teams
+                        </span>
+                      }
+                    >
+                      <Descriptions
+                        column={1}
+                        size="small"
+                        items={[
+                          {
+                            key: 'people',
+                            label: 'People',
+                            children: String(snapshot.people.length),
+                          },
+                          {
+                            key: 'teams',
+                            label: 'Teams',
+                            children: snapshot.teams.length
+                              ? String(snapshot.teams.length)
+                              : 'None configured — optional',
+                          },
+                        ]}
+                      />
+                      <p className="access-form-hint">
+                        Teams organize people and do not grant access. You can continue without a
+                        team.
+                      </p>
+                    </Card>
+                    <Card
+                      title={
+                        <span>
+                          <span className="onboarding-step">05</span>Customer assignments
+                        </span>
+                      }
+                    >
+                      <p>
+                        <strong>{snapshot.assignmentCount}</strong>{' '}
+                        {snapshot.assignmentCount === 1 ? 'assignment' : 'assignments'} configured.
+                      </p>
+                      <p className="access-form-hint">
+                        Customer assignments are required only for delegated customer workflows.
+                        Customer self-access follows verified ownership.
+                      </p>
+                    </Card>
+                  </div>
+
+                  <Card>
+                    <div className="onboarding-step">06</div>
+                    <h2>Connected services</h2>
+                    <Alert
+                      type="info"
+                      showIcon
+                      title="No external service is required to activate this organization"
+                      description="This test environment supports document/manual workflows without an external provider connection. Unsupported or unconfigured providers are not shown as connected."
+                    />
+                  </Card>
+
+                  <Card>
+                    <div className="onboarding-step">07</div>
+                    <h2>Review and complete setup</h2>
+                    <p>
+                      Recommended access is owner-confirmed. Review any omitted teams, customer
+                      assignments or external services above before activating the organization.
+                    </p>
                   </Card>
 
                   <div className="onboarding-complete">
