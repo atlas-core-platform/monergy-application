@@ -124,7 +124,7 @@ async function connect(page: Page, path = '/access') {
 test('first login reviews organization and access before mounting navigation', async ({ page }) => {
   const writes = await fixture(page);
   await connect(page);
-  await expect(page.getByRole('heading', { name: 'Set up your organization.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome to Monergy — Set up your organization' })).toBeVisible();
   await expect(page.locator('.mw-shell')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Complete setup' })).toBeDisabled();
   await page.screenshot({ path: '.artifacts/onboarding-setup.png', fullPage: true });
@@ -203,7 +203,7 @@ test('compact setup reflows at mobile width and supports reduced motion', async 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await fixture(page);
   await connect(page);
-  await expect(page.getByRole('heading', { name: 'Set up your organization.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome to Monergy — Set up your organization' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
