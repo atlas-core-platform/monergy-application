@@ -306,7 +306,7 @@ export default function EvidenceExperience() {
             }}
             type="success"
             title="Your document was uploaded."
-            description={`${confirmation.originalFileName} · Version ${confirmation.version}`}
+            description={`${confirmation.originalFileName} · Version ${String(confirmation.version)}`}
             className="product-library-alert"
           />
         )}
