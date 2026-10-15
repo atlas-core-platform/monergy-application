@@ -250,7 +250,6 @@ test('permission, group and resource editing keep existing contracts and review 
   await drawer.getByRole('button', { name: 'Save changes' }).click();
   await expect(drawer).toHaveCount(0);
   await nav.getByRole('link', { name: 'Customer Assignments', exact: true }).click();
-  await page.getByRole('tab', { name: 'Advanced resource grants', exact: true }).click();
   await page.getByRole('button', { name: 'Create resource access', exact: true }).click();
   await drawer.getByLabel('Person', { exact: true }).click();
   await page.getByTitle(member.normalizedEmail, { exact: true }).click();
