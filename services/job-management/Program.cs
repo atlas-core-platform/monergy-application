@@ -13,6 +13,7 @@ var referenceAdapter = ReferenceAdapterGuard.IsSelected(builder.Configuration);
 var documentProcessing =
     referenceAdapter &&
     builder.Configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled");
+var secondaryHttp = TenantBoundaryOptions.Selected(builder.Configuration) || documentProcessing;
 
 if (physicalPersistence)
 {
@@ -29,7 +30,8 @@ if (physicalPersistence || referenceAdapter)
     builder.Services.AddHostedService<DurableJobExecutionWorker>();
     builder.Services.AddHostedService<JobOutboxDispatchWorker>();
 }
-builder.Services.AddHostedService<JobManagementHttpAdapterWorker>();
+if (secondaryHttp)
+    builder.Services.AddHostedService<JobManagementHttpAdapterWorker>();
 
 if (documentProcessing && !JobAuditDeliveryOptions.Selected(builder.Configuration))
     throw new InvalidOperationException("Document processing requires governed Job Audit delivery.");
