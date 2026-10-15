@@ -1,10 +1,24 @@
+using System.Net.Http.Json;
 using Monergy.Platform;
 using Monergy.Platform.ControlPlane;
 
 namespace Monergy.UatGateway;
 
+public sealed record AccessPackStatus(
+    string? InstalledVersion,
+    string? InstalledIdentity,
+    DateTimeOffset? InstalledAt,
+    long PolicyVersion,
+    string? LatestOperationId,
+    string? LatestPlanHash,
+    long? FromPolicyVersion,
+    long? ToPolicyVersion);
+
 public static class TenantSetupEndpoints
 {
+    private const string RequiredPackVersion = "2.0";
+    private const string RequiredPackIdentity = "monergy-default-access-pack/2.0";
+
     public static void AddTenantSetup(this WebApplicationBuilder builder)
     {
         if (!builder.Configuration.GetValue<bool>("Monergy:Onboarding:Enabled")) return;
@@ -20,7 +34,7 @@ public static class TenantSetupEndpoints
     public static void MapTenantSetup(this WebApplication app)
     {
         var enabled = app.Configuration.GetValue<bool>("Monergy:Onboarding:Enabled");
-        app.MapGet("/uat-api/v1/setup", (HttpContext http, TenantAccessClient access) => InvokeAsync(async () =>
+        app.MapGet("/uat-api/v1/setup", (HttpContext http, TenantAccessClient access, HttpClient client) => InvokeAsync(async () =>
         {
             var admin = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
             if (!enabled) return (object)new { enabled = false, admin.TenantId, customerRelationships = false };
@@ -28,6 +42,7 @@ public static class TenantSetupEndpoints
             var tenant = await registry.GetAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false)
                 ?? throw new TenantBoundaryException("TENANT_ONBOARDING_UNAVAILABLE", 503);
             var receipt = await http.RequestServices.GetRequiredService<FileTenantSetup>().GetAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false);
+            var pack = await ReadPackStatusAsync(http, client).ConfigureAwait(false);
             return (object)new
             {
                 enabled = true,
@@ -40,27 +55,68 @@ public static class TenantSetupEndpoints
                 tenant.InitialAdministratorEmail,
                 state = tenant.State.ToString(),
                 receiptReference = receipt?.ReceiptReference,
-                customerRelationships = true
+                customerRelationships = true,
+                accessPack = new
+                {
+                    pack.InstalledVersion,
+                    pack.InstalledIdentity,
+                    pack.InstalledAt,
+                    pack.PolicyVersion,
+                    ready = IsRequiredPack(pack)
+                }
             };
         }));
         if (!enabled) return;
         app.MapPost("/uat-api/v1/setup", (TenantSetupSubmission request, HttpContext http, TenantAccessClient access,
-            ITenantRegistry registry, FileTenantSetup setup, TenantOnboardingOrchestrator orchestrator) => InvokeAsync(async () =>
+            HttpClient client, ITenantRegistry registry, FileTenantSetup setup, TenantOnboardingOrchestrator orchestrator) => InvokeAsync(async () =>
         {
             var admin = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
+            var pack = await ReadPackStatusAsync(http, client).ConfigureAwait(false);
+            if (!IsRequiredPack(pack) || pack.PolicyVersion != admin.PolicyVersion)
+                throw new InvalidOperationException("TENANT_ACCESS_PACK_REQUIRED");
             var tenant = await registry.GetAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false)
                 ?? throw new TenantBoundaryException("TENANT_ONBOARDING_UNAVAILABLE", 503);
             var receipt = await setup.CompleteAsync(tenant, admin.ActorId, admin.PolicyVersion, request, TimeProvider.System, http.RequestAborted).ConfigureAwait(false);
             var active = await orchestrator.ActivateAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false);
             return new { receipt.ReceiptReference, state = active.State.ToString() };
         }));
-        app.MapPost("/uat-api/v1/setup/activate", (HttpContext http, TenantAccessClient access,
+        app.MapPost("/uat-api/v1/setup/activate", (HttpContext http, TenantAccessClient access, HttpClient client,
             TenantOnboardingOrchestrator orchestrator) => InvokeAsync(async () =>
         {
             var admin = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
+            var pack = await ReadPackStatusAsync(http, client).ConfigureAwait(false);
+            if (!IsRequiredPack(pack) || pack.PolicyVersion != admin.PolicyVersion)
+                throw new InvalidOperationException("TENANT_ACCESS_PACK_REQUIRED");
             var active = await orchestrator.ActivateAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false);
             return new { active.SetupReceiptReference, state = active.State.ToString() };
         }));
+    }
+
+    private static bool IsRequiredPack(AccessPackStatus pack) =>
+        string.Equals(pack.InstalledVersion, RequiredPackVersion, StringComparison.Ordinal) &&
+        string.Equals(pack.InstalledIdentity, RequiredPackIdentity, StringComparison.Ordinal);
+
+    private static async Task<AccessPackStatus> ReadPackStatusAsync(HttpContext http, HttpClient client)
+    {
+        var (tenant, session) = TenantAccessClient.Headers(http);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "http://127.0.0.1:5088/v1/administration/default-access-pack");
+        request.Headers.Add("X-Monergy-Tenant", tenant);
+        request.Headers.Add("X-Monergy-Session", session);
+        using var response = await client.SendAsync(request, http.RequestAborted).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+            throw new TenantBoundaryException(
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "TENANT_ADMIN_REQUIRED"
+                    : "ACCESS_OWNER_UNAVAILABLE",
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden ? 403 : 503);
+        var pack = await response.Content.ReadFromJsonAsync<AccessPackStatus>(
+            cancellationToken: http.RequestAborted).ConfigureAwait(false)
+            ?? throw new TenantBoundaryException("ACCESS_OWNER_RESPONSE_INVALID", 503);
+        if (pack.PolicyVersion < 1)
+            throw new TenantBoundaryException("ACCESS_OWNER_RESPONSE_INVALID", 503);
+        return pack;
     }
 
     private static async Task<IResult> InvokeAsync<T>(Func<Task<T>> operation)
