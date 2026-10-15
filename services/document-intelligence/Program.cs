@@ -4,7 +4,7 @@ using Monergy.Services.DocumentIntelligence;
 const string serviceName = "Document Intelligence Service";
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.AddMonergyPlatform(serviceName);
+builder.AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false);
 builder.Services.AddHealthChecks();
 if (ReferenceAdapterGuard.IsSelected(builder.Configuration))
 {
