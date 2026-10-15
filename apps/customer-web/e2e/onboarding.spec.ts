@@ -245,8 +245,8 @@ test('customer entry stays isolated from administration and confirms reviewed ev
             'search.query.execute',
             'reporting.report.generate',
           ],
-          environment: 'Local UAT',
-          dataDurability: 'Runtime only',
+          environment: 'Test environment',
+          dataDurability: 'Temporary data',
           productionAccepted: false,
         },
       });
@@ -254,7 +254,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
     }
     if (path === '/product-api/v1/evidence') {
       if (route.request().method() === 'GET') {
-        await route.fulfill({ json: { items: library, dataDurability: 'Runtime only' } });
+        await route.fulfill({ json: { items: library, dataDurability: 'Temporary data' } });
         return;
       }
       const body = route.request().postDataJSON() as { operationId: string };
@@ -278,7 +278,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
           operationId: body.operationId,
           ...accepted,
           acceptedAt: '2026-10-14T00:00:00Z',
-          dataDurability: 'Runtime only',
+          dataDurability: 'Temporary data',
         },
       });
       return;
@@ -330,7 +330,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
               validationVersion: 'canonical-source-fact/1.0.0',
             },
           ],
-          dataDurability: 'Runtime only',
+          dataDurability: 'Temporary data',
           processingMode: 'Structured text reference processor',
         },
       });
