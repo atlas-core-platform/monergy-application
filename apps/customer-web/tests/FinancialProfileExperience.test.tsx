@@ -86,6 +86,10 @@ it('shows trusted financial information with source history and hides raw ids by
   expect(await screen.findByText('Employment income')).toBeVisible();
   expect(screen.getByText('$125,000.00')).toBeVisible();
   expect(screen.getByText('Source: customer-statement.txt')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Open source document customer-statement.txt' })).toHaveAttribute(
+    'href',
+    '/evidence?documentVersion=document-version-001',
+  );
   expect(screen.getByText('Current revision')).toBeVisible();
   expect(screen.queryByText('ff-income')).not.toBeInTheDocument();
 
