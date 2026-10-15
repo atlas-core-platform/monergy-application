@@ -160,7 +160,7 @@ test('administrator verification must finish before shell creation; cancellation
   await page.goto('/access/users');
   await connect(page);
   await expect.poll(() => reached).toBe(true);
-  await expect(page.getByRole('status')).toContainText('Verifying tenant administrator');
+  await expect(page.getByRole('status')).toContainText('Verifying Organization Administrator');
   await publicOnly(page);
   await page.getByRole('button', { name: 'Cancel connection' }).click();
   release?.();
