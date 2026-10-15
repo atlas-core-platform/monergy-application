@@ -671,7 +671,7 @@ export function AccessEditor({
             {area === 'members'
               ? 'Edit account access, then review the exact changes before saving.'
               : area === 'groups'
-                ? 'Groups organize people. They do not grant roles or business access.'
+                ? 'Teams organize people. They do not grant roles or business access.'
                 : 'Make access clear and intentional. Review your change before saving.'}
           </p>
 
@@ -869,7 +869,7 @@ export function AccessEditor({
                   <section className="access-editor-section" aria-labelledby="user-groups">
                     <h3 id="user-groups">Team membership</h3>
                     <p className="access-form-hint">
-                      Review and manage existing membership in <a href="/access/groups">Groups</a>.
+                      Review and manage existing membership in <a href="/access/groups">Teams</a>.
                       Group membership does not grant access.
                     </p>
                   </section>
