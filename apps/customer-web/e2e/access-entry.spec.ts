@@ -41,7 +41,7 @@ async function fixtures(page: Page, override?: (route: Route) => Promise<boolean
   });
 }
 async function connect(page: Page) {
-  await page.getByLabel('Local access key').fill('fixture-only-not-a-credential');
+  await page.getByLabel('Test access key').fill('fixture-only-not-a-credential');
   await page.getByRole('button', { name: 'Connect workspace', exact: true }).click();
 }
 async function publicOnly(page: Page) {
@@ -72,7 +72,7 @@ test('every Access direct route and operations stays public before credentials a
     '/operations',
   ]) {
     await page.goto(path);
-    await expect(page.getByLabel('Local access key')).toBeVisible();
+    await expect(page.getByLabel('Test access key')).toBeVisible();
     await publicOnly(page);
     await page.keyboard.press('Control+k');
     await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -82,7 +82,7 @@ test('every Access direct route and operations stays public before credentials a
   await connect(page);
   await expect(page.getByText(member.normalizedEmail, { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByLabel('Local access key')).toBeVisible();
+  await expect(page.getByLabel('Test access key')).toBeVisible();
   await publicOnly(page);
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
 });
@@ -136,7 +136,7 @@ for (const scenario of [
     await page.goto('/access/users');
     await connect(page);
     await expect(page.getByRole('alert')).toBeVisible();
-    await expect(page.getByLabel('Local access key')).toHaveValue('');
+    await expect(page.getByLabel('Test access key')).toHaveValue('');
     await publicOnly(page);
     expect(reads).toBe(0);
   });
@@ -160,7 +160,7 @@ test('administrator verification must finish before shell creation; cancellation
   await page.goto('/access/users');
   await connect(page);
   await expect.poll(() => reached).toBe(true);
-  await expect(page.getByRole('status')).toContainText('Verifying tenant administrator');
+  await expect(page.getByRole('status')).toContainText('Verifying Organization Administrator');
   await publicOnly(page);
   await page.getByRole('button', { name: 'Cancel connection' }).click();
   release?.();
