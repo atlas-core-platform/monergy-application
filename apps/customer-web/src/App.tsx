@@ -114,7 +114,7 @@ function RouteContent() {
       <Suspense
         fallback={
           <main className="access-loading" aria-busy="true">
-            Loading evidence…
+            Loading documents…
           </main>
         }
       >
@@ -162,12 +162,12 @@ function RouteContent() {
   if (window.location.pathname === '/vs02' && localUat)
     return (
       <main className="access-page">
-        <Card title="Document processing is available from Evidence">
+        <Card title="Document processing is available from Documents">
           <p>
-            Open a structured text document in your Evidence library to schedule processing and
-            review candidate source facts. The existing VS-02 simulator remains separately verified.
+            Open a supported structured-text document in Documents to extract details and review the
+            information found there. The existing VS-02 simulator remains separately verified.
           </p>
-          <Button href="/evidence">Open Evidence</Button>
+          <Button href="/evidence">Open Documents</Button>
         </Card>
       </main>
     );
@@ -207,7 +207,7 @@ function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
   return (
     <WorkspaceShell
       {...props}
-      context={product?.customerName ?? (session ? `Tenant ${session.tenantId}` : undefined)}
+      context={product?.customerName ?? (session ? `Organization ${session.tenantId}` : undefined)}
       actions={
         session ? (
           <Button
@@ -224,6 +224,7 @@ function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
   );
 }
 function WorkspaceApplication() {
+  const { authorization } = useWorkspaceSession();
   const [path, setPath] = useState(window.location.pathname);
   useEffect(() => {
     const pop = () => {
@@ -272,7 +273,26 @@ function WorkspaceApplication() {
   }, []);
   const inAdministration =
     path === '/access' || path.startsWith('/access/') || path === '/operations';
-  const navigation = inAdministration ? accessDestinations : destinations;
+  const productCapabilities =
+    authorization?.area === 'product' ? new Set(authorization.context.capabilities) : new Set<string>();
+  const navigation = inAdministration
+    ? accessDestinations
+    : destinations.filter((destination) => {
+        if (destination.id === 'home') return true;
+        if (destination.id === 'evidence')
+          return (
+            productCapabilities.has('evidence.document.upload') ||
+            productCapabilities.has('evidence.document.read') ||
+            productCapabilities.has('document-intelligence.document.process')
+          );
+        if (destination.id === 'search') return productCapabilities.has('search.query.execute');
+        if (destination.id === 'reports')
+          return (
+            productCapabilities.has('reporting.report.generate') ||
+            productCapabilities.has('reporting.report.read')
+          );
+        return false;
+      });
   const current =
     navigation.find(
       (destination) =>
