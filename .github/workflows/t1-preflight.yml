@@ -39,23 +39,20 @@ jobs:
           corepack enable
           corepack install --global pnpm@12.4.1
 
-      - name: Apply two bounded lint remediations
-        shell: python
+      - name: Apply bounded lint remediations
+        shell: bash
         run: |
+          sed -i '355s/index/String(index)/' apps/customer-web/src/access/TenantSetup.tsx
+          python - <<'PY'
           from pathlib import Path
-
-          setup = Path("apps/customer-web/src/access/TenantSetup.tsx")
-          text = setup.read_text()
-          text = text.replace("key={\`${change.kind}-${index}\`}", "key={\`${change.kind}-${String(index)}\`}")
-          setup.write_text(text)
-
-          test = Path("apps/customer-web/tests/Onboarding.test.tsx")
-          text = test.read_text()
-          text = text.replace(
+          p = Path("apps/customer-web/tests/Onboarding.test.tsx")
+          t = p.read_text()
+          t = t.replace(
               "...ready.accessPack!,\n          policyVersion: 8,",
               "installedVersion: '2.0',\n          installedIdentity: 'monergy-default-access-pack/2.0',\n          installedAt: '2026-10-15T00:00:00Z',\n          policyVersion: 8,\n          ready: true,"
           )
-          test.write_text(text)
+          p.write_text(t)
+          PY
 
       - name: Restore
         shell: pwsh
