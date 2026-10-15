@@ -351,7 +351,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                       <h3>Review changes</h3>
                       <ul className="onboarding-roles">
                         {(packPlan?.changes.length ?? 0) > 0 ? (
-                          packPlan?.changes.map((change, index) => (
+                          packPlan?.changes.map((change) => (
                             <li key={`${change.kind}-${change.objectId}`}>
                               <span>{changeLabel(change)}</span>
                             </li>
