@@ -424,7 +424,7 @@ export function ImportDrawer({
                         ?.label ?? 'None — no business permissions',
                   },
                   {
-                    label: 'Groups',
+                    label: 'Teams',
                     value: (userForm.getFieldValue('groups') as string[] | undefined)?.length
                       ? (userForm.getFieldValue('groups') as string[])
                           .map(
@@ -439,7 +439,7 @@ export function ImportDrawer({
               />
             ) : confirm === 'start' ? (
               <>
-                <p>{preview?.rowCount} users will be onboarded with the roles and groups below.</p>
+                <p>{preview?.rowCount} people will be onboarded with the roles and teams below.</p>
                 <pre className="access-csv-review">{csv}</pre>
               </>
             ) : null}
@@ -508,7 +508,7 @@ export function ImportDrawer({
                     </Form.Item>
                     <Form.Item
                       name="groups"
-                      label="Groups"
+                      label="Teams"
                       extra="Team membership does not grant access permissions."
                     >
                       <Select
@@ -518,7 +518,7 @@ export function ImportDrawer({
                           value: group.code,
                           label: group.label ?? group.code,
                         }))}
-                        placeholder="Choose groups (optional)"
+                        placeholder="Choose teams (optional)"
                       />
                     </Form.Item>
                   </Form>
