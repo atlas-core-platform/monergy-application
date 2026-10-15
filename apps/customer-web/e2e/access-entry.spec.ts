@@ -306,7 +306,10 @@ test('an uncertain onboarding commit is recovered by its original ID after recon
   await page.getByRole('button', { name: 'Create person', exact: true }).click();
   await page.getByLabel('Email address').fill('recovery@example.test');
   await page.getByRole('button', { name: 'Review person', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Create person', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Create person', exact: true })
+    .click();
   await publicOnly(page);
   await page.getByRole('button', { name: 'Reconnect workspace' }).click();
   await page.getByRole('button', { name: 'Review request', exact: true }).click();
