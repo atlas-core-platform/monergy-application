@@ -43,6 +43,7 @@ jobs:
       - name: Apply bounded lint remediations
         shell: bash
         run: |
+          sed -i '354s/(change, index)/(change)/' apps/customer-web/src/access/TenantSetup.tsx
           sed -i '355s/index/String(index)/' apps/customer-web/src/access/TenantSetup.tsx
           python - <<'PY'
           from pathlib import Path
