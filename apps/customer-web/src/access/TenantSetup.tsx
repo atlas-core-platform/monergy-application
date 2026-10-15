@@ -6,9 +6,20 @@ import { AccessApiError, displayError } from './accessApi';
 import type { AccessRecord } from './accessApi';
 import { localUat, useWorkspaceSession } from './workspaceSession';
 import { OnboardingContext } from './onboarding';
-import type { TenantSetupState } from './onboarding';
+import type { SetupAccessPolicyView, TenantSetupState } from './onboarding';
 import { ImportDrawer } from './ImportDrawer';
 import './onboarding.css';
+
+const accessPolicyStates = ['Ready', 'UpdateAvailable', 'Customized', 'Blocked'] as const;
+
+function validAccessPolicy(value: SetupAccessPolicyView | undefined): value is SetupAccessPolicyView {
+  return (
+    Boolean(value) &&
+    accessPolicyStates.includes(value?.state as (typeof accessPolicyStates)[number]) &&
+    [value?.changeCount, value?.roleChangeCount, value?.permissionChangeCount, value?.conflictCount]
+      .every((item) => Number.isSafeInteger(item) && (item ?? -1) >= 0)
+  );
+}
 
 export function TenantSetupGate({ children }: { children: ReactNode }) {
   return localUat ? <LocalTenantSetup>{children}</LocalTenantSetup> : children;
@@ -27,6 +38,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [onboardingUser, setOnboardingUser] = useState(false);
+
   useEffect(() => {
     if (!api || !session) return;
     const controller = new AbortController();
@@ -45,6 +57,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
               !state.countryCode ||
               !state.timeZone ||
               !state.initialAdministratorEmail ||
+              !validAccessPolicy(state.accessPolicy) ||
               ![
                 'Requested',
                 'Provisioning',
@@ -55,6 +68,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
               (state.state === 'Active' && !state.receiptReference)))
         )
           throw new AccessApiError(503, 'SETUP_RESPONSE_INVALID');
+
         const roles =
           state.enabled && state.state !== 'Active'
             ? await api.all('roles', controller.signal, state.policyVersion)
@@ -67,10 +81,12 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
       .catch((failure: unknown) => {
         if (!controller.signal.aborted) setError(displayError(failure));
       });
+
     return () => {
       controller.abort();
     };
   }, [api, session, revision]);
+
   if (!api || !session) return null;
   const state = snapshot?.state;
   if (state && (!state.enabled || state.state === 'Active'))
@@ -79,6 +95,11 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
         {children}
       </OnboardingContext>
     );
+
+  const accessPolicy = state?.accessPolicy;
+  const accessPolicyAllowsCompletion =
+    accessPolicy?.state === 'Ready' || accessPolicy?.state === 'Customized';
+
   const refresh = () => {
     setSnapshot(null);
     setOrganizationReviewed(false);
@@ -87,8 +108,23 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
     setError('');
     setRevision((value) => value + 1);
   };
+
+  const applyRecommendedAccess = async () => {
+    if (!state || accessPolicy?.state !== 'UpdateAvailable' || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api.setup('/access-policy/adopt', { requestId });
+      refresh();
+    } catch (failure) {
+      setError(displayError(failure));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const finish = async () => {
-    if (!state || busy) return;
+    if (!state || !accessPolicyAllowsCompletion || busy) return;
     setBusy(true);
     setError('');
     try {
@@ -110,6 +146,62 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
       setBusy(false);
     }
   };
+
+  const accessPolicyNotice = () => {
+    if (!accessPolicy) return null;
+    if (accessPolicy.state === 'Ready')
+      return (
+        <Alert
+          showIcon
+          type="success"
+          title="Recommended access is ready"
+          description="Your organization has Monergy’s current starter roles. Roles with implemented customer journeys are ready to use; future roles remain configured without placeholder access."
+        />
+      );
+    if (accessPolicy.state === 'UpdateAvailable')
+      return (
+        <Alert
+          showIcon
+          type="info"
+          title="Recommended access update available"
+          description={
+            <>
+              Monergy has a reviewed starter-access update for this organization. Applying it updates
+              only unchanged Monergy starter policy; it does not grant administrative authority.
+              <div className="access-form-actions">
+                <Button
+                  type="primary"
+                  loading={busy}
+                  onClick={() => {
+                    void applyRecommendedAccess();
+                  }}
+                >
+                  Apply recommended access
+                </Button>
+              </div>
+            </>
+          }
+        />
+      );
+    if (accessPolicy.state === 'Customized')
+      return (
+        <Alert
+          showIcon
+          type="warning"
+          title="Your organization uses a customized access model"
+          description="Monergy will not replace customized roles or permissions. Review the access model below and continue if it reflects how your organization should work."
+        />
+      );
+    return (
+      <Alert
+        showIcon
+        type="error"
+        title="Access setup needs attention"
+        description="Monergy could not confirm a supported access-policy state. Organization activation is blocked until the Access Management owner is healthy and the policy state is reviewed."
+      />
+    );
+  };
+
   return (
     <FoundationProvider appearance="midnight">
       <div className="access-entry onboarding-entry" data-monergy-theme="midnight">
@@ -118,7 +210,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
             <WorkspaceIcon name="shield" size={24} /> monergy
           </span>
           <Space>
-            <Tag>Local UAT</Tag>
+            <Tag>Test environment</Tag>
             <Button
               type="text"
               onClick={() => {
@@ -129,15 +221,17 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
             </Button>
           </Space>
         </header>
+
         <main className="onboarding-main" aria-labelledby="setup-title">
           <div className="onboarding-heading">
-            <p className="workspace-eyebrow">WORKSPACE SETUP</p>
-            <h1 id="setup-title">A clear start for your team.</h1>
+            <p className="workspace-eyebrow">ORGANIZATION SETUP</p>
+            <h1 id="setup-title">Welcome to Monergy — set up your organization.</h1>
             <p>
-              Review your organization and access model. Your progress is saved when you complete
-              setup.
+              Review your organization, recommended access and people before activating this
+              workspace.
             </p>
           </div>
+
           {error && (
             <Alert
               showIcon
@@ -146,9 +240,10 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
               action={<Button onClick={refresh}>Refresh setup</Button>}
             />
           )}
+
           {!snapshot ? (
             <div className="access-loading" role="status">
-              <Spin /> Checking workspace readiness…
+              <Spin /> Checking organization readiness…
             </div>
           ) : (
             <>
@@ -156,8 +251,8 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                 <Alert
                   type="warning"
                   showIcon
-                  title="Workspace preparation is incomplete"
-                  description="An owner has not completed the required provisioning. Refresh after the local setup process succeeds."
+                  title="Organization preparation is incomplete"
+                  description="The required provisioning receipts are not complete yet. Refresh after platform preparation succeeds."
                   action={<Button onClick={refresh}>Check again</Button>}
                 />
               ) : (
@@ -179,13 +274,13 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                           { key: 'zone', label: 'Time zone', children: state.timeZone },
                           {
                             key: 'admin',
-                            label: 'Initial administrator',
+                            label: 'Organization administrator',
                             children: state.initialAdministratorEmail,
                           },
                         ]}
                       />
                       <p className="access-form-hint">
-                        These details belong to the selected local workspace. Contact your platform
+                        These details belong to this organization. Contact your Monergy platform
                         administrator if they are incorrect.
                       </p>
                       <Checkbox
@@ -198,81 +293,105 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                         I have reviewed the organization details
                       </Checkbox>
                     </Card>
+
                     <Card
                       title={
                         <span>
-                          <span className="onboarding-step">02</span>Your access model
+                          <span className="onboarding-step">02</span>Recommended access
                         </span>
                       }
                     >
                       <p>
-                        Each user has at most one business role. Tenant administrator authority is
-                        separate and grants no financial access.
+                        Each person has at most one business role. Organization Administrator is
+                        separate and does not grant access to customer financial information.
                       </p>
-                      <ul className="onboarding-roles">
-                        {snapshot.roles.map((role) => (
-                          <li key={role.id}>
-                            <strong>{role.label}</strong>
-                            <span>{role.permissionIds?.length ?? 0} permissions</span>
-                          </li>
-                        ))}
-                      </ul>
+
+                      {accessPolicyNotice()}
+
+                      {accessPolicy?.state !== 'UpdateAvailable' &&
+                        accessPolicy?.state !== 'Blocked' && (
+                          <ul className="onboarding-roles">
+                            {snapshot.roles.map((role) => (
+                              <li key={role.id}>
+                                <strong>{role.label}</strong>
+                                <span>
+                                  {(role.permissionIds?.length ?? 0) > 0
+                                    ? 'Access ready'
+                                    : 'Role configured'}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+
                       <p className="access-form-hint">
                         Customer access follows verified ownership. Advisor access also requires an
-                        assigned customer, the role’s permissions, and current customer Consent.
+                        assigned customer, the role’s permissions and current customer Consent.
                       </p>
                       <Checkbox
                         checked={accessReviewed}
-                        disabled={busy || Boolean(state.receiptReference)}
+                        disabled={
+                          busy ||
+                          Boolean(state.receiptReference) ||
+                          !accessPolicyAllowsCompletion
+                        }
                         onChange={(event) => {
                           setAccessReviewed(event.target.checked);
                         }}
                       >
-                        I understand how roles and customer access work
+                        I have reviewed how roles and customer access work
                       </Checkbox>
                     </Card>
                   </div>
+
                   <Card className="onboarding-team">
                     <div>
-                      <h2>Bring your team into the workspace</h2>
+                      <h2>Bring your team into Monergy</h2>
                       <p>
-                        Create a user now, or continue in Users after setup. No minimum team size is
-                        required. Local account creation does not send invitations.
+                        Create a person now, or continue in People after setup. No minimum team size
+                        is required. This test environment does not send invitations.
                       </p>
                     </div>
                     <Button
-                      disabled={busy || Boolean(state.receiptReference)}
+                      disabled={
+                        busy ||
+                        Boolean(state.receiptReference) ||
+                        !accessPolicyAllowsCompletion
+                      }
                       onClick={() => {
                         setOnboardingUser(true);
                       }}
                     >
-                      Create user
+                      Add person
                     </Button>
                   </Card>
+
                   <div className="onboarding-complete">
                     <p>
                       {state.receiptReference
-                        ? 'Your review is saved. Resume to finish workspace activation.'
-                        : 'Completing setup records your review and activates this local workspace.'}
+                        ? 'Your review is saved. Resume to activate this organization.'
+                        : 'Completing setup saves your review and activates this organization in the test environment.'}
                     </p>
                     <Button
                       type="primary"
                       loading={busy}
                       disabled={
                         busy ||
+                        !accessPolicyAllowsCompletion ||
                         (!state.receiptReference && (!organizationReviewed || !accessReviewed))
                       }
                       onClick={() => {
                         void finish();
                       }}
                     >
-                      {state.receiptReference ? 'Resume activation' : 'Complete setup'}
+                      {state.receiptReference ? 'Resume activation' : 'Complete organization setup'}
                     </Button>
                   </div>
                 </>
               )}
             </>
           )}
+
           {onboardingUser && (
             <ImportDrawer
               api={api}
