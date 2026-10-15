@@ -51,6 +51,22 @@ public sealed class ContractCompatibilityTests
     }
 
     [Fact]
+    public void ProcessingAndJobStatesUseNamedWireValues()
+    {
+        var processing = new ProcessingStatus(
+            "processing-001", "document-version-001", ProcessingState.Completed, null, false,
+            DateTimeOffset.UnixEpoch);
+        var job = new ScheduledJob(
+            "job-001", "document-processing", "Document Intelligence Service", "document-version-001",
+            Vs02TestContext.CustomerId, JobState.Completed, 1, null, false, DateTimeOffset.UnixEpoch);
+
+        Assert.Equal("Completed", JsonSerializer.SerializeToElement(
+            processing, ContractJson.Options).GetProperty("state").GetString());
+        Assert.Equal("Completed", JsonSerializer.SerializeToElement(
+            job, ContractJson.Options).GetProperty("state").GetString());
+    }
+
+    [Fact]
     public void UnsupportedVersionsAndMalformedSecurityContextAreRejected()
     {
         var request = Vs02TestContext.Request(

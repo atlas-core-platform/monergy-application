@@ -9,16 +9,16 @@ public static class DocumentIntelligenceRegistration
 {
     public static IServiceCollection AddDocumentIntelligenceReferenceAdapters(
         this IServiceCollection services,
-        IConfiguration configuration,
-        IEvidenceContentReader contentReader)
+        IConfiguration configuration)
     {
         ReferenceAdapterGuard.EnsureAllowed(configuration);
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<InMemoryDocumentProcessingRepository>();
         services.AddSingleton<IDocumentProcessingRepository>(provider => provider.GetRequiredService<InMemoryDocumentProcessingRepository>());
         services.AddSingleton<IDocumentExtractor, FixtureDocumentExtractor>();
-        services.AddSingleton<IExecutionPolicy, ReferenceExecutionPolicy>();
-        services.AddSingleton(contentReader);
+        services.AddSingleton<TenantAccessClient>();
+        services.AddSingleton<IEvidenceContentReader, HttpEvidenceContentReader>();
+        services.AddSingleton<IExecutionPolicy, OwnerBackedExecutionPolicy>();
         services.AddSingleton<DocumentProcessingApplication>();
         return services;
     }

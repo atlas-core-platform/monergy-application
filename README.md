@@ -35,7 +35,7 @@ and CI / EPHEMERAL execution.
 - Hosted CI: GitHub Actions configured for D01-D10 gates and evidence
 - Governance: GitHub Free exception accepted; branch protection is
   `NOT_IMPLEMENTED — GITHUB FREE PLAN LIMITATION`; CODEOWNERS is advisory and CI
-  flags direct pushes to `main`
+  fails the lightweight merge-integrity check for direct pushes to `main`
 - Bootstrap exception: the reviewed initial baseline was published directly to
   establish `main`; normal pull-request flow remains mandatory once protection
   is available

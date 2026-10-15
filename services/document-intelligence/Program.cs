@@ -1,29 +1,23 @@
 using Monergy.Platform;
 using Monergy.Services.DocumentIntelligence;
-using Monergy.Services.DocumentIntelligence.Application;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 
 const string serviceName = "Document Intelligence Service";
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 builder.AddMonergyPlatform(serviceName);
 builder.Services.AddHealthChecks();
 if (ReferenceAdapterGuard.IsSelected(builder.Configuration))
 {
-    builder.Services.AddDocumentIntelligenceReferenceAdapters(
-        builder.Configuration,
-        new UnconfiguredEvidenceContentReader());
+    builder.Services.AddDocumentIntelligenceReferenceAdapters(builder.Configuration);
 }
 builder.Services.AddHostedService<StartupWorker>();
 
-await builder.Build().RunAsync();
+var app = builder.Build();
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
+app.MapHealthChecks("/health/ready");
+if (ReferenceAdapterGuard.IsSelected(builder.Configuration))
+    app.MapDocumentProcessing(builder.Configuration);
+await app.RunAsync();
 
-internal sealed class UnconfiguredEvidenceContentReader : IEvidenceContentReader
-{
-    public Task<EvidenceContent?> ReadAsync(
-        string documentVersionId,
-        string customerId,
-        Monergy.Contracts.TrustedSecurityContext security,
-        string correlationId,
-        CancellationToken cancellationToken) =>
-        Task.FromResult<EvidenceContent?>(null);
-}
+public partial class Program;

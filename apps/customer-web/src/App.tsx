@@ -162,13 +162,12 @@ function RouteContent() {
   if (window.location.pathname === '/vs02' && localUat)
     return (
       <main className="access-page">
-        <Card title="Evidence journey: integration pending">
+        <Card title="Document processing is available from Evidence">
           <p>
-            Document processing and job consumers are not connected in this Docker UAT profile. Test
-            administration, sessions, revocation, audit and service boundaries in People & access.
-            The existing VS-02 simulator remains separately verified.
+            Open a structured text document in your Evidence library to schedule processing and
+            review candidate source facts. The existing VS-02 simulator remains separately verified.
           </p>
-          <Button href="/access">Open People & access</Button>
+          <Button href="/evidence">Open Evidence</Button>
         </Card>
       </main>
     );

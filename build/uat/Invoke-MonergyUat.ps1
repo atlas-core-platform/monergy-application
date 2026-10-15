@@ -93,16 +93,21 @@ if (-not (Test-Path $profileFile)) {
         foreach ($actorId in $localActors) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
     }
     $new = @{ instanceId=[Guid]::NewGuid().ToString('N'); postgresPassword=(Secret); databases=$databases; identities=$identities; tokens=@{}; port=$Port; onboarding=[bool]$EnableOnboarding }
-    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','customerContext','consent','evidenceIntake')) { $new.tokens[$name] = Secret }
+    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','jobAuditEvent','customerContext','consent','evidenceIntake','evidenceProcessing','jobControl','documentControl')) { $new.tokens[$name] = Secret }
     Save-Json 'profile.json' $new
 }
 $state = Get-Content $profileFile -Raw | ConvertFrom-Json
 $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
-if ($Action -in @('Prepare','Start') -and $onboarding -and $null -eq $state.tokens.PSObject.Properties['evidenceIntake']) {
-    $state.tokens | Add-Member -NotePropertyName evidenceIntake -NotePropertyValue (Secret)
-    Save-Json 'profile.json' $state
-    Protect-Files
+if ($Action -in @('Prepare','Start') -and $onboarding) {
+    $tokensChanged = $false
+    foreach ($name in @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent')) {
+        if ($null -eq $state.tokens.PSObject.Properties[$name]) {
+            $state.tokens | Add-Member -NotePropertyName $name -NotePropertyValue (Secret)
+            $tokensChanged = $true
+        }
+    }
+    if ($tokensChanged) { Save-Json 'profile.json' $state; Protect-Files }
 }
 if ($Action -eq 'Credentials') {
     $identity = $state.identities | Where-Object { $_.tenantId -eq $Tenant -and $_.actorId -eq $Actor }
@@ -157,15 +162,28 @@ if ($Action -in @('Prepare','Start')) {
                 $integration.ConsentDatabases=@{}
                 foreach ($db in $state.databases | Where-Object service -eq 'consent') { $integration.ConsentDatabases[$db.tenant] = Connection $db 'runtime' }
             } else {
-                $integration.AuditEventToken=$state.tokens.auditEvent; $integration.AuditDatabases=@{}
+                $integration.AuditEventToken=$state.tokens.auditEvent; $integration.JobAuditEventToken=$state.tokens.jobAuditEvent; $integration.AuditDatabases=@{}
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.AuditDatabases[$db.tenant] = Connection $db 'runtime' }
             }
             $config.Monergy.AccessIntegration=$integration
-        } elseif ($service -in @('evidence','financial-profile','financial-rules','search-retrieval','reporting','integration-gateway')) {
+        } elseif ($service -in @('evidence','document-intelligence','financial-profile','financial-rules','search-retrieval','reporting','integration-gateway','job-management')) {
             $config.Monergy.ReferenceAdapters='true'
             if ($onboarding -and $service -eq 'evidence') {
                 $config.Monergy.OnboardingFixtures='true'
-                $config.Monergy.ProductIntake=@{ Enabled='true'; EvidenceToken=$state.tokens.evidenceIntake }
+                $config.Monergy.ProductIntake=@{ Enabled='true'; EvidenceToken=$state.tokens.evidenceIntake; ProcessingToken=$state.tokens.evidenceProcessing }
+            } elseif ($onboarding -and $service -eq 'document-intelligence') {
+                $config.Monergy.DocumentProcessing=@{
+                    EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceProcessing
+                    ControlToken=$state.tokens.documentControl
+                }
+            } elseif ($onboarding -and $service -eq 'job-management') {
+                $config.Monergy.DocumentProcessing=@{
+                    Enabled='true'; DocumentIntelligenceUrl='http://127.0.0.1:5112/'
+                    DocumentIntelligenceToken=$state.tokens.documentControl; ControlToken=$state.tokens.jobControl
+                }
+                $config.Monergy.AuditDelivery=@{
+                    Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.jobAuditEvent
+                }
             }
         }
         Save-Json "$service.json" $config
@@ -188,7 +206,10 @@ if ($Action -in @('Prepare','Start')) {
             CustomerIdentityUrl='http://127.0.0.1:5101/'; CustomerContextToken=$state.tokens.customerContext
             CustomerIdentityToken=$state.tokens.context; MembershipToken=$state.tokens.membership
         }
-        $workspace.Monergy.Product=@{ Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake }
+        $workspace.Monergy.Product=@{
+            Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake
+            JobManagementUrl='http://127.0.0.1:5118/'; JobManagementToken=$state.tokens.jobControl
+        }
     }
     Save-Json 'workspace.json' $workspace
     $runtimeUid = if ($windows) { '1654' } else { (& id -u).Trim() }
@@ -234,7 +255,7 @@ if ($Action -eq 'Start' -and -not (Test-Path (Join-Path $folder 'members-initial
     Save-Text 'members-initialized' $state.instanceId
     Protect-Files
 }
-if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'product-members-initialized'))) {
+if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'product-policy-v2-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
@@ -244,6 +265,27 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
             $customerRole = $roles.items | Where-Object code -eq 'customer'
             $advisorRole = $roles.items | Where-Object code -eq 'financial-advisor'
             if ($null -eq $customerRole -or $null -eq $advisorRole) { throw 'The default product access pack is incomplete.' }
+            $permissions = Invoke-RestMethod "$url/access-api/v1/administration/permissions?limit=100" -Headers $headers -TimeoutSec 15
+            $evidenceReadPermission = $permissions.items | Where-Object code -eq 'evidence-read'
+            $processingPermission = $permissions.items | Where-Object code -eq 'document-processing'
+            if ($null -eq $processingPermission) {
+                $created = Invoke-RestMethod "$url/access-api/v1/administration/permissions" -Method Post -ContentType 'application/json' -Headers $headers -Body (@{
+                    expectedPolicyVersion=$permissions.policyVersion; code='document-processing'; label='Process authorized evidence'
+                    grants=@(@{capabilityId='document-intelligence.document.process';scope='Resource'})
+                }|ConvertTo-Json -Depth 5) -TimeoutSec 15
+                $permissions = Invoke-RestMethod "$url/access-api/v1/administration/permissions?limit=100" -Headers $headers -TimeoutSec 15
+                $processingPermission = $permissions.items | Where-Object id -eq $created.id
+            }
+            if ($null -eq $evidenceReadPermission) { throw 'The default Evidence access permission is missing.' }
+            $roles = Invoke-RestMethod "$url/access-api/v1/administration/roles?limit=100" -Headers $headers -TimeoutSec 15
+            $customerRole = $roles.items | Where-Object code -eq 'customer'
+            $requiredProductPermissions = @($evidenceReadPermission.id,$processingPermission.id)
+            if (@($requiredProductPermissions | Where-Object { $_ -notin @($customerRole.permissionIds) }).Count) {
+                $permissionIds = @($customerRole.permissionIds) + @($requiredProductPermissions | Where-Object { $_ -notin @($customerRole.permissionIds) })
+                Invoke-RestMethod "$url/access-api/v1/administration/roles/$($customerRole.id)" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{
+                    expectedPolicyVersion=$roles.policyVersion; code=$customerRole.code; label=$customerRole.label; permissionIds=$permissionIds
+                }|ConvertTo-Json -Depth 5) -TimeoutSec 15 | Out-Null
+            }
             foreach ($binding in @(@{ actor='A100'; role=$customerRole.id },@{ actor='A200'; role=$customerRole.id },@{ actor='A300'; role=$advisorRole.id })) {
                 $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
                 $member = $members.items | Where-Object actorId -eq $binding.actor
@@ -255,7 +297,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
             Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
-    Save-Text 'product-members-initialized' $state.instanceId
+    Save-Text 'product-policy-v2-initialized' $state.instanceId
     Protect-Files
 }
 Write-Host "Local customer workspace is ready: $url/"

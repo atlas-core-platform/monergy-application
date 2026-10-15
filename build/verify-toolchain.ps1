@@ -137,9 +137,9 @@ Add-Check 'Committed pnpm lock' (Test-Path -LiteralPath (Join-Path $RepositoryRo
 
 $expectedServices = [ordered]@{
     'customer-identity' = 'Microsoft.NET.Sdk.Web'; 'consent' = 'Microsoft.NET.Sdk.Web'; 'integration-gateway' = 'Microsoft.NET.Sdk.Web'
-    'evidence' = 'Microsoft.NET.Sdk.Web'; 'document-intelligence' = 'Microsoft.NET.Sdk.Worker'; 'financial-profile' = 'Microsoft.NET.Sdk.Web'
+    'evidence' = 'Microsoft.NET.Sdk.Web'; 'document-intelligence' = 'Microsoft.NET.Sdk.Web'; 'financial-profile' = 'Microsoft.NET.Sdk.Web'
     'financial-rules' = 'Microsoft.NET.Sdk.Web'; 'search-retrieval' = 'Microsoft.NET.Sdk.Web'; 'ai-intelligence' = 'Microsoft.NET.Sdk.Web'
-    'reporting' = 'Microsoft.NET.Sdk.Web'; 'job-management' = 'Microsoft.NET.Sdk.Worker'; 'audit' = 'Microsoft.NET.Sdk.Worker'
+    'reporting' = 'Microsoft.NET.Sdk.Web'; 'job-management' = 'Microsoft.NET.Sdk.Web'; 'audit' = 'Microsoft.NET.Sdk.Worker'
 }
 $catalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 Add-Check 'Twelve canonical services' (Test-ExactSet @($catalog.services.id) @($expectedServices.Keys)) '12/12 R3 service identities'
@@ -293,10 +293,10 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
         $healthOnlyValid = $healthOnlyValid -and $program.Contains('AddHostedService<StartupWorker>') -and $program -notmatch '\.Map(?:Get|Post|Put|Patch|Delete)\('
     }
 }
-Add-Check 'Evidence-based host split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 9 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 3) 'Nine HTTP hosts and three primary workers'
+Add-Check 'Evidence-based responsibility split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 9 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 3) 'Catalog retains nine HTTP and three primary worker responsibilities; governed control-plane adapters do not transfer ownership'
 Add-Check 'No service-to-service project references' $serviceReferenceValid 'Every service references Platform exactly once, Contracts zero or one time, and no other project; service/test/app and duplicate references are forbidden'
 Add-Check $(if ($D10ForwardRegression) { 'D10-bounded service-owned migrations' } elseif ($D09ForwardRegression) { 'D09-bounded service-owned migrations' } else { 'Empty service-owned migrations' }) $migrationOwnershipValid $(if ($D10ForwardRegression) { 'Historical D09 and Job Management cohort; separately hash-verified LOCAL owner migrations excluded from historical counts' } elseif ($D09ForwardRegression) { 'Historical five-service cohort plus separately hash-verified LOCAL owner overlays' } else { 'Historical baseline remains empty after separately hash-verified LOCAL owner overlays' })
-Add-Check 'Controlled host scope' $healthOnlyValid 'Historical contract hosts and worker startup retained; Consent routes require the explicit Development LOCAL owner composition'
+Add-Check 'Controlled host scope' $healthOnlyValid 'Governed contract hosts and startup behavior retained; Consent routes require the explicit Development LOCAL owner composition'
 
 $lockFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter 'packages.lock.json' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
 $projectFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
@@ -362,9 +362,10 @@ Add-Check 'Pinned supply-chain scanners' ($supplyPolicy.tools.syft -ceq '1.51.1'
 Add-Check 'Honest scanner semantics' ($supplyPolicy.scannerFailureSemantics -ceq 'FAIL_NEVER_PASS' -and $supplyPolicy.unavailableToolSemantics -ceq 'NOT_RUN_OR_BLOCKED_NEVER_PASS') 'Unavailable or failed scanners cannot pass'
 
 $workflow = Get-Content -LiteralPath (Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml') -Raw
+$mergeWorkflow = Get-Content -LiteralPath (Join-Path $RepositoryRoot '.github/workflows/merge-integrity.yml') -Raw
 $toolchainScriptText = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/Invoke-Toolchain.ps1') -Raw
-Add-Check 'Technology-specific impact-aware CI workflow' ($workflow.Contains('10.0.401') -and $workflow.Contains('24.21.0') -and $workflow.Contains('hosted-oci-evidence.ps1') -and $workflow.Contains('oci_services') -and $workflow.Contains('full_regression') -and $workflow.Contains('Get-CiImpact.ps1') -and ($workflow -notmatch '(?m)^\s*(?:pull_request|pull_request_target):') -and $workflow.Contains('push:') -and $workflow.Contains('workflow_dispatch:') -and $workflow.Contains('- main') -and -not $workflow.Contains('delivery/mwp03-*') -and $toolchainScriptText.Contains('--frozen-lockfile')) 'Main-push/manual triggers, pinned toolchains, impacted OCI evidence, and governed complete 12-image capability'
-Add-Check 'GitHub Free exception preserved' ($workflow.Contains('Direct push to main detected') -and $workflow.Contains('/commits/$env:MONERGY_COMMIT_SHA/pulls')) 'Detection remains warning, not claimed prevention'
+Add-Check 'Technology-specific impact-aware candidate workflow' ($workflow.Contains('10.0.401') -and $workflow.Contains('24.21.0') -and $workflow.Contains('hosted-oci-evidence.ps1') -and $workflow.Contains('oci_services') -and $workflow.Contains('full_regression') -and $workflow.Contains('Get-CiImpact.ps1') -and $workflow.Contains('git merge-base origin/main $head') -and ($workflow -notmatch '(?m)^\s*(?:push|pull_request|pull_request_target):') -and $workflow.Contains('workflow_dispatch:') -and -not $workflow.Contains('delivery/mwp03-*') -and $toolchainScriptText.Contains('--frozen-lockfile')) 'One manual candidate workflow, complete branch delta, pinned toolchains, impacted OCI evidence, and governed complete 12-image capability'
+Add-Check 'GitHub Free merge-integrity control preserved' ($mergeWorkflow.Contains('/commits/$env:MONERGY_MERGE_SHA/pulls') -and $mergeWorkflow.Contains('has no successful Candidate readiness run') -and -not $mergeWorkflow.Contains('Invoke-Toolchain')) 'Main updates fail closed without a merged PR and exact successful candidate evidence; no duplicate post-merge suite'
 
 $invokeToolchain = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/Invoke-Toolchain.ps1') -Raw
 $requiredTasks = @('Restore', 'FormatCheck', 'Lint', 'Build', 'Test', 'ArchitectureTest', 'BrowserTest', 'Package', 'HostedOciEvidence', 'Sbom', 'VulnerabilityScan', 'SecretScan', 'ReleaseManifest', 'D12Verification', 'D13Verification', 'D14Verification', 'D15Verification', 'Verify')

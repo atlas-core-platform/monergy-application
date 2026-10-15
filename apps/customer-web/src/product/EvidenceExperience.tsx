@@ -6,11 +6,14 @@ import { AccessApiError } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import {
   evidenceTypes,
+  getDocumentProcessing,
   listEvidence,
   maximumEvidenceBytes,
+  scheduleDocumentProcessing,
   submitEvidence,
   type ProductEvidenceItem,
   type ProductEvidenceReceipt,
+  type ProductProcessingView,
 } from './productApi';
 import './product.css';
 
@@ -39,6 +42,8 @@ export default function EvidenceExperience() {
   const product = authorization?.area === 'product' ? authorization.context : null;
   const canUpload = product?.capabilities.includes('evidence.document.upload') ?? false;
   const canRead = product?.capabilities.includes('evidence.document.read') ?? false;
+  const canProcess =
+    product?.capabilities.includes('document-intelligence.document.process') ?? false;
   const [candidate, setCandidate] = useState<File | null>(null);
   const [operationId, setOperationId] = useState('');
   const [evidence, setEvidence] = useState<ProductEvidenceItem[]>([]);
@@ -48,6 +53,10 @@ export default function EvidenceExperience() {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [selectedEvidence, setSelectedEvidence] = useState<ProductEvidenceItem | null>(null);
+  const [processingEvidence, setProcessingEvidence] = useState<ProductEvidenceItem | null>(null);
+  const [processing, setProcessing] = useState<ProductProcessingView | null>(null);
+  const [processingBusy, setProcessingBusy] = useState(false);
+  const [processingError, setProcessingError] = useState('');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
@@ -150,6 +159,51 @@ export default function EvidenceExperience() {
       window.clearInterval(timer.current);
       timer.current = null;
       setBusy(false);
+    }
+  };
+  const closeProcessing = () => {
+    if (processingBusy) return;
+    setProcessingEvidence(null);
+    setProcessing(null);
+    setProcessingError('');
+  };
+  const processDocument = async () => {
+    if (!api || !processingEvidence || processingBusy || !canProcess) return;
+    setProcessingBusy(true);
+    setProcessingError('');
+    const controller = new AbortController();
+    try {
+      let view = await scheduleDocumentProcessing(
+        api,
+        processingEvidence.documentVersionId,
+        crypto.randomUUID().replaceAll('-', ''),
+        controller.signal,
+      );
+      setProcessing(view);
+      for (
+        let attempt = 0;
+        attempt < 30 && !['Completed', 'Failed', 'Cancelled'].includes(view.job.state);
+        attempt += 1
+      ) {
+        await new Promise((resolve) => window.setTimeout(resolve, 400));
+        view = await getDocumentProcessing(api, view.job.jobId, controller.signal);
+        setProcessing(view);
+      }
+      if (!['Completed', 'Failed', 'Cancelled'].includes(view.job.state))
+        setProcessingError(
+          'Processing is still running. Close this review and reopen the document to check again.',
+        );
+    } catch (failure) {
+      setProcessingError(
+        failure instanceof AccessApiError && failure.status === 403
+          ? 'Your current role no longer allows document processing.'
+          : failure instanceof AccessApiError && failure.status === 422
+            ? 'This LOCAL processor supports structured plain-text evidence only.'
+            : 'The processing owners did not confirm a result. No financial profile was changed.',
+      );
+    } finally {
+      controller.abort();
+      setProcessingBusy(false);
     }
   };
 
@@ -431,6 +485,167 @@ export default function EvidenceExperience() {
               These identifiers and the source hash came from the Evidence owner. Raw document
               content is not exposed by this library view.
             </p>
+            <div className="product-processing-entry">
+              <div>
+                <strong>Source-fact review</strong>
+                <p>
+                  {selectedEvidence.contentType === 'text/plain'
+                    ? 'Extract candidate income and expense facts with source references.'
+                    : 'The LOCAL reference processor currently accepts structured text only.'}
+                </p>
+              </div>
+              <Button
+                type="primary"
+                disabled={!canProcess || selectedEvidence.contentType !== 'text/plain'}
+                onClick={() => {
+                  setProcessingEvidence(selectedEvidence);
+                  setSelectedEvidence(null);
+                  setProcessing(null);
+                  setProcessingError('');
+                }}
+              >
+                Review processing
+              </Button>
+            </div>
+            {!canProcess && (
+              <Alert
+                showIcon
+                type="warning"
+                title="Document processing is not included in your current role"
+                description="Ask a Tenant Administrator for the Process authorized evidence permission."
+              />
+            )}
+          </div>
+        )}
+      </Drawer>
+
+      <Drawer
+        title="Review document processing"
+        aria-label="Review document processing"
+        open={Boolean(processingEvidence)}
+        onClose={closeProcessing}
+        destroyOnHidden
+        mask={{ closable: !processingBusy }}
+        closable={!processingBusy}
+        size="large"
+        footer={
+          <div className="product-drawer-actions">
+            <Button onClick={closeProcessing} disabled={processingBusy}>
+              Close
+            </Button>
+            {!processing?.job && (
+              <Button
+                type="primary"
+                loading={processingBusy}
+                disabled={!canProcess || processingEvidence?.contentType !== 'text/plain'}
+                onClick={() => void processDocument()}
+              >
+                Start processing
+              </Button>
+            )}
+          </div>
+        }
+      >
+        {processingEvidence && (
+          <div className="product-processing-review">
+            <div className="product-processing-hero">
+              <span className="product-review-icon">
+                <WorkspaceIcon name="workflow" size={25} />
+              </span>
+              <div>
+                <Tag color={processing?.job.state === 'Completed' ? 'success' : 'processing'}>
+                  {processing?.job.state.toUpperCase() ?? 'READY TO SCHEDULE'}
+                </Tag>
+                <h3>{processingEvidence.originalFileName}</h3>
+                <p>
+                  Version {processingEvidence.version} · {typeName(processingEvidence.contentType)}
+                </p>
+              </div>
+            </div>
+            <Alert
+              showIcon
+              type="info"
+              title="Candidate facts only"
+              description="This LOCAL/UAT processor reads the exact Evidence-owned version and identifies structured income or expense rows. It does not update your financial profile, make recommendations or run a production AI model. Because this is your own customer workspace, delegated advisor consent is not required."
+            />
+            {processingBusy && (
+              <div className="product-processing-progress" aria-live="polite">
+                <Progress percent={processing?.job.state === 'Running' ? 70 : 35} status="active" />
+                <p>Authorization is rechecked before the job and again before extraction.</p>
+              </div>
+            )}
+            {processingError && <Alert showIcon type="error" title={processingError} />}
+            {processing?.job.state === 'Failed' && !processingError && (
+              <Alert
+                showIcon
+                type="error"
+                title="Processing did not produce source facts"
+                description={
+                  processing.processing?.failureCode ??
+                  processing.job.failureCode ??
+                  'The source did not match the supported structured-text format.'
+                }
+              />
+            )}
+            {processing?.facts.length ? (
+              <section className="product-facts" aria-labelledby="source-facts-title">
+                <div className="product-section-heading">
+                  <div>
+                    <p className="workspace-eyebrow">SOURCE FACTS</p>
+                    <h2 id="source-facts-title">Review before any future use</h2>
+                  </div>
+                  <span>{processing.facts.length} candidates</span>
+                </div>
+                <div className="product-fact-list">
+                  {processing.facts.map((fact) => (
+                    <article key={fact.sourceFactId} className="product-fact-card">
+                      <div>
+                        <Tag>{fact.factType}</Tag>
+                        <strong>{fact.label}</strong>
+                        <span>
+                          {fact.sourceLocation} · {fact.effectiveDate}
+                        </span>
+                      </div>
+                      <div className="product-fact-value">
+                        <strong>
+                          {new Intl.NumberFormat(undefined, {
+                            style: 'currency',
+                            currency: fact.currency,
+                          }).format(fact.candidateValue)}
+                        </strong>
+                        <span>{Math.round(fact.confidence * 100)}% confidence</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+                <p className="product-review-note">
+                  Each candidate retains the evidence ID, document version, source location,
+                  extraction version and validation version. No candidate is authoritative financial
+                  data.
+                </p>
+              </section>
+            ) : (
+              !processingBusy &&
+              !processing?.job && (
+                <div className="product-processing-steps">
+                  <div>
+                    <span>01</span>
+                    <strong>Schedule</strong>
+                    <p>Create a durable, customer-scoped job.</p>
+                  </div>
+                  <div>
+                    <span>02</span>
+                    <strong>Verify</strong>
+                    <p>Recheck access and resolve the exact source.</p>
+                  </div>
+                  <div>
+                    <span>03</span>
+                    <strong>Review</strong>
+                    <p>Show candidates with lineage—never silent profile changes.</p>
+                  </div>
+                </div>
+              )
+            )}
           </div>
         )}
       </Drawer>

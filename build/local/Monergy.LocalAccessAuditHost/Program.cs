@@ -16,10 +16,14 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.AddMonergyPlatform("Audit Service");
 builder.Services.AddSingleton<PostgresTenantAccessAudit>();
 builder.Services.AddSingleton<ITenantAccessAuditRepository>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
+builder.Services.AddSingleton<ITenantJobAuditRepository>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
 builder.Services.AddSingleton<TenantAccessAudit>();
+builder.Services.AddSingleton<TenantJobAudit>();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
 var token = TenantAccessIntegration.Required(builder.Configuration, "Monergy:AccessIntegration:AuditEventToken");
 TenantAccessIntegration.ValidateToken(token);
+var jobToken = TenantAccessIntegration.Required(builder.Configuration, "Monergy:AccessIntegration:JobAuditEventToken");
+TenantAccessIntegration.ValidateToken(jobToken);
 var loseReceipt = builder.Configuration["Monergy:AccessIntegration:VerificationLoseReceiptOnce"] == "true" ? 1 : 0;
 var app = builder.Build();
 app.MapGet("/local/v1/administration/access-events", async (HttpContext http, string? after,
@@ -51,6 +55,22 @@ app.MapPost("/reference/events/audit", async (AccessManagementEvent message, Htt
         }
         return Results.Ok(receipt);
     }
+    catch (TenantAccessException exception) { return Results.Json(new { error = exception.Code }, statusCode: exception.StatusCode); }
+    catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
+});
+app.MapPost("/reference/events/job-audit", async (AuditableEvent message, HttpContext http, TenantJobAudit audit) =>
+{
+    if (!TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Reference-Transport"].ToString(), jobToken))
+        return (IResult)Results.StatusCode(403);
+    try
+    {
+        var receipt = await audit.ConsumeAsync(
+            http.Request.Headers["X-Monergy-Reference-Tenant"].ToString(),
+            message,
+            http.RequestAborted).ConfigureAwait(false);
+        return Results.Ok(receipt);
+    }
+    catch (ArgumentException) { return Results.BadRequest(new { error = "JOB_AUDIT_EVENT_INVALID" }); }
     catch (TenantAccessException exception) { return Results.Json(new { error = exception.Code }, statusCode: exception.StatusCode); }
     catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
 });

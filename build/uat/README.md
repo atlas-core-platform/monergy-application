@@ -2,7 +2,7 @@
 
 This profile runs the shared administration workspace and 13 service boundaries on your computer. Access Management, Customer & Identity and Audit use separate PostgreSQL databases for each tenant. Policies, imported identities, sessions, delivery receipts and canonical access audit persist across Stop/Start.
 
-Business reference adapters remain illustrative. Consent and AI are scaffolds; Document Intelligence and Job Management have no connected business consumers. Search and Reporting enforce current AM decisions before their reference business operations. Reporting reference data is volatile. The VS-02 simulator is deliberately unavailable in this profile until its complete tenant-aware worker journey is connected. This profile is not Production acceptance or a replacement for the separately verified D11 persisted-reporting profile.
+Business reference adapters remain illustrative. AI remains a scaffold. Consent, Evidence, Job Management and Document Intelligence provide the guarded LOCAL/UAT customer-processing journey; Search and Reporting enforce current AM decisions before their reference business operations. The processor accepts structured text only, candidate facts do not update Financial Profile, and runtime business data remains non-production. Reporting reference data is volatile. This profile is not Production acceptance or a replacement for the separately verified D11 persisted-reporting profile.
 
 ## Start on Windows
 
@@ -94,7 +94,7 @@ groups, resources, activity, sessions, sidebar collapse, drawers and sign-out.
 See [the candidate record](../governance/MWP-03-midnight-access-candidate.md) for
 scope, evidence and remaining acceptance checks.
 
-`Local Docker UAT acceptance` runs **after pushes to main** and on manual dispatch. It creates its own disposable `ci` profile, builds the actual containers, checks all 13 boundaries for allow/deny/isolation, calls the actual Search owner, tests revocation with delivery stopped, restart persistence, disablement, owner outage recovery and browser session/audit/service journeys. It uploads only allowlisted credential-free results and a signed-in workspace screenshot. The destructive Python acceptance script requires an explicit disposable instance identifier; never point it at operator UAT data. Existing AM owner integration checks continue covering durable CSV onboarding, lost acknowledgements and migration grants.
+The single manually dispatched **Candidate readiness** workflow selects Docker UAT only when the complete candidate delta affects runtime, application, contract, shared-platform or UAT composition paths. It creates its own disposable `ci` profile, builds the actual containers, checks all 13 boundaries for allow/deny/isolation, calls the actual owners, proves Job Management audit delivery, tests revocation with delivery stopped, restart persistence, disablement, owner outage recovery and browser session/audit/service journeys. It uploads only allowlisted credential-free results and signed-in screenshots. The destructive Python acceptance script requires an explicit disposable instance identifier; never point it at operator UAT data. Tenant Access owner integration remains an impact-selected job inside the same workflow.
 
 The runtime image verifies onboarding storage with a non-root UID during its build.
 For onboarding profiles, bootstrap repeats the create/replace/readback check against

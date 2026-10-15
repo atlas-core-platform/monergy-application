@@ -33,6 +33,48 @@ export interface ProductEvidenceLibrary {
   dataDurability: 'Runtime only';
 }
 
+export interface ProductSourceFact {
+  sourceFactId: string;
+  customerId: string;
+  factType: string;
+  label: string;
+  candidateValue: number;
+  currency: string;
+  effectiveDate: string;
+  sourceLocation: string;
+  confidence: number;
+  evidenceId: string;
+  documentVersionId: string;
+  extractionVersion: string;
+  validationVersion: string;
+}
+
+export interface ProductProcessingView {
+  job: {
+    jobId: string;
+    jobName: string;
+    ownerService: string;
+    payloadReference: string;
+    customerId: string;
+    state: 'Scheduled' | 'Running' | 'CancellationRequested' | 'Completed' | 'Failed' | 'Cancelled';
+    attempt: number;
+    failureCode: string | null;
+    retryable: boolean;
+    updatedAt: string;
+  };
+  processing: {
+    processingId: string;
+    documentVersionId: string;
+    state: 'Accepted' | 'Running' | 'Completed' | 'Failed';
+    failureCode: string | null;
+    retryable: boolean;
+    updatedAt: string;
+  } | null;
+  facts: ProductSourceFact[];
+  dataDurability: 'Runtime only';
+  processingMode: 'Structured text reference processor';
+}
+
 export const evidenceTypes = ['application/pdf', 'image/png', 'image/jpeg', 'text/plain'];
 export const maximumEvidenceBytes = 1_048_576;
 
@@ -71,6 +113,33 @@ export async function submitEvidence(
       contentType: file.type,
       contentBase64,
     },
+    signal,
+  );
+}
+
+export function scheduleDocumentProcessing(
+  api: AccessApi,
+  documentVersionId: string,
+  operationId: string,
+  signal?: AbortSignal,
+): Promise<ProductProcessingView> {
+  return api.product<ProductProcessingView>(
+    `v1/evidence/${encodeURIComponent(documentVersionId)}/processing`,
+    'POST',
+    { operationId },
+    signal,
+  );
+}
+
+export function getDocumentProcessing(
+  api: AccessApi,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ProductProcessingView> {
+  return api.product<ProductProcessingView>(
+    `v1/processing/${encodeURIComponent(jobId)}`,
+    'GET',
+    undefined,
     signal,
   );
 }

@@ -244,6 +244,8 @@ Add-Check 'CI gate stage coverage' (Test-ExactSet $pipelineGateIds $expectedGate
 
 $workflowPath = Join-Path $RepositoryRoot '.github/workflows/bootstrap.yml'
 $workflowText = if (Test-Path -LiteralPath $workflowPath) { Get-Content -LiteralPath $workflowPath -Raw } else { '' }
+$mergeWorkflowPath = Join-Path $RepositoryRoot '.github/workflows/merge-integrity.yml'
+$mergeWorkflowText = if (Test-Path -LiteralPath $mergeWorkflowPath) { Get-Content -LiteralPath $mergeWorkflowPath -Raw } else { '' }
 $workflowValid = $workflowText -match 'Invoke-Toolchain\.ps1 -Task Restore' -and
     $workflowText -match 'Invoke-Toolchain\.ps1 -Task D15Verification' -and
     $workflowText -match 'Get-CiImpact\.ps1' -and
@@ -254,9 +256,11 @@ $workflowValid = $workflowText -match 'Invoke-Toolchain\.ps1 -Task Restore' -and
     $workflowText -match 'actions/checkout@[0-9a-f]{40}' -and
     $workflowText -match '(?m)^\s*contents:\s*read\s*$' -and
     $workflowText -match '(?m)^\s*pull-requests:\s*read\s*$' -and
-    $workflowText.Contains('Direct push to main detected') -and
-    $workflowText.Contains('/commits/$env:MONERGY_COMMIT_SHA/pulls')
-Add-Check 'Hosted bootstrap workflow' $workflowValid 'Commit-pinned checkout, least privilege, impact-aware bootstrap, governed full regression, and direct-push detection'
+    $workflowText.Contains('git merge-base origin/main $head') -and
+    -not ($workflowText -match '(?m)^\s*push:\s*$') -and
+    $mergeWorkflowText.Contains('/commits/$env:MONERGY_MERGE_SHA/pulls') -and
+    $mergeWorkflowText.Contains('has no successful Candidate readiness run')
+Add-Check 'Hosted bootstrap workflow' $workflowValid 'Commit-pinned checkout, least privilege, complete candidate impact range, governed full regression, and lightweight merge integrity'
 
 $codeOwnersPath = Join-Path $RepositoryRoot '.github/CODEOWNERS'
 $codeOwners = if (Test-Path -LiteralPath $codeOwnersPath) { (Get-Content -LiteralPath $codeOwnersPath -Raw).Trim() } else { '' }
@@ -272,7 +276,7 @@ $protectionStateValid = $ownershipPolicy.protectedMain -ceq 'NOT_IMPLEMENTED_GIT
     @($ownershipPolicy.codeOwners).Count -eq 1 -and $ownershipPolicy.codeOwners[0] -ceq '@Magkhan060' -and
     $ownershipPolicy.codeOwnersMode -ceq 'ADVISORY_GITHUB_FREE' -and
     $ownershipPolicy.pullRequestPolicy -ceq 'REQUIRED_NOT_ENFORCED' -and
-    $ownershipPolicy.directPushDetection -ceq 'GITHUB_ACTIONS_WARNING' -and
+    $ownershipPolicy.directPushDetection -ceq 'GITHUB_ACTIONS_FAIL_CLOSED' -and
     $ownershipPolicy.forcePushPolicy -ceq 'PROHIBITED_NOT_ENFORCED' -and
     $ownershipPolicy.branchDeletionPolicy -ceq 'PROHIBITED_NOT_ENFORCED' -and
     $ownershipPolicy.repositoryBasePermission -ceq 'READ' -and

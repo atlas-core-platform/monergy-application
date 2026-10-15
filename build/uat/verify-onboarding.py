@@ -72,7 +72,7 @@ def ready():
 
 def sql(database, query):
     # Cluster-owner fixture injection only, bounded to this disposable CI instance.
-    assert database in {'uat_consent_t001', 'uat_customer_identity_t001', 'uat_am_t001'}
+    assert database in {'uat_consent_t001', 'uat_customer_identity_t001', 'uat_am_t001', 'uat_audit_t001'}
     return subprocess.run(compose_command + ['exec', '-T', 'postgres', 'psql', '-U', 'postgres', '-d', database, '-At', '-v', 'ON_ERROR_STOP=1', '-c', query],
                           check=True, capture_output=True, text=True, timeout=30).stdout.strip()
 
@@ -116,10 +116,12 @@ assert product_context['customerId'] == 'reference-customer' and product_context
 assert product_context['dataDurability'] == 'Runtime only' and product_context['productionAccepted'] is False
 assert 'evidence.document.upload' in product_context['capabilities']
 assert 'evidence.document.read' in product_context['capabilities']
+assert 'document-intelligence.document.process' in product_context['capabilities']
 assert call('/product-api/v1/context', session=second_customer)['customerId'] == 'C001'
 product_operation = 'a' * 32
+product_source = b'INCOME|Employment income|125000|USD|2026-10-01|line 1|0.98\nEXPENSE|Housing|24000|USD|2026-10-01|line 2|0.95'
 product_upload = {'operationId': product_operation, 'originalFileName': 'customer-statement.txt',
-                  'contentType': 'text/plain', 'contentBase64': base64.b64encode(b'Customer supplied UAT evidence.').decode()}
+                  'contentType': 'text/plain', 'contentBase64': base64.b64encode(product_source).decode()}
 call('/product-api/v1/evidence', 'POST', product_upload, status=401)
 call('/product-api/v1/evidence', 'POST', product_upload, owner, status=403)
 call('/product-api/v1/evidence', 'POST', {**product_upload, 'operationId': 'b' * 32,
@@ -138,6 +140,39 @@ assert product_library['items'][0]['documentVersionId'] == product_receipt['docu
 assert product_library['items'][0]['contentSha256'] == product_receipt['contentSha256']
 assert 'contentReference' not in product_library['items'][0]
 assert call('/product-api/v1/evidence', session=second_customer)['items'] == []
+
+# APP-03 schedules an owner-governed job, resolves the exact Evidence version and returns only candidate facts.
+processing_path = '/product-api/v1/evidence/' + product_receipt['documentVersionId'] + '/processing'
+processing_operation = 'c' * 32
+call(processing_path, 'POST', {'operationId': processing_operation}, status=401)
+call(processing_path, 'POST', {'operationId': processing_operation}, owner, status=403)
+call(processing_path, 'POST', {'operationId': processing_operation}, second_customer, status=404)
+processing = call(processing_path, 'POST', {'operationId': processing_operation}, customer)
+assert processing['job']['jobId'] == 'job-processing-' + processing_operation
+assert processing['job']['ownerService'] == 'Document Intelligence Service'
+assert processing['processing'] is None and processing['facts'] == []
+status_path = '/product-api/v1/processing/' + processing['job']['jobId']
+call(status_path, status=401)
+for _ in range(40):
+    processing = call(status_path, session=customer)
+    if processing['job']['state'] in {'Completed', 'Failed', 'Cancelled'}:
+        break
+    time.sleep(.25)
+assert processing['job']['state'] == 'Completed', processing
+assert processing['processing']['state'] == 'Completed'
+assert [(fact['factType'], fact['label']) for fact in processing['facts']] == [
+    ('INCOME', 'Employment income'), ('EXPENSE', 'Housing')]
+assert all(fact['documentVersionId'] == product_receipt['documentVersionId'] for fact in processing['facts'])
+assert all('content' not in fact and 'contentReference' not in fact for fact in processing['facts'])
+job_audit_count = '0'
+for _ in range(20):
+    job_audit_count = sql('uat_audit_t001', "SELECT count(*) FROM audit.evidence WHERE source_event_id LIKE 'job-processing-cccccccccccccccccccccccccccccccc:CID-05%';")
+    if job_audit_count == '2':
+        break
+    time.sleep(.25)
+assert job_audit_count == '2', job_audit_count
+replayed = call(processing_path, 'POST', {'operationId': processing_operation}, customer)
+assert replayed['job']['jobId'] == processing['job']['jobId']
 
 # Setup is tenant/admin bound; a receipt cannot be fabricated or saved against a stale review.
 call('/uat-api/v1/setup', status=401)
@@ -264,9 +299,9 @@ assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
-           'validated': ['setup review and replay', 'server-resolved customer product entry', 'idempotent customer evidence intake', 'customer-scoped evidence library and provenance',
+           'validated': ['setup review and replay', 'server-resolved customer product entry', 'idempotent customer evidence intake', 'customer-scoped evidence library and provenance', 'authorized durable document processing, source-fact review and canonical Job Audit delivery',
                          'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
                          'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
-           'limitations': ['Business data uses owner reference adapters.', 'AI and unsupported business consumers are not claimed.', 'Consent outbox delivery is not claimed.']}
+           'limitations': ['Business data uses owner reference adapters.', 'The processor accepts structured LOCAL/UAT text and does not claim OCR or production AI.', 'Candidate facts do not update the financial profile.', 'Consent outbox delivery is not claimed.']}
 (root / '.artifacts/onboarding-acceptance.json').write_text(json.dumps(summary, indent=2) + '\n')
 print('Local onboarding owner/process acceptance passed:', checks, 'checks.')

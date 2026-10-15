@@ -39,12 +39,21 @@ public sealed record ProductEvidenceLibrary(
     IReadOnlyList<CustomerEvidenceItem> Items,
     string DataDurability);
 
+public sealed record ProductDocumentProcessingRequest(string OperationId);
+public sealed record ProductDocumentProcessingView(
+    ScheduledJob Job,
+    ProcessingStatus? Processing,
+    IReadOnlyList<ValidatedSourceFact> Facts,
+    string DataDurability,
+    string ProcessingMode);
+
 public static class ProductWorkspaceEndpoints
 {
     private static readonly string[] ProductCapabilities =
     [
         "evidence.document.upload",
         "evidence.document.read",
+        "document-intelligence.document.process",
         "financial-profile.profile.read",
         "search.query.execute",
         "reporting.report.generate",
@@ -60,6 +69,7 @@ public static class ProductWorkspaceEndpoints
         builder.Services.AddSingleton(provider => new CustomerOwnerClient(
             provider.GetRequiredService<IConfiguration>()));
         builder.Services.AddSingleton<ProductEvidenceClient>();
+        builder.Services.AddSingleton<ProductDocumentProcessingClient>();
     }
 
     public static void MapProductWorkspace(this WebApplication app)
@@ -192,6 +202,111 @@ public static class ProductWorkspaceEndpoints
                 registration.Data.CreatedAt,
                 "Runtime only"));
         });
+        app.MapPost("/product-api/v1/evidence/{documentVersionId}/processing", async (
+            string documentVersionId,
+            ProductDocumentProcessingRequest submission,
+            HttpContext http,
+            CustomerOwnerClient owners,
+            TenantAccessClient access,
+            ProductEvidenceClient evidence,
+            ProductDocumentProcessingClient processing) =>
+        {
+            ValidateOperation(submission.OperationId);
+            if (!TenantAccessClient.Identifier(documentVersionId, 160))
+                throw new TenantBoundaryException("DOCUMENT_VERSION_INVALID", 400);
+            var session = await owners.SessionAsync(http).ConfigureAwait(false);
+            var customer = await owners.OwnedCustomerAsync(session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
+            var decision = await access.EvaluateCustomerAsync(
+                http, "document-intelligence.document.process", customer.CustomerId).ConfigureAwait(false);
+            if (decision.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+            var security = Security(session, customer.CustomerId, decision);
+            var listRequest = new ContractRequest<ListCustomerEvidence>(
+                App02ContractNames.ListCustomerEvidence,
+                ContractGuard.CurrentVersion,
+                "request-processing-source-" + submission.OperationId,
+                "correlation-processing-" + submission.OperationId,
+                null,
+                security,
+                null,
+                new ListCustomerEvidence(customer.CustomerId, 100));
+            var library = await evidence.ListAsync(
+                session.TenantId, session.AuthenticationContextId, listRequest, http.RequestAborted).ConfigureAwait(false);
+            var source = library.Items.SingleOrDefault(item => item.DocumentVersionId == documentVersionId)
+                ?? throw new TenantBoundaryException("EVIDENCE_VERSION_NOT_FOUND", 404);
+            if (!string.Equals(source.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase))
+                throw new TenantBoundaryException("PROCESSING_CONTENT_TYPE_UNSUPPORTED", 422);
+            var now = DateTimeOffset.UtcNow;
+            var jobId = "job-processing-" + submission.OperationId;
+            var processingId = "processing-" + submission.OperationId;
+            var jobRequest = new ContractRequest<ScheduleJob>(
+                Vs02ContractNames.ScheduleJob,
+                ContractGuard.CurrentVersion,
+                "request-job-" + submission.OperationId,
+                "correlation-processing-" + submission.OperationId,
+                null,
+                security,
+                submission.OperationId,
+                new ScheduleJob(
+                    jobId,
+                    "document-processing",
+                    "Document Intelligence Service",
+                    source.DocumentVersionId,
+                    customer.CustomerId,
+                    now));
+            var job = await processing.ScheduleAsync(
+                session.TenantId,
+                new ScheduleDocumentProcessingJob(jobRequest, processingId, source.EvidenceId),
+                http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(new ProductDocumentProcessingView(
+                job,
+                null,
+                [],
+                "Runtime only",
+                "Structured text reference processor"));
+        });
+        app.MapGet("/product-api/v1/processing/{jobId}", async (
+            string jobId,
+            HttpContext http,
+            CustomerOwnerClient owners,
+            TenantAccessClient access,
+            ProductDocumentProcessingClient processing) =>
+        {
+            if (!TenantAccessClient.Identifier(jobId, 160) || !jobId.StartsWith("job-processing-", StringComparison.Ordinal))
+                throw new TenantBoundaryException("PROCESSING_JOB_INVALID", 400);
+            var session = await owners.SessionAsync(http).ConfigureAwait(false);
+            var customer = await owners.OwnedCustomerAsync(session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
+            var decision = await access.EvaluateCustomerAsync(
+                http, "document-intelligence.document.process", customer.CustomerId).ConfigureAwait(false);
+            if (decision.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+            var request = new ContractRequest<GetJobStatus>(
+                Vs02ContractNames.GetJobStatus,
+                ContractGuard.CurrentVersion,
+                "request-status-" + Guid.NewGuid().ToString("N"),
+                "correlation-status-" + Guid.NewGuid().ToString("N"),
+                null,
+                Security(session, customer.CustomerId, decision),
+                null,
+                new GetJobStatus(jobId, customer.CustomerId));
+            var view = await processing.StatusAsync(session.TenantId, request, http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(view with { DataDurability = "Runtime only", ProcessingMode = "Structured text reference processor" });
+        });
+    }
+
+    private static TrustedSecurityContext Security(
+        CustomerOwnerSession session,
+        string customerId,
+        CustomerAccessDecision decision) => new(
+        new ActorContext(session.ActorId, "Customer", DateTimeOffset.UtcNow, session.AuthenticationContextId),
+        new WorkloadContext("customer-web", "local-uat-workspace:" + session.TenantId),
+        new AccessContext("customer-advice", null, decision.DecisionId, customerId));
+
+    private static void ValidateOperation(string operationId)
+    {
+        if (operationId.Length != 32 || operationId.Any(character =>
+            !char.IsAsciiHexDigit(character) || char.IsAsciiLetterUpper(character)))
+            throw new TenantBoundaryException("PROCESSING_OPERATION_INVALID", 400);
     }
 
     private static void Validate(ProductEvidenceSubmission submission)
@@ -207,6 +322,92 @@ public static class ProductWorkspaceEndpoints
         if (string.IsNullOrWhiteSpace(submission.ContentBase64) || submission.ContentBase64.Length > 1_398_104)
             throw new TenantBoundaryException("EVIDENCE_CONTENT_SIZE_INVALID", 400);
     }
+}
+
+public sealed record ScheduleDocumentProcessingJob(
+    ContractRequest<ScheduleJob> Job,
+    string ProcessingId,
+    string EvidenceReferenceId);
+
+public sealed class ProductDocumentProcessingClient : IDisposable
+{
+    private sealed record JobProcessingView(
+        ScheduledJob Job,
+        ProcessingStatus? Processing,
+        IReadOnlyList<ValidatedSourceFact> Facts);
+
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true };
+    private readonly HttpClient client = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
+    { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1_048_576 };
+    private readonly Uri endpoint;
+    private readonly string token;
+
+    public ProductDocumentProcessingClient(IConfiguration configuration)
+    {
+        endpoint = TenantAccessIntegration.LoopbackRoot(
+            TenantAccessIntegration.Required(configuration, "Monergy:Product:JobManagementUrl"));
+        token = TenantAccessIntegration.Required(configuration, "Monergy:Product:JobManagementToken");
+        TenantAccessIntegration.ValidateToken(token);
+    }
+
+    public async Task<ScheduledJob> ScheduleAsync(
+        string tenantId,
+        ScheduleDocumentProcessingJob input,
+        CancellationToken cancellationToken)
+    {
+        using var request = Message(
+            HttpMethod.Post, "internal/local/v1/jobs/document-processing", tenantId, input);
+        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+            throw new TenantBoundaryException(response.StatusCode == System.Net.HttpStatusCode.Conflict
+                ? "PROCESSING_OPERATION_CONFLICT" : response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                    ? "ACCESS_DENIED" : "JOB_OWNER_UNAVAILABLE",
+                response.StatusCode == System.Net.HttpStatusCode.Conflict ? 409 :
+                    response.StatusCode == System.Net.HttpStatusCode.Forbidden ? 403 : 503);
+        var result = await response.Content.ReadFromJsonAsync<ContractResult<ScheduledJob>>(
+            ContractJson.Options, cancellationToken).ConfigureAwait(false)
+            ?? throw new TenantBoundaryException("JOB_OWNER_RESPONSE_INVALID", 503);
+        if (result.Outcome != ContractOutcome.Success || result.Data is null ||
+            result.Data.JobId != input.Job.Payload.JobId || result.Data.CustomerId != input.Job.Payload.CustomerId)
+            throw new TenantBoundaryException("JOB_OWNER_RESPONSE_INVALID", 503);
+        return result.Data;
+    }
+
+    public async Task<ProductDocumentProcessingView> StatusAsync(
+        string tenantId,
+        ContractRequest<GetJobStatus> input,
+        CancellationToken cancellationToken)
+    {
+        using var request = Message(HttpMethod.Post, "internal/local/v1/jobs/status", tenantId, input);
+        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+            throw new TenantBoundaryException(response.StatusCode == System.Net.HttpStatusCode.Forbidden
+                ? "ACCESS_DENIED" : "JOB_OWNER_UNAVAILABLE",
+                response.StatusCode == System.Net.HttpStatusCode.Forbidden ? 403 : 503);
+        var view = await response.Content.ReadFromJsonAsync<JobProcessingView>(Json, cancellationToken)
+            .ConfigureAwait(false) ?? throw new TenantBoundaryException("JOB_OWNER_RESPONSE_INVALID", 503);
+        if (view.Job.JobId != input.Payload.JobId || view.Job.CustomerId != input.Payload.CustomerId ||
+            view.Facts.Any(fact => fact.CustomerId != input.Payload.CustomerId))
+            throw new TenantBoundaryException("JOB_OWNER_RESPONSE_INVALID", 503);
+        return new ProductDocumentProcessingView(
+            view.Job,
+            view.Processing,
+            view.Facts,
+            "Runtime only",
+            "Structured text reference processor");
+    }
+
+    private HttpRequestMessage Message(HttpMethod method, string path, string tenantId, object body)
+    {
+        var request = new HttpRequestMessage(method, new Uri(endpoint, path));
+        request.Headers.Add("X-Monergy-Tenant", tenantId);
+        request.Headers.Add("X-Monergy-Job-Token", token);
+        request.Content = JsonContent.Create(body, options: ContractJson.Options);
+        return request;
+    }
+
+    public void Dispose() => client.Dispose();
 }
 
 public sealed class ProductEvidenceClient : IDisposable

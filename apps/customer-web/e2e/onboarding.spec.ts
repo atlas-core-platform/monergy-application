@@ -234,6 +234,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
           capabilities: [
             'evidence.document.upload',
             'evidence.document.read',
+            'document-intelligence.document.process',
             'search.query.execute',
             'reporting.report.generate',
           ],
@@ -275,6 +276,59 @@ test('customer entry stays isolated from administration and confirms reviewed ev
       });
       return;
     }
+    if (path.includes('/product-api/v1/evidence/') && path.endsWith('/processing')) {
+      const body = route.request().postDataJSON() as { operationId: string };
+      await route.fulfill({
+        json: {
+          job: {
+            jobId: `job-processing-${body.operationId}`,
+            jobName: 'document-processing',
+            ownerService: 'Document Intelligence Service',
+            payloadReference: String(
+              (library[0] as { documentVersionId: string }).documentVersionId,
+            ),
+            customerId: 'reference-customer',
+            state: 'Completed',
+            attempt: 1,
+            failureCode: null,
+            retryable: false,
+            updatedAt: '2026-10-14T00:00:01Z',
+          },
+          processing: {
+            processingId: `processing-${body.operationId}`,
+            documentVersionId: String(
+              (library[0] as { documentVersionId: string }).documentVersionId,
+            ),
+            state: 'Completed',
+            failureCode: null,
+            retryable: false,
+            updatedAt: '2026-10-14T00:00:01Z',
+          },
+          facts: [
+            {
+              sourceFactId: 'source-fact-browser-001',
+              customerId: 'reference-customer',
+              factType: 'INCOME',
+              label: 'Employment income',
+              candidateValue: 125000,
+              currency: 'USD',
+              effectiveDate: '2026-10-01',
+              sourceLocation: 'line 1',
+              confidence: 0.98,
+              evidenceId: String((library[0] as { evidenceId: string }).evidenceId),
+              documentVersionId: String(
+                (library[0] as { documentVersionId: string }).documentVersionId,
+              ),
+              extractionVersion: 'fixture-extractor/1.0.0',
+              validationVersion: 'canonical-source-fact/1.0.0',
+            },
+          ],
+          dataDurability: 'Runtime only',
+          processingMode: 'Structured text reference processor',
+        },
+      });
+      return;
+    }
     await route.fulfill({ status: 404, json: { error: 'NOT_FOUND' } });
   });
   await page.goto('/');
@@ -304,6 +358,12 @@ test('customer entry stays isolated from administration and confirms reviewed ev
   const provenance = page.getByRole('dialog', { name: 'Evidence provenance' });
   await expect(provenance).toContainText('document-version-');
   await expect(provenance).toContainText('Raw document content is not exposed');
+  await provenance.getByRole('button', { name: 'Review processing' }).click();
+  const processing = page.getByRole('dialog', { name: 'Review document processing' });
+  await expect(processing).toContainText('Candidate facts only');
+  await processing.getByRole('button', { name: 'Start processing' }).click();
+  await expect(processing).toContainText('Employment income');
+  await expect(processing).toContainText('98% confidence');
   expect(writes).toHaveLength(1);
   await page.screenshot({ path: '.artifacts/customer-evidence-intake.png', fullPage: true });
 });

@@ -5,7 +5,7 @@
   "codeOwnersMode": "ADVISORY_GITHUB_FREE",
   "protectedMain": "NOT_IMPLEMENTED_GITHUB_FREE_PLAN_LIMITATION",
   "pullRequestPolicy": "REQUIRED_NOT_ENFORCED",
-  "directPushDetection": "GITHUB_ACTIONS_WARNING",
+  "directPushDetection": "GITHUB_ACTIONS_FAIL_CLOSED",
   "forcePushPolicy": "PROHIBITED_NOT_ENFORCED",
   "branchDeletionPolicy": "PROHIBITED_NOT_ENFORCED",
   "repositoryBasePermission": "READ",

@@ -9,6 +9,8 @@ public sealed record EvidenceContent(EvidenceReference Reference, string Content
 
 public sealed class EvidenceDependencyException(string message) : Exception(message);
 
+public sealed class EvidenceContentUnsupportedException(string message) : Exception(message);
+
 public sealed class DocumentExtractionException(string message) : Exception(message);
 
 public sealed class ProcessingConflictException(string message) : Exception(message);
@@ -436,6 +438,12 @@ public sealed class DocumentProcessingApplication(
             return await FailAsync(
                 request, started, "processing.evidence.dependency-unavailable",
                 ContractErrorCategory.DependencyFailure, true, cancellationToken);
+        }
+        catch (EvidenceContentUnsupportedException)
+        {
+            return await FailAsync(
+                request, started, "processing.content-type.unsupported",
+                ContractErrorCategory.UnsupportedOperation, false, cancellationToken);
         }
 
         if (!MatchesRequestedSource(
