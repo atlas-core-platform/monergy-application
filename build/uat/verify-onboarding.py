@@ -113,7 +113,7 @@ call('/product-api/v1/context', status=401)
 call('/product-api/v1/context', session=owner, status=403)
 product_context = call('/product-api/v1/context', session=customer)
 assert product_context['customerId'] == 'reference-customer' and product_context['actorId'] == 'A100'
-assert product_context['dataDurability'] == 'Runtime only' and product_context['productionAccepted'] is False
+assert product_context['dataDurability'] == 'Temporary data' and product_context['productionAccepted'] is False
 assert 'evidence.document.upload' in product_context['capabilities']
 assert 'evidence.document.read' in product_context['capabilities']
 assert 'document-intelligence.document.process' in product_context['capabilities']
@@ -128,14 +128,14 @@ call('/product-api/v1/evidence', 'POST', {**product_upload, 'operationId': 'b' *
      'contentType': 'application/pdf'}, customer, status=400)
 product_receipt = call('/product-api/v1/evidence', 'POST', product_upload, customer)
 assert product_receipt['documentId'] == 'document-' + product_operation and product_receipt['version'] == 1
-assert product_receipt['dataDurability'] == 'Runtime only' and 'contentReference' not in product_receipt
+assert product_receipt['dataDurability'] == 'Temporary data' and 'contentReference' not in product_receipt
 assert call('/product-api/v1/evidence', 'POST', product_upload, customer) == product_receipt
 call('/product-api/v1/evidence', 'POST', {**product_upload, 'contentBase64': base64.b64encode(b'Different content.').decode()}, customer, status=409)
 product_metadata = {'documentId': product_receipt['documentId'], 'customerId': 'reference-customer'}
 assert call('/contracts/cid-021/v1', 'POST', envelope(customer, 'GetEvidenceMetadata', product_metadata), customer)['data']['versions'][0]['originalFileName'] == 'customer-statement.txt'
 call('/product-api/v1/evidence', session=owner, status=403)
 product_library = call('/product-api/v1/evidence', session=customer)
-assert product_library['dataDurability'] == 'Runtime only' and len(product_library['items']) == 1
+assert product_library['dataDurability'] == 'Temporary data' and len(product_library['items']) == 1
 assert product_library['items'][0]['documentVersionId'] == product_receipt['documentVersionId']
 assert product_library['items'][0]['contentSha256'] == product_receipt['contentSha256']
 assert 'contentReference' not in product_library['items'][0]
