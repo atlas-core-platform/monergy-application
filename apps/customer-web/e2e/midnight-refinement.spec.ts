@@ -112,7 +112,7 @@ test('user review preserves drafts, explains consequences, traps focus and resto
   await expect(drawer.locator('.is-changed')).toHaveCount(2);
   await expect(drawer.locator('.is-unchanged')).toHaveCount(1);
   await expect(
-    drawer.getByText('Saving changes invalidates this user’s existing sessions.'),
+    drawer.getByText('Saving changes invalidates this person’s existing sessions.'),
   ).toBeVisible();
   await drawer.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(drawer.getByRole('button', { name: 'Review change' })).toBeFocused();
@@ -233,7 +233,7 @@ test('permission, group and resource editing keep existing contracts and review 
   await page.getByRole('button', { name: 'Open Read records' }).click();
   await drawer.getByLabel('Name', { exact: true }).fill('Read assigned records');
   await drawer.getByLabel('Scope', { exact: true }).click();
-  await page.getByTitle('Tenant-wide', { exact: true }).click();
+  await page.getByTitle('Organization-wide', { exact: true }).click();
   await drawer.getByRole('button', { name: 'Review change' }).click();
   await expect(drawer.locator('.is-changed')).toHaveCount(2);
   expect(writes).toHaveLength(0);
