@@ -161,7 +161,12 @@ export default function FinancialProfileExperience() {
                     </div>
                     <div className="product-financial-source">
                       <span>Effective {formatDate(fact.effectiveDate)}</span>
-                      <strong>Source: {fact.source.sourceName}</strong>
+                      <a
+                        href={`/evidence?documentVersion=${encodeURIComponent(fact.source.documentVersion)}`}
+                        aria-label={`Open source document ${fact.source.sourceName}`}
+                      >
+                        Source: {fact.source.sourceName}
+                      </a>
                       <span>
                         Added {formatDateTime(fact.source.recordedAt)} · revision {fact.revision}
                       </span>
