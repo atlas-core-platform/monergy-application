@@ -347,3 +347,46 @@ it('requires explicit source-fact selection before updating Financial informatio
     undefined,
   );
 });
+
+
+it('opens the exact referenced document when navigating from financial information', async () => {
+  window.history.replaceState(null, '', '/evidence?documentVersion=document-version-002');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    dataDurability: 'Temporary data',
+    items: [
+      {
+        documentId: 'document-001',
+        documentVersionId: 'document-version-001',
+        evidenceId: 'evidence-001',
+        version: 1,
+        sourceName: 'Customer upload',
+        originalFileName: 'first.txt',
+        contentType: 'text/plain',
+        contentLength: 10,
+        contentSha256: 'a'.repeat(64),
+        receivedAt: '2026-10-14T00:00:00Z',
+        createdAt: '2026-10-14T00:00:00Z',
+      },
+      {
+        documentId: 'document-002',
+        documentVersionId: 'document-version-002',
+        evidenceId: 'evidence-002',
+        version: 1,
+        sourceName: 'Customer upload',
+        originalFileName: 'source.txt',
+        contentType: 'text/plain',
+        contentLength: 10,
+        contentSha256: 'b'.repeat(64),
+        receivedAt: '2026-10-15T00:00:00Z',
+        createdAt: '2026-10-15T00:00:00Z',
+      },
+    ],
+  });
+  mount(api);
+
+  const drawer = await screen.findByRole('dialog', { name: 'Document details' });
+  expect(drawer).toHaveTextContent('source.txt');
+  expect(drawer).not.toHaveTextContent('first.txt');
+  window.history.replaceState(null, '', '/');
+});
