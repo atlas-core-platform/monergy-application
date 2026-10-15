@@ -345,8 +345,9 @@ Add-Check 'No service-to-service project references' $serviceReferenceValid 'Eve
 Add-Check $(if ($D10ForwardRegression) { 'D10-bounded service-owned migrations' } elseif ($D09ForwardRegression) { 'D09-bounded service-owned migrations' } else { 'Empty service-owned migrations' }) $migrationOwnershipValid $(if ($D10ForwardRegression) { 'Historical D09 and Job Management cohort; separately hash-verified LOCAL owner migrations excluded from historical counts' } elseif ($D09ForwardRegression) { 'Historical five-service cohort plus separately hash-verified LOCAL owner overlays' } else { 'Historical baseline remains empty after separately hash-verified LOCAL owner overlays' })
 Add-Check 'Controlled host scope' $healthOnlyValid 'Governed contract hosts and startup behavior retained; Consent routes require the explicit Development LOCAL owner composition'
 
-$lockFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter 'packages.lock.json' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
-$projectFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' })
+$vendoredOwnerSource = '[\\/]build[\\/]uat[\\/]dependencies[\\/]source[\\/]'
+$lockFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter 'packages.lock.json' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' -and $_.FullName -notmatch $vendoredOwnerSource })
+$projectFiles = @(Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Filter '*.csproj' | Where-Object { $_.FullName -notmatch '[\\/](?:bin|obj|\.toolcache)[\\/]' -and $_.FullName -notmatch $vendoredOwnerSource })
 $projectsWithoutLocks = @($projectFiles | Where-Object { -not (Test-Path -LiteralPath (Join-Path $_.DirectoryName 'packages.lock.json')) })
 Add-Check 'NuGet lock coverage' ($lockFiles.Count -eq $projectFiles.Count -and $projectsWithoutLocks.Count -eq 0) 'Every service, shared, contract, and independently owned test project has a lock file'
 $projectText = @($projectFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
