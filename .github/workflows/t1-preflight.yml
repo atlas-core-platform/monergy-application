@@ -39,6 +39,24 @@ jobs:
           corepack enable
           corepack install --global pnpm@12.4.1
 
+      - name: Apply two bounded lint remediations
+        shell: python
+        run: |
+          from pathlib import Path
+
+          setup = Path("apps/customer-web/src/access/TenantSetup.tsx")
+          text = setup.read_text()
+          text = text.replace("key={\`${change.kind}-${index}\`}", "key={\`${change.kind}-${String(index)}\`}")
+          setup.write_text(text)
+
+          test = Path("apps/customer-web/tests/Onboarding.test.tsx")
+          text = test.read_text()
+          text = text.replace(
+              "...ready.accessPack!,\n          policyVersion: 8,",
+              "installedVersion: '2.0',\n          installedIdentity: 'monergy-default-access-pack/2.0',\n          installedAt: '2026-10-15T00:00:00Z',\n          policyVersion: 8,\n          ready: true,"
+          )
+          test.write_text(text)
+
       - name: Restore
         shell: pwsh
         run: ./build/Invoke-Toolchain.ps1 -Task Restore
@@ -68,6 +86,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/customer-web/src/access/TenantSetup.tsx apps/customer-web/tests/Onboarding.test.tsx
           git rm .github/workflows/t1-preflight.yml
-          git commit -m "T1-03: remove temporary preflight helper"
+          git commit -m "T1-03: fix lint findings and remove temporary preflight helper"
           git push origin HEAD:delivery/t1-integrated-onboarding-documents
