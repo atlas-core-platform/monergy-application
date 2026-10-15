@@ -8,6 +8,16 @@ export const OnboardingContext = createContext<OnboardingFeatures>({
 });
 export const useOnboarding = () => useContext(OnboardingContext);
 
+export type SetupAccessPolicyState = 'Ready' | 'UpdateAvailable' | 'Customized' | 'Blocked';
+
+export interface SetupAccessPolicyView {
+  state: SetupAccessPolicyState;
+  changeCount: number;
+  roleChangeCount: number;
+  permissionChangeCount: number;
+  conflictCount: number;
+}
+
 export interface TenantSetupState {
   enabled: boolean;
   tenantId: string;
@@ -19,5 +29,6 @@ export interface TenantSetupState {
   initialAdministratorEmail?: string;
   state?: 'Requested' | 'Provisioning' | 'ProvisioningFailed' | 'ReadyForAdmin' | 'Active';
   receiptReference?: string | null;
+  accessPolicy?: SetupAccessPolicyView;
   customerRelationships: boolean;
 }
