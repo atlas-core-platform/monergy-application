@@ -43,9 +43,9 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   },
   {
     value: 'resource-grants',
-    label: 'Customer Assignments',
+    label: 'Advanced resource grants',
     description:
-      'Assign named customers to authorized professionals. Advanced exact-resource grants remain available when a contract explicitly needs them.',
+      'Manage exact record-level grants only for contracts that explicitly require them. Customer relationships are managed in Assigned customers.',
   },
 ];
 
