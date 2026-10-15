@@ -1,0 +1,22 @@
+name: T1 temporary candidate dispatcher
+
+on:
+  push:
+    branches:
+      - delivery/t1-app03-topology-and-language
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch governed Candidate readiness
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          gh workflow run bootstrap.yml --repo "${GITHUB_REPOSITORY}" --ref "${BRANCH}" -f verification_mode=impacted
