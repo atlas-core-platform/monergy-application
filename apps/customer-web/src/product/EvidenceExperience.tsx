@@ -1,7 +1,7 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
-import { Alert, Button, Drawer, Input, Progress, Select, Skeleton, Tag, Upload } from 'antd';
+import { Alert, Button, Drawer, Input, Select, Skeleton, Spin, Tag, Upload } from 'antd';
 import type { UploadProps } from 'antd';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import {
@@ -58,9 +58,7 @@ export default function EvidenceExperience() {
   const [processingBusy, setProcessingBusy] = useState(false);
   const [processingError, setProcessingError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
-  const timer = useRef<number | null>(null);
   const loadLibrary = useCallback(
     async (signal?: AbortSignal) => {
       if (!api || !canRead) {
@@ -76,8 +74,8 @@ export default function EvidenceExperience() {
         if (!signal?.aborted) {
           setLibraryError(
             failure instanceof AccessApiError && failure.status === 403
-              ? 'Your current role does not allow evidence library access.'
-              : 'The Evidence owner could not confirm the library. Retry before relying on this view.',
+              ? 'You don\'t have access to these documents. Contact your organization administrator.'
+              : 'We couldn\'t load your documents. Try again.',
           );
         }
       } finally {
@@ -136,28 +134,20 @@ export default function EvidenceExperience() {
     if (!candidate || issue || !api || busy) return;
     setBusy(true);
     setError('');
-    setProgress(18);
-    timer.current = window.setInterval(() => {
-      setProgress((value) => Math.min(value + 8, 82));
-    }, 180);
     try {
       const receipt = await submitEvidence(api, operationId, candidate);
-      setProgress(100);
       setConfirmation(receipt);
       if (receipt.documentVersionId) await loadLibrary();
       window.setTimeout(close, 250);
     } catch (failure) {
       setError(
         failure instanceof AccessApiError && failure.status === 403
-          ? 'Your current role does not allow evidence uploads.'
+          ? 'You don\'t have permission to upload documents. Contact your organization administrator.'
           : failure instanceof AccessApiError && failure.status === 409
-            ? 'This upload identity was already used for different content. Select the file again.'
-            : 'The evidence owner did not confirm this upload. Retry to check the same operation safely.',
+            ? 'We couldn\'t confirm this upload because the same request was used for different content. Choose the file again.'
+            : 'We couldn\'t confirm the upload. Try again to check the same request.',
       );
-      setProgress(0);
     } finally {
-      window.clearInterval(timer.current);
-      timer.current = null;
       setBusy(false);
     }
   };
@@ -191,15 +181,15 @@ export default function EvidenceExperience() {
       }
       if (!['Completed', 'Failed', 'Cancelled'].includes(view.job.state))
         setProcessingError(
-          'Processing is still running. Close this review and reopen the document to check again.',
+          'We\'re still extracting details. Close this view and reopen the document to check again.',
         );
     } catch (failure) {
       setProcessingError(
         failure instanceof AccessApiError && failure.status === 403
-          ? 'Your current role no longer allows document processing.'
+          ? 'You no longer have access to extract details from this document.'
           : failure instanceof AccessApiError && failure.status === 422
-            ? 'This LOCAL processor supports structured plain-text evidence only.'
-            : 'The processing owners did not confirm a result. No financial profile was changed.',
+            ? 'Extracting details is currently available only for structured text files.'
+            : 'We couldn\'t extract details from this document. Your financial profile has not changed.',
       );
     } finally {
       controller.abort();
@@ -211,14 +201,14 @@ export default function EvidenceExperience() {
     <main className="product-page evidence-page">
       <header className="product-heading">
         <div>
-          <p className="workspace-eyebrow">EVIDENCE</p>
-          <h1>Bring your financial documents into view.</h1>
+          <p className="workspace-eyebrow">DOCUMENTS</p>
+          <h1>Keep your financial documents together.</h1>
           <p>
-            Add source documents to {product?.customerName ?? 'your workspace'}. Monergy verifies
-            the file, records its evidence identity and preserves its source hash.
+            Add documents to {product?.customerName ?? 'your workspace'} and review the information
+            Monergy can find in them.
           </p>
         </div>
-        <Tag className="product-environment">LOCAL UAT · RUNTIME ONLY</Tag>
+        <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
       </header>
 
       <section className="product-intake-grid" aria-labelledby="upload-heading">
@@ -228,7 +218,7 @@ export default function EvidenceExperience() {
               <WorkspaceIcon name="evidence" size={20} />
             </span>
             <div>
-              <h2 id="upload-heading">Add evidence</h2>
+              <h2 id="upload-heading">Add document</h2>
               <p>PDF, PNG, JPEG or text · up to 1 MB</p>
             </div>
           </div>
@@ -236,8 +226,8 @@ export default function EvidenceExperience() {
             <Alert
               showIcon
               type="warning"
-              title="Evidence upload is not included in your current role"
-              description="Ask a Tenant Administrator to assign a role that includes Upload evidence."
+              title="Document upload is not included in your current access"
+              description="Contact your organization administrator if you need access to upload documents."
             />
           )}
           <Dragger
@@ -256,42 +246,42 @@ export default function EvidenceExperience() {
           </Dragger>
           <div className="product-trust-row">
             <span>
-              <WorkspaceIcon name="shield" size={16} /> Customer ownership checked
+              <WorkspaceIcon name="shield" size={16} /> Linked to your customer account
             </span>
             <span>
-              <WorkspaceIcon name="check" size={16} /> Access evaluated at submission
+              <WorkspaceIcon name="check" size={16} /> Access checked when you upload
             </span>
           </div>
         </div>
         <aside className="product-panel product-explainer" aria-labelledby="evidence-result-title">
           <p className="workspace-eyebrow">WHAT HAPPENS NEXT</p>
-          <h2 id="evidence-result-title">A traceable source, ready for the next step.</h2>
+          <h2 id="evidence-result-title">Your document stays connected to its details.</h2>
           <ol>
             <li>
               <span>01</span>
               <div>
-                <strong>Verify</strong>
-                <p>File type, size and content hash are checked.</p>
+                <strong>Check file</strong>
+                <p>Monergy checks the file type, size and integrity.</p>
               </div>
             </li>
             <li>
               <span>02</span>
               <div>
-                <strong>Register</strong>
-                <p>The Evidence owner creates a document version.</p>
+                <strong>Save document</strong>
+                <p>Monergy records a document version you can return to.</p>
               </div>
             </li>
             <li>
               <span>03</span>
               <div>
-                <strong>Confirm</strong>
-                <p>You receive the exact evidence and version references.</p>
+                <strong>Ready to review</strong>
+                <p>You can open the document details and extract supported information.</p>
               </div>
             </li>
           </ol>
           <p className="product-limit-note">
-            This LOCAL/UAT slice keeps uploaded content only for the current runtime. Production
-            retention remains a separate governed decision.
+            Test environment · Temporary data. These documents may be cleared when this test
+            environment is reset.
           </p>
         </aside>
       </section>
@@ -299,11 +289,11 @@ export default function EvidenceExperience() {
       <section className="product-recent" aria-labelledby="evidence-library-title">
         <div className="product-section-heading">
           <div>
-            <p className="workspace-eyebrow">EVIDENCE LIBRARY</p>
-            <h2 id="evidence-library-title">Verified sources and provenance</h2>
+            <p className="workspace-eyebrow">YOUR DOCUMENTS</p>
+            <h2 id="evidence-library-title">Your documents</h2>
           </div>
           <span>
-            {evidence.length ? `${String(evidence.length)} available` : 'No evidence yet'}
+            {evidence.length ? `${String(evidence.length)} available` : 'No documents yet'}
           </span>
         </div>
         {confirmation && (
@@ -315,8 +305,8 @@ export default function EvidenceExperience() {
               },
             }}
             type="success"
-            title={`${confirmation.originalFileName} was registered`}
-            description={`Evidence version ${confirmation.documentVersionId} was confirmed by the Evidence owner.`}
+            title="Your document was uploaded."
+            description={`${confirmation.originalFileName} · Version ${confirmation.version}`}
             className="product-library-alert"
           />
         )}
@@ -324,8 +314,8 @@ export default function EvidenceExperience() {
           <Alert
             showIcon
             type="warning"
-            title="Evidence library access is not included in your current role"
-            description="You may still upload evidence when separately authorized, but existing documents cannot be displayed."
+            title="You don't have access to these documents"
+            description="Contact your organization administrator if you need access to view existing documents."
             className="product-library-alert"
           />
         )}
@@ -333,8 +323,8 @@ export default function EvidenceExperience() {
           <div className="product-library-controls">
             <Input
               allowClear
-              aria-label="Find evidence"
-              placeholder="Find by file name or version ID"
+              aria-label="Find documents"
+              placeholder="Find by file name"
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -342,7 +332,7 @@ export default function EvidenceExperience() {
             />
             <Select
               id="evidence-type-filter"
-              aria-label="Filter evidence type"
+              aria-label="Filter document type"
               value={typeFilter}
               onChange={setTypeFilter}
               options={[
@@ -384,15 +374,15 @@ export default function EvidenceExperience() {
           <div className="product-empty">
             <WorkspaceIcon name="evidence" size={24} />
             <div>
-              <strong>Your verified evidence library is ready.</strong>
-              <p>Add a source document above to create its first traceable version.</p>
+              <strong>No documents yet.</strong>
+              <p>Add a document above to get started.</p>
             </div>
           </div>
         ) : canRead && visibleEvidence.length === 0 ? (
           <div className="product-empty">
             <WorkspaceIcon name="search" size={24} />
             <div>
-              <strong>No evidence matches these filters.</strong>
+              <strong>No documents match these filters.</strong>
               <p>Clear the search or choose another file type.</p>
             </div>
           </div>
@@ -403,7 +393,7 @@ export default function EvidenceExperience() {
                 <button
                   type="button"
                   className="product-receipt-action"
-                  aria-label={`View provenance for ${item.originalFileName}`}
+                  aria-label={`View document details for ${item.originalFileName}`}
                   onClick={() => {
                     setSelectedEvidence(item);
                   }}
@@ -419,7 +409,7 @@ export default function EvidenceExperience() {
                     </span>
                   </span>
                   <span className="product-receipt-meta">
-                    <Tag color="success">VERIFIED</Tag>
+                    <Tag color="success">UPLOADED</Tag>
                     <small>{formatDate(item.createdAt)}</small>
                   </span>
                   <WorkspaceIcon name="arrow" size={17} />
@@ -431,8 +421,8 @@ export default function EvidenceExperience() {
       </section>
 
       <Drawer
-        title="Evidence provenance"
-        aria-label="Evidence provenance"
+        title="Document details"
+        aria-label="Document details"
         open={Boolean(selectedEvidence)}
         onClose={() => {
           setSelectedEvidence(null);
@@ -445,7 +435,7 @@ export default function EvidenceExperience() {
             <span className="product-review-icon">
               <WorkspaceIcon name="check" size={25} />
             </span>
-            <Tag color="success">OWNER VERIFIED</Tag>
+            <Tag color="success">UPLOADED</Tag>
             <h3>{selectedEvidence.originalFileName}</h3>
             <p>
               {typeName(selectedEvidence.contentType)} ·{' '}
@@ -461,37 +451,39 @@ export default function EvidenceExperience() {
                 <dd>{selectedEvidence.version}</dd>
               </div>
               <div>
-                <dt>Registered</dt>
+                <dt>Uploaded</dt>
                 <dd>{formatDate(selectedEvidence.createdAt)}</dd>
               </div>
-              <div>
-                <dt>Document ID</dt>
-                <dd className="product-identifier">{selectedEvidence.documentId}</dd>
-              </div>
-              <div>
-                <dt>Version ID</dt>
-                <dd className="product-identifier">{selectedEvidence.documentVersionId}</dd>
-              </div>
-              <div>
-                <dt>Evidence ID</dt>
-                <dd className="product-identifier">{selectedEvidence.evidenceId}</dd>
-              </div>
-              <div>
-                <dt>SHA-256</dt>
-                <dd className="product-hash">{selectedEvidence.contentSha256}</dd>
-              </div>
+
             </dl>
-            <p className="product-review-note">
-              These identifiers and the source hash came from the Evidence owner. Raw document
-              content is not exposed by this library view.
-            </p>
+            <details className="product-review-note">
+              <summary>Technical details</summary>
+              <dl>
+                <div>
+                  <dt>Document ID</dt>
+                  <dd className="product-identifier">{selectedEvidence.documentId}</dd>
+                </div>
+                <div>
+                  <dt>Version ID</dt>
+                  <dd className="product-identifier">{selectedEvidence.documentVersionId}</dd>
+                </div>
+                <div>
+                  <dt>Evidence ID</dt>
+                  <dd className="product-identifier">{selectedEvidence.evidenceId}</dd>
+                </div>
+                <div>
+                  <dt>SHA-256</dt>
+                  <dd className="product-hash">{selectedEvidence.contentSha256}</dd>
+                </div>
+              </dl>
+            </details>
             <div className="product-processing-entry">
               <div>
-                <strong>Source-fact review</strong>
+                <strong>Extract details from this document</strong>
                 <p>
                   {selectedEvidence.contentType === 'text/plain'
-                    ? 'Extract candidate income and expense facts with source references.'
-                    : 'The LOCAL reference processor currently accepts structured text only.'}
+                    ? 'Find supported income and expense information and review where it came from.'
+                    : 'Extracting details is currently available only for structured text files.'}
                 </p>
               </div>
               <Button
@@ -504,15 +496,15 @@ export default function EvidenceExperience() {
                   setProcessingError('');
                 }}
               >
-                Review processing
+                Extract details
               </Button>
             </div>
             {!canProcess && (
               <Alert
                 showIcon
                 type="warning"
-                title="Document processing is not included in your current role"
-                description="Ask a Tenant Administrator for the Process authorized evidence permission."
+                title="Extracting details is not included in your current access"
+                description="Contact your organization administrator if you need access to extract document details."
               />
             )}
           </div>
@@ -520,8 +512,8 @@ export default function EvidenceExperience() {
       </Drawer>
 
       <Drawer
-        title="Review document processing"
-        aria-label="Review document processing"
+        title="Extract and review details"
+        aria-label="Extract and review details"
         open={Boolean(processingEvidence)}
         onClose={closeProcessing}
         destroyOnHidden
@@ -540,7 +532,7 @@ export default function EvidenceExperience() {
                 disabled={!canProcess || processingEvidence?.contentType !== 'text/plain'}
                 onClick={() => void processDocument()}
               >
-                Start processing
+                Extract details
               </Button>
             )}
           </div>
@@ -554,7 +546,13 @@ export default function EvidenceExperience() {
               </span>
               <div>
                 <Tag color={processing?.job.state === 'Completed' ? 'success' : 'processing'}>
-                  {processing?.job.state.toUpperCase() ?? 'READY TO SCHEDULE'}
+                  {processing?.job.state === 'Completed'
+                    ? 'DETAILS EXTRACTED'
+                    : processing?.job.state === 'Failed'
+                      ? 'NEEDS ATTENTION'
+                      : processing?.job.state === 'Running'
+                        ? 'EXTRACTING DETAILS'
+                        : 'READY TO EXTRACT'}
                 </Tag>
                 <h3>{processingEvidence.originalFileName}</h3>
                 <p>
@@ -565,13 +563,13 @@ export default function EvidenceExperience() {
             <Alert
               showIcon
               type="info"
-              title="Candidate facts only"
-              description="This LOCAL/UAT processor reads the exact Evidence-owned version and identifies structured income or expense rows. It does not update your financial profile, make recommendations or run a production AI model. Because this is your own customer workspace, delegated advisor consent is not required."
+              title="Review before adding anything to your financial profile"
+              description="Monergy can find supported income and expense details in this document. Review them against the document first. Your financial profile is not changed by this step."
             />
             {processingBusy && (
               <div className="product-processing-progress" aria-live="polite">
-                <Progress percent={processing?.job.state === 'Running' ? 70 : 35} status="active" />
-                <p>Authorization is rechecked before the job and again before extraction.</p>
+                <Spin size="small" />
+                <p>Extracting details from this document…</p>
               </div>
             )}
             {processingError && <Alert showIcon type="error" title={processingError} />}
@@ -579,11 +577,9 @@ export default function EvidenceExperience() {
               <Alert
                 showIcon
                 type="error"
-                title="Processing did not produce source facts"
+                title="We couldn't extract details from this document"
                 description={
-                  processing.processing?.failureCode ??
-                  processing.job.failureCode ??
-                  'The source did not match the supported structured-text format.'
+                  'Check that this is a supported structured-text document containing income or expense information, then try again.'
                 }
               />
             )}
@@ -591,10 +587,10 @@ export default function EvidenceExperience() {
               <section className="product-facts" aria-labelledby="source-facts-title">
                 <div className="product-section-heading">
                   <div>
-                    <p className="workspace-eyebrow">SOURCE FACTS</p>
-                    <h2 id="source-facts-title">Review before any future use</h2>
+                    <p className="workspace-eyebrow">INFORMATION TO REVIEW</p>
+                    <h2 id="source-facts-title">Review information found in this document</h2>
                   </div>
-                  <span>{processing.facts.length} candidates</span>
+                  <span>{processing.facts.length} items</span>
                 </div>
                 <div className="product-fact-list">
                   {processing.facts.map((fact) => (
@@ -619,9 +615,8 @@ export default function EvidenceExperience() {
                   ))}
                 </div>
                 <p className="product-review-note">
-                  Each candidate retains the evidence ID, document version, source location,
-                  extraction version and validation version. No candidate is authoritative financial
-                  data.
+                  Each item stays linked to the document location it came from. Review the details
+                  carefully; nothing here has been added to your financial profile.
                 </p>
               </section>
             ) : (
@@ -630,18 +625,18 @@ export default function EvidenceExperience() {
                 <div className="product-processing-steps">
                   <div>
                     <span>01</span>
-                    <strong>Schedule</strong>
-                    <p>Create a durable, customer-scoped job.</p>
+                    <strong>Start</strong>
+                    <p>Choose the document details you want Monergy to extract.</p>
                   </div>
                   <div>
                     <span>02</span>
-                    <strong>Verify</strong>
-                    <p>Recheck access and resolve the exact source.</p>
+                    <strong>Check</strong>
+                    <p>Monergy checks your current access and the selected document.</p>
                   </div>
                   <div>
                     <span>03</span>
                     <strong>Review</strong>
-                    <p>Show candidates with lineage—never silent profile changes.</p>
+                    <p>Check the extracted information against the document before future use.</p>
                   </div>
                 </div>
               )
@@ -651,8 +646,8 @@ export default function EvidenceExperience() {
       </Drawer>
 
       <Drawer
-        title="Review evidence upload"
-        aria-label="Review evidence upload"
+        title="Review document upload"
+        aria-label="Review document upload"
         open={Boolean(candidate)}
         onClose={close}
         destroyOnHidden
@@ -670,7 +665,7 @@ export default function EvidenceExperience() {
               loading={busy}
               disabled={Boolean(issue) || !canUpload}
             >
-              Upload evidence
+              Upload document
             </Button>
           </div>
         }
@@ -687,7 +682,10 @@ export default function EvidenceExperience() {
             {issue && <Alert showIcon type="error" title={issue} />}
             {error && <Alert showIcon type="error" title={error} />}
             {busy && (
-              <Progress percent={progress} status="active" aria-label="Evidence upload progress" />
+              <div className="product-processing-progress" aria-live="polite">
+                <Spin size="small" />
+                <p>Uploading document…</p>
+              </div>
             )}
             <dl>
               <div>
@@ -696,16 +694,15 @@ export default function EvidenceExperience() {
               </div>
               <div>
                 <dt>Result</dt>
-                <dd>New evidence document · Version 1</dd>
+                <dd>New document · Version 1</dd>
               </div>
               <div>
                 <dt>Storage</dt>
-                <dd>Current LOCAL/UAT runtime only</dd>
+                <dd>Test environment · Temporary data</dd>
               </div>
             </dl>
             <p className="product-review-note">
-              Uploading sends the file to the Evidence service. Your session, customer ownership and
-              upload capability are checked again before the version is registered.
+              Monergy checks your current access before saving this document version.
             </p>
           </div>
         )}
