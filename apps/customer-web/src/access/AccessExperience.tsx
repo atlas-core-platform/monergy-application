@@ -18,8 +18,8 @@ import './access.css';
 const areas: { value: AccessArea; label: string; description: string }[] = [
   {
     value: 'members',
-    label: 'Users',
-    description: 'Create user accounts and manage their role, status and administrator authority.',
+    label: 'People',
+    description: 'Add people and manage their business role, status and Organization Administrator authority.',
   },
   {
     value: 'roles',
@@ -28,13 +28,13 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   },
   {
     value: 'permissions',
-    label: 'Permissions',
-    description: 'Choose the capabilities each permission allows.',
+    label: 'Access Permissions',
+    description: 'Choose what each access permission allows.',
   },
   {
     value: 'groups',
-    label: 'Groups',
-    description: 'Organize people without changing their access.',
+    label: 'Teams',
+    description: 'Organize people into teams without changing their access.',
   },
   {
     value: 'imports',
@@ -43,9 +43,9 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   },
   {
     value: 'resource-grants',
-    label: 'Resource Access',
+    label: 'Customer Assignments',
     description:
-      'Assign specific resources to users whose role includes a resource-scoped capability.',
+      'Assign named customers to authorized professionals. Advanced exact-resource grants remain available when a contract explicitly needs them.',
   },
 ];
 
@@ -85,7 +85,7 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
       {!embedded && (
         <div className="access-context-bar">
           <span>
-            <WorkspaceIcon name="shield" size={15} /> Tenant <strong>{session.tenantId}</strong>
+            <WorkspaceIcon name="shield" size={15} /> Organization <strong>{session.tenantId}</strong>
             <span className="access-context-divider">/</span>Administrator
           </span>
           <Button
@@ -363,7 +363,7 @@ function Administration({
             key: 'authority',
             render: (_: unknown, record: AccessRecord) => (
               <span className="access-secondary">
-                {record.tenantAdmin ? 'Tenant administrator' : 'No'}
+                {record.tenantAdmin ? 'Organization Administrator' : 'No'}
               </span>
             ),
           },
@@ -460,9 +460,9 @@ function Administration({
             }}
           >
             {area === 'members'
-              ? 'Create user'
+              ? 'Create person'
               : area === 'imports'
-                ? 'Import users'
+                ? 'Import people'
                 : `Create ${area === 'resource-grants' ? 'resource access' : area.slice(0, -1)}`}
           </Button>
         </Space>
