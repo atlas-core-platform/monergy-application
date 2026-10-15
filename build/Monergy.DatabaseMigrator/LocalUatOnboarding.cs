@@ -126,8 +126,21 @@ internal static partial class LocalUatBootstrap
                     sql = "SELECT EXISTS(SELECT 1 FROM customer_identity.tenant_principals WHERE actor_id='A900' AND normalized_email='a900@example.test');";
                 if (step == TenantProvisioningStep.AccessManagementBootstrapped && database.Service == "am")
                     sql = """
-                        SELECT EXISTS(SELECT 1 FROM am.tenant_identity WHERE singleton AND tenant_id=@tenant AND initial_admin_actor_id='A900' AND default_access_pack_version='2.0')
-                            AND EXISTS(SELECT 1 FROM am.access_subjects WHERE actor_id='A900' AND administrative_authority='TenantAdmin' AND business_role_id IS NULL AND status='Active');
+                        SELECT EXISTS(
+                            SELECT 1
+                            FROM am.tenant_identity i
+                            JOIN am.default_access_pack_history h
+                              ON h.pack_version=i.default_access_pack_version
+                            WHERE i.singleton
+                              AND i.tenant_id=@tenant
+                              AND i.initial_admin_actor_id='A900'
+                              AND i.default_access_pack_version IN ('1.0','2.0'))
+                            AND EXISTS(
+                                SELECT 1 FROM am.access_subjects
+                                WHERE actor_id='A900'
+                                  AND administrative_authority='TenantAdmin'
+                                  AND business_role_id IS NULL
+                                  AND status='Active');
                         """;
                 if (step == TenantProvisioningStep.MandatoryReadinessValidated)
                     sql = $"SELECT NOT has_schema_privilege(current_user,'{schema}','CREATE') AND NOT has_schema_privilege(current_user,'public','CREATE') AND NOT has_database_privilege(current_user,current_database(),'CREATE') AND NOT has_table_privilege(current_user,'{table}','INSERT,UPDATE,DELETE,TRUNCATE');";
