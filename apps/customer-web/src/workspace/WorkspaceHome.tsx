@@ -1,7 +1,9 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import type { WorkspaceIconName } from '@monergy/ui-foundation';
-import { Tag } from 'antd';
+import { Alert, Skeleton, Tag } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
 import { useWorkspaceSession } from '../access/workspaceSession';
+import { getFinancialProfile, listEvidence, type ProductFinancialProfile } from '../product/productApi';
 
 const journeys: {
   title: string;
@@ -46,10 +48,52 @@ const journeys: {
 ];
 
 export default function WorkspaceHome() {
-  const { authorization } = useWorkspaceSession();
+  const { api, authorization } = useWorkspaceSession();
   const context = authorization?.area === 'product' ? authorization.context : null;
   const capabilities = new Set(context?.capabilities ?? journeys.map((item) => item.capability));
   const available = journeys.filter((item) => capabilities.has(item.capability));
+  const canReadFinancial = capabilities.has('financial-profile.profile.read');
+  const canReadDocuments = capabilities.has('evidence.document.read');
+  const [profile, setProfile] = useState<ProductFinancialProfile | null>(null);
+  const [documentCount, setDocumentCount] = useState<number | null>(null);
+  const [snapshotBusy, setSnapshotBusy] = useState(false);
+  const [snapshotError, setSnapshotError] = useState('');
+
+  useEffect(() => {
+    if (!api || (!canReadFinancial && !canReadDocuments)) return;
+    const controller = new AbortController();
+    setSnapshotBusy(true);
+    setSnapshotError('');
+    void Promise.all([
+      canReadFinancial ? getFinancialProfile(api, controller.signal) : Promise.resolve(null),
+      canReadDocuments ? listEvidence(api, controller.signal) : Promise.resolve(null),
+    ])
+      .then(([financial, documents]) => {
+        setProfile(financial);
+        setDocumentCount(documents?.items.length ?? null);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted)
+          setSnapshotError("We couldn't refresh your financial snapshot. Your detailed pages are still available.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSnapshotBusy(false);
+      });
+    return () => controller.abort();
+  }, [api, canReadDocuments, canReadFinancial]);
+
+  const snapshot = useMemo(() => {
+    const facts = profile?.facts ?? [];
+    const income = facts.filter((fact) => fact.factType === 'INCOME').length;
+    const expenses = facts.filter((fact) => fact.factType === 'EXPENSE').length;
+    const sources = new Set(facts.map((fact) => fact.source.documentVersion)).size;
+    const latest = [...facts]
+      .sort((left, right) => right.source.recordedAt.localeCompare(left.source.recordedAt))
+      .slice(0, 3);
+    return { facts: facts.length, income, expenses, sources, latest };
+  }, [profile]);
+
+  const hasTrustedInformation = snapshot.facts > 0;
   return (
     <main className="workspace-home product-home">
       <div className="workspace-page-heading">
@@ -123,6 +167,84 @@ export default function WorkspaceHome() {
           </div>
         </div>
       </section>
+
+      {(canReadFinancial || canReadDocuments) && (
+        <section className="workspace-passport" aria-labelledby="workspace-passport-title">
+          <div className="workspace-section-heading">
+            <div>
+              <p className="workspace-eyebrow">FINANCIAL PASSPORT</p>
+              <h2 id="workspace-passport-title">Your source-connected snapshot</h2>
+            </div>
+            <a href="/finances">View financial information</a>
+          </div>
+          {snapshotError && <Alert showIcon type="warning" title={snapshotError} />}
+          {snapshotBusy && !profile && documentCount === null ? (
+            <div className="workspace-passport-panel">
+              <Skeleton active paragraph={{ rows: 2 }} />
+            </div>
+          ) : (
+            <>
+              <div className="workspace-passport-grid">
+                <article className="workspace-passport-card">
+                  <span>Trusted information</span>
+                  <strong>{canReadFinancial ? snapshot.facts : '—'}</strong>
+                  <small>{canReadFinancial ? 'Reviewed items in your financial profile' : 'Not included in your access'}</small>
+                </article>
+                <article className="workspace-passport-card">
+                  <span>Income items</span>
+                  <strong>{canReadFinancial ? snapshot.income : '—'}</strong>
+                  <small>Source-connected Income records</small>
+                </article>
+                <article className="workspace-passport-card">
+                  <span>Expense items</span>
+                  <strong>{canReadFinancial ? snapshot.expenses : '—'}</strong>
+                  <small>Source-connected Expense records</small>
+                </article>
+                <article className="workspace-passport-card">
+                  <span>Documents</span>
+                  <strong>{documentCount ?? '—'}</strong>
+                  <small>{canReadDocuments ? 'Documents available to you' : 'Not included in your access'}</small>
+                </article>
+              </div>
+              {hasTrustedInformation ? (
+                <div className="workspace-passport-panel">
+                  <div className="workspace-passport-heading">
+                    <div>
+                      <p className="workspace-eyebrow">RECENT TRUSTED INFORMATION</p>
+                      <h3>Follow each item back to its source</h3>
+                    </div>
+                    <span>{snapshot.sources} source {snapshot.sources === 1 ? 'document' : 'documents'}</span>
+                  </div>
+                  <div className="workspace-passport-list">
+                    {snapshot.latest.map((fact) => (
+                      <a href="/finances" key={fact.financialFactId}>
+                        <span>
+                          <strong>{fact.label}</strong>
+                          <small>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'EXPENSE' ? 'Expense' : fact.factType}</small>
+                        </span>
+                        <span>
+                          <small>Source</small>
+                          <strong>{fact.source.sourceName}</strong>
+                        </span>
+                        <WorkspaceIcon name="arrow" size={16} />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ) : canReadFinancial ? (
+                <div className="workspace-passport-panel workspace-passport-empty">
+                  <WorkspaceIcon name="reports" size={22} />
+                  <div>
+                    <strong>Your Financial Passport is ready for trusted information.</strong>
+                    <p>Review supported Income or Expense details from Documents and choose what to add.</p>
+                  </div>
+                  {capabilities.has('evidence.document.upload') && <a href="/evidence">Review documents</a>}
+                </div>
+              ) : null}
+            </>
+          )}
+        </section>
+      )}
 
       <section aria-labelledby="workspace-areas-title">
         <div className="workspace-section-heading">
