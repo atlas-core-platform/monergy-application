@@ -120,6 +120,10 @@ it('shows a source-connected Financial Passport without inventing financial scor
   expect(screen.getByText('Expense items')).toBeVisible();
   expect(screen.getByText('Employment income')).toBeVisible();
   expect(screen.getByText('income-statement.txt')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Open source document for Employment income' })).toHaveAttribute(
+    'href',
+    '/evidence?documentVersion=document-version-001',
+  );
   expect(screen.getByText('2 source documents')).toBeVisible();
   expect(screen.queryByText(/financial health score/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/recommendation/i)).not.toBeInTheDocument();
