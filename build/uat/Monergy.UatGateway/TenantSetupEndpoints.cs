@@ -31,6 +31,8 @@ public static class TenantSetupEndpoints
             var receipt = await http.RequestServices.GetRequiredService<FileTenantSetup>().GetAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false);
             var accessPolicy = await http.RequestServices.GetRequiredService<AccessPackSetupClient>()
                 .ReadViewAsync(http).ConfigureAwait(false);
+            var currentReceipt = AccessPackSetupClient.AllowsActivation(accessPolicy) &&
+                receipt?.ReviewedPolicyVersion == admin.PolicyVersion ? receipt : null;
             return (object)new
             {
                 enabled = true,
@@ -42,7 +44,7 @@ public static class TenantSetupEndpoints
                 tenant.TimeZone,
                 tenant.InitialAdministratorEmail,
                 state = tenant.State.ToString(),
-                receiptReference = receipt?.ReceiptReference,
+                receiptReference = currentReceipt?.ReceiptReference,
                 accessPolicy,
                 customerRelationships = true
             };
@@ -79,6 +81,10 @@ public static class TenantSetupEndpoints
                 .ReadViewAsync(http).ConfigureAwait(false);
             if (!AccessPackSetupClient.AllowsActivation(accessPolicy))
                 throw new InvalidOperationException("TENANT_ACCESS_POLICY_REVIEW_REQUIRED");
+            var receipt = await http.RequestServices.GetRequiredService<FileTenantSetup>()
+                .GetAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false);
+            if (receipt?.ReviewedPolicyVersion != admin.PolicyVersion)
+                throw new InvalidOperationException("TENANT_SETUP_REVIEW_REQUIRED");
             var active = await orchestrator.ActivateAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false);
             return new { active.SetupReceiptReference, state = active.State.ToString() };
         }));
