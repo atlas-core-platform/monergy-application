@@ -197,9 +197,7 @@ it('keeps the library hidden without evidence read authority', () => {
   const api = new AccessApi(session);
   const request = vi.spyOn(api, 'product');
   mount(api, ['evidence.document.upload']);
-  expect(
-    screen.getByText('You don't have access to these documents'),
-  ).toBeVisible();
+  expect(screen.getByText("You don't have access to these documents")).toBeVisible();
   expect(request).not.toHaveBeenCalled();
 });
 
