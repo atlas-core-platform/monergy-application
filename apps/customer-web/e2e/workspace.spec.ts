@@ -33,7 +33,9 @@ test('product direct routes isolate the protected shell until authorization succ
 
 test('product reload returns to public entry before fresh verification', async ({ page }) => {
   await connectProductWorkspace(page);
-  await expect(page.getByRole('heading', { name: 'Start with what you already have.' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Start with what you already have.' }),
+  ).toBeVisible();
 
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Connect to your workspace' })).toBeVisible();
@@ -41,7 +43,9 @@ test('product reload returns to public entry before fresh verification', async (
   await expect(page.getByRole('navigation')).toHaveCount(0);
 
   await completeProductWorkspaceConnection(page);
-  await expect(page.getByRole('heading', { name: 'Start with what you already have.' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Start with what you already have.' }),
+  ).toBeVisible();
 });
 
 test('workspace navigation, command palette and guide support keyboard and reduced motion', async ({
@@ -49,7 +53,9 @@ test('workspace navigation, command palette and guide support keyboard and reduc
 }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await connectProductWorkspace(page);
-  await expect(page.getByRole('heading', { name: 'Start with what you already have.' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Start with what you already have.' }),
+  ).toBeVisible();
   await expect(page).toHaveTitle('Overview · Monergy');
   await expect(page.locator('.workspace-art-chip').first()).toHaveCSS('animation-name', 'none');
   await page.getByRole('button', { name: 'Collapse sidebar' }).click();
@@ -339,7 +345,9 @@ test('access routes keep the session and exclude platform navigation across deep
   await expect(palette).toBeVisible();
   await expect(palette.getByRole('button', { name: 'System Expert', exact: true })).toHaveCount(0);
   await palette.getByRole('button', { name: 'Access Permissions', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Access Permissions', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Access Permissions', exact: true }),
+  ).toBeVisible();
   await page.getByRole('link', { name: 'Access Management home' }).click();
   await expect(page).toHaveURL(/\/access$/);
   await expect(page.getByRole('heading', { name: 'Access overview' })).toBeVisible();

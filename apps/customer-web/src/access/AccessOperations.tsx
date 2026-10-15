@@ -491,8 +491,8 @@ function OperationsDrawer({
         confirmLoading={loading}
       >
         <p>
-          This ends the person’s current sessions in this organization. Their role and access
-          remain assigned. They can establish a new session if their membership is active.
+          This ends the person’s current sessions in this organization. Their role and access remain
+          assigned. They can establish a new session if their membership is active.
         </p>
         <p>Revoking your own sessions returns you to sign-in.</p>
       </Modal>

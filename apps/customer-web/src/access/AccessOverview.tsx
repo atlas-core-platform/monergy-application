@@ -188,8 +188,8 @@ export function AccessOverview({
           <hr />
           <h3>How access works</h3>
           <p>
-            <strong>One business role per person.</strong> Access permissions come from that role and
-            applicable resource assignments.
+            <strong>One business role per person.</strong> Access permissions come from that role
+            and applicable resource assignments.
           </p>
           <p>
             <strong>Teams organize people.</strong> Joining a team does not grant access.

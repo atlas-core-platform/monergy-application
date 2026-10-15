@@ -147,7 +147,8 @@ export function WorkspaceEntry({
             </Form>
           )}
           <p className="access-connect-footnote">
-            Your key is cleared after use. Test-environment keys do not configure production sign-in.
+            Your key is cleared after use. Test-environment keys do not configure production
+            sign-in.
           </p>
         </section>
       </main>

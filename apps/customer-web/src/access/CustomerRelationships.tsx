@@ -407,8 +407,8 @@ function AssignedCustomers({ api }: { api: AccessApi }) {
               />
             </Form.Item>
             <p className="access-form-hint">
-              Monergy checks that the selected person has an applicable customer-related capability. Customer
-              self-access follows verified ownership and does not need a manual assignment.
+              Monergy checks that the selected person has an applicable customer-related capability.
+              Customer self-access follows verified ownership and does not need a manual assignment.
             </p>
           </Form>
         )}

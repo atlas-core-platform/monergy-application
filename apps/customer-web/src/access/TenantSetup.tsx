@@ -249,12 +249,16 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
       'Client access requires an assigned customer, implemented permissions and current customer Consent.',
     'operations-support':
       'Operational support access becomes available only through implemented support operations.',
-    'dsa-case-manager': 'Case-management tasks remain unavailable until the case owner is implemented.',
-    'lender-professional': 'Lending tasks remain unavailable until application/lender owners are implemented.',
+    'dsa-case-manager':
+      'Case-management tasks remain unavailable until the case owner is implemented.',
+    'lender-professional':
+      'Lending tasks remain unavailable until application/lender owners are implemented.',
     'financial-professional':
       'Professional verification tasks remain unavailable until governed engagements are implemented.',
-    'property-valuer': 'Valuation tasks remain unavailable until governed valuation assignments are implemented.',
-    'legal-advisor': 'Legal-review tasks remain unavailable until governed legal matters are implemented.',
+    'property-valuer':
+      'Valuation tasks remain unavailable until governed valuation assignments are implemented.',
+    'legal-advisor':
+      'Legal-review tasks remain unavailable until governed legal matters are implemented.',
   };
 
   return (
@@ -511,7 +515,9 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                               <li key={person.actorId ?? person.id}>
                                 <strong>{person.normalizedEmail ?? 'Person unavailable'}</strong>
                                 {' — '}
-                                {person.tenantAdmin ? 'Organization Administrator' : roleLabel(person.businessRoleId)}
+                                {person.tenantAdmin
+                                  ? 'Organization Administrator'
+                                  : roleLabel(person.businessRoleId)}
                               </li>
                             ))}
                           </ul>
@@ -524,7 +530,8 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                           <ul>
                             {snapshot.teams.map((team) => (
                               <li key={team.id}>
-                                {team.label ?? team.code ?? 'Team'} · {team.memberCount ?? 0} members
+                                {team.label ?? team.code ?? 'Team'} · {team.memberCount ?? 0}{' '}
+                                members
                               </li>
                             ))}
                           </ul>
@@ -582,7 +589,11 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                       column={1}
                       size="small"
                       items={[
-                        { key: 'organization', label: 'Organization', children: state.organizationName },
+                        {
+                          key: 'organization',
+                          label: 'Organization',
+                          children: state.organizationName,
+                        },
                         {
                           key: 'administrator',
                           label: 'Organization Administrator',
@@ -638,9 +649,9 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                       ]}
                     />
                     <p className="access-form-hint">
-                      Recommended access is owner-confirmed. Teams, customer assignments and external
-                      services shown as optional may be completed later when a supported workflow
-                      requires them.
+                      Recommended access is owner-confirmed. Teams, customer assignments and
+                      external services shown as optional may be completed later when a supported
+                      workflow requires them.
                     </p>
                   </Card>
 

@@ -653,11 +653,14 @@ export function AccessEditor({
                       </p>
                     )}
                     {!confirmation.values?.active && (
-                      <p>This person will be unable to access the organization until reactivated.</p>
+                      <p>
+                        This person will be unable to access the organization until reactivated.
+                      </p>
                     )}
                     {confirmation.values?.tenantAdmin && (
                       <p>
-                        This person will be able to administer people and access settings across this organization.
+                        This person will be able to administer people and access settings across
+                        this organization.
                       </p>
                     )}
                   </>
@@ -746,8 +749,8 @@ export function AccessEditor({
                     <>
                       <h3 className="access-form-section">Capabilities</h3>
                       <p className="access-form-hint">
-                        Organization-wide access applies within this organization. Record-specific access also
-                        requires an individual resource grant.
+                        Organization-wide access applies within this organization. Record-specific
+                        access also requires an individual resource grant.
                       </p>
                       {fields.map((field) => (
                         <div className="access-grant-row" key={field.key}>
@@ -832,8 +835,8 @@ export function AccessEditor({
                       <Switch />
                     </Form.Item>
                     <p className="access-form-hint">
-                      An inactive person cannot access this organization. Saving a change invalidates
-                      existing sessions.
+                      An inactive person cannot access this organization. Saving a change
+                      invalidates existing sessions.
                     </p>
                   </section>
                   <section className="access-editor-section" aria-labelledby="user-role">
@@ -862,8 +865,8 @@ export function AccessEditor({
                       <Switch />
                     </Form.Item>
                     <p className="access-form-hint">
-                      Allows administration of this organization. Business data still requires a business
-                      role and applicable resource grants.
+                      Allows administration of this organization. Business data still requires a
+                      business role and applicable resource grants.
                     </p>
                   </section>
                   <section className="access-editor-section" aria-labelledby="user-groups">

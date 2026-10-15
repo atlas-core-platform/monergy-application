@@ -22,7 +22,9 @@ export const accessModule = {
   guide: (
     <>
       <h2>Give the right people the right access.</h2>
-      <p>Create people, assign a business role, and review access changes within your organization.</p>
+      <p>
+        Create people, assign a business role, and review access changes within your organization.
+      </p>
       <h3>Start with People</h3>
       <p>
         Create one person or import a team. Open a person to change their role, status or

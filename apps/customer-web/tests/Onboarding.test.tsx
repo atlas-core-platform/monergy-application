@@ -135,7 +135,6 @@ it('requires both reviews and waits for server activation before showing the wor
   expect(await screen.findByText('Protected workspace')).toBeVisible();
 });
 
-
 it('requires an explicit owner adoption before a v1 organization can complete setup', async () => {
   const api = new AccessApi(session);
   const v1 = {

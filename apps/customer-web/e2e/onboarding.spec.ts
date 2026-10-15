@@ -124,7 +124,9 @@ async function connect(page: Page, path = '/access') {
 test('first login reviews organization and access before mounting navigation', async ({ page }) => {
   const writes = await fixture(page);
   await connect(page);
-  await expect(page.getByRole('heading', { name: 'Welcome to Monergy — Set up your organization' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Welcome to Monergy — Set up your organization' }),
+  ).toBeVisible();
   await expect(page.locator('.mw-shell')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Complete setup' })).toBeDisabled();
   await expect(page.getByText('maya@aster.example').first()).toBeVisible();
@@ -209,7 +211,9 @@ test('compact setup reflows at mobile width and supports reduced motion', async 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await fixture(page);
   await connect(page);
-  await expect(page.getByRole('heading', { name: 'Welcome to Monergy — Set up your organization' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Welcome to Monergy — Set up your organization' }),
+  ).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -349,7 +353,9 @@ test('customer entry stays isolated from administration and confirms reviewed ev
   await expect(page.getByRole('navigation')).toHaveCount(0);
   await page.getByLabel('Local access key').fill('customer-fixture');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'Start with what you already have.' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Start with what you already have.' }),
+  ).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Financial Workspace navigation' });
   await expect(navigation.getByRole('link', { name: 'Documents' })).toBeVisible();
   for (const name of ['Organization Settings', 'System Expert', 'Engineering foundation'])

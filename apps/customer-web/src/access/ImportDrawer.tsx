@@ -445,8 +445,8 @@ export function ImportDrawer({
             ) : null}
             {confirm === 'start' && (
               <p className="access-form-hint">
-                This creates organization membership and assigned access. It does not send an invitation
-                or configure a password or sign-in method.
+                This creates organization membership and assigned access. It does not send an
+                invitation or configure a password or sign-in method.
               </p>
             )}
           </section>

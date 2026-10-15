@@ -19,7 +19,8 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   {
     value: 'members',
     label: 'People',
-    description: 'Add people and manage their business role, status and Organization Administrator authority.',
+    description:
+      'Add people and manage their business role, status and Organization Administrator authority.',
   },
   {
     value: 'roles',
@@ -505,7 +506,9 @@ function Administration({
             prefix={<WorkspaceIcon name="search" size={17} />}
             aria-label="Filter loaded records"
             placeholder={
-              area === 'members' ? 'Filter loaded people by email or role' : 'Filter loaded records…'
+              area === 'members'
+                ? 'Filter loaded people by email or role'
+                : 'Filter loaded records…'
             }
             value={query}
             onChange={(event) => {
