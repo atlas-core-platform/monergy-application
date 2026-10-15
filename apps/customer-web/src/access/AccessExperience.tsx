@@ -149,7 +149,7 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
         <>
           <header className="access-page-header">
             <div>
-              <p className="workspace-eyebrow">LOCAL UAT · OPERATOR TOOLS</p>
+              <p className="workspace-eyebrow">TEST ENVIRONMENT · OPERATOR TOOLS</p>
               <h1>Environment operations</h1>
               <p>Inspect local service connections and the remaining release gates.</p>
             </div>
@@ -446,7 +446,7 @@ function Administration({
               Import users
             </Button>
           )}
-          {area === 'imports' ? <Button href="/access/users">Back to users</Button> : null}
+          {area === 'imports' ? <Button href="/access/users">Back to people</Button> : null}
           <Button
             type="primary"
             disabled={!page}
@@ -505,7 +505,7 @@ function Administration({
             prefix={<WorkspaceIcon name="search" size={17} />}
             aria-label="Filter loaded records"
             placeholder={
-              area === 'members' ? 'Filter loaded users by email or role' : 'Filter loaded records…'
+              area === 'members' ? 'Filter loaded people by email or role' : 'Filter loaded records…'
             }
             value={query}
             onChange={(event) => {
@@ -515,7 +515,7 @@ function Administration({
           {area === 'members' && (
             <Select
               className="access-status-filter"
-              aria-label="Filter loaded users by status"
+              aria-label="Filter loaded people by status"
               value={statusFilter}
               onChange={setStatusFilter}
               options={[
@@ -591,7 +591,7 @@ function Administration({
         <div className="access-bottom-note">
           <WorkspaceIcon name="shield" size={17} />
           <p>
-            Tenant administrators manage access. Business permissions come from the person’s
+            Organization Administrators manage access. Business permissions come from the person’s
             assigned role and applicable resource grants.
           </p>
         </div>
