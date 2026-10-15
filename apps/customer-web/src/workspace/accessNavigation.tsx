@@ -17,7 +17,7 @@ export const accessDestinations: WorkspaceDestination[] = [
   { id: 'sessions', label: 'Security & Sessions', icon: 'access', href: '/access/sessions' },
 ];
 export const accessModule = {
-  name: 'Organization Access',
+  name: 'Organization Settings',
   homeHref: '/access',
   guide: (
     <>
