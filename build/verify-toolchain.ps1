@@ -308,7 +308,8 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
                 $program.Contains('AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false)') -and
                 $program.Contains('AddHostedService<JobManagementHttpAdapterWorker>') -and
                 $adapter.Contains('WebApplication.CreateSlimBuilder()') -and
-                $adapter.Contains('builder.WebHost.UseUrls(urls)') -and
+                $adapter.Contains('TenantAccessIntegration.LoopbackRoot') -and
+                $adapter.Contains('builder.WebHost.UseUrls(endpoint.ToString())') -and
                 $adapter.Contains('ownerServices.GetRequiredService<TenantBoundaryOptions>()') -and
                 $adapter.Contains('ownerServices.GetRequiredService<TenantAccessClient>()') -and
                 $adapter.Contains('app.UseMiddleware<TenantBoundaryMiddleware>()') -and
@@ -323,7 +324,8 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
                 $program.Contains('AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false)') -and
                 $program.Contains('AddHostedService<DocumentIntelligenceHttpAdapterWorker>') -and
                 $adapter.Contains('WebApplication.CreateSlimBuilder()') -and
-                $adapter.Contains('builder.WebHost.UseUrls(urls)') -and
+                $adapter.Contains('TenantAccessIntegration.LoopbackRoot') -and
+                $adapter.Contains('builder.WebHost.UseUrls(endpoint.ToString())') -and
                 $adapter.Contains('ownerServices.GetRequiredService<TenantBoundaryOptions>()') -and
                 $adapter.Contains('ownerServices.GetRequiredService<TenantAccessClient>()') -and
                 $adapter.Contains('app.UseMiddleware<TenantBoundaryMiddleware>()') -and
