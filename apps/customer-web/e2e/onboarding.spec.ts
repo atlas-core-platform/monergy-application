@@ -127,13 +127,19 @@ test('first login reviews organization and access before mounting navigation', a
   await expect(page.getByRole('heading', { name: 'Welcome to Monergy — Set up your organization' })).toBeVisible();
   await expect(page.locator('.mw-shell')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Complete setup' })).toBeDisabled();
+  await expect(page.getByText('maya@aster.example').first()).toBeVisible();
+  await expect(page.getByText(/Financial Advisor/).first()).toBeVisible();
+  await expect(page.getByText('External services — Not configured · Optional')).toBeVisible();
+  await expect(page.getByText(/None configured — optional/).first()).toBeVisible();
+  await expect(page.getByText('advisor-private-reference')).toHaveCount(0);
+  await expect(page.getByText('customer-private-reference')).toHaveCount(0);
   await page.screenshot({ path: '.artifacts/onboarding-setup.png', fullPage: true });
   await page.getByLabel('I have reviewed the organization details').check();
   await page.getByLabel('I understand how roles and customer access work').check();
   expect(writes).toHaveLength(0);
   await page.getByRole('button', { name: 'Complete setup' }).click();
   await expect(
-    page.getByRole('navigation', { name: 'Access Management navigation' }),
+    page.getByRole('navigation', { name: 'Organization Settings navigation' }),
   ).toBeVisible();
   expect(writes).toHaveLength(1);
   expect(writes[0]?.body).toMatchObject({
@@ -346,7 +352,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
   await expect(page.getByRole('heading', { name: 'Start with what you already have.' })).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Financial Workspace navigation' });
   await expect(navigation.getByRole('link', { name: 'Documents' })).toBeVisible();
-  for (const name of ['Access management', 'System Expert', 'Engineering foundation'])
+  for (const name of ['Organization Settings', 'System Expert', 'Engineering foundation'])
     await expect(navigation.getByRole('link', { name, exact: true })).toHaveCount(0);
   await navigation.getByRole('link', { name: 'Documents' }).click();
   await page.locator('input[type="file"]').setInputFiles({
