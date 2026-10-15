@@ -59,7 +59,7 @@ test('workspace navigation, command palette and guide support keyboard and reduc
   );
   const compactEvidence = page
     .getByRole('navigation', { name: 'Financial Workspace navigation' })
-    .getByRole('link', { name: 'Evidence' });
+    .getByRole('link', { name: 'Documents' });
   await expect(compactEvidence).toBeVisible();
   await expect(compactEvidence.locator('svg')).toBeVisible();
   await page.getByRole('button', { name: 'Jump to a financial page', exact: true }).click();
@@ -71,8 +71,8 @@ test('workspace navigation, command palette and guide support keyboard and reduc
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('dialog', { name: 'Jump to a financial page' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Find a financial page' })).toBeFocused();
-  await page.getByRole('textbox', { name: 'Find a financial page' }).fill('evidence');
-  await page.getByRole('dialog').getByRole('button', { name: 'Evidence' }).click();
+  await page.getByRole('textbox', { name: 'Find a financial page' }).fill('documents');
+  await page.getByRole('dialog').getByRole('button', { name: 'Documents' }).click();
   await expect(page).toHaveURL(/\/evidence$/);
   await expect(
     page.getByRole('heading', { name: 'Keep your financial documents together.' }),
@@ -93,12 +93,12 @@ test('mobile navigation and access form remain within the viewport', async ({ pa
   await connectProductWorkspace(page);
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await expect(
-    page.getByRole('dialog').locator('.mw-nav-label').filter({ hasText: 'Evidence' }),
+    page.getByRole('dialog').locator('.mw-nav-label').filter({ hasText: 'Documents' }),
   ).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Open navigation' })).toBeFocused();
   await page.getByRole('button', { name: 'Open navigation' }).click();
-  await page.getByRole('dialog').getByRole('link', { name: 'Evidence' }).click();
+  await page.getByRole('dialog').getByRole('link', { name: 'Documents' }).click();
   await expect(
     page.getByRole('heading', { name: 'Keep your financial documents together.' }),
   ).toBeVisible();
@@ -306,7 +306,7 @@ test('access routes keep the session and exclude platform navigation across deep
   await page.goto('/access/roles');
   const navigation = page.getByRole('navigation', { name: 'Access Management navigation' });
   for (const name of [
-    'Evidence',
+    'Documents',
     'Search',
     'Reports',
     'System Expert',
