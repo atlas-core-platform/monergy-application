@@ -167,8 +167,8 @@ test('CSV drag and drop validates the whole file and sign-out revokes the sessio
   await page.getByLabel('Local access key').fill('browser-fixture-only');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Access overview' })).toBeVisible();
-  await page.getByRole('navigation').getByRole('link', { name: 'Users', exact: true }).click();
-  await page.getByRole('button', { name: 'Import users' }).click();
+  await page.getByRole('navigation').getByRole('link', { name: 'People', exact: true }).click();
+  await page.getByRole('button', { name: 'Import people' }).click();
   const transfer = await page.evaluateHandle(() => {
     const data = new DataTransfer();
     data.items.add(
@@ -253,7 +253,7 @@ test('bundled typography reaches drawers and review shows the exact role before 
   const editor = page.getByRole('dialog', { name: 'Create role', exact: true });
   await editor.getByLabel('Name', { exact: true }).fill('Financial analyst');
   await editor.getByLabel('Code', { exact: true }).fill('financial-analyst');
-  await editor.getByRole('combobox', { name: 'Permissions' }).click();
+  await editor.getByRole('combobox', { name: 'Access Permissions' }).click();
   await page.getByTitle('Read financial information', { exact: true }).click();
   await editor.getByRole('button', { name: 'Review change' }).click();
   const review = page.getByRole('dialog', { name: 'Review new role' });
@@ -323,23 +323,23 @@ test('access routes keep the session and exclude platform navigation across deep
     'aria-current',
     'page',
   );
-  await navigation.getByRole('link', { name: 'Users', exact: true }).click();
+  await navigation.getByRole('link', { name: 'People', exact: true }).click();
   await page.getByRole('link', { name: 'Onboarding history', exact: true }).click();
   await expect(page).toHaveURL(/\/access\/users\/history$/);
-  await expect(navigation.getByRole('link', { name: 'Users', exact: true })).toHaveAttribute(
+  await expect(navigation.getByRole('link', { name: 'People', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   );
   await page.goBack();
-  await expect(page.getByRole('heading', { name: 'Users', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'People', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Roles', exact: true })).toBeVisible();
   await page.keyboard.press('Control+k');
   const palette = page.getByRole('dialog', { name: 'Jump to an access page' });
   await expect(palette).toBeVisible();
   await expect(palette.getByRole('button', { name: 'System Expert', exact: true })).toHaveCount(0);
-  await palette.getByRole('button', { name: 'Permissions', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Permissions', exact: true })).toBeVisible();
+  await palette.getByRole('button', { name: 'Access Permissions', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Access Permissions', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Access Management home' }).click();
   await expect(page).toHaveURL(/\/access$/);
   await expect(page.getByRole('heading', { name: 'Access overview' })).toBeVisible();
@@ -400,19 +400,19 @@ test('single-user review, completion and drawer close return to the refreshed di
   await page.goto('/access/users');
   await page.getByLabel('Local access key').fill('browser-fixture-only');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await page.getByRole('button', { name: 'Create user', exact: true }).click();
-  const form = page.getByRole('dialog', { name: 'Create user', exact: true });
+  await page.getByRole('button', { name: 'Create person', exact: true }).click();
+  const form = page.getByRole('dialog', { name: 'Create person', exact: true });
   await form.getByLabel('Email address').fill('new@example.test');
-  await form.getByRole('button', { name: 'Review user', exact: true }).click();
-  const review = page.getByRole('dialog', { name: 'Review new user', exact: true });
+  await form.getByRole('button', { name: 'Review person', exact: true }).click();
+  const review = page.getByRole('dialog', { name: 'Review new person', exact: true });
   await expect(review.getByText('new@example.test', { exact: true })).toBeVisible();
   expect(writes.filter((write) => write.path.endsWith('/commit'))).toHaveLength(0);
   await review.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(form.getByLabel('Email address')).toHaveValue('new@example.test');
-  await form.getByRole('button', { name: 'Review user', exact: true }).click();
-  await review.getByRole('button', { name: 'Create user', exact: true }).click();
+  await form.getByRole('button', { name: 'Review person', exact: true }).click();
+  await review.getByRole('button', { name: 'Create person', exact: true }).click();
   await expect(
-    page.getByRole('dialog').getByRole('heading', { name: 'User created.', exact: true }),
+    page.getByRole('dialog').getByRole('heading', { name: 'Person created.', exact: true }),
   ).toBeVisible();
   const commit = writes.find((write) => write.path.endsWith('/commit'));
   expect(commit?.body).toEqual({
@@ -430,9 +430,9 @@ test('single-user review, completion and drawer close return to the refreshed di
   await page.getByRole('dialog').getByLabel('Close', { exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(
-    page.getByRole('region', { name: 'Users', exact: true }).getByText('new@example.test', {
+    page.getByRole('region', { name: 'People', exact: true }).getByText('new@example.test', {
       exact: true,
     }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Create user', exact: true })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Create person', exact: true })).toBeFocused();
 });
