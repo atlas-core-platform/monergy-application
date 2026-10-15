@@ -444,7 +444,7 @@ function Administration({
                 setImportId(null);
               }}
             >
-              Import users
+              Import people
             </Button>
           )}
           {area === 'imports' ? <Button href="/access/users">Back to people</Button> : null}

@@ -111,25 +111,25 @@ it('creates one user through reviewed, versioned onboarding and recovers an unce
   await user.click(
     await screen.findByText('Financial analyst', { selector: '.ant-select-item-option-content' }),
   );
-  await user.click(screen.getByRole('combobox', { name: 'Groups' }));
+  await user.click(screen.getByRole('combobox', { name: 'Teams' }));
   await user.click(
     await screen.findByText('Advisory team', { selector: '.ant-select-item-option-content' }),
   );
   await user.keyboard('{Escape}');
-  await user.click(screen.getByRole('button', { name: 'Review user' }));
+  await user.click(screen.getByRole('button', { name: 'Review person' }));
   expect(await screen.findByText('duplicate email')).toBeVisible();
   expect(calls.some((call) => call.url.endsWith('/commit'))).toBe(false);
   valid = true;
-  await user.click(screen.getByRole('button', { name: 'Review user' }));
+  await user.click(screen.getByRole('button', { name: 'Review person' }));
   await screen.findByRole('region', { name: 'Review onboarding' });
   const review = within(screen.getByRole('region', { name: 'Review onboarding' }));
   expect(review.getByText('new@example.test')).toBeVisible();
   expect(review.getByText('Financial analyst')).toBeVisible();
   expect(review.getByText('Advisory team')).toBeVisible();
   expect(review.getByText('No', { exact: true })).toBeVisible();
-  await user.click(screen.getByRole('button', { name: 'Create user' }));
+  await user.click(screen.getByRole('button', { name: 'Create person' }));
   expect(await screen.findByText(/Your request has not been confirmed/)).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Review user' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Review person' })).toBeDisabled();
   expect(screen.getByLabelText('Email address')).toBeDisabled();
   const commit = calls.find((call) => call.url.endsWith('/commit'));
   expect(commit?.body).toEqual({
@@ -148,7 +148,7 @@ it('creates one user through reviewed, versioned onboarding and recovers an unce
   expect(changed).not.toHaveBeenCalled();
   await user.click(screen.getByRole('button', { name: 'Review and retry' }));
   await user.click(screen.getByRole('button', { name: 'Retry onboarding' }));
-  expect(await screen.findByText('User created.')).toBeVisible();
+  expect(await screen.findByText('Person created.')).toBeVisible();
   expect(changed).toHaveBeenCalledOnce();
   expect(calls.filter((call) => call.url.endsWith('/commit'))).toHaveLength(1);
   expect(calls.filter((call) => call.url.endsWith('/process')).map((call) => call.body)).toEqual([

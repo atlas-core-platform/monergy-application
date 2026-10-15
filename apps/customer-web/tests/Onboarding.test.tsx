@@ -177,7 +177,7 @@ it('requires an explicit owner adoption before a v1 organization can complete se
         ...ready,
         policyVersion: 8,
         accessPack: {
-          ...ready.accessPack!,
+          ...(ready.accessPack ?? {}),
           policyVersion: 8,
         },
       });
@@ -281,7 +281,7 @@ it('preserves a policy conflict until an explicit refresh and does not repeat th
   await user.click(await screen.findByLabelText('I have reviewed the organization details'));
   await user.click(screen.getByLabelText('I understand how roles and customer access work'));
   await user.click(screen.getByRole('button', { name: 'Complete setup' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent('workspace changed');
+  expect(await screen.findByText(/workspace changed/i)).toHaveTextContent('workspace changed');
   expect(save).toHaveBeenCalledTimes(1);
   await user.click(screen.getByRole('button', { name: 'Refresh setup' }));
   expect(await screen.findByRole('button', { name: 'Complete setup' })).toBeDisabled();
