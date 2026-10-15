@@ -1,0 +1,60 @@
+name: T1 temporary browser preflight
+
+on:
+  push:
+    branches:
+      - delivery/t1-integrated-onboarding-documents
+
+permissions:
+  contents: write
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.401
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+      - name: Enable pinned pnpm
+        shell: bash
+        run: |
+          corepack enable
+          corepack install --global pnpm@12.4.1
+      - name: Restore
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Restore
+      - name: Format
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task FormatCheck
+      - name: Lint
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Lint
+      - name: Build
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task Build
+      - name: Unit and architecture tests
+        shell: pwsh
+        run: |
+          ./build/Invoke-Toolchain.ps1 -Task Test
+          ./build/Invoke-Toolchain.ps1 -Task ArchitectureTest
+      - name: Install Chromium
+        shell: bash
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Browser test
+        shell: pwsh
+        run: ./build/Invoke-Toolchain.ps1 -Task BrowserTest
+      - name: Remove temporary browser preflight
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/t1-browser-preflight.yml
+          git commit -m "T1-03: remove temporary browser preflight"
+          git push origin HEAD:delivery/t1-integrated-onboarding-documents
