@@ -59,7 +59,7 @@ test('workspace navigation, command palette and guide support keyboard and reduc
   );
   const compactEvidence = page
     .getByRole('navigation', { name: 'Financial Workspace navigation' })
-    .getByRole('link', { name: 'Evidence' });
+    .getByRole('link', { name: 'Documents' });
   await expect(compactEvidence).toBeVisible();
   await expect(compactEvidence.locator('svg')).toBeVisible();
   await page.getByRole('button', { name: 'Jump to a financial page', exact: true }).click();
@@ -71,8 +71,8 @@ test('workspace navigation, command palette and guide support keyboard and reduc
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('dialog', { name: 'Jump to a financial page' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Find a financial page' })).toBeFocused();
-  await page.getByRole('textbox', { name: 'Find a financial page' }).fill('evidence');
-  await page.getByRole('dialog').getByRole('button', { name: 'Evidence' }).click();
+  await page.getByRole('textbox', { name: 'Find a financial page' }).fill('documents');
+  await page.getByRole('dialog').getByRole('button', { name: 'Documents' }).click();
   await expect(page).toHaveURL(/\/evidence$/);
   await expect(
     page.getByRole('heading', { name: 'Keep your financial documents together.' }),
@@ -93,12 +93,12 @@ test('mobile navigation and access form remain within the viewport', async ({ pa
   await connectProductWorkspace(page);
   await page.getByRole('button', { name: 'Open navigation' }).click();
   await expect(
-    page.getByRole('dialog').locator('.mw-nav-label').filter({ hasText: 'Evidence' }),
+    page.getByRole('dialog').locator('.mw-nav-label').filter({ hasText: 'Documents' }),
   ).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Open navigation' })).toBeFocused();
   await page.getByRole('button', { name: 'Open navigation' }).click();
-  await page.getByRole('dialog').getByRole('link', { name: 'Evidence' }).click();
+  await page.getByRole('dialog').getByRole('link', { name: 'Documents' }).click();
   await expect(
     page.getByRole('heading', { name: 'Keep your financial documents together.' }),
   ).toBeVisible();
@@ -164,11 +164,11 @@ test('CSV drag and drop validates the whole file and sign-out revokes the sessio
     } else await route.fulfill({ json: { policyVersion: 1, items: [member], nextCursor: null } });
   });
   await page.goto('/access');
-  await page.getByLabel('Local access key').fill('browser-fixture-only');
+  await page.getByLabel('Test access key').fill('browser-fixture-only');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Access overview' })).toBeVisible();
-  await page.getByRole('navigation').getByRole('link', { name: 'Users', exact: true }).click();
-  await page.getByRole('button', { name: 'Import users' }).click();
+  await page.getByRole('navigation').getByRole('link', { name: 'People', exact: true }).click();
+  await page.getByRole('button', { name: 'Import people' }).click();
   const transfer = await page.evaluateHandle(() => {
     const data = new DataTransfer();
     data.items.add(
@@ -246,7 +246,7 @@ test('bundled typography reaches drawers and review shows the exact role before 
         .some((entry) => entry.name.includes('inter-latin') && entry.name.endsWith('.woff2')),
     ),
   ).toBe(true);
-  await page.getByLabel('Local access key').fill('browser-fixture-only');
+  await page.getByLabel('Test access key').fill('browser-fixture-only');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
   await page.getByRole('navigation').getByRole('link', { name: 'Roles', exact: true }).click();
   await page.getByRole('button', { name: 'Create role', exact: true }).click();
@@ -306,7 +306,7 @@ test('access routes keep the session and exclude platform navigation across deep
   await page.goto('/access/roles');
   const navigation = page.getByRole('navigation', { name: 'Access Management navigation' });
   for (const name of [
-    'Evidence',
+    'Documents',
     'Search',
     'Reports',
     'System Expert',
@@ -316,36 +316,36 @@ test('access routes keep the session and exclude platform navigation across deep
     await expect(navigation.getByRole('link', { name, exact: true })).toHaveCount(0);
   }
   await expect(navigation).toHaveCount(0);
-  await page.getByLabel('Local access key').fill('browser-fixture-only');
+  await page.getByLabel('Test access key').fill('browser-fixture-only');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
   await expect(page.getByRole('heading', { name: 'Roles', exact: true })).toBeVisible();
   await expect(navigation.getByRole('link', { name: 'Roles', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   );
-  await navigation.getByRole('link', { name: 'Users', exact: true }).click();
+  await navigation.getByRole('link', { name: 'People', exact: true }).click();
   await page.getByRole('link', { name: 'Onboarding history', exact: true }).click();
   await expect(page).toHaveURL(/\/access\/users\/history$/);
-  await expect(navigation.getByRole('link', { name: 'Users', exact: true })).toHaveAttribute(
+  await expect(navigation.getByRole('link', { name: 'People', exact: true })).toHaveAttribute(
     'aria-current',
     'page',
   );
   await page.goBack();
-  await expect(page.getByRole('heading', { name: 'Users', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'People', exact: true })).toBeVisible();
   await page.goBack();
   await expect(page.getByRole('heading', { name: 'Roles', exact: true })).toBeVisible();
   await page.keyboard.press('Control+k');
   const palette = page.getByRole('dialog', { name: 'Jump to an access page' });
   await expect(palette).toBeVisible();
   await expect(palette.getByRole('button', { name: 'System Expert', exact: true })).toHaveCount(0);
-  await palette.getByRole('button', { name: 'Permissions', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Permissions', exact: true })).toBeVisible();
+  await palette.getByRole('button', { name: 'Access Permissions', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Access Permissions', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Access Management home' }).click();
   await expect(page).toHaveURL(/\/access$/);
   await expect(page.getByRole('heading', { name: 'Access overview' })).toBeVisible();
   expect(signIns).toBe(1);
   await page.goto('/access/not-a-page');
-  await page.getByLabel('Local access key').fill('browser-fixture-only');
+  await page.getByLabel('Test access key').fill('browser-fixture-only');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
   await expect(page.getByText('This access management page does not exist.')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Monergy frontend foundation' })).toHaveCount(0);
@@ -398,7 +398,7 @@ test('single-user review, completion and drawer close return to the refreshed di
       });
   });
   await page.goto('/access/users');
-  await page.getByLabel('Local access key').fill('browser-fixture-only');
+  await page.getByLabel('Test access key').fill('browser-fixture-only');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
   await page.getByRole('button', { name: 'Create user', exact: true }).click();
   const form = page.getByRole('dialog', { name: 'Create user', exact: true });
@@ -430,7 +430,7 @@ test('single-user review, completion and drawer close return to the refreshed di
   await page.getByRole('dialog').getByLabel('Close', { exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(
-    page.getByRole('region', { name: 'Users', exact: true }).getByText('new@example.test', {
+    page.getByRole('region', { name: 'People', exact: true }).getByText('new@example.test', {
       exact: true,
     }),
   ).toBeVisible();
