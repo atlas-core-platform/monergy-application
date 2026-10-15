@@ -24,7 +24,7 @@ export function WorkspaceEntry({
           </svg>
           monergy
         </span>
-        <Tag>Local UAT</Tag>
+        <Tag>Test environment</Tag>
       </header>
       <main className="access-public-body">
         <section className="access-public-intro">
@@ -45,7 +45,7 @@ export function WorkspaceEntry({
             <WorkspaceIcon name="shield" size={18} />
             <span>
               {area === 'administration'
-                ? 'Administration becomes available after your identity and tenant authority have been verified.'
+                ? 'Administration becomes available after your identity and organization authority have been verified.'
                 : 'Your workspace becomes available after your identity, customer ownership and product access have been verified.'}
             </span>
           </div>
@@ -55,7 +55,7 @@ export function WorkspaceEntry({
             <WorkspaceIcon name="shield" size={20} />
           </span>
           <h2 id="access-connect-title">Connect to your workspace</h2>
-          <p>Enter the tenant and local key provided by your administrator.</p>
+          <p>Enter the organization and test access key provided by your administrator.</p>
           {message && (
             <Alert
               showIcon
@@ -96,17 +96,17 @@ export function WorkspaceEntry({
             >
               <Form.Item
                 name="tenantId"
-                label="Tenant"
+                label="Organization"
                 extra={
                   area === 'administration'
-                    ? 'The workspace you want to administer.'
-                    : 'The financial workspace you want to open.'
+                    ? 'The organization you want to administer.'
+                    : 'The organization whose financial workspace you want to open.'
                 }
                 rules={[
-                  { required: true, message: 'Enter your tenant.' },
+                  { required: true, message: 'Enter your organization.' },
                   {
                     pattern: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/,
-                    message: 'Enter a valid tenant identifier.',
+                    message: 'Enter a valid organization identifier.',
                   },
                 ]}
               >
@@ -114,8 +114,8 @@ export function WorkspaceEntry({
               </Form.Item>
               <Form.Item
                 name="key"
-                label="Local access key"
-                rules={[{ required: true, message: 'Enter your local access key.' }]}
+                label="Test access key"
+                rules={[{ required: true, message: 'Enter your test access key.' }]}
               >
                 <Input.Password autoComplete="off" disabled={busy} />
               </Form.Item>
@@ -136,7 +136,7 @@ export function WorkspaceEntry({
                     {status === 'connecting'
                       ? 'Verifying your identity…'
                       : area === 'administration'
-                        ? 'Verifying tenant administrator access…'
+                        ? 'Verifying Organization Administrator access…'
                         : 'Resolving your customer workspace and product access…'}
                   </p>
                   <Button block type="text" onClick={cancel}>
@@ -147,13 +147,13 @@ export function WorkspaceEntry({
             </Form>
           )}
           <p className="access-connect-footnote">
-            Your key is cleared after use. Local UAT keys do not configure production sign-in.
+            Your key is cleared after use. Test access keys do not configure Production sign-in.
           </p>
         </section>
       </main>
       <footer className="access-public-footer">
         Monergy · {area === 'administration' ? 'Access Management' : 'Financial Workspace'}
-        <span>Local UAT connection</span>
+        <span>Test environment connection</span>
       </footer>
     </div>
   );
