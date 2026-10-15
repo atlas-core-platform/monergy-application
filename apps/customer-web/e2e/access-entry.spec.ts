@@ -160,7 +160,7 @@ test('administrator verification must finish before shell creation; cancellation
   await page.goto('/access/users');
   await connect(page);
   await expect.poll(() => reached).toBe(true);
-  await expect(page.getByRole('status')).toContainText('Verifying tenant administrator');
+  await expect(page.getByRole('status')).toContainText('Verifying Organization Administrator');
   await publicOnly(page);
   await page.getByRole('button', { name: 'Cancel connection' }).click();
   release?.();
@@ -180,7 +180,7 @@ test('idle expiry removes the shell and open portal without waiting for another 
   });
   await page.goto('/access/users');
   await connect(page);
-  await page.getByRole('button', { name: 'Create user', exact: true }).click();
+  await page.getByRole('button', { name: 'Create person', exact: true }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.clock.fastForward(15_001);
   await expect(page.getByRole('alert')).toContainText('session has ended');
@@ -303,10 +303,13 @@ test('an uncertain onboarding commit is recovered by its original ID after recon
   });
   await page.goto('/access/users');
   await connect(page);
-  await page.getByRole('button', { name: 'Create user', exact: true }).click();
+  await page.getByRole('button', { name: 'Create person', exact: true }).click();
   await page.getByLabel('Email address').fill('recovery@example.test');
-  await page.getByRole('button', { name: 'Review user', exact: true }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Create user', exact: true }).click();
+  await page.getByRole('button', { name: 'Review person', exact: true }).click();
+  await page
+    .getByRole('dialog')
+    .getByRole('button', { name: 'Create person', exact: true })
+    .click();
   await publicOnly(page);
   await page.getByRole('button', { name: 'Reconnect workspace' }).click();
   await page.getByRole('button', { name: 'Review request', exact: true }).click();

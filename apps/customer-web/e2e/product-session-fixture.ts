@@ -44,8 +44,8 @@ export async function connectProductWorkspace(
       'search.query.execute',
       'reporting.report.generate',
     ],
-    environment: 'Local UAT',
-    dataDurability: 'Runtime only',
+    environment: 'Test environment',
+    dataDurability: 'Temporary data',
     productionAccepted: false,
   };
   await page.route('**/identity-api/**', async (route) => {
@@ -59,7 +59,7 @@ export async function connectProductWorkspace(
       await route.fulfill({ status: 405, json: { error: 'METHOD_NOT_ALLOWED' } });
       return;
     }
-    await route.fulfill({ json: { items: [], dataDurability: 'Runtime only' } });
+    await route.fulfill({ json: { items: [], dataDurability: 'Temporary data' } });
   });
   await page.goto(path);
   await completeProductWorkspaceConnection(page);

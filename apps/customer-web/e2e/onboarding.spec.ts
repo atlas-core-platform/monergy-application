@@ -45,6 +45,13 @@ async function fixture(page: Page, initiallyActive = false) {
           state: active ? 'Active' : 'ReadyForAdmin',
           receiptReference: active ? 'setup-fixture-receipt' : null,
           customerRelationships: true,
+          accessPack: {
+            installedVersion: '2.0',
+            installedIdentity: 'monergy-default-access-pack/2.0',
+            installedAt: '2026-10-15T00:00:00Z',
+            policyVersion,
+            ready: true,
+          },
         },
       });
       return;
@@ -117,16 +124,24 @@ async function connect(page: Page, path = '/access') {
 test('first login reviews organization and access before mounting navigation', async ({ page }) => {
   const writes = await fixture(page);
   await connect(page);
-  await expect(page.getByRole('heading', { name: 'A clear start for your team.' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Welcome to Monergy — Set up your organization' }),
+  ).toBeVisible();
   await expect(page.locator('.mw-shell')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Complete setup' })).toBeDisabled();
+  await expect(page.getByText('maya@aster.example').first()).toBeVisible();
+  await expect(page.getByText(/Financial Advisor/).first()).toBeVisible();
+  await expect(page.getByText('External services — Not configured · Optional')).toBeVisible();
+  await expect(page.getByText(/None configured — optional/).first()).toBeVisible();
+  await expect(page.getByText('advisor-private-reference')).toHaveCount(0);
+  await expect(page.getByText('customer-private-reference')).toHaveCount(0);
   await page.screenshot({ path: '.artifacts/onboarding-setup.png', fullPage: true });
   await page.getByLabel('I have reviewed the organization details').check();
   await page.getByLabel('I understand how roles and customer access work').check();
   expect(writes).toHaveLength(0);
   await page.getByRole('button', { name: 'Complete setup' }).click();
   await expect(
-    page.getByRole('navigation', { name: 'Access Management navigation' }),
+    page.getByRole('navigation', { name: 'Organization Settings navigation' }),
   ).toBeVisible();
   expect(writes).toHaveLength(1);
   expect(writes[0]?.body).toMatchObject({
@@ -196,7 +211,9 @@ test('compact setup reflows at mobile width and supports reduced motion', async 
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await fixture(page);
   await connect(page);
-  await expect(page.getByRole('heading', { name: 'A clear start for your team.' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Welcome to Monergy — Set up your organization' }),
+  ).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   );
@@ -238,8 +255,8 @@ test('customer entry stays isolated from administration and confirms reviewed ev
             'search.query.execute',
             'reporting.report.generate',
           ],
-          environment: 'Local UAT',
-          dataDurability: 'Runtime only',
+          environment: 'Test environment',
+          dataDurability: 'Temporary data',
           productionAccepted: false,
         },
       });
@@ -247,7 +264,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
     }
     if (path === '/product-api/v1/evidence') {
       if (route.request().method() === 'GET') {
-        await route.fulfill({ json: { items: library, dataDurability: 'Runtime only' } });
+        await route.fulfill({ json: { items: library, dataDurability: 'Temporary data' } });
         return;
       }
       const body = route.request().postDataJSON() as { operationId: string };
@@ -271,7 +288,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
           operationId: body.operationId,
           ...accepted,
           acceptedAt: '2026-10-14T00:00:00Z',
-          dataDurability: 'Runtime only',
+          dataDurability: 'Temporary data',
         },
       });
       return;
@@ -323,7 +340,7 @@ test('customer entry stays isolated from administration and confirms reviewed ev
               validationVersion: 'canonical-source-fact/1.0.0',
             },
           ],
-          dataDurability: 'Runtime only',
+          dataDurability: 'Temporary data',
           processingMode: 'Structured text reference processor',
         },
       });
@@ -336,12 +353,14 @@ test('customer entry stays isolated from administration and confirms reviewed ev
   await expect(page.getByRole('navigation')).toHaveCount(0);
   await page.getByLabel('Local access key').fill('customer-fixture');
   await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await expect(page.getByRole('heading', { name: 'Start with what you know.' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Start with what you already have.' }),
+  ).toBeVisible();
   const navigation = page.getByRole('navigation', { name: 'Financial Workspace navigation' });
-  await expect(navigation.getByRole('link', { name: 'Evidence' })).toBeVisible();
-  for (const name of ['Access management', 'System Expert', 'Engineering foundation'])
+  await expect(navigation.getByRole('link', { name: 'Documents' })).toBeVisible();
+  for (const name of ['Organization Settings', 'System Expert', 'Engineering foundation'])
     await expect(navigation.getByRole('link', { name, exact: true })).toHaveCount(0);
-  await navigation.getByRole('link', { name: 'Evidence' }).click();
+  await navigation.getByRole('link', { name: 'Documents' }).click();
   await page.locator('input[type="file"]').setInputFiles({
     name: 'statement.txt',
     mimeType: 'text/plain',

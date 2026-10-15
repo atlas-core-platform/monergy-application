@@ -38,8 +38,8 @@ function mount(
               customerName: 'Reference Customer',
               customerDetail: 'Primary UAT customer',
               capabilities,
-              environment: 'Local UAT',
-              dataDurability: 'Runtime only',
+              environment: 'Test environment',
+              dataDurability: 'Temporary data',
               productionAccepted: false,
             },
           },
@@ -75,7 +75,7 @@ it('reviews the exact file before submitting and shows the upload confirmation',
     contentLength: 16,
     contentSha256: 'b'.repeat(64),
     acceptedAt: '2026-10-14T00:00:00Z',
-    dataDurability: 'Runtime only',
+    dataDurability: 'Temporary data',
   } as const;
   const item = {
     documentId: receipt.documentId,
@@ -93,7 +93,7 @@ it('reviews the exact file before submitting and shows the upload confirmation',
   let listed = false;
   const submit = vi.spyOn(api, 'product').mockImplementation((_, method) => {
     if (method === 'GET')
-      return Promise.resolve({ items: listed ? [item] : [], dataDurability: 'Runtime only' });
+      return Promise.resolve({ items: listed ? [item] : [], dataDurability: 'Temporary data' });
     listed = true;
     return Promise.resolve(receipt);
   });
@@ -137,7 +137,7 @@ it('reviews the exact file before submitting and shows the upload confirmation',
 
 it('does not expose upload when the current role lacks the capability', () => {
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue({ items: [], dataDurability: 'Runtime only' });
+  vi.spyOn(api, 'product').mockResolvedValue({ items: [], dataDurability: 'Temporary data' });
   mount(api, ['evidence.document.read']);
   expect(screen.getByText('Document upload is not included in your current access')).toBeVisible();
   expect(document.querySelector('input[type="file"]')).toBeDisabled();
@@ -146,7 +146,7 @@ it('does not expose upload when the current role lacks the capability', () => {
 it('loads, filters and inspects the document library', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockResolvedValue({
-    dataDurability: 'Runtime only',
+    dataDurability: 'Temporary data',
     items: [
       {
         documentId: 'document-001',
@@ -254,12 +254,12 @@ it('reviews authorized structured-text processing and displays extracted informa
         validationVersion: 'canonical-source-fact/1.0.0',
       },
     ],
-    dataDurability: 'Runtime only',
+    dataDurability: 'Temporary data',
     processingMode: 'Structured text reference processor',
   };
   const request = vi.spyOn(api, 'product').mockImplementation((path, method) => {
     if (path === 'v1/evidence' && method === 'GET')
-      return Promise.resolve({ items: [item], dataDurability: 'Runtime only' });
+      return Promise.resolve({ items: [item], dataDurability: 'Temporary data' });
     if (path.endsWith('/processing') && method === 'POST') return Promise.resolve(result);
     return Promise.reject(new Error(`Unexpected request: ${String(method)} ${path}`));
   });

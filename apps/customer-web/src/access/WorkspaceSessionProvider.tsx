@@ -62,7 +62,7 @@ async function verify(
       !Array.isArray(context.capabilities) ||
       context.capabilities.some((capability) => !identifier(capability, 160)) ||
       context.productionAccepted ||
-      context.dataDurability !== 'Runtime only'
+      context.dataDurability !== 'Temporary data'
     )
       throw new AccessApiError(503, 'PRODUCT_CONTEXT_INVALID');
     return { area: 'product', context };
@@ -191,10 +191,10 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
           message:
             failure instanceof AccessApiError && failure.status === 403
               ? area === 'administration'
-                ? 'Tenant administrator access is required.'
+                ? 'Organization Administrator access is required.'
                 : 'A customer workspace and product role are required.'
               : failure instanceof AccessApiError && failure.status === 401
-                ? 'Unable to connect. Check your tenant and local access key, then try again.'
+                ? 'Unable to connect. Check your organization and local access key, then try again.'
                 : 'Workspace verification could not be completed. Check the connection and try again.',
         });
       } finally {

@@ -12,16 +12,16 @@ const journeys: {
   action: string;
 }[] = [
   {
-    title: 'Add financial evidence',
-    description: 'Upload a source document and receive a traceable evidence version.',
+    title: 'Add financial documents',
+    description: 'Upload a document and keep its source details connected for later review.',
     href: '/evidence',
     icon: 'evidence',
     capability: 'evidence.document.upload',
-    action: 'Add evidence',
+    action: 'Add document',
   },
   {
-    title: 'Search trusted information',
-    description: 'Find authorized information and follow each result to its source.',
+    title: 'Search your information',
+    description: 'Find authorized information and follow each result back to its source.',
     href: '/search',
     icon: 'search',
     capability: 'search.query.execute',
@@ -29,7 +29,7 @@ const journeys: {
   },
   {
     title: 'Build a financial report',
-    description: 'Bring available financial facts together with their provenance.',
+    description: 'Bring available financial information together with where it came from.',
     href: '/reports',
     icon: 'reports',
     capability: 'reporting.report.generate',
@@ -46,36 +46,37 @@ export default function WorkspaceHome() {
     <main className="workspace-home product-home">
       <div className="workspace-page-heading">
         <div>
-          <p className="workspace-eyebrow">FINANCIAL WORKSPACE</p>
+          <p className="workspace-eyebrow">MY FINANCES</p>
           <h1>Good {new Date().getUTCHours() < 12 ? 'morning' : 'to see you'}.</h1>
           <p className="workspace-subtitle">
-            {context?.customerName ?? 'Your Monergy workspace'} · Move from source evidence to
-            financial clarity, with every step traceable.
+            {context?.customerName ?? 'Your Monergy workspace'} · Bring your financial information
+            together and keep every result connected to its source.
           </p>
         </div>
-        <Tag className="product-environment">LOCAL UAT · RUNTIME DATA</Tag>
+        <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
       </div>
 
       <section className="workspace-hero" aria-labelledby="workspace-hero-title">
         <div className="workspace-hero-copy">
           <span className="workspace-pill">YOUR NEXT BEST STEP</span>
-          <h2 id="workspace-hero-title">Start with what you know.</h2>
+          <h2 id="workspace-hero-title">Start with what you already have.</h2>
           <p>
-            Add a financial document. Monergy will verify the source, register its identity and keep
-            its provenance ready for the journeys that follow.
+            Add a financial document. Monergy keeps the document version and source details
+            connected so you can review extracted information before anything reaches your Financial
+            Passport.
           </p>
           {capabilities.has('evidence.document.upload') ? (
             <a className="workspace-primary-link" href="/evidence">
-              Add financial evidence <WorkspaceIcon name="arrow" size={18} />
+              Add financial document <WorkspaceIcon name="arrow" size={18} />
             </a>
           ) : (
             <span className="workspace-unavailable">
-              Your current role does not include evidence upload.
+              Your current access does not include document upload.
             </span>
           )}
           <span className="workspace-hero-note">
             <WorkspaceIcon name="shield" size={14} />
-            Customer ownership and access are checked by the authoritative services.
+            Your identity, customer ownership and current access are checked by Monergy.
           </span>
         </div>
         <div className="workspace-hero-art" aria-hidden="true">
@@ -90,8 +91,8 @@ export default function WorkspaceHome() {
               <WorkspaceIcon name="evidence" />
             </span>
             <div>
-              <strong>Source</strong>
-              <small>Your original evidence</small>
+              <strong>Document</strong>
+              <small>Your original source</small>
             </div>
           </div>
           <div className="workspace-art-chip chip-permissions">
@@ -99,8 +100,8 @@ export default function WorkspaceHome() {
               <WorkspaceIcon name="check" />
             </span>
             <div>
-              <strong>Verified</strong>
-              <small>Identity and hash recorded</small>
+              <strong>Checked</strong>
+              <small>Version and integrity recorded</small>
             </div>
           </div>
           <div className="workspace-art-chip chip-workspace">
@@ -108,8 +109,8 @@ export default function WorkspaceHome() {
               <WorkspaceIcon name="changes" />
             </span>
             <div>
-              <strong>Traceable</strong>
-              <small>Provenance stays connected</small>
+              <strong>Connected</strong>
+              <small>Source details stay linked</small>
             </div>
           </div>
         </div>
@@ -148,8 +149,8 @@ export default function WorkspaceHome() {
           <div className="workspace-access-empty">
             <WorkspaceIcon name="shield" size={23} />
             <div>
-              <strong>Your workspace is connected, but no product journeys are assigned.</strong>
-              <p>Ask a Tenant Administrator to assign an appropriate business role.</p>
+              <strong>Your workspace is connected, but no financial journeys are available.</strong>
+              <p>Contact your Organization Administrator if you need additional access.</p>
             </div>
           </div>
         )}
@@ -160,13 +161,13 @@ export default function WorkspaceHome() {
           <WorkspaceIcon name="shield" size={20} />
         </span>
         <div>
-          <p className="workspace-eyebrow">CLEAR BOUNDARIES</p>
+          <p className="workspace-eyebrow">YOUR ACCESS</p>
           <h2 id="workspace-boundary-title">
-            You are working as {context?.customerName ?? 'a customer'}.
+            You are viewing {context?.customerName ?? 'your own financial workspace'}.
           </h2>
           <p>
-            Monergy resolves this customer from your verified identity. The browser does not choose
-            or infer the customer record.
+            Monergy resolves this customer from your verified identity. You do not choose or enter
+            an internal customer ID.
           </p>
         </div>
         <div className="workspace-boundary-facts">
@@ -175,8 +176,8 @@ export default function WorkspaceHome() {
             {context?.environment ?? 'Preview'}
           </span>
           <span>
-            <small>Data durability</small>
-            {context?.dataDurability ?? 'Reference'}
+            <small>Data</small>
+            {context?.dataDurability ?? 'Temporary'}
           </span>
         </div>
       </section>

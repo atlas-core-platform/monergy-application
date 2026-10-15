@@ -8,6 +8,36 @@ export const OnboardingContext = createContext<OnboardingFeatures>({
 });
 export const useOnboarding = () => useContext(OnboardingContext);
 
+export interface DefaultAccessPackState {
+  installedVersion: string | null;
+  installedIdentity: string | null;
+  installedAt: string | null;
+  policyVersion: number;
+  ready: boolean;
+}
+export interface DefaultAccessPackChange {
+  kind: string;
+  objectId: string;
+  before: string | null;
+  after: string | null;
+}
+export interface DefaultAccessPackPlan {
+  installedVersion: string | null;
+  targetVersion: string;
+  policyVersion: number;
+  planHash: string;
+  alreadyInstalled: boolean;
+  changes: DefaultAccessPackChange[];
+  conflicts: string[];
+}
+export interface DefaultAccessPackAdoptionResult {
+  packVersion: string;
+  policyVersion: number;
+  operationId: string;
+  planHash: string;
+  replayed: boolean;
+}
+
 export interface TenantSetupState {
   enabled: boolean;
   tenantId: string;
@@ -20,4 +50,5 @@ export interface TenantSetupState {
   state?: 'Requested' | 'Provisioning' | 'ProvisioningFailed' | 'ReadyForAdmin' | 'Active';
   receiptReference?: string | null;
   customerRelationships: boolean;
+  accessPack?: DefaultAccessPackState;
 }

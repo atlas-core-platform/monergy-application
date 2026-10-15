@@ -113,7 +113,7 @@ call('/product-api/v1/context', status=401)
 call('/product-api/v1/context', session=owner, status=403)
 product_context = call('/product-api/v1/context', session=customer)
 assert product_context['customerId'] == 'reference-customer' and product_context['actorId'] == 'A100'
-assert product_context['dataDurability'] == 'Runtime only' and product_context['productionAccepted'] is False
+assert product_context['dataDurability'] == 'Temporary data' and product_context['productionAccepted'] is False
 assert 'evidence.document.upload' in product_context['capabilities']
 assert 'evidence.document.read' in product_context['capabilities']
 assert 'document-intelligence.document.process' in product_context['capabilities']
@@ -128,14 +128,14 @@ call('/product-api/v1/evidence', 'POST', {**product_upload, 'operationId': 'b' *
      'contentType': 'application/pdf'}, customer, status=400)
 product_receipt = call('/product-api/v1/evidence', 'POST', product_upload, customer)
 assert product_receipt['documentId'] == 'document-' + product_operation and product_receipt['version'] == 1
-assert product_receipt['dataDurability'] == 'Runtime only' and 'contentReference' not in product_receipt
+assert product_receipt['dataDurability'] == 'Temporary data' and 'contentReference' not in product_receipt
 assert call('/product-api/v1/evidence', 'POST', product_upload, customer) == product_receipt
 call('/product-api/v1/evidence', 'POST', {**product_upload, 'contentBase64': base64.b64encode(b'Different content.').decode()}, customer, status=409)
 product_metadata = {'documentId': product_receipt['documentId'], 'customerId': 'reference-customer'}
 assert call('/contracts/cid-021/v1', 'POST', envelope(customer, 'GetEvidenceMetadata', product_metadata), customer)['data']['versions'][0]['originalFileName'] == 'customer-statement.txt'
 call('/product-api/v1/evidence', session=owner, status=403)
 product_library = call('/product-api/v1/evidence', session=customer)
-assert product_library['dataDurability'] == 'Runtime only' and len(product_library['items']) == 1
+assert product_library['dataDurability'] == 'Temporary data' and len(product_library['items']) == 1
 assert product_library['items'][0]['documentVersionId'] == product_receipt['documentVersionId']
 assert product_library['items'][0]['contentSha256'] == product_receipt['contentSha256']
 assert 'contentReference' not in product_library['items'][0]
@@ -174,12 +174,23 @@ assert job_audit_count == '2', job_audit_count
 replayed = call(processing_path, 'POST', {'operationId': processing_operation}, customer)
 assert replayed['job']['jobId'] == processing['job']['jobId']
 
-# Setup is tenant/admin bound; a receipt cannot be fabricated or saved against a stale review.
+# Setup is tenant/admin bound and depends on the Access Management owner's v2 receipt.
+assert sql('uat_am_t001', "SELECT schema_version::text || '|' || default_access_pack_version FROM am.tenant_identity WHERE singleton;") == '6|2.0'
+assert sql('uat_am_t001', "SELECT count(*) FROM am.default_access_pack_history WHERE pack_version='2.0' AND pack_identity='monergy-default-access-pack/2.0';") == '1'
+pack_status = admin('default-access-pack')
+assert pack_status['installedVersion'] == '2.0'
+assert pack_status['installedIdentity'] == 'monergy-default-access-pack/2.0'
+assert pack_status['policyVersion'] == revision()
+
 call('/uat-api/v1/setup', status=401)
 call('/uat-api/v1/setup', session=customer, status=403)
 call('/uat-api/v1/setup/activate', 'POST', {}, owner, status=409)
 state = call('/uat-api/v1/setup', session=other_admin)
 assert state['state'] == 'ReadyForAdmin' and state['receiptReference'] is None
+assert state['accessPack']['ready'] is True
+assert state['accessPack']['installedVersion'] == '2.0'
+assert state['accessPack']['installedIdentity'] == 'monergy-default-access-pack/2.0'
+assert state['accessPack']['policyVersion'] == state['policyVersion']
 submission = {'requestId': 'ci-setup-T002', 'expectedPolicyVersion': state['policyVersion'], 'organizationReviewed': True, 'accessReviewed': True}
 call('/uat-api/v1/setup', 'POST', {**submission, 'expectedPolicyVersion': state['policyVersion'] + 1}, other_admin, status=409)
 call('/uat-api/v1/setup', 'POST', {**submission, 'accessReviewed': False}, other_admin, status=409)
@@ -299,7 +310,7 @@ assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
-           'validated': ['setup review and replay', 'server-resolved customer product entry', 'idempotent customer evidence intake', 'customer-scoped evidence library and provenance', 'authorized durable document processing, source-fact review and canonical Job Audit delivery',
+           'validated': ['owner-confirmed Default Access Pack v2 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library and source details', 'authorized durable document processing, extracted-information review and canonical Job Audit delivery',
                          'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
                          'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
            'limitations': ['Business data uses owner reference adapters.', 'The processor accepts structured LOCAL/UAT text and does not claim OCR or production AI.', 'Candidate facts do not update the financial profile.', 'Consent outbox delivery is not claimed.']}

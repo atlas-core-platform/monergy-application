@@ -255,37 +255,35 @@ if ($Action -eq 'Start' -and -not (Test-Path (Join-Path $folder 'members-initial
     Save-Text 'members-initialized' $state.instanceId
     Protect-Files
 }
-if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'product-policy-v2-initialized'))) {
+if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'app03-processing-policy-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
+            if ($pack.installedVersion -ne '2.0' -or $pack.installedIdentity -ne 'monergy-default-access-pack/2.0') {
+                throw 'The Access Management owner has not confirmed Default Access Pack v2.'
+            }
+
             $roles = Invoke-RestMethod "$url/access-api/v1/administration/roles?limit=100" -Headers $headers -TimeoutSec 15
             $customerRole = $roles.items | Where-Object code -eq 'customer'
             $advisorRole = $roles.items | Where-Object code -eq 'financial-advisor'
-            if ($null -eq $customerRole -or $null -eq $advisorRole) { throw 'The default product access pack is incomplete.' }
+            if ($null -eq $customerRole -or $null -eq $advisorRole) { throw 'The owner-confirmed Default Access Pack v2 role set is incomplete.' }
+
             $permissions = Invoke-RestMethod "$url/access-api/v1/administration/permissions?limit=100" -Headers $headers -TimeoutSec 15
-            $evidenceReadPermission = $permissions.items | Where-Object code -eq 'evidence-read'
             $processingPermission = $permissions.items | Where-Object code -eq 'document-processing'
-            if ($null -eq $processingPermission) {
-                $created = Invoke-RestMethod "$url/access-api/v1/administration/permissions" -Method Post -ContentType 'application/json' -Headers $headers -Body (@{
-                    expectedPolicyVersion=$permissions.policyVersion; code='document-processing'; label='Process authorized evidence'
-                    grants=@(@{capabilityId='document-intelligence.document.process';scope='Resource'})
-                }|ConvertTo-Json -Depth 5) -TimeoutSec 15
-                $permissions = Invoke-RestMethod "$url/access-api/v1/administration/permissions?limit=100" -Headers $headers -TimeoutSec 15
-                $processingPermission = $permissions.items | Where-Object id -eq $created.id
-            }
-            if ($null -eq $evidenceReadPermission) { throw 'The default Evidence access permission is missing.' }
-            $roles = Invoke-RestMethod "$url/access-api/v1/administration/roles?limit=100" -Headers $headers -TimeoutSec 15
-            $customerRole = $roles.items | Where-Object code -eq 'customer'
-            $requiredProductPermissions = @($evidenceReadPermission.id,$processingPermission.id)
-            if (@($requiredProductPermissions | Where-Object { $_ -notin @($customerRole.permissionIds) }).Count) {
-                $permissionIds = @($customerRole.permissionIds) + @($requiredProductPermissions | Where-Object { $_ -notin @($customerRole.permissionIds) })
+            if ($null -eq $processingPermission) { throw 'The owner-confirmed document-processing permission is missing.' }
+
+            # APP-03 has now been accepted. This LOCAL/UAT customization enables that
+            # accepted journey for the customer fixture. It is not part of the v2 pack receipt.
+            if ($processingPermission.id -notin @($customerRole.permissionIds)) {
+                $permissionIds = @($customerRole.permissionIds) + $processingPermission.id
                 Invoke-RestMethod "$url/access-api/v1/administration/roles/$($customerRole.id)" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{
                     expectedPolicyVersion=$roles.policyVersion; code=$customerRole.code; label=$customerRole.label; permissionIds=$permissionIds
                 }|ConvertTo-Json -Depth 5) -TimeoutSec 15 | Out-Null
             }
+
             foreach ($binding in @(@{ actor='A100'; role=$customerRole.id },@{ actor='A200'; role=$customerRole.id },@{ actor='A300'; role=$advisorRole.id })) {
                 $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
                 $member = $members.items | Where-Object actorId -eq $binding.actor
@@ -297,7 +295,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
             Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
-    Save-Text 'product-policy-v2-initialized' $state.instanceId
+    Save-Text 'app03-processing-policy-initialized' $state.instanceId
     Protect-Files
 }
 Write-Host "Local customer workspace is ready: $url/"

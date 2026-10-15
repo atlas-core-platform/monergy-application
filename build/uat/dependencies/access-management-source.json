@@ -1,12 +1,13 @@
 {
-  "schemaVersion": "1.0.0",
+  "schemaVersion": "1.1.0",
   "purpose": "Immutable source dependency for Development LOCAL/CI Docker UAT only; not a Production runtime authority",
+  "storageMode": "verified-files",
+  "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "fb242bfccd161e49d63223b0d32c68fdf770a024",
-  "sourceTree": "c5a2489411344c426b434c53e0cdbc768fbc21df",
-  "verificationStatus": "OWNER_HOSTED_VERIFIED_INTEGRATED_UAT_PENDING",
-  "candidatePullRequest": "https://github.com/atlas-core-platform/monergy-access-management-service/pull/10",
-  "archiveSha256": "e3c74c04ac459ea0b767f4b589ba76c73d18f2670b983b4c5230999732b87795",
+  "commit": "4d368b98e90e17bbefb3abeb007fa069501665f5",
+  "sourceTree": "e095991ef924a2cdb41824e9c25e78fd10eb7203",
+  "verificationStatus": "OWNER_HOSTED_VERIFIED_ACCEPTED_T1_01",
+  "candidatePullRequest": "https://github.com/atlas-core-platform/monergy-access-management-service/pull/11",
   "files": [
     {
       "path": "Directory.Build.props",
@@ -22,7 +23,7 @@
     },
     {
       "path": "build/provision-ci-tenants.sh",
-      "gitBlobSha": "e675ff8a688ada4414f1a4d49f31a423e1dc123d"
+      "gitBlobSha": "a8d37e80d5dec5584aa6274d857ec82e673e3802"
     },
     {
       "path": "global.json",
@@ -34,11 +35,11 @@
     },
     {
       "path": "src/Monergy.AccessManagement/AdministrationEndpoints.cs",
-      "gitBlobSha": "024fb231988f411cc3e6718b3902c80db946d4f8"
+      "gitBlobSha": "4554122b9987572accc13b3b2a74b9993b3b7a92"
     },
     {
       "path": "src/Monergy.AccessManagement/AdministrationModels.cs",
-      "gitBlobSha": "0b527d657f8de8fb9c8a10b7526cfa7006211246"
+      "gitBlobSha": "f8b3079b0d2c43c579cf20b039f58fcca25a1ade"
     },
     {
       "path": "src/Monergy.AccessManagement/BulkImportAdministration.cs",
@@ -58,7 +59,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/DefaultAccessPack.cs",
-      "gitBlobSha": "7664747ae89269af5ac82a7ad5fa29740fb7cee1"
+      "gitBlobSha": "1c8e2351fcd0e41f800d59a152e440ffe32d2046"
     },
     {
       "path": "src/Monergy.AccessManagement/EventDeliveryProtocol.cs",
@@ -86,7 +87,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessAdministration.cs",
-      "gitBlobSha": "a67244138ffc86c2583b52671b5b59c92ac8a68f"
+      "gitBlobSha": "0b90c176c8336718cdffccc3e560463958320e96"
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessPolicyStore.cs",
@@ -110,7 +111,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/TenantConnections.cs",
-      "gitBlobSha": "343ccc21ecad51d1cd8bdca02bdb40c3d0fc4d1a"
+      "gitBlobSha": "3f2e26b8285544d4d6b589fc49d2540c2a29ea36"
     },
     {
       "path": "src/Monergy.AccessManagement/packages.lock.json",
@@ -142,7 +143,7 @@
     },
     {
       "path": "tools/Monergy.AccessManagement.Migrations/Program.cs",
-      "gitBlobSha": "06ffe85b29f3f97a1ce38fa922b4866c3e6db210"
+      "gitBlobSha": "5b5996a560da99106e418029eb71a11c42f29597"
     },
     {
       "path": "tools/Monergy.AccessManagement.Migrations/migrations/0001_tenant_access_policy.sql",
@@ -165,9 +166,13 @@
       "gitBlobSha": "d32996d4389025bb263955bb947387c4075a1287"
     },
     {
+      "path": "tools/Monergy.AccessManagement.Migrations/migrations/0006_default_access_pack_history.sql",
+      "gitBlobSha": "ac0c7310d48734d0bf4f22dc080e1372966065e0"
+    },
+    {
       "path": "tools/Monergy.AccessManagement.Migrations/packages.lock.json",
       "gitBlobSha": "45328e64d43da453a7accddb94584e1d7fe5f2a6"
     }
   ],
-  "verifiedRun": "https://github.com/atlas-core-platform/monergy-access-management-service/actions/runs/38047073048"
+  "verifiedRun": "https://github.com/atlas-core-platform/monergy-access-management-service/actions/runs/38693750372"
 }

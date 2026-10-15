@@ -170,7 +170,7 @@ function AssignedCustomers({ api }: { api: AccessApi }) {
     <>
       <header className="access-page-header">
         <div>
-          <p className="workspace-eyebrow">RESOURCE ACCESS</p>
+          <p className="workspace-eyebrow">CUSTOMER ASSIGNMENTS</p>
           <h1>Assigned customers</h1>
           <p>
             Connect advisors to named customers. Their role determines what they can do; customer
@@ -196,7 +196,7 @@ function AssignedCustomers({ api }: { api: AccessApi }) {
         showIcon
         className="access-notice"
         title="One relationship, consistent customer boundaries"
-        description="An assignment applies to supported customer workflows. Verified customers receive self-access only where their role permits it. Neither administrator authority nor a group grants financial access."
+        description="An assignment applies to supported customer workflows. Verified customers receive self-access only where their role permits it. Neither Organization Administrator authority nor a team grants financial access."
       />
       {notice && <Alert type="success" showIcon title={notice} className="access-notice" />}
       {error && !draft && (
@@ -407,8 +407,8 @@ function AssignedCustomers({ api }: { api: AccessApi }) {
               />
             </Form.Item>
             <p className="access-form-hint">
-              The service checks that the selected user has a customer-related capability. Customer
-              self-access follows verified ownership and does not need a manual assignment.
+              Monergy checks that the selected person has an applicable customer-related capability.
+              Customer self-access follows verified ownership and does not need a manual assignment.
             </p>
           </Form>
         )}

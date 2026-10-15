@@ -48,6 +48,21 @@
 .onboarding-roles span {
   color: var(--monergy-midnight-secondary);
 }
+.onboarding-roles li > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.onboarding-roles small {
+  display: block;
+  max-width: 560px;
+  color: var(--monergy-midnight-secondary);
+  line-height: 1.45;
+}
+.onboarding-roles li > span {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .onboarding-team .ant-card-body,
 .onboarding-complete {
   display: flex;
@@ -81,5 +96,12 @@
     align-items: stretch;
     flex-direction: column;
     gap: 14px;
+  }
+  .onboarding-roles li {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .onboarding-roles li > span {
+    white-space: normal;
   }
 }
