@@ -96,8 +96,8 @@ public static class ProductWorkspaceEndpoints
                 customer.DisplayName,
                 customer.SecondaryLabel,
                 capabilities,
-                "Local UAT",
-                "Runtime only",
+                "Test environment",
+                "Temporary data",
                 false));
         });
         app.MapGet("/product-api/v1/evidence", async (
@@ -128,7 +128,7 @@ public static class ProductWorkspaceEndpoints
                 new ListCustomerEvidence(customer.CustomerId, 100));
             var library = await evidence.ListAsync(
                 session.TenantId, session.AuthenticationContextId, request, http.RequestAborted).ConfigureAwait(false);
-            return Results.Ok(new ProductEvidenceLibrary(library.Items, "Runtime only"));
+            return Results.Ok(new ProductEvidenceLibrary(library.Items, "Temporary data"));
         });
         app.MapPost("/product-api/v1/evidence", async (
             ProductEvidenceSubmission submission,
@@ -200,7 +200,7 @@ public static class ProductWorkspaceEndpoints
                 staged.ContentLength,
                 registration.Data.ContentSha256,
                 registration.Data.CreatedAt,
-                "Runtime only"));
+                "Temporary data"));
         });
         app.MapPost("/product-api/v1/evidence/{documentVersionId}/processing", async (
             string documentVersionId,
@@ -262,7 +262,7 @@ public static class ProductWorkspaceEndpoints
                 job,
                 null,
                 [],
-                "Runtime only",
+                "Temporary data",
                 "Structured text reference processor"));
         });
         app.MapGet("/product-api/v1/processing/{jobId}", async (
@@ -290,7 +290,7 @@ public static class ProductWorkspaceEndpoints
                 null,
                 new GetJobStatus(jobId, customer.CustomerId));
             var view = await processing.StatusAsync(session.TenantId, request, http.RequestAborted).ConfigureAwait(false);
-            return Results.Ok(view with { DataDurability = "Runtime only", ProcessingMode = "Structured text reference processor" });
+            return Results.Ok(view with { DataDurability = "Temporary data", ProcessingMode = "Structured text reference processor" });
         });
     }
 
@@ -394,7 +394,7 @@ public sealed class ProductDocumentProcessingClient : IDisposable
             view.Job,
             view.Processing,
             view.Facts,
-            "Runtime only",
+            "Temporary data",
             "Structured text reference processor");
     }
 
