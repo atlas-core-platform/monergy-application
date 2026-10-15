@@ -93,6 +93,14 @@ public interface IFinancialProfileRepository
     Task<FinancialProvenance?> GetProvenanceAsync(
         string provenanceId,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<AuditableEvent>> PendingAuditEventsAsync(
+        CancellationToken cancellationToken);
+
+    Task MarkAuditEventDispatchedAsync(
+        string eventId,
+        DateTimeOffset dispatchedAt,
+        CancellationToken cancellationToken);
 }
 
 public sealed class FinancialProfileApplication(

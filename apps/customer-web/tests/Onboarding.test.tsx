@@ -27,8 +27,8 @@ const ready: TenantSetupState = {
   state: 'ReadyForAdmin',
   customerRelationships: true,
   accessPack: {
-    installedVersion: '2.0',
-    installedIdentity: 'monergy-default-access-pack/2.0',
+    installedVersion: '2.1',
+    installedIdentity: 'monergy-default-access-pack/2.1',
     installedAt: '2026-10-15T00:00:00Z',
     policyVersion: 7,
     ready: true,
@@ -157,7 +157,7 @@ it('requires an explicit owner adoption before a v1 organization can complete se
     if (path === 'administration/default-access-pack/plan' && method === 'GET')
       return Promise.resolve({
         installedVersion: '1.0',
-        targetVersion: '2.0',
+        targetVersion: '2.1',
         policyVersion: 7,
         planHash: 'a'.repeat(64),
         alreadyInstalled: false,
@@ -182,7 +182,7 @@ it('requires an explicit owner adoption before a v1 organization can complete se
         },
       });
       return Promise.resolve({
-        packVersion: '2.0',
+        packVersion: '2.1',
         policyVersion: 8,
         operationId: 'setup-pack-fixture',
         planHash: 'a'.repeat(64),
@@ -240,7 +240,7 @@ it('does not overwrite a customized v1 access model', async () => {
     if (path === 'administration/default-access-pack/plan' && method === 'GET')
       return Promise.resolve({
         installedVersion: '1.0',
-        targetVersion: '2.0',
+        targetVersion: '2.1',
         policyVersion: 7,
         planHash: 'b'.repeat(64),
         alreadyInstalled: false,

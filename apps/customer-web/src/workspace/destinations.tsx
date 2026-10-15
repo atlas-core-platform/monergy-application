@@ -3,6 +3,7 @@ import type { WorkspaceDestination } from '@monergy/ui-foundation';
 export const destinations: WorkspaceDestination[] = [
   { id: 'home', label: 'Overview', icon: 'home', href: '/', group: 'Your finances' },
   { id: 'evidence', label: 'Documents', icon: 'evidence', href: '/evidence' },
+  { id: 'finances', label: 'Financial information', icon: 'reports', href: '/finances' },
   { id: 'search', label: 'Search', icon: 'search', href: '/search' },
   { id: 'reports', label: 'Reports', icon: 'reports', href: '/reports' },
 ];
@@ -18,8 +19,8 @@ export const productModule = {
     <>
       <h2>Turn documents into clear financial information.</h2>
       <p>
-        Start in Documents to add a financial record. Search and Reports only return information
-        your current customer access allows.
+        Start in Documents to add a financial record. Review extracted details before adding them
+        to Financial information. Search and Reports only return information your current customer access allows.
       </p>
       <h3>Add documents</h3>
       <p>
@@ -29,8 +30,8 @@ export const productModule = {
       <h3>Follow the source</h3>
       <p>
         Open Document details to see when a document was uploaded and, when needed, expand Technical
-        details for its immutable identifiers and integrity hash. A confirmed upload does not mean
-        the information has been added to your Financial Passport.
+        details for its immutable identifiers and integrity hash. A confirmed upload does not change
+        Financial information until you explicitly review and add supported details.
       </p>
       <h3>Know this environment</h3>
       <p>

@@ -2,11 +2,39 @@ using Microsoft.Extensions.DependencyInjection;
 using Monergy.Platform;
 using Monergy.Services.FinancialProfile.Application;
 using Monergy.Services.FinancialProfile.Infrastructure;
+using Monergy.Contracts;
 
 namespace Monergy.Services.FinancialProfile;
 
 public static class FinancialProfileRegistration
 {
+    private static IServiceCollection AddAuditDelivery(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        if (!FinancialProfileAuditDeliveryOptions.Selected(configuration)) return services;
+        if (!TenantBoundaryOptions.Selected(configuration))
+            throw new InvalidOperationException("Financial Profile Audit delivery requires governed tenant bindings.");
+        services.AddSingleton<EventDeliveryTelemetry>();
+        services.AddSingleton<IEventDeliveryTelemetry>(provider =>
+            provider.GetRequiredService<EventDeliveryTelemetry>());
+        services.AddSingleton<IGovernedEventTransport<AuditableEvent>>(provider =>
+            new ReferenceGovernedEventTransport<AuditableEvent>(
+                configuration,
+                provider.GetServices<IGovernedEventConsumer<AuditableEvent>>(),
+                provider.GetRequiredService<IEventDeliveryTelemetry>()));
+        services.AddSingleton<FinancialProfileOutboxDispatcher>();
+        services.AddHttpClient<HttpFinancialProfileAuditEventConsumer>(client =>
+        {
+            client.BaseAddress = FinancialProfileAuditDeliveryOptions.Endpoint(configuration);
+            client.Timeout = TimeSpan.FromSeconds(5);
+        });
+        services.AddTransient<IGovernedEventConsumer<AuditableEvent>>(provider =>
+            provider.GetRequiredService<HttpFinancialProfileAuditEventConsumer>());
+        return services;
+    }
+
+
     public static IEndpointRouteBuilder MapD11LocalShutdown(this IEndpointRouteBuilder endpoints,
         IConfiguration configuration)
     {
@@ -31,7 +59,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<InMemoryFinancialProfileRepository>();
         services.AddSingleton<IFinancialProfileRepository>(provider => provider.GetRequiredService<InMemoryFinancialProfileRepository>());
         services.AddSingleton<FinancialProfileApplication>();
-        return services;
+        return services.AddAuditDelivery(configuration);
     }
 
     public static IServiceCollection AddFinancialProfilePhysicalPersistence(
@@ -42,6 +70,6 @@ public static class FinancialProfileRegistration
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IFinancialProfileRepository, PostgresFinancialProfileRepository>();
         services.AddSingleton<FinancialProfileApplication>();
-        return services;
+        return services.AddAuditDelivery(configuration);
     }
 }

@@ -75,6 +75,38 @@ export interface ProductProcessingView {
   processingMode: 'Structured text reference processor';
 }
 
+
+export interface ProductFinancialSource {
+  sourceName: string;
+  documentVersion: string;
+  recordedAt: string;
+  technicalSourceFactId: string;
+}
+
+export interface ProductFinancialFact {
+  financialFactId: string;
+  factType: 'INCOME' | 'EXPENSE' | string;
+  label: string;
+  value: number;
+  currency: string;
+  effectiveDate: string;
+  revision: number;
+  source: ProductFinancialSource;
+}
+
+export interface ProductFinancialProfile {
+  financialProfileId: string;
+  revision: number;
+  updatedAt: string | null;
+  facts: ProductFinancialFact[];
+  dataDurability: 'Temporary data';
+}
+
+export interface ProductFinancialPromotionResult {
+  profile: ProductFinancialProfile;
+  confirmed: number;
+}
+
 export const evidenceTypes = ['application/pdf', 'image/png', 'image/jpeg', 'text/plain'];
 export const maximumEvidenceBytes = 1_048_576;
 
@@ -140,6 +172,28 @@ export function getDocumentProcessing(
     `v1/processing/${encodeURIComponent(jobId)}`,
     'GET',
     undefined,
+    signal,
+  );
+}
+
+export function getFinancialProfile(
+  api: AccessApi,
+  signal?: AbortSignal,
+): Promise<ProductFinancialProfile> {
+  return api.product<ProductFinancialProfile>('v1/financial-profile', 'GET', undefined, signal);
+}
+
+export function addProcessingFactsToFinancialProfile(
+  api: AccessApi,
+  jobId: string,
+  operationId: string,
+  sourceFactIds: string[],
+  signal?: AbortSignal,
+): Promise<ProductFinancialPromotionResult> {
+  return api.product<ProductFinancialPromotionResult>(
+    `v1/financial-profile/from-processing/${encodeURIComponent(jobId)}`,
+    'POST',
+    { operationId, sourceFactIds },
     signal,
   );
 }

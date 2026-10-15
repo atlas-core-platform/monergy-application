@@ -20,6 +20,14 @@ const journeys: {
     action: 'Add document',
   },
   {
+    title: 'Review financial information',
+    description: 'See trusted income and expense information together with the source document behind each item.',
+    href: '/finances',
+    icon: 'reports',
+    capability: 'financial-profile.profile.read',
+    action: 'View financial information',
+  },
+  {
     title: 'Search your information',
     description: 'Find authorized information and follow each result back to its source.',
     href: '/search',
@@ -61,9 +69,9 @@ export default function WorkspaceHome() {
           <span className="workspace-pill">YOUR NEXT BEST STEP</span>
           <h2 id="workspace-hero-title">Start with what you already have.</h2>
           <p>
-            Add a financial document. Monergy keeps the document version and source details
-            connected so you can review extracted information before anything reaches your Financial
-            Passport.
+            Add a financial document. Monergy keeps the document and source details connected so
+            you can review extracted Income or Expense information before explicitly adding it to
+            your trusted financial information.
           </p>
           {capabilities.has('evidence.document.upload') ? (
             <a className="workspace-primary-link" href="/evidence">
@@ -109,8 +117,8 @@ export default function WorkspaceHome() {
               <WorkspaceIcon name="changes" />
             </span>
             <div>
-              <strong>Connected</strong>
-              <small>Source details stay linked</small>
+              <strong>Reviewed</strong>
+              <small>You choose what becomes trusted information</small>
             </div>
           </div>
         </div>

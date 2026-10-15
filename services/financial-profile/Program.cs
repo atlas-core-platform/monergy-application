@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Monergy.Platform;
 using Monergy.Services.FinancialProfile;
+using Monergy.Services.FinancialProfile.Infrastructure;
 
 const string serviceName = "Financial Profile Service";
 
@@ -16,6 +17,11 @@ var physicalPersistence = PhysicalPersistenceGuard.IsSelected(builder.Configurat
 if (physicalPersistence)
 {
     builder.Services.AddFinancialProfilePhysicalPersistence(builder.Configuration);
+}
+if ((referenceAdapters || physicalPersistence) &&
+    FinancialProfileAuditDeliveryOptions.Selected(builder.Configuration))
+{
+    builder.Services.AddHostedService<FinancialProfileOutboxDispatchWorker>();
 }
 
 var app = builder.Build();

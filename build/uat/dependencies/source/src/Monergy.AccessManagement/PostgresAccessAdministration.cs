@@ -497,7 +497,19 @@ public sealed partial class PostgresAccessAdministration(
         if (installedVersion == DefaultAccessPack.Version)
             return CreatePackPlan(installedVersion, policyVersion, true, changes, conflicts);
 
-        if (!string.Equals(installedVersion, "1.0", StringComparison.Ordinal))
+        IReadOnlyList<DefaultPermissionTemplate> baselinePermissions;
+        IReadOnlyList<DefaultRoleTemplate> baselineRoles;
+        if (string.Equals(installedVersion, "1.0", StringComparison.Ordinal))
+        {
+            baselinePermissions = DefaultAccessPack.Version1Permissions;
+            baselineRoles = DefaultAccessPack.Version1Roles;
+        }
+        else if (string.Equals(installedVersion, "2.0", StringComparison.Ordinal))
+        {
+            baselinePermissions = DefaultAccessPack.Version2Permissions;
+            baselineRoles = DefaultAccessPack.Version2Roles;
+        }
+        else
         {
             conflicts.Add(installedVersion is null
                 ? "DEFAULT_ACCESS_PACK_NOT_INSTALLED"
@@ -505,7 +517,7 @@ public sealed partial class PostgresAccessAdministration(
             return CreatePackPlan(installedVersion, policyVersion, false, changes, conflicts);
         }
 
-        var allPermissions = DefaultAccessPack.Version1Permissions.Concat(DefaultAccessPack.Permissions)
+        var allPermissions = baselinePermissions.Concat(DefaultAccessPack.Permissions)
             .GroupBy(permission => permission.PermissionId, StringComparer.Ordinal).Select(group => group.Last()).ToArray();
         var permissionIds = allPermissions.Select(permission => permission.PermissionId).ToArray();
         var permissionCodes = allPermissions.Select(permission => permission.Code)
@@ -519,7 +531,7 @@ public sealed partial class PostgresAccessAdministration(
             ORDER BY p.permission_id,pc.capability_id,pc.scope;
             """, new { Ids = permissionIds, Codes = permissionCodes }, transaction, ct)).ConfigureAwait(false)).ToArray();
 
-        foreach (var legacy in DefaultAccessPack.Version1Permissions)
+        foreach (var legacy in baselinePermissions)
         {
             var target = DefaultAccessPack.Permissions.SingleOrDefault(permission => permission.PermissionId == legacy.PermissionId);
             var current = ReadPermissionState(permissionRows, legacy.PermissionId);
@@ -546,7 +558,7 @@ public sealed partial class PostgresAccessAdministration(
         }
 
         foreach (var target in DefaultAccessPack.Permissions.Where(permission =>
-                     DefaultAccessPack.Version1Permissions.All(legacy => legacy.PermissionId != permission.PermissionId)))
+                     baselinePermissions.All(legacy => legacy.PermissionId != permission.PermissionId)))
         {
             var current = ReadPermissionState(permissionRows, target.PermissionId);
             var codeOwner = permissionRows.FirstOrDefault(row =>
@@ -559,7 +571,7 @@ public sealed partial class PostgresAccessAdministration(
             conflicts.Add("PERMISSION_COLLISION:" + target.PermissionId);
         }
 
-        var allRoles = DefaultAccessPack.Version1Roles.Concat(DefaultAccessPack.Roles)
+        var allRoles = baselineRoles.Concat(DefaultAccessPack.Roles)
             .GroupBy(role => role.RoleId, StringComparer.Ordinal).Select(group => group.Last()).ToArray();
         var roleIds = allRoles.Select(role => role.RoleId).ToArray();
         var roleCodes = allRoles.Select(role => role.Code).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
@@ -571,7 +583,7 @@ public sealed partial class PostgresAccessAdministration(
             ORDER BY r.role_id,rp.permission_id;
             """, new { Ids = roleIds, Codes = roleCodes }, transaction, ct)).ConfigureAwait(false)).ToArray();
 
-        foreach (var legacy in DefaultAccessPack.Version1Roles)
+        foreach (var legacy in baselineRoles)
         {
             var target = DefaultAccessPack.Roles.Single(role => role.RoleId == legacy.RoleId);
             var current = ReadRoleState(roleRows, legacy.RoleId);
@@ -597,7 +609,7 @@ public sealed partial class PostgresAccessAdministration(
         }
 
         foreach (var target in DefaultAccessPack.Roles.Where(role =>
-                     DefaultAccessPack.Version1Roles.All(legacy => legacy.RoleId != role.RoleId)))
+                     baselineRoles.All(legacy => legacy.RoleId != role.RoleId)))
         {
             var current = ReadRoleState(roleRows, target.RoleId);
             var codeOwner = roleRows.FirstOrDefault(row =>
@@ -611,7 +623,7 @@ public sealed partial class PostgresAccessAdministration(
         }
 
         if (conflicts.Count == 0)
-            changes.Add(new("SET_PACK_VERSION", "default-access-pack", "1.0", DefaultAccessPack.Version));
+            changes.Add(new("SET_PACK_VERSION", "default-access-pack", installedVersion, DefaultAccessPack.Version));
         return CreatePackPlan(installedVersion, policyVersion, false, changes, conflicts);
     }
 

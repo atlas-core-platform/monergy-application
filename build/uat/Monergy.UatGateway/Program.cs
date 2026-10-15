@@ -14,6 +14,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 builder.AddTenantSetup();
 builder.AddProductWorkspace();
+builder.AddProductFinancialProfile();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
 builder.Services.AddSingleton(new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
 { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1_048_576 });
@@ -36,6 +37,7 @@ app.UseStaticFiles();
 app.UseRouting();
 app.MapTenantSetup();
 app.MapProductWorkspace();
+app.MapProductFinancialProfile();
 app.MapGet("/health/live", () => Results.Ok(new { profile = "local-uat", productionAccepted = false }));
 app.MapGet("/health/ready", async (HttpClient client, CancellationToken ct) =>
 {
@@ -105,7 +107,7 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     if (path is not ("/" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
         "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
         "/access/activity" or "/access/sessions" or "/operations" or
-        "/search" or "/reports" or "/vs02" or "/foundation"))
+        "/search" or "/reports" or "/finances" or "/vs02" or "/foundation"))
     { http.Response.StatusCode = 404; return; }
     http.Response.ContentType = "text/html; charset=utf-8";
     await http.Response.SendFileAsync(Path.Combine(environment.WebRootPath, "index.html"), http.RequestAborted).ConfigureAwait(false);
@@ -129,7 +131,6 @@ static string? Route(string path, string method)
     var port = id[2] switch
     {
         "cid-020" or "cid-021" or "cid-022" => 5111,
-        "cid-030" or "cid-031" or "cid-032" or "cid-033" => 5113,
         "cid-037" or "cid-038" or "cid-039" => 5114,
         "cid-042" or "cid-043" or "cid-044" => 5115,
         "cid-051" or "cid-052" => 5116,

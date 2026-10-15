@@ -201,7 +201,7 @@ it('keeps the library hidden without evidence read authority', () => {
   expect(request).not.toHaveBeenCalled();
 });
 
-it('reviews authorized structured-text processing and displays extracted information without profile mutation', async () => {
+it('requires explicit source-fact selection before updating Financial information', async () => {
   const api = new AccessApi(session);
   const item = {
     documentId: 'document-003',
@@ -257,14 +257,49 @@ it('reviews authorized structured-text processing and displays extracted informa
     dataDurability: 'Temporary data',
     processingMode: 'Structured text reference processor',
   };
+  const promotion = {
+    profile: {
+      financialProfileId: 'financial-profile-reference-customer',
+      revision: 1,
+      updatedAt: '2026-10-14T00:00:02Z',
+      facts: [
+        {
+          financialFactId: 'financial-fact-001',
+          factType: 'INCOME',
+          label: 'Employment income',
+          value: 125000,
+          currency: 'USD',
+          effectiveDate: '2026-10-01',
+          revision: 1,
+          source: {
+            sourceName: 'financial-facts.txt',
+            documentVersion: item.documentVersionId,
+            recordedAt: '2026-10-14T00:00:02Z',
+            technicalSourceFactId: 'source-fact-001',
+          },
+        },
+      ],
+      dataDurability: 'Temporary data',
+    },
+    confirmed: 1,
+  };
   const request = vi.spyOn(api, 'product').mockImplementation((path, method) => {
     if (path === 'v1/evidence' && method === 'GET')
       return Promise.resolve({ items: [item], dataDurability: 'Temporary data' });
     if (path.endsWith('/processing') && method === 'POST') return Promise.resolve(result);
+    if (path.includes('v1/financial-profile/from-processing/') && method === 'POST')
+      return Promise.resolve(promotion);
     return Promise.reject(new Error(`Unexpected request: ${String(method)} ${path}`));
   });
-  vi.spyOn(crypto, 'randomUUID').mockReturnValue('cccccccc-cccc-cccc-cccc-cccccccccccc');
-  mount(api);
+  vi.spyOn(crypto, 'randomUUID')
+    .mockReturnValueOnce('cccccccc-cccc-cccc-cccc-cccccccccccc')
+    .mockReturnValueOnce('dddddddd-dddd-dddd-dddd-dddddddddddd');
+  mount(api, [
+    'evidence.document.upload',
+    'evidence.document.read',
+    'document-intelligence.document.process',
+    'financial-profile.profile.update',
+  ]);
   const user = userEvent.setup();
   await user.click(
     await screen.findByRole('button', { name: 'View document details for financial-facts.txt' }),
@@ -272,8 +307,8 @@ it('reviews authorized structured-text processing and displays extracted informa
   const provenance = screen.getByRole('dialog', { name: 'Document details' });
   await user.click(within(provenance).getByRole('button', { name: 'Extract details' }));
   const review = await screen.findByRole('dialog', { name: 'Extract and review details' });
-  expect(review).toHaveTextContent('Review before adding anything to your financial profile');
-  expect(review).toHaveTextContent('Your financial profile is not changed by this step');
+  expect(review).toHaveTextContent('Review before adding anything to your financial information');
+  expect(review).toHaveTextContent('Your financial information is not changed by this step');
   await user.click(within(review).getByRole('button', { name: 'Extract details' }));
   expect(await screen.findByText('Employment income')).toBeVisible();
   expect(review).toHaveTextContent('$125,000.00');
@@ -283,5 +318,32 @@ it('reviews authorized structured-text processing and displays extracted informa
     'POST',
     { operationId: 'c'.repeat(32) },
     expect.any(AbortSignal),
+  );
+  const add = within(review).getByRole('button', { name: 'Add selected information' });
+  expect(add).toBeDisabled();
+  expect(
+    request.mock.calls.filter(([path]) =>
+      String(path).includes('v1/financial-profile/from-processing/'),
+    ),
+  ).toHaveLength(0);
+
+  await user.click(
+    within(review).getByRole('checkbox', {
+      name: 'Add Employment income to financial information',
+    }),
+  );
+  expect(add).toBeEnabled();
+  await user.click(add);
+
+  expect(await screen.findByText('Your financial information was updated')).toBeVisible();
+  expect(review).toHaveTextContent('1 reviewed item confirmed');
+  expect(request).toHaveBeenCalledWith(
+    `v1/financial-profile/from-processing/${result.job.jobId}`,
+    'POST',
+    {
+      operationId: 'd'.repeat(32),
+      sourceFactIds: ['source-fact-001'],
+    },
+    undefined,
   );
 });

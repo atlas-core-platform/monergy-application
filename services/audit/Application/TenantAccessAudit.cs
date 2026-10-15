@@ -16,7 +16,28 @@ public interface ITenantJobAuditRepository
         CancellationToken cancellationToken);
 }
 
+public interface ITenantFinancialAuditRepository
+{
+    Task<TenantFinancialAuditReceipt> AppendFinancialEventAsync(
+        string tenantId,
+        AuditableEvent source,
+        CancellationToken cancellationToken);
+}
+
 public sealed record TenantJobAuditReceipt(
+    string Recipient,
+    string TenantId,
+    string SourceEventId,
+    string SourceContractId,
+    string EventName,
+    string EventVersion,
+    string Producer,
+    string SubjectType,
+    string SubjectId,
+    string AuditEvidenceId,
+    bool Created);
+
+public sealed record TenantFinancialAuditReceipt(
     string Recipient,
     string TenantId,
     string SourceEventId,
@@ -73,5 +94,36 @@ public sealed class TenantJobAudit(ITenantJobAuditRepository repository)
             throw new ArgumentException("The Job Management audit event is invalid.", nameof(source));
         }
         return repository.AppendJobEventAsync(trustedTenant, source, cancellationToken);
+    }
+}
+
+public sealed class TenantFinancialAudit(ITenantFinancialAuditRepository repository)
+{
+    public Task<TenantFinancialAuditReceipt> ConsumeAsync(
+        string trustedTenant,
+        AuditableEvent source,
+        CancellationToken cancellationToken)
+    {
+        TenantAccessProtocol.Identifier(trustedTenant, 64);
+        ArgumentNullException.ThrowIfNull(source);
+        var expectedName = source.ContractId switch
+        {
+            "CID-034" => Vs02ContractNames.FinancialFactCreated,
+            "CID-035" => Vs02ContractNames.FinancialFactUpdated,
+            _ => null,
+        };
+        if (expectedName is null ||
+            source.EventName != expectedName ||
+            source.EventVersion != ContractGuard.CurrentVersion ||
+            source.Producer != "Financial Profile Service" ||
+            source.SubjectType != "financial-fact" ||
+            string.IsNullOrWhiteSpace(source.EventId) ||
+            string.IsNullOrWhiteSpace(source.SubjectId) ||
+            string.IsNullOrWhiteSpace(source.CorrelationId) ||
+            source.OccurredAt == default)
+        {
+            throw new ArgumentException("The Financial Profile audit event is invalid.", nameof(source));
+        }
+        return repository.AppendFinancialEventAsync(trustedTenant, source, cancellationToken);
     }
 }

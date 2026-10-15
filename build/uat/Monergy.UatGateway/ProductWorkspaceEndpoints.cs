@@ -55,6 +55,7 @@ public static class ProductWorkspaceEndpoints
         "evidence.document.read",
         "document-intelligence.document.process",
         "financial-profile.profile.read",
+        "financial-profile.profile.update",
         "search.query.execute",
         "reporting.report.generate",
     ];

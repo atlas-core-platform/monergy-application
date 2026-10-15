@@ -8,8 +8,8 @@ public sealed record DefaultRoleTemplate(
 
 public static class DefaultAccessPack
 {
-    public const string Version = "2.0";
-    public const string Identity = "monergy-default-access-pack/2.0";
+    public const string Version = "2.1";
+    public const string Identity = "monergy-default-access-pack/2.1";
 
     internal static IReadOnlyList<DefaultPermissionTemplate> Version1Permissions { get; } =
     [
@@ -39,7 +39,7 @@ public static class DefaultAccessPack
             ("job-management.job.read", AuthorizationScope.Tenant))
     ];
 
-    public static IReadOnlyList<DefaultPermissionTemplate> Permissions { get; } =
+    internal static IReadOnlyList<DefaultPermissionTemplate> Version2Permissions { get; } =
     [
         Permission("default-permission-profile-read", "financial-profile-read", "View customer financial profile",
             ("financial-profile.profile.read", AuthorizationScope.Resource)),
@@ -69,6 +69,9 @@ public static class DefaultAccessPack
             ("document-intelligence.document.process", AuthorizationScope.Resource))
     ];
 
+    public static IReadOnlyList<DefaultPermissionTemplate> Permissions { get; } = Version2Permissions;
+
+
     internal static IReadOnlyList<DefaultRoleTemplate> Version1Roles { get; } =
     [
         Role("default-role-customer", "customer", "Customer",
@@ -91,9 +94,26 @@ public static class DefaultAccessPack
             "default-permission-job-read")
     ];
 
+    internal static IReadOnlyList<DefaultRoleTemplate> Version2Roles { get; } =
+    [
+        Role("default-role-customer", "customer", "Customer",
+            "default-permission-evidence-read",
+            "default-permission-evidence-upload",
+            "default-permission-document-processing"),
+        Role("default-role-financial-advisor", "financial-advisor", "Financial Advisor / Relationship Manager"),
+        Role("default-role-operations-support", "operations-support", "Operations Support"),
+        Role("default-role-dsa-case-manager", "dsa-case-manager", "DSA / Case Manager"),
+        Role("default-role-lender-professional", "lender-professional", "Lender Professional"),
+        Role("default-role-financial-professional", "financial-professional", "Chartered Accountant / Financial Professional"),
+        Role("default-role-property-valuer", "property-valuer", "Property Valuer"),
+        Role("default-role-legal-advisor", "legal-advisor", "Legal Advisor / Advocate")
+    ];
+
     public static IReadOnlyList<DefaultRoleTemplate> Roles { get; } =
     [
         Role("default-role-customer", "customer", "Customer",
+            "default-permission-profile-read",
+            "default-permission-profile-update",
             "default-permission-evidence-read",
             "default-permission-evidence-upload",
             "default-permission-document-processing"),
