@@ -55,7 +55,7 @@ test('real tenant administration, sessions, canonical audit and service readines
     );
   await page.getByRole('button', { name: 'Connect workspace' }).click();
   if (profile.onboarding) {
-    await expect(page.getByRole('heading', { name: 'A clear start for your team.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Set up your organization.' })).toBeVisible();
     await expect(page.locator('.mw-shell')).toHaveCount(0);
     await page.getByLabel('I have reviewed the organization details').check();
     await page.getByLabel('I understand how roles and customer access work').check();
