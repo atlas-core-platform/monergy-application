@@ -20,10 +20,14 @@ public sealed class DocumentIntelligenceHttpAdapterWorker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var builder = WebApplication.CreateSlimBuilder();
-        if (configuration["urls"] is { Length: > 0 } urls)
-            builder.WebHost.UseUrls(urls);
-
         var tenantBoundary = TenantBoundaryOptions.Selected(configuration);
+        var adapterUrl = configuration["urls"];
+        if (string.IsNullOrWhiteSpace(adapterUrl) && tenantBoundary)
+            adapterUrl = ownerServices.GetRequiredService<TenantBoundaryOptions>().ProbeUrl.ToString();
+        var endpoint = TenantAccessIntegration.LoopbackRoot(
+            adapterUrl ?? throw new InvalidOperationException("Worker HTTP adapter requires an explicit loopback URL."));
+        builder.WebHost.UseUrls(endpoint.ToString());
+
         if (tenantBoundary)
         {
             builder.Services.AddSingleton(ownerServices.GetRequiredService<TenantBoundaryOptions>());
