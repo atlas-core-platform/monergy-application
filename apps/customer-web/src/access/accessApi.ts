@@ -85,7 +85,7 @@ export class AccessApiError extends Error {
       status === 401
         ? 'Your session has ended. Connect again to continue.'
         : status === 403
-          ? 'Tenant administrator access is required.'
+          ? 'Organization administrator access is required.'
           : status === 409
             ? 'The workspace changed or this operation conflicts with current access. Refresh and review before retrying.'
             : status === 503
@@ -238,7 +238,7 @@ export class AccessApi {
       signal,
     );
   }
-  setup<T>(path: '' | '/activate', body: unknown): Promise<T> {
+  setup<T>(path: '' | '/activate' | '/access-policy/adopt', body: unknown): Promise<T> {
     return this.guarded<T>('/uat-api/v1/setup' + path, {
       method: 'POST',
       headers: {
