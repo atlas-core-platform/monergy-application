@@ -5,7 +5,7 @@ using Monergy.Services.JobManagement.Infrastructure;
 const string serviceName = "Job Management Service";
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.AddMonergyPlatform(serviceName);
+builder.AddMonergyPlatform(serviceName, hostWorkerTenantBoundary: false);
 builder.Services.AddHealthChecks();
 
 var physicalPersistence = PhysicalPersistenceGuard.IsSelected(builder.Configuration);
