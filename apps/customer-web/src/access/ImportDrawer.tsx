@@ -198,7 +198,7 @@ export function ImportDrawer({
         if (staged.status === 'Activated' || staged.status === 'Cancelled') {
           onChanged(
             staged.status === 'Activated'
-              ? 'User access was activated.'
+              ? 'Person access was activated.'
               : 'Onboarding was cancelled.',
           );
           return;
@@ -220,8 +220,8 @@ export function ImportDrawer({
       if (next.status === 'Activated')
         onChanged(
           single
-            ? 'The user was created and their access was activated.'
-            : `${String(next.rowCount)} users were onboarded together.`,
+            ? 'The person was created and their access was activated.'
+            : `${String(next.rowCount)} people were onboarded together.`,
         );
       else if (next.status === 'Cancelled')
         onChanged('The pending import was cancelled. No access was activated by it.');
@@ -256,10 +256,10 @@ export function ImportDrawer({
       : confirm === 'retry'
         ? 'Retry onboarding'
         : single
-          ? 'Create user'
+          ? 'Add person'
           : 'Onboard people';
   const preparationLabel = single
-    ? 'Review user'
+    ? 'Review person'
     : preview?.valid
       ? 'Confirm onboarding'
       : 'Validate entire file';
@@ -282,13 +282,13 @@ export function ImportDrawer({
               : confirm === 'retry'
                 ? 'Review retry'
                 : single
-                  ? 'Review new user'
+                  ? 'Review new person'
                   : 'Review onboarding'
             : importId
               ? 'Onboarding details'
               : single
-                ? 'Create user'
-                : 'Import users'
+                ? 'Add person'
+                : 'Import people'
         }
         open={open}
         onClose={() => {
@@ -398,7 +398,7 @@ export function ImportDrawer({
           size="small"
           current={result?.status === 'Activated' ? 2 : preview?.valid || result ? 1 : 0}
           items={[
-            { title: single ? 'User details' : 'Choose file' },
+            { title: single ? 'Person details' : 'Choose file' },
             { title: 'Review & create' },
             { title: 'Complete' },
           ]}
@@ -424,7 +424,7 @@ export function ImportDrawer({
                         ?.label ?? 'None — no business permissions',
                   },
                   {
-                    label: 'Groups',
+                    label: 'Teams',
                     value: (userForm.getFieldValue('groups') as string[] | undefined)?.length
                       ? (userForm.getFieldValue('groups') as string[])
                           .map(
@@ -434,18 +434,18 @@ export function ImportDrawer({
                           .join(', ')
                       : 'None',
                   },
-                  { label: 'Tenant administrator', value: 'No' },
+                  { label: 'Organization Administrator', value: 'No' },
                 ]}
               />
             ) : confirm === 'start' ? (
               <>
-                <p>{preview?.rowCount} users will be onboarded with the roles and groups below.</p>
+                <p>{preview?.rowCount} people will be onboarded with the roles and teams below.</p>
                 <pre className="access-csv-review">{csv}</pre>
               </>
             ) : null}
             {confirm === 'start' && (
               <p className="access-form-hint">
-                This creates tenant membership and assigned access. It does not send an invitation
+                This creates organization membership and assigned access. It does not send an invitation
                 or configure a password or sign-in method.
               </p>
             )}
@@ -457,8 +457,8 @@ export function ImportDrawer({
               {single ? (
                 <>
                   <p className="access-drawer-intro">
-                    Create one user and choose their access. A business role is optional; groups
-                    only organize users.
+                    Add one person and choose their access. A business role is optional; teams
+                    only organize people.
                   </p>
                   <Form
                     form={userForm}
@@ -493,7 +493,7 @@ export function ImportDrawer({
                     <Form.Item
                       name="role"
                       label="Business role"
-                      extra="Each user can have one business role. Without one, they have no role-based business access."
+                      extra="Each person can have one business role. Without one, they have no role-based business access."
                     >
                       <Select
                         allowClear
@@ -508,8 +508,8 @@ export function ImportDrawer({
                     </Form.Item>
                     <Form.Item
                       name="groups"
-                      label="Groups"
-                      extra="Group membership does not grant permissions."
+                      label="Teams"
+                      extra="Team membership does not grant permissions."
                     >
                       <Select
                         mode="multiple"
@@ -518,7 +518,7 @@ export function ImportDrawer({
                           value: group.code,
                           label: group.label ?? group.code,
                         }))}
-                        placeholder="Choose groups (optional)"
+                        placeholder="Choose teams (optional)"
                       />
                     </Form.Item>
                   </Form>
@@ -603,9 +603,9 @@ export function ImportDrawer({
                           <ul className="access-guidelines">
                             <li>Use exactly: email, role_code, group_codes.</li>
                             <li>Leave role_code empty for no business access.</li>
-                            <li>Use existing role and group codes. Separate group codes with |.</li>
+                            <li>Use existing role and team codes. Separate team codes with |.</li>
                             <li>Do not include passwords or credentials.</li>
-                            <li>Groups organize people; they do not grant permissions.</li>
+                            <li>Teams organize people; they do not grant permissions.</li>
                           </ul>
                         ),
                       },
@@ -621,14 +621,14 @@ export function ImportDrawer({
                     title={
                       preview.valid
                         ? single
-                          ? 'User details validated'
-                          : `${String(preview.rowCount)} users ready for review`
+                          ? 'Person details validated'
+                          : `${String(preview.rowCount)} people ready for review`
                         : `${String(preview.errors.length)} issues to resolve`
                     }
                     description={
                       preview.valid
                         ? single
-                          ? 'No changes have been made. Review the user’s details before creating their account.'
+                          ? 'No changes have been made. Review the person’s details before creating their account.'
                           : 'No changes have been made. Review the original CSV, then confirm onboarding.'
                         : 'Correct every issue and validate again. No part of this file will be imported while errors remain.'
                     }
@@ -674,8 +674,8 @@ export function ImportDrawer({
               <h2>
                 {result.status === 'Activated'
                   ? single
-                    ? 'User created.'
-                    : 'User access activated.'
+                    ? 'Person added.'
+                    : 'People access activated.'
                   : result.status === 'Cancelled'
                     ? 'Import cancelled.'
                     : 'Onboarding is not complete.'}
@@ -683,8 +683,8 @@ export function ImportDrawer({
               <p>
                 {result.status === 'Activated'
                   ? single
-                    ? 'This user’s tenant membership and assigned access are active. Sign-in setup is managed separately.'
-                    : 'All users in this batch were activated together.'
+                    ? 'This person’s organization membership and assigned access are active. Sign-in setup is managed separately.'
+                    : 'All people in this batch were activated together.'
                   : 'This batch has not activated any access. Verified identities are retained for safe recovery.'}
               </p>
               <Progress
