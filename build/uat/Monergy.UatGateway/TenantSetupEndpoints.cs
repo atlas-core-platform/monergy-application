@@ -31,8 +31,12 @@ public static class TenantSetupEndpoints
             var receipt = await http.RequestServices.GetRequiredService<FileTenantSetup>().GetAsync(admin.TenantId, http.RequestAborted).ConfigureAwait(false);
             var accessPolicy = await http.RequestServices.GetRequiredService<AccessPackSetupClient>()
                 .ReadViewAsync(http).ConfigureAwait(false);
-            var currentReceipt = AccessPackSetupClient.AllowsActivation(accessPolicy) &&
-                receipt?.ReviewedPolicyVersion == admin.PolicyVersion ? receipt : null;
+            var currentReceipt = tenant.State == TenantLifecycleState.Active
+                ? receipt
+                : AccessPackSetupClient.AllowsActivation(accessPolicy) &&
+                    receipt?.ReviewedPolicyVersion == admin.PolicyVersion
+                    ? receipt
+                    : null;
             return (object)new
             {
                 enabled = true,
