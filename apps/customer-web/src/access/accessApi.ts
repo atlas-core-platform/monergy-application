@@ -85,7 +85,7 @@ export class AccessApiError extends Error {
       status === 401
         ? 'Your session has ended. Connect again to continue.'
         : status === 403
-          ? 'Tenant administrator access is required.'
+          ? 'Organization Administrator access is required.'
           : status === 409
             ? 'The workspace changed or this operation conflicts with current access. Refresh and review before retrying.'
             : status === 503
