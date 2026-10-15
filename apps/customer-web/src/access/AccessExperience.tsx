@@ -85,7 +85,7 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
       {!embedded && (
         <div className="access-context-bar">
           <span>
-            <WorkspaceIcon name="shield" size={15} /> Organization <strong>{session.tenantId}</strong>
+            <WorkspaceIcon name="shield" size={15} /> Organization Settings
             <span className="access-context-divider">/</span>Administrator
           </span>
           <Button
@@ -157,7 +157,7 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
           <AccessOperations api={api} onExpired={fail} views={['services', 'readiness']} />
         </>
       ) : (
-        <Empty description="This access management page does not exist.">
+        <Empty description="This Organization Settings page does not exist.">
           <Button href="/access">Return to overview</Button>
         </Empty>
       )}
