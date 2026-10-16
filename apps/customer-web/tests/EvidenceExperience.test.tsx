@@ -352,23 +352,11 @@ it('requires explicit source-fact selection before updating Financial informatio
 it('opens the exact authorized source document version from Financial Passport history', async () => {
   window.history.replaceState(null, '', '/evidence?version=document-version-002');
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue({
-    dataDurability: 'Temporary data',
-    items: [
-      {
-        documentId: 'document-001',
-        documentVersionId: 'document-version-001',
-        evidenceId: 'evidence-001',
-        version: 1,
-        sourceName: 'Customer upload',
-        originalFileName: 'original-income.txt',
-        contentType: 'text/plain',
-        contentLength: 24,
-        contentSha256: 'a'.repeat(64),
-        receivedAt: '2026-10-13T00:00:00Z',
-        createdAt: '2026-10-13T00:00:00Z',
-      },
-      {
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+    if (path === 'v1/evidence/source/document-version-002')
+      return Promise.resolve({
         documentId: 'document-002',
         documentVersionId: 'document-version-002',
         evidenceId: 'evidence-002',
@@ -376,20 +364,20 @@ it('opens the exact authorized source document version from Financial Passport h
         sourceName: 'Customer upload',
         originalFileName: 'updated-income.txt',
         contentType: 'text/plain',
-        contentLength: 28,
         contentSha256: 'b'.repeat(64),
         receivedAt: '2026-10-15T00:00:00Z',
-        createdAt: '2026-10-15T00:00:00Z',
-      },
-    ],
+        dataDurability: 'Temporary data',
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
   });
 
   mount(api, ['evidence.document.read']);
 
-  const drawer = await screen.findByRole('dialog', { name: 'Document details' });
+  const drawer = await screen.findByRole('dialog', { name: 'Source document details' });
   expect(drawer).toHaveTextContent('updated-income.txt');
   expect(drawer).toHaveTextContent('Version');
   expect(drawer).toHaveTextContent('2');
+  expect(drawer).toHaveTextContent('Customer upload');
   expect(window.location.pathname).toBe('/evidence');
   expect(window.location.search).toBe('');
 });
@@ -397,9 +385,12 @@ it('opens the exact authorized source document version from Financial Passport h
 it('fails closed when a requested source document version is outside current Evidence access', async () => {
   window.history.replaceState(null, '', '/evidence?version=document-version-hidden');
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue({
-    dataDurability: 'Temporary data',
-    items: [],
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+    if (path === 'v1/evidence/source/document-version-hidden')
+      return Promise.reject(new AccessApiError(404, 'EVIDENCE_VERSION_NOT_FOUND'));
+    return Promise.reject(new Error('unexpected product endpoint'));
   });
 
   mount(api, ['evidence.document.read']);
@@ -407,5 +398,7 @@ it('fails closed when a requested source document version is outside current Evi
   expect(
     await screen.findByText("The source document version isn't available in your current document access."),
   ).toBeVisible();
-  expect(screen.queryByRole('dialog', { name: 'Document details' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('dialog', { name: 'Source document details' }),
+  ).not.toBeInTheDocument();
 });
