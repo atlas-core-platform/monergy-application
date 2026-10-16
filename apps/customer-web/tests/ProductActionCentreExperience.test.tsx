@@ -188,13 +188,14 @@ it('shows a truthful clear state when both currently supported categories are re
   mount(api);
 
   expect(
-    await screen.findByText('Nothing currently needs attention in the supported journeys'),
+    await screen.findByText('No attention items are visible in the currently loaded supported state'),
   ).toBeVisible();
   expect(
     screen.getByText(/This does not mean your overall finances are complete/),
   ).toBeVisible();
+  expect(screen.getByText(/not a lifetime processing-history claim/)).toBeVisible();
   expect(screen.getByText('2 of 2')).toBeVisible();
-  expect(screen.getByText('Processing attention').parentElement).toHaveTextContent('0');
+  expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('0');
 });
 
 it('does not present a clear state when only one bounded input is authorized', async () => {
@@ -212,7 +213,7 @@ it('does not present a clear state when only one bounded input is authorized', a
     await screen.findByText('Current attention could not be fully determined'),
   ).toBeVisible();
   expect(
-    screen.queryByText('Nothing currently needs attention in the supported journeys'),
+    screen.queryByText('No attention items are visible in the currently loaded supported state'),
   ).not.toBeInTheDocument();
 });
 
@@ -241,7 +242,7 @@ it('never turns an unavailable Financial Profile into a false zero-information a
   expect(screen.getByText('Current attention could not be fully determined')).toBeVisible();
   expect(screen.getByText('Some current information is unavailable.')).toBeVisible();
   expect(
-    screen.queryByText('Nothing currently needs attention in the supported journeys'),
+    screen.queryByText('No attention items are visible in the currently loaded supported state'),
   ).not.toBeInTheDocument();
   expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
 });
@@ -307,7 +308,7 @@ it('aggregates durable processing attention without turning jobs into tasks', as
 
   expect(await screen.findByText('2 documents are still being processed.')).toBeVisible();
   expect(screen.getByText("1 document processing run couldn't complete.")).toBeVisible();
-  expect(screen.getByText('Processing attention').parentElement).toHaveTextContent('3');
+  expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('3');
   expect(screen.getByText('2 items from supported journeys')).toBeVisible();
   const links = screen.getAllByRole('link', { name: 'View processing activity' });
   expect(links).toHaveLength(2);
@@ -339,9 +340,9 @@ it('never turns unavailable processing activity into an all-clear Action Centre'
     await screen.findByText("We couldn't refresh document processing attention."),
   ).toBeVisible();
   expect(screen.getByText('Current attention could not be fully determined')).toBeVisible();
-  expect(screen.getByText('Processing attention').parentElement).toHaveTextContent('—');
+  expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('—');
   expect(
-    screen.queryByText('Nothing currently needs attention in the supported journeys'),
+    screen.queryByText('No attention items are visible in the currently loaded supported state'),
   ).not.toBeInTheDocument();
 });
 
@@ -367,7 +368,7 @@ it('does not infer processing all-clear when job read is outside the current acc
   ]);
 
   expect(
-    await screen.findByText("Processing attention isn't included in your current access"),
+    await screen.findByText("Recent processing attention isn't included in your current access"),
   ).toBeVisible();
   expect(screen.getByText('Current attention could not be fully determined')).toBeVisible();
   expect(
