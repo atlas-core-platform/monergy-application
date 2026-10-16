@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import {
   getFinancialProfile,
+  getProcessingActivity,
   listEvidence,
   type ProductFinancialProfile,
+  type ProductProcessingActivityItem,
 } from './productApi';
 import './product.css';
 
@@ -24,13 +26,16 @@ export default function ProductActionCentreExperience() {
   const canReadDocuments = capabilities.has('evidence.document.read');
   const canUploadDocuments = capabilities.has('evidence.document.upload');
   const canReadFinancial = capabilities.has('financial-profile.profile.read');
+  const canReadProcessingActivity = capabilities.has('job-management.job.read');
   const [documentCount, setDocumentCount] = useState<number | null>(null);
   const [profile, setProfile] = useState<ProductFinancialProfile | null>(null);
+  const [processingActivity, setProcessingActivity] =
+    useState<ProductProcessingActivityItem[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [warnings, setWarnings] = useState<string[]>([]);
 
   useEffect(() => {
-    if (!api || (!canReadDocuments && !canReadFinancial)) return;
+    if (!api || (!canReadDocuments && !canReadFinancial && !canReadProcessingActivity)) return;
     const controller = new AbortController();
     setBusy(true);
     setWarnings([]);
@@ -38,8 +43,9 @@ export default function ProductActionCentreExperience() {
     void Promise.allSettled([
       canReadDocuments ? listEvidence(api, controller.signal) : Promise.resolve(null),
       canReadFinancial ? getFinancialProfile(api, controller.signal) : Promise.resolve(null),
+      canReadProcessingActivity ? getProcessingActivity(api, controller.signal) : Promise.resolve(null),
     ])
-      .then(([documents, financial]) => {
+      .then(([documents, financial, processing]) => {
         if (controller.signal.aborted) return;
 
         const nextWarnings: string[] = [];
@@ -58,6 +64,13 @@ export default function ProductActionCentreExperience() {
           nextWarnings.push("We couldn't refresh your trusted financial information.");
         }
 
+        if (processing.status === 'fulfilled') {
+          setProcessingActivity(processing.value?.items ?? null);
+        } else if (canReadProcessingActivity) {
+          setProcessingActivity(null);
+          nextWarnings.push("We couldn't refresh document processing attention.");
+        }
+
         setWarnings(nextWarnings);
       })
       .finally(() => {
@@ -65,7 +78,7 @@ export default function ProductActionCentreExperience() {
       });
 
     return () => controller.abort();
-  }, [api, canReadDocuments, canReadFinancial]);
+  }, [api, canReadDocuments, canReadFinancial, canReadProcessingActivity]);
 
   const state = useMemo(() => {
     const facts = profile?.facts ?? [];
@@ -80,8 +93,50 @@ export default function ProductActionCentreExperience() {
     };
   }, [profile]);
 
+  const processingState = useMemo(() => {
+    const items = processingActivity ?? [];
+    const inProgress = items.filter((item) =>
+      ['Scheduled', 'Running', 'CancellationRequested'].includes(item.state),
+    ).length;
+    const failed = items.filter((item) => item.state === 'Failed').length;
+    return {
+      inProgress,
+      failed,
+      attentionCount: inProgress + failed,
+    };
+  }, [processingActivity]);
+
   const attention = useMemo<AttentionItem[]>(() => {
     const items: AttentionItem[] = [];
+
+    if (canReadProcessingActivity && processingActivity !== null) {
+      if (processingState.inProgress > 0) {
+        items.push({
+          id: 'processing-in-progress',
+          title:
+            processingState.inProgress === 1
+              ? '1 document is still being processed.'
+              : String(processingState.inProgress) + ' documents are still being processed.',
+          description:
+            'Open Documents to see the current read-only processing status. Processing does not change Financial information until you review and confirm supported details.',
+          href: '/evidence',
+          action: 'View processing activity',
+        });
+      }
+      if (processingState.failed > 0) {
+        items.push({
+          id: 'processing-failed',
+          title:
+            processingState.failed === 1
+              ? "1 document processing run couldn't complete."
+              : String(processingState.failed) + " document processing runs couldn't complete.",
+          description:
+            'Open Documents to review the durable status. Retry, cancellation and support controls are not available from the Customer workspace.',
+          href: '/evidence',
+          action: 'View processing activity',
+        });
+      }
+    }
 
     if (canReadDocuments && documentCount === 0) {
       items.push({
@@ -142,20 +197,26 @@ export default function ProductActionCentreExperience() {
   }, [
     canReadDocuments,
     canReadFinancial,
+    canReadProcessingActivity,
     canUploadDocuments,
     documentCount,
+    processingActivity,
+    processingState.failed,
+    processingState.inProgress,
     profile,
     state.expenses,
     state.income,
     state.trusted,
   ]);
 
-  const hasReadableState = canReadDocuments || canReadFinancial;
+  const hasReadableState = canReadDocuments || canReadFinancial || canReadProcessingActivity;
   const attentionStateComplete =
     canReadDocuments &&
     canReadFinancial &&
+    canReadProcessingActivity &&
     documentCount !== null &&
-    profile !== null;
+    profile !== null &&
+    processingActivity !== null;
 
   return (
     <main className="product-page product-action-centre">
@@ -164,9 +225,9 @@ export default function ProductActionCentreExperience() {
           <p className="workspace-eyebrow">ACTION CENTRE</p>
           <h1>See what needs attention in the journeys Monergy supports today.</h1>
           <p>
-            These attention items are derived only from your current Documents and trusted Income
-            or Expense information. They are not ranked recommendations, a financial-health score,
-            or a persistent task list.
+            These attention items are derived only from your current Documents, trusted Income or
+            Expense information, and durable document-processing status. They are not ranked
+            recommendations, a financial-health score, or a persistent task list.
           </p>
         </div>
         <Tag className="product-environment">
@@ -184,11 +245,20 @@ export default function ProductActionCentreExperience() {
         />
       )}
 
+      {!canReadProcessingActivity && hasReadableState && (
+        <Alert
+          showIcon
+          type="warning"
+          title="Processing attention isn't included in your current access"
+          description="Monergy won't infer an all-clear Action Centre while this supported input is unavailable."
+        />
+      )}
+
       {warnings.map((warning) => (
         <Alert key={warning} showIcon type="warning" title={warning} />
       ))}
 
-      {busy && documentCount === null && profile === null ? (
+      {busy && documentCount === null && profile === null && processingActivity === null ? (
         <section className="product-panel">
           <Skeleton active paragraph={{ rows: 5 }} />
         </section>
@@ -220,6 +290,19 @@ export default function ProductActionCentreExperience() {
               <div>
                 <span>Supported coverage</span>
                 <strong>{canReadFinancial && profile !== null ? String(state.covered) + ' of 2' : '—'}</strong>
+              </div>
+            </div>
+            <div className="product-panel product-summary-card">
+              <span className="product-icon">
+                <WorkspaceIcon name="changes" size={20} />
+              </span>
+              <div>
+                <span>Processing attention</span>
+                <strong>
+                  {canReadProcessingActivity && processingActivity !== null
+                    ? processingState.attentionCount
+                    : '—'}
+                </strong>
               </div>
             </div>
           </section>
@@ -266,7 +349,8 @@ export default function ProductActionCentreExperience() {
                   <strong>Some current information is unavailable.</strong>
                   <p>
                     Monergy will not infer a clear or missing-information state until the supported
-                    Documents and Financial information needed for this view can be refreshed.
+                    Documents, Financial information and processing status needed for this view can
+                    be refreshed.
                   </p>
                 </div>
               </div>
@@ -274,10 +358,10 @@ export default function ProductActionCentreExperience() {
               <div className="product-action-clear">
                 <WorkspaceIcon name="check" size={23} />
                 <div>
-                  <strong>No current attention items from Documents or supported Financial information.</strong>
+                  <strong>No current attention items from the supported Documents, Financial information or processing journeys.</strong>
                   <p>
                     This does not mean your overall finances are complete. It only reflects the
-                    Income and Expense journeys Monergy currently supports.
+                    Income, Expense and document-processing journeys Monergy currently supports.
                   </p>
                 </div>
                 <Button href="/finances">View Financial information</Button>
