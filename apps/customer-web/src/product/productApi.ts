@@ -278,17 +278,36 @@ export function scheduleDocumentProcessing(
   );
 }
 
-export function getRecoveredProcessingResult(
+export async function getRecoveredProcessingResult(
   api: AccessApi,
   jobId: string,
   signal?: AbortSignal,
 ): Promise<ProductRecoveredProcessingResult> {
-  return api.product<ProductRecoveredProcessingResult>(
+  const result = await api.product<ProductRecoveredProcessingResult>(
     `v1/processing-result/${encodeURIComponent(jobId)}`,
     'GET',
     undefined,
     signal,
   );
+  if (
+    !result ||
+    result.jobId !== jobId ||
+    result.state !== 'Completed' ||
+    !result.documentVersionId ||
+    !Array.isArray(result.facts) ||
+    result.facts.length < 1 ||
+    new Set(result.facts.map((fact) => fact.sourceFactId)).size !== result.facts.length ||
+    result.facts.some(
+      (fact) =>
+        !fact ||
+        (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE') ||
+        fact.documentVersionId !== result.documentVersionId ||
+        fact.confidence < 0 ||
+        fact.confidence > 1,
+    )
+  )
+    throw new Error('Recovered processing result response is invalid.');
+  return result;
 }
 
 export function getProcessingActivity(
