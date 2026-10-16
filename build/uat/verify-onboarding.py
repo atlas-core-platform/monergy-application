@@ -119,6 +119,8 @@ assert 'evidence.document.read' in product_context['capabilities']
 assert 'document-intelligence.document.process' in product_context['capabilities']
 assert 'financial-profile.profile.read' in product_context['capabilities']
 assert 'financial-profile.profile.update' in product_context['capabilities']
+assert 'financial-profile.profile.read' in product_context['capabilities']
+assert 'financial-profile.profile.update' in product_context['capabilities']
 assert call('/product-api/v1/context', session=second_customer)['customerId'] == 'C001'
 product_operation = 'a' * 32
 product_source = b'INCOME|Employment income|125000|USD|2026-10-01|line 1|0.98\nEXPENSE|Housing|24000|USD|2026-10-01|line 2|0.95'
@@ -175,6 +177,36 @@ for _ in range(20):
 assert job_audit_count == '2', job_audit_count
 replayed = call(processing_path, 'POST', {'operationId': processing_operation}, customer)
 assert replayed['job']['jobId'] == processing['job']['jobId']
+
+# APP-04 promotes only explicitly reviewed source facts through the Financial Profile owner.
+call('/contracts/cid-031/v1', 'POST', {}, customer, status=404)
+empty_profile = call('/product-api/v1/financial-profile', session=customer)
+assert empty_profile['revision'] == 0 and empty_profile['facts'] == []
+call('/product-api/v1/financial-profile', session=owner, status=403)
+promotion_path = '/product-api/v1/financial-profile/from-processing/' + processing['job']['jobId']
+promotion_operation = 'd' * 32
+selected_fact_ids = [fact['sourceFactId'] for fact in processing['facts']]
+call(promotion_path, 'POST', {'operationId': promotion_operation, 'sourceFactIds': selected_fact_ids}, status=401)
+call(promotion_path, 'POST', {'operationId': promotion_operation, 'sourceFactIds': selected_fact_ids}, owner, status=403)
+promotion = call(promotion_path, 'POST', {'operationId': promotion_operation, 'sourceFactIds': selected_fact_ids}, customer)
+assert promotion['confirmed'] == 2
+assert promotion['profile']['revision'] == 1
+assert [(fact['factType'], fact['label']) for fact in promotion['profile']['facts']] == [
+    ('EXPENSE', 'Housing'), ('INCOME', 'Employment income')]
+assert all(fact['source']['sourceName'] == 'customer-statement.txt' for fact in promotion['profile']['facts'])
+assert {fact['source']['technicalSourceFactId'] for fact in promotion['profile']['facts']} == set(selected_fact_ids)
+assert call(promotion_path, 'POST', {'operationId': promotion_operation, 'sourceFactIds': selected_fact_ids}, customer) == promotion
+call(promotion_path, 'POST', {'operationId': promotion_operation, 'sourceFactIds': [selected_fact_ids[0]]}, customer, status=409)
+profile = call('/product-api/v1/financial-profile', session=customer)
+assert profile == promotion['profile']
+assert call('/product-api/v1/financial-profile', session=second_customer)['facts'] == []
+financial_audit_count = '0'
+for _ in range(20):
+    financial_audit_count = sql('uat_audit_t001', "SELECT count(*) FROM audit.evidence WHERE producer='Financial Profile Service' AND source_contract_id IN ('CID-034','CID-035');")
+    if financial_audit_count == '2':
+        break
+    time.sleep(.25)
+assert financial_audit_count == '2', financial_audit_count
 
 # APP-04 keeps extracted facts review-only until the customer explicitly confirms selected items.
 financial_before = call('/product-api/v1/financial-profile', session=customer)
