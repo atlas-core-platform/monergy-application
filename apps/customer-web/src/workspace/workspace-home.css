@@ -771,7 +771,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
-.workspace-passport-coverage article {
+.workspace-passport-coverage > a {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -780,7 +780,19 @@
   border-radius: 10px;
   background: var(--monergy-midnight-sidebar);
 }
-.workspace-passport-coverage article.missing {
+.workspace-passport-coverage > a {
+  color: var(--mw-ink);
+  transition: border-color 160ms var(--mw-ease), background 160ms var(--mw-ease);
+}
+.workspace-passport-coverage > a:hover {
+  border-color: var(--monergy-midnight-control-border);
+  background: var(--monergy-midnight-elevated);
+}
+.workspace-passport-coverage > a > svg {
+  margin-left: auto;
+  color: var(--mw-muted);
+}
+.workspace-passport-coverage > a.missing {
   border-style: dashed;
 }
 .workspace-passport-coverage-icon {
@@ -793,10 +805,10 @@
   background: var(--monergy-midnight-selected);
   color: var(--mw-primary);
 }
-.workspace-passport-coverage article.missing .workspace-passport-coverage-icon {
+.workspace-passport-coverage > a.missing .workspace-passport-coverage-icon {
   color: var(--mw-muted);
 }
-.workspace-passport-coverage article > span:last-child {
+.workspace-passport-coverage > a > span:nth-child(2) {
   display: grid;
   gap: 3px;
 }
