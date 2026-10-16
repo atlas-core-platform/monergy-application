@@ -37,12 +37,12 @@ T1-01 through T1-19 preserve existing individual CTO acceptance and merge eviden
 ## T1-20 boundary and evidence
 
 - View only **up to 100 recent** Consent-owned grant records for the authenticated owned customer, via existing `GET /local/v1/consents/customers/{customerId}`.
-- Customer may inspect active, expired and revoked grants; statuses are derived from owner expiry/revocation fields. No live provider connection inference.
+- Customer may inspect unexpired, expired and revoked **records**; these are derived from expiry/revocation fields and do not claim effective authorization after current owner/version checks. No live provider connection inference.
 - Actor reference remains under Technical details pending a real owner-resolved recipient name; no generic role/tenant wide access is invented.
 - Consent owner verifies current trusted session, active customer and exact owner actor. Client also rejects malformed or other-customer response records.
 - No grant/revoke/mutate functionality, self-consent fabrication, new service contract, new database, or product authority added.
 - Source evidence: `apps/customer-web/src/product/ConsentExperience.tsx`, `apps/customer-web/src/access/accessApi.ts`, `apps/customer-web/tests/ConsentExperience.test.tsx`, UAT Gateway SPA route.
-- Status **CANDIDATE** until focused component + local UAT and System Expert consistency proof. Do not merge or mark complete before those checks.
+- Status **CANDIDATE** until focused component + local UAT and System Expert consistency proof. See `build/governance/T1-20-LOCAL-ACCEPTANCE.md` for the bounded no-Actions verification path. Do not merge or mark complete before those checks.
 
 ## Mandatory System Expert coupling
 
