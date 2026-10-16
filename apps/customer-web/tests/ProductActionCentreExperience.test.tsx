@@ -306,7 +306,7 @@ it('aggregates durable processing attention without turning jobs into tasks', as
 
   mount(api);
 
-  expect(await screen.findByText('2 documents are still being processed.')).toBeVisible();
+  expect(await screen.findByText('2 document processing runs are still active.')).toBeVisible();
   expect(screen.getByText("1 document processing run couldn't complete.")).toBeVisible();
   expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('3');
   expect(screen.getByText('2 items from supported journeys')).toBeVisible();
