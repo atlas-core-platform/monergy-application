@@ -641,14 +641,14 @@ public sealed class ProductDocumentProcessingClient : IDisposable
         string JobId,
         string CustomerId);
 
-    private sealed record DocumentProcessingReadOnlyServiceView(
+    public sealed record DocumentProcessingReadOnlyServiceView(
         string ProcessingId,
         string DocumentVersionId,
         ProcessingState State,
         DateTimeOffset UpdatedAt,
         IReadOnlyList<ValidatedSourceFact> Facts);
 
-    private sealed record DocumentProcessingJobReadOnlyView(
+    public sealed record DocumentProcessingJobReadOnlyView(
         ScheduledJob Job,
         DocumentProcessingReadOnlyServiceView Result);
 
