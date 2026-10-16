@@ -19,6 +19,7 @@ const ProductSearchExperience = lazy(() => import('./product/ProductSearchExperi
 const ProductReportsExperience = lazy(() => import('./product/ProductReportsExperience'));
 const EvidenceExperience = lazy(() => import('./product/EvidenceExperience'));
 const FinancialProfileExperience = lazy(() => import('./product/FinancialProfileExperience'));
+const ProductActionCentreExperience = lazy(() => import('./product/ProductActionCentreExperience'));
 const AccessExperience = lazy(() => import('./access/AccessExperience'));
 const { Paragraph, Text, Title } = Typography;
 
@@ -132,6 +133,18 @@ function RouteContent() {
         }
       >
         <FinancialProfileExperience />
+      </Suspense>
+    );
+  if (window.location.pathname === '/actions')
+    return (
+      <Suspense
+        fallback={
+          <main className="access-loading" aria-busy="true">
+            Loading Action Centre…
+          </main>
+        }
+      >
+        <ProductActionCentreExperience />
       </Suspense>
     );
   if (
@@ -262,6 +275,7 @@ function WorkspaceApplication() {
             '/',
             '/evidence',
             '/finances',
+            '/actions',
             '/access',
             '/reports',
             '/search',
@@ -298,7 +312,7 @@ function WorkspaceApplication() {
       ? `${current?.label ?? 'Overview'} · Organization Settings · Monergy`
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
-  const productProtected = ['/', '/evidence', '/finances', '/search', '/reports'].includes(path);
+  const productProtected = ['/', '/actions', '/evidence', '/finances', '/search', '/reports'].includes(path);
   const gated = inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';
