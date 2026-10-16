@@ -94,6 +94,27 @@ export interface ProductProcessingActivityView {
   dataDurability: 'Temporary data';
 }
 
+export interface ProductRecoveredProcessingFact {
+  sourceFactId: string;
+  factType: 'INCOME' | 'EXPENSE';
+  label: string;
+  candidateValue: number;
+  currency: string;
+  effectiveDate: string;
+  sourceLocation: string;
+  confidence: number;
+  documentVersionId: string;
+}
+
+export interface ProductRecoveredProcessingResult {
+  jobId: string;
+  documentVersionId: string;
+  state: 'Completed';
+  updatedAt: string;
+  facts: ProductRecoveredProcessingFact[];
+  dataDurability: 'Temporary data';
+}
+
 export interface ProductProcessingView {
   job: {
     jobId: string;
@@ -253,6 +274,19 @@ export function scheduleDocumentProcessing(
     `v1/evidence/${encodeURIComponent(documentVersionId)}/processing`,
     'POST',
     { operationId },
+    signal,
+  );
+}
+
+export function getRecoveredProcessingResult(
+  api: AccessApi,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ProductRecoveredProcessingResult> {
+  return api.product<ProductRecoveredProcessingResult>(
+    `v1/processing-result/${encodeURIComponent(jobId)}`,
+    'GET',
+    undefined,
     signal,
   );
 }
