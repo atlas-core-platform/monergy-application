@@ -71,6 +71,41 @@ public sealed class ProductSearchProjectionSourceTests
     }
 
     [Fact]
+    public async Task RefreshingOneSearchFamilyPreservesTheOtherCurrentFamily()
+    {
+        var handler = new OwnerHandler();
+        var documents = Source(handler, Accessor(SearchContractNames.SearchDocuments));
+
+        await documents.PrepareCustomerAsync(
+            "reference-customer",
+            "decision-search",
+            Security(),
+            SearchContractNames.SearchDocuments,
+            "search-correlation-documents",
+            CancellationToken.None);
+
+        // The same source instance receives the next current-customer query under the next owner proof.
+        var accessorField = typeof(ProductSearchProjectionSource)
+            .GetField("<accessor>P", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(accessorField);
+        var accessor = Assert.IsAssignableFrom<IHttpContextAccessor>(accessorField.GetValue(documents));
+        accessor.HttpContext = Accessor(SearchContractNames.SearchFinancialData).HttpContext;
+
+        await documents.PrepareCustomerAsync(
+            "reference-customer",
+            "decision-search",
+            Security(),
+            SearchContractNames.SearchFinancialData,
+            "search-correlation-financial",
+            CancellationToken.None);
+
+        var records = documents.ReadForCustomer("reference-customer");
+        Assert.Equal(3, records.Length);
+        Assert.Single(records, item => item.ResultType == SearchResultType.Document);
+        Assert.Equal(2, records.Count(item => item.ResultType == SearchResultType.Financial));
+    }
+
+    [Fact]
     public async Task CrossCustomerFinancialProvenanceFailsClosed()
     {
         var handler = new OwnerHandler { CrossCustomerProvenance = true };
