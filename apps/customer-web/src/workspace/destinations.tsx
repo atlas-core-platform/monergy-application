@@ -38,8 +38,9 @@ export const productModule = {
       <h3>Track processing</h3>
       <p>
         Recent document-processing status remains visible in Documents after you close the review
-        drawer or return later. This Customer view is read-only and does not expose retry, cancel or
-        support controls.
+        drawer or return later. For completed runs, you can reopen the extracted candidate
+        information in a read-only result view. Retry, cancel, support and recovered-result
+        promotion controls are not exposed.
       </p>
       <h3>Know this environment</h3>
       <p>
