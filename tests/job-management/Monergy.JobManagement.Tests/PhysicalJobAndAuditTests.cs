@@ -136,6 +136,54 @@ public sealed class PhysicalJobAndAuditTests
     }
 
     [Fact, Trait("Category", "Physical")]
+    public async Task PostgresCustomerJobListingIsCustomerBoundedFilteredAndNewestFirst()
+    {
+        var configuration = JobTestContext.Configuration();
+        var suffix = Guid.NewGuid().ToString("N");
+        var clock = new MutableTimeProvider(JobTestContext.Now);
+        await using var repository = new PostgresJobRepository(configuration);
+        var app = new JobManagementApplication(repository, new CapturingTelemetry(), clock);
+
+        ContractRequest<ScheduleJob> Activity(string id, string key, string document, TrustedSecurityContext? security = null)
+        {
+            var source = JobTestContext.Schedule(id, key, document, security);
+            return source with
+            {
+                Payload = source.Payload with
+                {
+                    JobName = "document-processing",
+                    PayloadReference = document,
+                },
+            };
+        }
+
+        var firstId = $"job-activity-a-{suffix}";
+        var secondId = $"job-activity-b-{suffix}";
+        await app.ScheduleJobAsync(Activity(firstId, $"key-a-{suffix}", "document-version-a"));
+        clock.Advance(TimeSpan.FromMinutes(1));
+        await app.ScheduleJobAsync(Activity(secondId, $"key-b-{suffix}", "document-version-b"));
+        await app.ScheduleJobAsync(JobTestContext.Schedule($"job-unrelated-{suffix}", $"key-u-{suffix}"));
+        await app.ScheduleJobAsync(Activity($"job-other-{suffix}", $"key-o-{suffix}", "document-version-other",
+            JobTestContext.Security("customer-other")));
+
+        var listed = await repository.ListCustomerAsync(
+            JobTestContext.CustomerId, "document-processing", 20, default);
+
+        Assert.Equal(2, listed.Count);
+        Assert.Equal(secondId, listed[0].JobId);
+        Assert.Equal(firstId, listed[1].JobId);
+        Assert.All(listed, job =>
+        {
+            Assert.Equal(JobTestContext.CustomerId, job.CustomerId);
+            Assert.Equal("document-processing", job.JobName);
+        });
+        var other = await repository.ListCustomerAsync(
+            "customer-other", "document-processing", 20, default);
+        Assert.Single(other);
+        Assert.Equal("customer-other", other[0].CustomerId);
+    }
+
+    [Fact, Trait("Category", "Physical")]
     public async Task PersistedJobSurvivesRepositoryReconstructionAndDatabaseRestart()
     {
         var configuration = JobTestContext.Configuration();
