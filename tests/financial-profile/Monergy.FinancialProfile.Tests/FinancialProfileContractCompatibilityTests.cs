@@ -19,6 +19,23 @@ public sealed class FinancialProfileContractCompatibilityTests
     };
 
     [Fact]
+    public void Cid032PreservesCurrentReadAndAddsOptionalRevisionSelection()
+    {
+        var current = new GetFinancialFact("fact-001", FinancialProfileTestContext.CustomerId);
+        var historical = new GetFinancialFact("fact-001", FinancialProfileTestContext.CustomerId, 2);
+
+        var currentJson = JsonSerializer.Serialize(current, ContractJson.Options);
+        var historicalJson = JsonSerializer.Serialize(historical, ContractJson.Options);
+        var currentRoundTrip = JsonSerializer.Deserialize<GetFinancialFact>(currentJson, ContractJson.Options);
+        var historicalRoundTrip = JsonSerializer.Deserialize<GetFinancialFact>(historicalJson, ContractJson.Options);
+
+        Assert.Null(currentRoundTrip?.Revision);
+        Assert.Equal(2, historicalRoundTrip?.Revision);
+        Assert.Equal(current.FinancialFactId, historicalRoundTrip?.FinancialFactId);
+        Assert.Equal(current.CustomerId, historicalRoundTrip?.CustomerId);
+    }
+
+    [Fact]
     public void CatalogPreservesExactlyTheSevenGovernedContractsAndSemantics()
     {
         var expected = new[] { "CID-030", "CID-031", "CID-032", "CID-033", "CID-034", "CID-035", "CID-036" };
