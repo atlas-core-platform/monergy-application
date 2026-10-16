@@ -50,6 +50,25 @@ public sealed class InMemoryJobRepository : IJobRepository
         lock (sync) return Task.FromResult(jobs.GetValueOrDefault(jobId));
     }
 
+    public Task<IReadOnlyList<DurableJobRecord>> ListCustomerAsync(
+        string customerId, string jobName, int limit, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(customerId) || string.IsNullOrWhiteSpace(jobName) ||
+            limit is < 1 or > 100)
+            throw new ArgumentException("A customer, job name and limit from 1 to 100 are required.");
+        lock (sync)
+        {
+            IReadOnlyList<DurableJobRecord> result = jobs.Values
+                .Where(job => job.CustomerId == customerId && job.JobName == jobName)
+                .OrderByDescending(job => job.UpdatedAt)
+                .ThenBy(job => job.JobId, StringComparer.Ordinal)
+                .Take(limit)
+                .ToArray();
+            return Task.FromResult(result);
+        }
+    }
+
     public Task<JobLease?> ClaimAsync(string jobId, string workerId, DateTimeOffset now,
         TimeSpan leaseDuration, CancellationToken cancellationToken)
     {
