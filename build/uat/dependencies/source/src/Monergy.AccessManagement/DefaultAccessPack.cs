@@ -8,8 +8,8 @@ public sealed record DefaultRoleTemplate(
 
 public static class DefaultAccessPack
 {
-    public const string Version = "2.2";
-    public const string Identity = "monergy-default-access-pack/2.2";
+    public const string Version = "2.3";
+    public const string Identity = "monergy-default-access-pack/2.3";
 
     internal static IReadOnlyList<DefaultPermissionTemplate> Version1Permissions { get; } =
     [
@@ -126,7 +126,7 @@ public static class DefaultAccessPack
         Role("default-role-legal-advisor", "legal-advisor", "Legal Advisor / Advocate")
     ];
 
-    public static IReadOnlyList<DefaultRoleTemplate> Roles { get; } =
+    internal static IReadOnlyList<DefaultRoleTemplate> Version22Roles { get; } =
     [
         Role("default-role-customer", "customer", "Customer",
             "default-permission-profile-read",
@@ -136,6 +136,26 @@ public static class DefaultAccessPack
             "default-permission-document-processing",
             "default-permission-report-read",
             "default-permission-report-generate"),
+        Role("default-role-financial-advisor", "financial-advisor", "Financial Advisor / Relationship Manager"),
+        Role("default-role-operations-support", "operations-support", "Operations Support"),
+        Role("default-role-dsa-case-manager", "dsa-case-manager", "DSA / Case Manager"),
+        Role("default-role-lender-professional", "lender-professional", "Lender Professional"),
+        Role("default-role-financial-professional", "financial-professional", "Chartered Accountant / Financial Professional"),
+        Role("default-role-property-valuer", "property-valuer", "Property Valuer"),
+        Role("default-role-legal-advisor", "legal-advisor", "Legal Advisor / Advocate")
+    ];
+
+    public static IReadOnlyList<DefaultRoleTemplate> Roles { get; } =
+    [
+        Role("default-role-customer", "customer", "Customer",
+            "default-permission-profile-read",
+            "default-permission-profile-update",
+            "default-permission-evidence-read",
+            "default-permission-evidence-upload",
+            "default-permission-document-processing",
+            "default-permission-report-read",
+            "default-permission-report-generate",
+            "default-permission-search"),
         Role("default-role-financial-advisor", "financial-advisor", "Financial Advisor / Relationship Manager"),
         Role("default-role-operations-support", "operations-support", "Operations Support"),
         Role("default-role-dsa-case-manager", "dsa-case-manager", "DSA / Case Manager"),
