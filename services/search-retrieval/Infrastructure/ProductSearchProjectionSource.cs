@@ -133,7 +133,7 @@ public sealed class ProductSearchProjectionSource(
                 authorizationContextId,
                 SearchResultType.Document,
                 item.OriginalFileName,
-                $"{item.OriginalFileName} {item.SourceName} {item.ContentType} version {item.Version}",
+                $"{item.SourceName} version {item.Version}",
                 SearchAuthority.EvidenceService,
                 new SearchSourceReference(
                     "DocumentVersion",
@@ -222,7 +222,7 @@ public sealed class ProductSearchProjectionSource(
                 authorizationContextId,
                 SearchResultType.Financial,
                 fact.Label,
-                $"{fact.Label} {fact.FactType} {fact.Value} {fact.Currency} effective {fact.EffectiveDate:yyyy-MM-dd}",
+                $"{(fact.FactType == "INCOME" ? "Income" : "Expense")} {fact.Value} {fact.Currency} effective {fact.EffectiveDate:yyyy-MM-dd}",
                 SearchAuthority.FinancialProfileService,
                 new SearchSourceReference(
                     "FinancialFact",
