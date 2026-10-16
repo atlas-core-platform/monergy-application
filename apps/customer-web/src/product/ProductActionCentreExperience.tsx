@@ -152,8 +152,10 @@ export default function ProductActionCentreExperience() {
 
   const hasReadableState = canReadDocuments || canReadFinancial;
   const attentionStateComplete =
-    (!canReadDocuments || documentCount !== null) &&
-    (!canReadFinancial || profile !== null);
+    canReadDocuments &&
+    canReadFinancial &&
+    documentCount !== null &&
+    profile !== null;
 
   return (
     <main className="product-page product-action-centre">
