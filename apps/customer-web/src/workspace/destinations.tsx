@@ -39,8 +39,9 @@ export const productModule = {
       <p>
         Recent document-processing status remains visible in Documents after you close the review
         drawer or return later. For completed runs, you can reopen the extracted candidate
-        information and, when your current Financial Profile access allows it, resume the same
-        explicit review-and-confirm flow. Retry, cancel and support controls are not exposed.
+        information and resume the same explicit review-and-confirm flow. Items already represented
+        by the exact source fact and document version are marked as trusted and link back to the
+        current Financial fact; they cannot be selected again.
       </p>
       <h3>Know this environment</h3>
       <p>
