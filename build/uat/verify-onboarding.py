@@ -236,12 +236,37 @@ assert source_detail['documentVersionId'] == product_receipt['documentVersionId'
 assert source_detail['originalFileName'] == 'customer-statement.txt'
 assert source_detail['version'] == 1
 
-# Setup is tenant/admin bound and depends on the Access Management owner's v2.1 receipt.
+# T1-10 generates the current customer's basic summary from authoritative Financial Profile facts.
+report_path = '/product-api/v1/reports'
+report_operation = 'e' * 32
+report_body = {'operationId': report_operation}
+call(report_path, 'POST', report_body, status=401)
+call(report_path, 'POST', report_body, owner, status=403)
+basic_report = call(report_path, 'POST', report_body, customer)
+assert basic_report['customerId'] == 'reference-customer'
+assert basic_report['state'] == 'GENERATED'
+assert len(basic_report['items']) == 2
+assert sorted(item['label'] for item in basic_report['items']) == ['Employment income', 'Housing']
+assert all(item['source']['sourceType'] == 'FinancialFact' for item in basic_report['items'])
+assert sorted(item['source']['sourceId'] for item in basic_report['items']) == sorted(
+    fact['financialFactId'] for fact in promoted['profile']['facts'])
+assert all(item['source']['evidenceReferenceId'] for item in basic_report['items'])
+assert all(item['source']['financialProvenanceReferenceId'] for item in basic_report['items'])
+assert basic_report['calculationLineageReferences'] == []
+assert basic_report['aiResponseTraceReference'] is None
+assert 'Savings ratio' not in basic_report['export']['content']
+assert call(report_path, 'POST', report_body, customer) == basic_report
+report_read_path = report_path + '/' + basic_report['reportId']
+call(report_read_path, session=owner, status=403)
+call(report_read_path, session=second_customer, status=404)
+assert call(report_read_path, session=customer) == basic_report
+
+# Setup is tenant/admin bound and depends on the Access Management owner's v2.2 receipt.
 assert sql('uat_am_t001', "SELECT schema_version::text || '|' || default_access_pack_version FROM am.tenant_identity WHERE singleton;") == '6|2.2'
 assert sql('uat_am_t001', "SELECT count(*) FROM am.default_access_pack_history WHERE pack_version='2.2' AND pack_identity='monergy-default-access-pack/2.2';") == '1'
 pack_status = admin('default-access-pack')
 assert pack_status['installedVersion'] == '2.2'
-assert pack_status['installedIdentity'] == 'monergy-default-access-pack/2.1'
+assert pack_status['installedIdentity'] == 'monergy-default-access-pack/2.2'
 assert pack_status['policyVersion'] == revision()
 
 call('/uat-api/v1/setup', status=401)
@@ -251,7 +276,7 @@ state = call('/uat-api/v1/setup', session=other_admin)
 assert state['state'] == 'ReadyForAdmin' and state['receiptReference'] is None
 assert state['accessPack']['ready'] is True
 assert state['accessPack']['installedVersion'] == '2.2'
-assert state['accessPack']['installedIdentity'] == 'monergy-default-access-pack/2.1'
+assert state['accessPack']['installedIdentity'] == 'monergy-default-access-pack/2.2'
 assert state['accessPack']['policyVersion'] == state['policyVersion']
 submission = {'requestId': 'ci-setup-T002', 'expectedPolicyVersion': state['policyVersion'], 'organizationReviewed': True, 'accessReviewed': True}
 call('/uat-api/v1/setup', 'POST', {**submission, 'expectedPolicyVersion': state['policyVersion'] + 1}, other_admin, status=409)
@@ -372,7 +397,7 @@ assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
-           'validated': ['owner-confirmed Default Access Pack 2.2 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'canonical Job Audit delivery',
+           'validated': ['owner-confirmed Default Access Pack 2.2 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'customer-bound basic Financial Summary and exact export from authoritative Financial Profile facts', 'canonical Job Audit delivery',
                          'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
                          'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
            'limitations': ['Business data uses owner reference adapters.', 'The processor accepts structured LOCAL/UAT text and does not claim OCR or production AI.', 'Only customer-reviewed Income/Expense source facts are promoted; OCR/production AI and additional financial fact types remain out of scope.', 'Consent outbox delivery is not claimed.']}
