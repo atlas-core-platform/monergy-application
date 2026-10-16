@@ -298,6 +298,23 @@ export default function EvidenceExperience() {
     return grouped;
   }, [financialProfile]);
 
+  const trustedFactsBySourceFactId = useMemo(() => {
+    const mapped = new Map<string, ProductFinancialFact>();
+    for (const fact of financialProfile?.facts ?? []) {
+      if (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE') continue;
+      if (!fact.source.technicalSourceFactId) continue;
+      mapped.set(fact.source.technicalSourceFactId, fact);
+    }
+    return mapped;
+  }, [financialProfile]);
+
+  useEffect(() => {
+    if (trustedFactsBySourceFactId.size === 0) return;
+    setRecoveredSelectedSourceFactIds((current) =>
+      current.filter((sourceFactId) => !trustedFactsBySourceFactId.has(sourceFactId)),
+    );
+  }, [trustedFactsBySourceFactId]);
+
   const visibleEvidence = useMemo(() => {
     const term = query.trim().toLocaleLowerCase();
     const filtered = evidence.filter(
@@ -456,7 +473,9 @@ export default function EvidenceExperience() {
       recoveredSelectedSourceFactIds.length === 0 ||
       recoveredPromotionBusy ||
       !canUpdateFinancial ||
-      !canReadFinancial
+      !canReadFinancial ||
+      financialProfile === null ||
+      Boolean(financialLinkError)
     )
       return;
 
@@ -953,7 +972,10 @@ export default function EvidenceExperience() {
                     'Document processing result'}
                 </h3>
                 <p>
-                  {canUpdateFinancial && canReadFinancial
+                  {canUpdateFinancial &&
+                  canReadFinancial &&
+                  financialProfile !== null &&
+                  !financialLinkError
                     ? 'Resume review from this completed processing result'
                     : 'Read-only recovered processing result'}
                 </p>
@@ -984,17 +1006,25 @@ export default function EvidenceExperience() {
                   </div>
                   <div className="product-fact-list">
                     {recoveredResult.facts.map((fact) => {
+                      const trusted = trustedFactsBySourceFactId.get(fact.sourceFactId);
                       const selected = recoveredSelectedSourceFactIds.includes(fact.sourceFactId);
+                      const reviewReady =
+                        canUpdateFinancial &&
+                        canReadFinancial &&
+                        financialProfile !== null &&
+                        !financialLinkError;
                       return (
                         <article
                           className={
-                            selected
-                              ? 'product-fact-card selected'
-                              : 'product-fact-card'
+                            trusted
+                              ? 'product-fact-card trusted'
+                              : selected
+                                ? 'product-fact-card selected'
+                                : 'product-fact-card'
                           }
                           key={fact.sourceFactId}
                         >
-                          {canUpdateFinancial && canReadFinancial && (
+                          {reviewReady && !trusted && (
                             <Checkbox
                               checked={selected}
                               disabled={recoveredPromotionBusy || Boolean(recoveredPromotionResult)}
@@ -1005,11 +1035,22 @@ export default function EvidenceExperience() {
                             />
                           )}
                           <div>
-                            <Tag>{fact.factType === 'INCOME' ? 'Income' : 'Expense'}</Tag>
+                            <span className="product-fact-tags">
+                              <Tag>{fact.factType === 'INCOME' ? 'Income' : 'Expense'}</Tag>
+                              {trusted && <Tag color="success">ALREADY TRUSTED</Tag>}
+                            </span>
                             <strong>{fact.label}</strong>
                             <span>
                               {fact.sourceLocation} · {fact.effectiveDate}
                             </span>
+                            {trusted && (
+                              <a
+                                className="product-fact-trust-link"
+                                href={'/finances?fact=' + encodeURIComponent(trusted.financialFactId)}
+                              >
+                                View trusted Financial information
+                              </a>
+                            )}
                           </div>
                           <div className="product-fact-value">
                             <strong>
@@ -1026,29 +1067,54 @@ export default function EvidenceExperience() {
                   </div>
                 </section>
                 {canUpdateFinancial && canReadFinancial ? (
-                  <>
+                  financialLinkError ? (
+                    <Alert
+                      showIcon
+                      type="warning"
+                      title="Trusted Financial information could not be reconciled"
+                      description="This recovered result remains read-only until the current Financial Profile can be refreshed. Monergy will not guess which extracted items are already trusted."
+                    />
+                  ) : financialProfile === null ? (
                     <Alert
                       showIcon
                       type="info"
-                      title="Review before adding"
-                      description="Select only the candidate items you have reviewed. Nothing is added to trusted Financial information until you confirm the selected items."
+                      title="Checking trusted Financial information"
+                      description="Selection remains unavailable until Monergy can determine which extracted items are already represented."
                     />
-                    {recoveredPromotionError && (
-                      <Alert showIcon type="error" title={recoveredPromotionError} />
-                    )}
-                    {recoveredPromotionResult && (
+                  ) : recoveredResult.facts.every((fact) =>
+                      trustedFactsBySourceFactId.has(fact.sourceFactId),
+                    ) ? (
+                    <Alert
+                      showIcon
+                      type="success"
+                      title="All supported items from this run are already trusted"
+                      description="Each extracted item in this completed run is already represented in current Financial information. Use the item links above to inspect the trusted facts."
+                    />
+                  ) : (
+                    <>
                       <Alert
                         showIcon
-                        type="success"
-                        title={
-                          String(recoveredPromotionResult.confirmed) +
-                          (recoveredPromotionResult.confirmed === 1
-                            ? ' item added to Financial information'
-                            : ' items added to Financial information')
-                        }
+                        type="info"
+                        title="Review before adding"
+                        description="Items already represented in trusted Financial information are marked and cannot be selected again. Select only the remaining candidate items you have reviewed."
                       />
-                    )}
-                  </>
+                      {recoveredPromotionError && (
+                        <Alert showIcon type="error" title={recoveredPromotionError} />
+                      )}
+                      {recoveredPromotionResult && (
+                        <Alert
+                          showIcon
+                          type="success"
+                          title={
+                            String(recoveredPromotionResult.confirmed) +
+                            (recoveredPromotionResult.confirmed === 1
+                              ? ' item added to Financial information'
+                              : ' items added to Financial information')
+                          }
+                        />
+                      )}
+                    </>
+                  )
                 ) : (
                   <Alert
                     showIcon
@@ -1058,7 +1124,13 @@ export default function EvidenceExperience() {
                   />
                 )}
                 <div className="product-drawer-actions">
-                  {canUpdateFinancial && canReadFinancial && (
+                  {canUpdateFinancial &&
+                    canReadFinancial &&
+                    financialProfile !== null &&
+                    !financialLinkError &&
+                    recoveredResult.facts.some(
+                      (fact) => !trustedFactsBySourceFactId.has(fact.sourceFactId),
+                    ) && (
                     <Button
                       type="primary"
                       loading={recoveredPromotionBusy}
