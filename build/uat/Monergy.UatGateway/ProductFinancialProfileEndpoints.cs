@@ -14,7 +14,8 @@ public sealed record ProductFinancialSourceView(
     string SourceName,
     string DocumentVersion,
     DateTimeOffset RecordedAt,
-    string TechnicalSourceFactId);
+    string TechnicalSourceFactId,
+    string TechnicalProvenanceId);
 
 public sealed record ProductFinancialFactView(
     string FinancialFactId,
@@ -293,7 +294,8 @@ public static class ProductFinancialProfileEndpoints
                     names.GetValueOrDefault(provenance.Data.DocumentVersionId, "Uploaded document"),
                     provenance.Data.DocumentVersionId,
                     provenance.Data.RecordedAt,
-                    provenance.Data.SourceFactId)));
+                    provenance.Data.SourceFactId,
+                    provenance.Data.FinancialProvenanceId)));
         }
 
         return new ProductFinancialProfileView(
@@ -382,7 +384,8 @@ public static class ProductFinancialProfileEndpoints
                 sourceNames.GetValueOrDefault(provenance.Data.DocumentVersionId, "Uploaded document"),
                 provenance.Data.DocumentVersionId,
                 provenance.Data.RecordedAt,
-                provenance.Data.SourceFactId));
+                provenance.Data.SourceFactId,
+                provenance.Data.FinancialProvenanceId));
     }
 
     private static TrustedSecurityContext Security(
