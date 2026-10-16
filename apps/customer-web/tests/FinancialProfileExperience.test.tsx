@@ -158,6 +158,44 @@ it('opens Passport category deep links and switches between supported financial 
   expect(window.location.pathname + window.location.search).toBe('/finances');
 });
 
+it('shows a truthful empty state for a Passport category with no trusted items', async () => {
+  window.history.replaceState(null, '', '/finances?type=EXPENSE');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 1,
+    updatedAt: '2026-10-15T12:00:00Z',
+    dataDurability: 'Temporary data',
+    facts: [
+      {
+        financialFactId: 'ff-income',
+        factType: 'INCOME',
+        label: 'Employment income',
+        value: 125000,
+        currency: 'USD',
+        effectiveDate: '2026-10-01',
+        revision: 1,
+        source: {
+          sourceName: 'income-statement.txt',
+          documentVersion: 'document-version-001',
+          recordedAt: '2026-10-15T12:00:00Z',
+          technicalSourceFactId: 'source-fact-income',
+          technicalProvenanceId: 'provenance-income',
+        },
+      },
+    ],
+  });
+
+  mount(api);
+
+  expect(
+    await screen.findByRole('heading', { name: 'No trusted expense information yet.' }),
+  ).toBeVisible();
+  expect(screen.queryByText('Employment income')).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Review documents' })).toHaveAttribute('href', '/evidence');
+  expect(screen.getByRole('button', { name: 'Show all financial information' })).toBeVisible();
+});
+
 it('opens a bounded trusted-fact drill-down with revision and source history', async () => {
   const api = new AccessApi(session);
   const current = {
