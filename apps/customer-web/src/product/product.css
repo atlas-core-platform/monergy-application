@@ -994,3 +994,106 @@
     padding-left: 50px;
   }
 }
+
+
+/* T1-12 — deterministic Action Centre over currently implemented journeys. */
+.product-action-centre {
+  display: grid;
+  gap: 18px;
+}
+.product-action-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.product-action-list-panel {
+  display: grid;
+  gap: 14px;
+}
+.product-action-list-panel .product-section-heading {
+  margin: 0;
+}
+.product-action-list {
+  display: grid;
+  gap: 10px;
+}
+.product-action-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  padding: 14px;
+  border: 1px solid var(--monergy-midnight-border);
+  border-radius: 11px;
+  background: var(--monergy-midnight-sidebar);
+}
+.product-action-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--mw-primary);
+  background: var(--monergy-midnight-selected);
+}
+.product-action-item h3,
+.product-action-clear strong {
+  margin: 0;
+  color: var(--monergy-midnight-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.product-action-item p,
+.product-action-clear p {
+  margin: 5px 0 0;
+  color: var(--monergy-midnight-secondary);
+  font-size: var(--monergy-text-small);
+  line-height: 1.6;
+}
+.product-action-clear {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 13px;
+  padding: 14px;
+  border: 1px solid var(--monergy-midnight-border);
+  border-radius: 11px;
+  background: var(--monergy-midnight-sidebar);
+}
+.product-action-clear > svg {
+  color: var(--mw-primary);
+}
+.product-action-boundary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+.product-action-boundary .workspace-eyebrow {
+  margin-bottom: 6px;
+}
+.product-action-boundary h2 {
+  margin: 0;
+  color: var(--monergy-midnight-text);
+  font-size: 16px;
+}
+.product-action-boundary p:last-child {
+  margin: 6px 0 0;
+  color: var(--monergy-midnight-secondary);
+  font-size: var(--monergy-text-small);
+  line-height: 1.6;
+}
+@media (max-width: 760px) {
+  .product-action-summary {
+    grid-template-columns: 1fr;
+  }
+  .product-action-item,
+  .product-action-clear {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .product-action-item .ant-btn,
+  .product-action-clear .ant-btn {
+    grid-column: 2;
+    width: fit-content;
+  }
+}

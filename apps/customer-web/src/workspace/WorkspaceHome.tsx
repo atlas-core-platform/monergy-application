@@ -22,6 +22,14 @@ const journeys: {
     action: 'Add document',
   },
   {
+    title: 'Review current attention',
+    description: 'See bounded attention items derived from your current Documents and trusted financial information.',
+    href: '/actions',
+    icon: 'changes',
+    capability: 'financial-profile.profile.read',
+    action: 'Open Action Centre',
+  },
+  {
     title: 'Review financial information',
     description: 'See trusted income and expense information together with the source document behind each item.',
     href: '/finances',
