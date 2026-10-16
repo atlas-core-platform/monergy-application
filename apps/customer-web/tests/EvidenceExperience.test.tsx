@@ -1392,7 +1392,7 @@ it('reconciles mixed recovered candidates and submits only still-untrusted sourc
       technicalProvenanceId: 'provenance-expense',
     },
   };
-  const request = vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
+  vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
     if (path === 'v1/evidence')
       return Promise.resolve({
         dataDurability: 'Temporary data',
