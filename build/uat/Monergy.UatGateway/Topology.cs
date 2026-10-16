@@ -32,7 +32,9 @@ internal static class Topology
                 ? "Customer basic summaries from Financial Profile; report storage is volatile"
                 : onboarding && service.Id == "search-retrieval"
                     ? "Customer lexical search over current Documents and Financial Profile; derived index is rebuildable"
-                    : service.Implementation;
+                    : onboarding && service.Id == "job-management"
+                        ? "Durable document-processing scheduling with read-only Customer activity and workload-only control"
+                        : service.Implementation;
         return new ServiceState(service.Id, service.Label, implementation, available);
     }));
 }
