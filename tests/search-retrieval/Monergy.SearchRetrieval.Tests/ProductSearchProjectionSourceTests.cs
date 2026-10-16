@@ -74,7 +74,8 @@ public sealed class ProductSearchProjectionSourceTests
     public async Task RefreshingOneSearchFamilyPreservesTheOtherCurrentFamily()
     {
         var handler = new OwnerHandler();
-        var documents = Source(handler, Accessor(SearchContractNames.SearchDocuments));
+        var accessor = Accessor(SearchContractNames.SearchDocuments);
+        var documents = Source(handler, accessor);
 
         await documents.PrepareCustomerAsync(
             "reference-customer",
@@ -85,10 +86,6 @@ public sealed class ProductSearchProjectionSourceTests
             CancellationToken.None);
 
         // The same source instance receives the next current-customer query under the next owner proof.
-        var accessorField = typeof(ProductSearchProjectionSource)
-            .GetField("<accessor>P", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        Assert.NotNull(accessorField);
-        var accessor = Assert.IsAssignableFrom<IHttpContextAccessor>(accessorField.GetValue(documents));
         accessor.HttpContext = Accessor(SearchContractNames.SearchFinancialData).HttpContext;
 
         await documents.PrepareCustomerAsync(
@@ -157,7 +154,7 @@ public sealed class ProductSearchProjectionSourceTests
         return new(new TestHttpClientFactory(handler), accessor, configuration);
     }
 
-    private static IHttpContextAccessor Accessor(string contractName)
+    private static HttpContextAccessor Accessor(string contractName)
     {
         var http = new DefaultHttpContext();
         http.Features.Set(new TenantBoundaryProof(
