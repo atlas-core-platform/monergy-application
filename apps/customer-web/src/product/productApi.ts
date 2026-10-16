@@ -81,6 +81,7 @@ export interface ProductFinancialSource {
   documentVersion: string;
   recordedAt: string;
   technicalSourceFactId: string;
+  technicalProvenanceId: string;
 }
 
 export interface ProductFinancialFact {
