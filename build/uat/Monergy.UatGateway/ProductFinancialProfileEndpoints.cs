@@ -148,35 +148,38 @@ public static class ProductFinancialProfileEndpoints
                 if (update.AccessBasis != "Self")
                     throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
 
-                var process = await access.EvaluateCustomerAsync(
-                    http, "document-intelligence.document.process", customer.CustomerId).ConfigureAwait(false);
-                if (process.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+                var read = await access.EvaluateCustomerAsync(
+                    http, "financial-profile.profile.read", customer.CustomerId).ConfigureAwait(false);
+                if (read.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
 
-                var statusRequest = new ContractRequest<GetJobStatus>(
-                    Vs02ContractNames.GetJobStatus,
-                    ContractGuard.CurrentVersion,
-                    "request-financial-review-status-" + Guid.NewGuid().ToString("N"),
-                    "correlation-financial-review-" + submission.OperationId,
-                    null,
-                    Security(session, customer.CustomerId, process, null),
-                    null,
-                    new GetJobStatus(jobId, customer.CustomerId));
-                var reviewed = await processing.StatusAsync(
-                    session.TenantId, statusRequest, http.RequestAborted).ConfigureAwait(false);
+                var jobRead = await access.EvaluateCustomerAsync(
+                    http, "job-management.job.read", customer.CustomerId).ConfigureAwait(false);
+                var evidenceRead = await access.EvaluateCustomerAsync(
+                    http, "evidence.document.read", customer.CustomerId).ConfigureAwait(false);
+                if (jobRead.Outcome != "Allow" || evidenceRead.Outcome != "Allow")
+                    throw new TenantBoundaryException("ACCESS_DENIED", 403);
+
+                var reviewed = await processing.ReadCompletedResultAsync(
+                    session.TenantId,
+                    Security(session, customer.CustomerId, jobRead, null),
+                    jobId,
+                    customer.CustomerId,
+                    http.RequestAborted).ConfigureAwait(false);
 
                 if (reviewed.Job.State != JobState.Completed ||
-                    reviewed.Processing is not { State: ProcessingState.Completed } ||
-                    reviewed.Facts.Count == 0)
+                    reviewed.Result.State != ProcessingState.Completed ||
+                    reviewed.Result.Facts.Count == 0)
                     throw new TenantBoundaryException("FINANCIAL_REVIEW_NOT_READY", 409);
 
                 var selectedIds = submission.SourceFactIds.ToHashSet(StringComparer.Ordinal);
-                var selected = reviewed.Facts
+                var selected = reviewed.Result.Facts
                     .Where(fact => selectedIds.Contains(fact.SourceFactId))
                     .ToArray();
 
                 if (selected.Length != selectedIds.Count ||
                     selected.Any(fact => !SupportedFactTypes.Contains(fact.FactType) ||
-                        !string.Equals(fact.CustomerId, customer.CustomerId, StringComparison.Ordinal)))
+                        !string.Equals(fact.CustomerId, customer.CustomerId, StringComparison.Ordinal) ||
+                        !string.Equals(fact.DocumentVersionId, reviewed.Job.PayloadReference, StringComparison.Ordinal)))
                     throw new TenantBoundaryException("FINANCIAL_REVIEW_SELECTION_INVALID", 400);
 
                 if (selected.GroupBy(
@@ -196,7 +199,7 @@ public static class ProductFinancialProfileEndpoints
                     new NormalizeSourceFacts(
                         ProfileId(customer.CustomerId),
                         customer.CustomerId,
-                        reviewed.Processing.ProcessingId,
+                        reviewed.Result.ProcessingId,
                         selected,
                         "reviewed-document-facts/1.0.0",
                         now));
@@ -210,10 +213,6 @@ public static class ProductFinancialProfileEndpoints
                         conflict ? "FINANCIAL_PROFILE_CONFLICT" : "FINANCIAL_PROFILE_UPDATE_REJECTED",
                         conflict ? 409 : 400);
                 }
-
-                var read = await access.EvaluateCustomerAsync(
-                    http, "financial-profile.profile.read", customer.CustomerId).ConfigureAwait(false);
-                if (read.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
 
                 var profile = await ReadProductProfileAsync(
                     http, session, customer, read, access, financial, evidence).ConfigureAwait(false);

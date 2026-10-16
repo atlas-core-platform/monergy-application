@@ -1128,3 +1128,221 @@ it('fails closed when a recovered processing result is no longer available', asy
   );
   expect(drawer).not.toHaveTextContent('Add selected information');
 });
+
+
+it('resumes explicit Financial review from a recovered completed result', async () => {
+  const api = new AccessApi(session);
+  const document = {
+    documentId: 'document-resume',
+    documentVersionId: 'document-version-resume',
+    evidenceId: 'evidence-resume',
+    version: 1,
+    sourceName: 'Customer upload',
+    originalFileName: 'resume-review.txt',
+    contentType: 'text/plain',
+    contentLength: 64,
+    contentSha256: '6'.repeat(64),
+    receivedAt: '2026-10-16T08:00:00Z',
+    createdAt: '2026-10-16T08:00:00Z',
+  };
+  const emptyProfile = {
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 0,
+    updatedAt: null,
+    dataDurability: 'Temporary data',
+    facts: [],
+  };
+  const promotedProfile = {
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 1,
+    updatedAt: '2026-10-16T09:05:00Z',
+    dataDurability: 'Temporary data',
+    facts: [
+      {
+        financialFactId: 'financial-fact-income',
+        factType: 'INCOME',
+        label: 'Employment income',
+        value: 125000,
+        currency: 'USD',
+        effectiveDate: '2026-10-01',
+        revision: 1,
+        source: {
+          sourceName: 'resume-review.txt',
+          documentVersion: document.documentVersionId,
+          recordedAt: '2026-10-16T09:05:00Z',
+          technicalSourceFactId: 'source-fact-income',
+          technicalProvenanceId: 'provenance-income',
+        },
+      },
+    ],
+  };
+  const request = vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ items: [document], dataDurability: 'Temporary data' }) as never;
+    if (path === 'v1/financial-profile')
+      return Promise.resolve(emptyProfile) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-resume',
+            documentVersionId: document.documentVersionId,
+            state: 'Completed',
+            attempt: 1,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+      }) as never;
+    if (path === 'v1/processing-result/job-processing-resume')
+      return Promise.resolve({
+        jobId: 'job-processing-resume',
+        documentVersionId: document.documentVersionId,
+        state: 'Completed',
+        updatedAt: '2026-10-16T09:00:00Z',
+        dataDurability: 'Temporary data',
+        facts: [
+          {
+            sourceFactId: 'source-fact-income',
+            factType: 'INCOME',
+            label: 'Employment income',
+            candidateValue: 125000,
+            currency: 'USD',
+            effectiveDate: '2026-10-01',
+            sourceLocation: 'line 1',
+            confidence: 0.98,
+            documentVersionId: document.documentVersionId,
+          },
+        ],
+      }) as never;
+    if (
+      path === 'v1/financial-profile/from-processing/job-processing-resume' &&
+      method === 'POST'
+    ) {
+      expect(body).toEqual(
+        expect.objectContaining({
+          operationId: expect.stringMatching(/^[0-9a-f]{32}$/),
+          sourceFactIds: ['source-fact-income'],
+        }),
+      );
+      return Promise.resolve({
+        profile: promotedProfile,
+        confirmed: 1,
+      }) as never;
+    }
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, [
+    'evidence.document.read',
+    'job-management.job.read',
+    'financial-profile.profile.read',
+    'financial-profile.profile.update',
+  ]);
+  const user = userEvent.setup();
+
+  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
+
+  expect(drawer).toHaveTextContent('Resume review from this completed processing result');
+  const checkbox = within(drawer).getByRole('checkbox', {
+    name: 'Add Employment income to financial information',
+  });
+  await user.click(checkbox);
+  await user.click(within(drawer).getByRole('button', { name: 'Add selected information' }));
+
+  expect(
+    await within(drawer).findByText('1 item added to Financial information'),
+  ).toBeVisible();
+  expect(request).toHaveBeenCalledWith(
+    'v1/financial-profile/from-processing/job-processing-resume',
+    'POST',
+    expect.objectContaining({ sourceFactIds: ['source-fact-income'] }),
+    undefined,
+  );
+  expect(checkbox).toBeDisabled();
+});
+
+it('keeps recovered review read-only when Financial Profile update is not authorized', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({
+        items: [
+          {
+            documentId: 'document-readonly-resume',
+            documentVersionId: 'document-version-readonly-resume',
+            evidenceId: 'evidence-readonly-resume',
+            version: 1,
+            sourceName: 'Customer upload',
+            originalFileName: 'readonly-resume.txt',
+            contentType: 'text/plain',
+            contentLength: 32,
+            contentSha256: '5'.repeat(64),
+            receivedAt: '2026-10-16T08:00:00Z',
+            createdAt: '2026-10-16T08:00:00Z',
+          },
+        ],
+        dataDurability: 'Temporary data',
+      }) as never;
+    if (path === 'v1/financial-profile')
+      return Promise.resolve({
+        financialProfileId: 'financial-profile-reference-customer',
+        revision: 0,
+        updatedAt: null,
+        dataDurability: 'Temporary data',
+        facts: [],
+      }) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-readonly-resume',
+            documentVersionId: 'document-version-readonly-resume',
+            state: 'Completed',
+            attempt: 1,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+      }) as never;
+    if (path === 'v1/processing-result/job-processing-readonly-resume')
+      return Promise.resolve({
+        jobId: 'job-processing-readonly-resume',
+        documentVersionId: 'document-version-readonly-resume',
+        state: 'Completed',
+        updatedAt: '2026-10-16T09:00:00Z',
+        dataDurability: 'Temporary data',
+        facts: [
+          {
+            sourceFactId: 'source-fact-income',
+            factType: 'INCOME',
+            label: 'Employment income',
+            candidateValue: 125000,
+            currency: 'USD',
+            effectiveDate: '2026-10-01',
+            sourceLocation: 'line 1',
+            confidence: 0.98,
+            documentVersionId: 'document-version-readonly-resume',
+          },
+        ],
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, [
+    'evidence.document.read',
+    'job-management.job.read',
+    'financial-profile.profile.read',
+  ]);
+  const user = userEvent.setup();
+
+  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
+
+  expect(drawer).toHaveTextContent('This recovered view is read-only');
+  expect(within(drawer).queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(
+    within(drawer).queryByRole('button', { name: 'Add selected information' }),
+  ).not.toBeInTheDocument();
+});

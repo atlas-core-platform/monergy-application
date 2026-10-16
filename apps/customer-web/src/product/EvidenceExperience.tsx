@@ -122,6 +122,11 @@ export default function EvidenceExperience() {
     useState<ProductRecoveredProcessingResult | null>(null);
   const [recoveredResultBusy, setRecoveredResultBusy] = useState(false);
   const [recoveredResultError, setRecoveredResultError] = useState('');
+  const [recoveredSelectedSourceFactIds, setRecoveredSelectedSourceFactIds] = useState<string[]>([]);
+  const [recoveredPromotionBusy, setRecoveredPromotionBusy] = useState(false);
+  const [recoveredPromotionError, setRecoveredPromotionError] = useState('');
+  const [recoveredPromotionResult, setRecoveredPromotionResult] =
+    useState<ProductFinancialPromotionResult | null>(null);
   const [processingBusy, setProcessingBusy] = useState(false);
   const [processingError, setProcessingError] = useState('');
   const [selectedSourceFactIds, setSelectedSourceFactIds] = useState<string[]>([]);
@@ -400,6 +405,9 @@ export default function EvidenceExperience() {
     setRecoveredResultJob(item);
     setRecoveredResult(null);
     setRecoveredResultError('');
+    setRecoveredSelectedSourceFactIds([]);
+    setRecoveredPromotionError('');
+    setRecoveredPromotionResult(null);
     setRecoveredResultBusy(true);
     try {
       const result = await getRecoveredProcessingResult(api, item.jobId);
@@ -422,10 +430,59 @@ export default function EvidenceExperience() {
   };
 
   const closeRecoveredProcessingResult = () => {
-    if (recoveredResultBusy) return;
+    if (recoveredResultBusy || recoveredPromotionBusy) return;
     setRecoveredResultJob(null);
     setRecoveredResult(null);
     setRecoveredResultError('');
+    setRecoveredSelectedSourceFactIds([]);
+    setRecoveredPromotionError('');
+    setRecoveredPromotionResult(null);
+  };
+
+  const toggleRecoveredSourceFact = (sourceFactId: string, checked: boolean) => {
+    setRecoveredPromotionError('');
+    setRecoveredPromotionResult(null);
+    setRecoveredSelectedSourceFactIds((current) =>
+      checked ? [...current, sourceFactId] : current.filter((id) => id !== sourceFactId),
+    );
+  };
+
+  const addRecoveredReviewedFacts = async () => {
+    if (
+      !api ||
+      !recoveredResultJob ||
+      !recoveredResult ||
+      recoveredResult.state !== 'Completed' ||
+      recoveredSelectedSourceFactIds.length === 0 ||
+      recoveredPromotionBusy ||
+      !canUpdateFinancial ||
+      !canReadFinancial
+    )
+      return;
+
+    setRecoveredPromotionBusy(true);
+    setRecoveredPromotionError('');
+    setRecoveredPromotionResult(null);
+    try {
+      const result = await addProcessingFactsToFinancialProfile(
+        api,
+        recoveredResultJob.jobId,
+        crypto.randomUUID().replaceAll('-', ''),
+        recoveredSelectedSourceFactIds,
+      );
+      setRecoveredPromotionResult(result);
+      setFinancialProfile(result.profile);
+    } catch (failure) {
+      setRecoveredPromotionError(
+        failure instanceof AccessApiError && failure.status === 403
+          ? 'Your access to review or update financial information changed. Ask your organization administrator to review the current Customer access package.'
+          : failure instanceof AccessApiError && failure.status === 409
+            ? 'Your financial information or this completed review changed before it could be confirmed. Close this view, refresh, and review the result again.'
+            : "We couldn't add the selected information. Your financial information has not been confirmed as changed.",
+      );
+    } finally {
+      setRecoveredPromotionBusy(false);
+    }
   };
 
   const closeProcessing = () => {
@@ -880,8 +937,8 @@ export default function EvidenceExperience() {
         onClose={closeRecoveredProcessingResult}
         destroyOnHidden
         size="default"
-        closable={!recoveredResultBusy}
-        mask={{ closable: !recoveredResultBusy }}
+        closable={!recoveredResultBusy && !recoveredPromotionBusy}
+        mask={{ closable: !recoveredResultBusy && !recoveredPromotionBusy }}
       >
         {recoveredResultJob && (
           <div className="product-processing-review product-recovered-processing">
@@ -895,7 +952,11 @@ export default function EvidenceExperience() {
                   {evidenceByVersion.get(recoveredResultJob.documentVersionId)?.originalFileName ??
                     'Document processing result'}
                 </h3>
-                <p>Read-only recovered processing result</p>
+                <p>
+                  {canUpdateFinancial && canReadFinancial
+                    ? 'Resume review from this completed processing result'
+                    : 'Read-only recovered processing result'}
+                </p>
               </div>
             </div>
 
@@ -922,37 +983,99 @@ export default function EvidenceExperience() {
                     <span>{recoveredResult.facts.length} items</span>
                   </div>
                   <div className="product-fact-list">
-                    {recoveredResult.facts.map((fact) => (
-                      <article className="product-fact-card" key={fact.sourceFactId}>
-                        <div>
-                          <Tag>{fact.factType === 'INCOME' ? 'Income' : 'Expense'}</Tag>
-                          <strong>{fact.label}</strong>
-                          <span>
-                            {fact.sourceLocation} · {fact.effectiveDate}
-                          </span>
-                        </div>
-                        <div className="product-fact-value">
-                          <strong>
-                            {new Intl.NumberFormat(undefined, {
-                              style: 'currency',
-                              currency: fact.currency,
-                            }).format(fact.candidateValue)}
-                          </strong>
-                          <span>{Math.round(fact.confidence * 100)}% confidence</span>
-                        </div>
-                      </article>
-                    ))}
+                    {recoveredResult.facts.map((fact) => {
+                      const selected = recoveredSelectedSourceFactIds.includes(fact.sourceFactId);
+                      return (
+                        <article
+                          className={
+                            selected
+                              ? 'product-fact-card selected'
+                              : 'product-fact-card'
+                          }
+                          key={fact.sourceFactId}
+                        >
+                          {canUpdateFinancial && canReadFinancial && (
+                            <Checkbox
+                              checked={selected}
+                              disabled={recoveredPromotionBusy || Boolean(recoveredPromotionResult)}
+                              onChange={(event) =>
+                                toggleRecoveredSourceFact(fact.sourceFactId, event.target.checked)
+                              }
+                              aria-label={'Add ' + fact.label + ' to financial information'}
+                            />
+                          )}
+                          <div>
+                            <Tag>{fact.factType === 'INCOME' ? 'Income' : 'Expense'}</Tag>
+                            <strong>{fact.label}</strong>
+                            <span>
+                              {fact.sourceLocation} · {fact.effectiveDate}
+                            </span>
+                          </div>
+                          <div className="product-fact-value">
+                            <strong>
+                              {new Intl.NumberFormat(undefined, {
+                                style: 'currency',
+                                currency: fact.currency,
+                              }).format(fact.candidateValue)}
+                            </strong>
+                            <span>{Math.round(fact.confidence * 100)}% confidence</span>
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 </section>
-                <Alert
-                  showIcon
-                  type="info"
-                  title="This recovered view is read-only"
-                  description="It shows the candidate information produced by this completed processing run. You cannot select, add, retry or change information from this recovered result."
-                />
+                {canUpdateFinancial && canReadFinancial ? (
+                  <>
+                    <Alert
+                      showIcon
+                      type="info"
+                      title="Review before adding"
+                      description="Select only the candidate items you have reviewed. Nothing is added to trusted Financial information until you confirm the selected items."
+                    />
+                    {recoveredPromotionError && (
+                      <Alert showIcon type="error" title={recoveredPromotionError} />
+                    )}
+                    {recoveredPromotionResult && (
+                      <Alert
+                        showIcon
+                        type="success"
+                        title={
+                          String(recoveredPromotionResult.confirmed) +
+                          (recoveredPromotionResult.confirmed === 1
+                            ? ' item added to Financial information'
+                            : ' items added to Financial information')
+                        }
+                      />
+                    )}
+                  </>
+                ) : (
+                  <Alert
+                    showIcon
+                    type="info"
+                    title="This recovered view is read-only"
+                    description="You can review the candidate information produced by this completed run, but adding it to trusted Financial information is not included in your current access."
+                  />
+                )}
                 <div className="product-drawer-actions">
+                  {canUpdateFinancial && canReadFinancial && (
+                    <Button
+                      type="primary"
+                      loading={recoveredPromotionBusy}
+                      disabled={
+                        recoveredSelectedSourceFactIds.length === 0 ||
+                        Boolean(recoveredPromotionResult)
+                      }
+                      onClick={() => {
+                        void addRecoveredReviewedFacts();
+                      }}
+                    >
+                      Add selected information
+                    </Button>
+                  )}
                   {evidenceByVersion.has(recoveredResult.documentVersionId) && (
                     <Button
+                      disabled={recoveredPromotionBusy}
                       onClick={() => {
                         const document = evidenceByVersion.get(recoveredResult.documentVersionId);
                         if (!document) return;
