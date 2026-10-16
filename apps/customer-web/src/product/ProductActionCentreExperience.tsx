@@ -98,6 +98,7 @@ export default function ProductActionCentreExperience() {
     if (
       canReadDocuments &&
       canReadFinancial &&
+      profile !== null &&
       documentCount !== null &&
       documentCount > 0 &&
       state.trusted === 0
@@ -143,6 +144,7 @@ export default function ProductActionCentreExperience() {
     canReadFinancial,
     canUploadDocuments,
     documentCount,
+    profile,
     state.expenses,
     state.income,
     state.trusted,
@@ -203,7 +205,7 @@ export default function ProductActionCentreExperience() {
               </span>
               <div>
                 <span>Trusted information</span>
-                <strong>{canReadFinancial ? state.trusted : '—'}</strong>
+                <strong>{canReadFinancial && profile !== null ? state.trusted : '—'}</strong>
               </div>
             </div>
             <div className="product-panel product-summary-card">
@@ -212,7 +214,7 @@ export default function ProductActionCentreExperience() {
               </span>
               <div>
                 <span>Supported coverage</span>
-                <strong>{canReadFinancial ? String(state.covered) + ' of 2' : '—'}</strong>
+                <strong>{canReadFinancial && profile !== null ? String(state.covered) + ' of 2' : '—'}</strong>
               </div>
             </div>
           </section>
