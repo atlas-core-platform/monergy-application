@@ -16,6 +16,7 @@ const TenantSetupGate = lazy(() =>
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const ProductSearchExperience = lazy(() => import('./product/ProductSearchExperience'));
+const ConsentExperience = lazy(() => import('./product/ConsentExperience'));
 const ProductReportsExperience = lazy(() => import('./product/ProductReportsExperience'));
 const EvidenceExperience = lazy(() => import('./product/EvidenceExperience'));
 const FinancialProfileExperience = lazy(() => import('./product/FinancialProfileExperience'));
@@ -171,6 +172,14 @@ function RouteContent() {
     );
   }
 
+  if (window.location.pathname === '/consent') {
+    return (
+      <Suspense fallback={<main className="access-loading" aria-busy="true">Loading sharing permissions…</main>}>
+        <ConsentExperience />
+      </Suspense>
+    );
+  }
+
   if (window.location.pathname === '/search') {
     return (
       <Suspense
@@ -279,6 +288,7 @@ function WorkspaceApplication() {
             '/access',
             '/reports',
             '/search',
+            '/consent',
             '/vs02',
             '/foundation',
             '/operations',
@@ -312,7 +322,7 @@ function WorkspaceApplication() {
       ? `${current?.label ?? 'Overview'} · Organization Settings · Monergy`
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
-  const productProtected = ['/', '/actions', '/evidence', '/finances', '/search', '/reports'].includes(path);
+  const productProtected = ['/', '/actions', '/evidence', '/finances', '/search', '/reports', '/consent'].includes(path);
   const gated = inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';
