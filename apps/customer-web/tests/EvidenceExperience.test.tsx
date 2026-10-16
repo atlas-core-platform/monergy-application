@@ -1742,3 +1742,108 @@ it('keeps recovered review non-selectable when trusted Financial state is unavai
     within(drawer).queryByRole('button', { name: 'Add selected information' }),
   ).not.toBeInTheDocument();
 });
+
+
+it('does not reconcile a source fact from a different document version as already trusted', async () => {
+  const api = new AccessApi(session);
+  const documentVersionId = 'document-version-current-review';
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            documentId: 'document-current-review',
+            documentVersionId,
+            evidenceId: 'evidence-current-review',
+            version: 1,
+            sourceName: 'Customer upload',
+            originalFileName: 'current-review.txt',
+            contentType: 'text/plain',
+            contentLength: 64,
+            contentSha256: '1'.repeat(64),
+            receivedAt: '2026-10-16T08:00:00Z',
+            createdAt: '2026-10-16T08:00:00Z',
+          },
+        ],
+      }) as never;
+    if (path === 'v1/financial-profile')
+      return Promise.resolve({
+        financialProfileId: 'financial-profile-reference-customer',
+        revision: 1,
+        updatedAt: '2026-10-16T09:00:00Z',
+        dataDurability: 'Temporary data',
+        facts: [
+          {
+            financialFactId: 'financial-fact-other-version',
+            factType: 'INCOME',
+            label: 'Employment income',
+            value: 125000,
+            currency: 'USD',
+            effectiveDate: '2026-10-01',
+            revision: 1,
+            source: {
+              sourceName: 'older-review.txt',
+              documentVersion: 'document-version-other-review',
+              recordedAt: '2026-10-15T09:00:00Z',
+              technicalSourceFactId: 'source-fact-shared-id',
+              technicalProvenanceId: 'provenance-other-version',
+            },
+          },
+        ],
+      }) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-current-review',
+            documentVersionId,
+            state: 'Completed',
+            attempt: 1,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+      }) as never;
+    if (path === 'v1/processing-result/job-processing-current-review')
+      return Promise.resolve({
+        jobId: 'job-processing-current-review',
+        documentVersionId,
+        state: 'Completed',
+        updatedAt: '2026-10-16T09:00:00Z',
+        dataDurability: 'Temporary data',
+        facts: [
+          {
+            sourceFactId: 'source-fact-shared-id',
+            factType: 'INCOME',
+            label: 'Employment income',
+            candidateValue: 125000,
+            currency: 'USD',
+            effectiveDate: '2026-10-01',
+            sourceLocation: 'line 1',
+            confidence: 0.98,
+            documentVersionId,
+          },
+        ],
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, [
+    'evidence.document.read',
+    'job-management.job.read',
+    'financial-profile.profile.read',
+    'financial-profile.profile.update',
+  ]);
+  const user = userEvent.setup();
+
+  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
+
+  expect(drawer).not.toHaveTextContent('ALREADY TRUSTED');
+  expect(
+    within(drawer).getByRole('checkbox', {
+      name: 'Add Employment income to financial information',
+    }),
+  ).toBeVisible();
+});
