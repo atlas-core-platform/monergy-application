@@ -130,8 +130,20 @@ it('shows a source-connected Financial Passport without inventing financial scor
   expect(screen.getByText(/2 of 2 currently supported categories represented/)).toBeVisible();
   expect(screen.getByText('Last trusted update 15 Oct 2026')).toBeVisible();
   const coverage = screen.getByLabelText('Financial Passport current coverage');
-  expect(within(coverage).getByText('Income').closest('article')).toHaveTextContent('1 trusted item');
-  expect(within(coverage).getByText('Expenses').closest('article')).toHaveTextContent('1 trusted item');
+  expect(within(coverage).getByRole('link', { name: 'View Income financial information' })).toHaveAttribute(
+    'href',
+    '/finances?type=INCOME',
+  );
+  expect(within(coverage).getByRole('link', { name: 'View Income financial information' })).toHaveTextContent(
+    '1 trusted item',
+  );
+  expect(within(coverage).getByRole('link', { name: 'View Expenses financial information' })).toHaveAttribute(
+    'href',
+    '/finances?type=EXPENSE',
+  );
+  expect(within(coverage).getByRole('link', { name: 'View Expenses financial information' })).toHaveTextContent(
+    '1 trusted item',
+  );
   expect(
     screen.getByText(/Coverage is limited to the Income and Expense information Monergy currently supports/),
   ).toBeVisible();
