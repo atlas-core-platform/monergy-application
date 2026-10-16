@@ -27,6 +27,13 @@ Each unit requires: owner-backed UI/API/data behavior; tenant/customer access, a
 
 T1-01 through T1-19 preserve existing individual CTO acceptance and merge evidence, including PR #66 at application main `241da03742893d8c362503365a6fa8f1fad80d36`. They are **not** collectively a complete Monergy product. The current implementation crosswalk remains scoped at Income/Expense for the customer-facing Financial Passport and structured-text extraction.
 
+## Current linked candidate records
+
+- Application: [PR #67](https://github.com/atlas-core-platform/monergy-application/pull/67) — DRAFT, source changes present, tests not executed.
+- System Expert: [PR #19](https://github.com/atlas-core-platform/monergy-system-expert/pull/19) — DRAFT, product source history through T1-19 and candidate T1-20 knowledge.
+- Evidence tier: SOURCE_CROSS_CHECK_ONLY. Full React/Vitest and LOCAL/UAT owner-boundary verification still mandatory.
+- Merge gate: both reviewed candidate source checks, focused local tests, and System Expert consistency verification must pass. No GitHub Actions in development.
+
 ## T1-20 boundary and evidence
 
 - View only **up to 100 recent** Consent-owned grant records for the authenticated owned customer, via existing `GET /local/v1/consents/customers/{customerId}`.
