@@ -9,6 +9,7 @@ import {
   evidenceTypes,
   getDocumentProcessing,
   getEvidenceSource,
+  getFinancialProfile,
   listEvidence,
   maximumEvidenceBytes,
   scheduleDocumentProcessing,
@@ -16,6 +17,8 @@ import {
   type ProductEvidenceItem,
   type ProductEvidenceReceipt,
   type ProductEvidenceSource,
+  type ProductFinancialFact,
+  type ProductFinancialProfile,
   type ProductFinancialPromotionResult,
   type ProductProcessingView,
 } from './productApi';
@@ -40,6 +43,11 @@ const formatDate = (value: string) =>
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
+const formatFinancialValue = (fact: ProductFinancialFact) =>
+  new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: fact.currency,
+  }).format(fact.value);
 
 export default function EvidenceExperience() {
   const { api, authorization } = useWorkspaceSession();
@@ -50,6 +58,8 @@ export default function EvidenceExperience() {
     product?.capabilities.includes('document-intelligence.document.process') ?? false;
   const canUpdateFinancial =
     product?.capabilities.includes('financial-profile.profile.update') ?? false;
+  const canReadFinancial =
+    product?.capabilities.includes('financial-profile.profile.read') ?? false;
   const [candidate, setCandidate] = useState<File | null>(null);
   const [operationId, setOperationId] = useState('');
   const [evidence, setEvidence] = useState<ProductEvidenceItem[]>([]);
@@ -64,6 +74,9 @@ export default function EvidenceExperience() {
   const [sourceFocusError, setSourceFocusError] = useState('');
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [sortOrder, setSortOrder] = useState<'newest' | 'oldest' | 'name'>('newest');
+  const [financialProfile, setFinancialProfile] = useState<ProductFinancialProfile | null>(null);
+  const [financialLinkError, setFinancialLinkError] = useState('');
   const [selectedEvidence, setSelectedEvidence] = useState<ProductEvidenceItem | null>(null);
   const [processingEvidence, setProcessingEvidence] = useState<ProductEvidenceItem | null>(null);
   const [processing, setProcessing] = useState<ProductProcessingView | null>(null);
@@ -112,6 +125,28 @@ export default function EvidenceExperience() {
     };
   }, [loadLibrary]);
   useEffect(() => {
+    if (!api || !canReadFinancial) {
+      setFinancialProfile(null);
+      setFinancialLinkError('');
+      return;
+    }
+    const controller = new AbortController();
+    setFinancialLinkError('');
+    void getFinancialProfile(api, controller.signal)
+      .then(setFinancialProfile)
+      .catch((failure) => {
+        if (!controller.signal.aborted) {
+          setFinancialProfile(null);
+          setFinancialLinkError(
+            failure instanceof AccessApiError && failure.status === 403
+              ? "Linked financial information isn't included in your current access."
+              : "We couldn't refresh linked financial information.",
+          );
+        }
+      });
+    return () => controller.abort();
+  }, [api, canReadFinancial]);
+  useEffect(() => {
     const version = sourceVersionFocus.current;
     if (!version || !api || !canRead) return;
     sourceVersionFocus.current = null;
@@ -136,16 +171,44 @@ export default function EvidenceExperience() {
       });
     return () => controller.abort();
   }, [api, canRead]);
+  const linkedFactsByVersion = useMemo(() => {
+    const grouped = new Map<string, ProductFinancialFact[]>();
+    for (const fact of financialProfile?.facts ?? []) {
+      const current = grouped.get(fact.source.documentVersion) ?? [];
+      current.push(fact);
+      grouped.set(fact.source.documentVersion, current);
+    }
+    return grouped;
+  }, [financialProfile]);
+
   const visibleEvidence = useMemo(() => {
     const term = query.trim().toLocaleLowerCase();
-    return evidence.filter(
+    const filtered = evidence.filter(
       (item) =>
         (typeFilter === 'all' || item.contentType === typeFilter) &&
         (!term ||
           item.originalFileName.toLocaleLowerCase().includes(term) ||
           item.documentVersionId.toLocaleLowerCase().includes(term)),
     );
-  }, [evidence, query, typeFilter]);
+    return [...filtered].sort((left, right) => {
+      if (sortOrder === 'name')
+        return left.originalFileName.localeCompare(right.originalFileName, undefined, {
+          sensitivity: 'base',
+        });
+      const compared = left.createdAt.localeCompare(right.createdAt);
+      return sortOrder === 'oldest' ? compared : -compared;
+    });
+  }, [evidence, query, sortOrder, typeFilter]);
+
+  const selectedLinkedFacts = useMemo(
+    () =>
+      selectedEvidence
+        ? [...(linkedFactsByVersion.get(selectedEvidence.documentVersionId) ?? [])].sort((left, right) =>
+            left.label.localeCompare(right.label),
+          )
+        : [],
+    [linkedFactsByVersion, selectedEvidence],
+  );
   const issue = useMemo(() => {
     if (!candidate) return '';
     if (!evidenceTypes.includes(candidate.type))
@@ -269,6 +332,7 @@ export default function EvidenceExperience() {
         selectedSourceFactIds,
       );
       setPromotionResult(result);
+      setFinancialProfile(result.profile);
     } catch (failure) {
       setPromotionError(
         failure instanceof AccessApiError && failure.status === 403
@@ -441,6 +505,17 @@ export default function EvidenceExperience() {
                 ...evidenceTypes.map((value) => ({ value, label: typeName(value) })),
               ]}
             />
+            <Select
+              id="evidence-sort-order"
+              aria-label="Sort documents"
+              value={sortOrder}
+              onChange={setSortOrder}
+              options={[
+                { value: 'newest', label: 'Newest first' },
+                { value: 'oldest', label: 'Oldest first' },
+                { value: 'name', label: 'File name A–Z' },
+              ]}
+            />
             <Button
               loading={libraryBusy}
               onClick={() => {
@@ -511,6 +586,14 @@ export default function EvidenceExperience() {
                   </span>
                   <span className="product-receipt-meta">
                     <Tag color="success">UPLOADED</Tag>
+                    {canReadFinancial && financialProfile && (
+                      <small>
+                        {(linkedFactsByVersion.get(item.documentVersionId) ?? []).length}{' '}
+                        {(linkedFactsByVersion.get(item.documentVersionId) ?? []).length === 1
+                          ? 'trusted item'
+                          : 'trusted items'}
+                      </small>
+                    )}
                     <small>{formatDate(item.createdAt)}</small>
                   </span>
                   <WorkspaceIcon name="arrow" size={17} />
@@ -617,6 +700,47 @@ export default function EvidenceExperience() {
                 <dd>{formatDate(selectedEvidence.createdAt)}</dd>
               </div>
             </dl>
+            <section className="product-document-links" aria-labelledby="document-financial-links-title">
+              <div>
+                <p className="workspace-eyebrow">RELATED FINANCIAL INFORMATION</p>
+                <h4 id="document-financial-links-title">Trusted information using this document version</h4>
+              </div>
+              {!canReadFinancial ? (
+                <p className="product-document-links-note">
+                  Linked financial information is not included in your current access.
+                </p>
+              ) : financialLinkError ? (
+                <Alert showIcon type="warning" title={financialLinkError} />
+              ) : financialProfile === null ? (
+                <p className="product-document-links-note">Refreshing linked financial information…</p>
+              ) : selectedLinkedFacts.length > 0 ? (
+                <div className="product-document-links-list">
+                  {selectedLinkedFacts.map((fact) => (
+                    <a
+                      key={fact.financialFactId}
+                      href={'/finances?fact=' + encodeURIComponent(fact.financialFactId)}
+                    >
+                      <span>
+                        <strong>{fact.label}</strong>
+                        <small>
+                          {fact.factType === 'INCOME'
+                            ? 'Income'
+                            : fact.factType === 'EXPENSE'
+                              ? 'Expense'
+                              : fact.factType}
+                        </small>
+                      </span>
+                      <strong>{formatFinancialValue(fact)}</strong>
+                      <WorkspaceIcon name="arrow" size={15} />
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="product-document-links-note">
+                  No trusted Income or Expense information currently uses this document version.
+                </p>
+              )}
+            </section>
             <details className="product-review-note">
               <summary>Technical details</summary>
               <dl>
