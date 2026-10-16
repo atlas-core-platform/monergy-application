@@ -1,4 +1,5 @@
 import type { AccessApi } from '../access/accessApi';
+import type { TrustedFinancialReport } from '../reports/types';
 
 export interface ProductEvidenceReceipt {
   operationId: string;
@@ -237,6 +238,33 @@ export function getFinancialFactDetail(
 ): Promise<ProductFinancialFactDetail> {
   return api.product<ProductFinancialFactDetail>(
     `v1/financial-profile/facts/${encodeURIComponent(financialFactId)}`,
+    'GET',
+    undefined,
+    signal,
+  );
+}
+
+
+export function generateBasicFinancialReport(
+  api: AccessApi,
+  operationId: string,
+  signal?: AbortSignal,
+): Promise<TrustedFinancialReport> {
+  return api.product<TrustedFinancialReport>(
+    'v1/reports',
+    'POST',
+    { operationId },
+    signal,
+  );
+}
+
+export function getBasicFinancialReport(
+  api: AccessApi,
+  reportId: string,
+  signal?: AbortSignal,
+): Promise<TrustedFinancialReport> {
+  return api.product<TrustedFinancialReport>(
+    `v1/reports/${encodeURIComponent(reportId)}`,
     'GET',
     undefined,
     signal,
