@@ -309,11 +309,14 @@ export default function EvidenceExperience() {
   }, [financialProfile]);
 
   useEffect(() => {
-    if (trustedFactsBySourceFactId.size === 0) return;
+    if (!recoveredResult || trustedFactsBySourceFactId.size === 0) return;
     setRecoveredSelectedSourceFactIds((current) =>
-      current.filter((sourceFactId) => !trustedFactsBySourceFactId.has(sourceFactId)),
+      current.filter((sourceFactId) => {
+        const trusted = trustedFactsBySourceFactId.get(sourceFactId);
+        return !trusted || trusted.source.documentVersion !== recoveredResult.documentVersionId;
+      }),
     );
-  }, [trustedFactsBySourceFactId]);
+  }, [recoveredResult, trustedFactsBySourceFactId]);
 
   const visibleEvidence = useMemo(() => {
     const term = query.trim().toLocaleLowerCase();
@@ -1006,7 +1009,11 @@ export default function EvidenceExperience() {
                   </div>
                   <div className="product-fact-list">
                     {recoveredResult.facts.map((fact) => {
-                      const trusted = trustedFactsBySourceFactId.get(fact.sourceFactId);
+                      const trustedCandidate = trustedFactsBySourceFactId.get(fact.sourceFactId);
+                      const trusted =
+                        trustedCandidate?.source.documentVersion === recoveredResult.documentVersionId
+                          ? trustedCandidate
+                          : undefined;
                       const selected = recoveredSelectedSourceFactIds.includes(fact.sourceFactId);
                       const reviewReady =
                         canUpdateFinancial &&
@@ -1082,7 +1089,8 @@ export default function EvidenceExperience() {
                       description="Selection remains unavailable until Monergy can determine which extracted items are already represented."
                     />
                   ) : recoveredResult.facts.every((fact) =>
-                      trustedFactsBySourceFactId.has(fact.sourceFactId),
+                      trustedFactsBySourceFactId.get(fact.sourceFactId)?.source.documentVersion ===
+                        recoveredResult.documentVersionId,
                     ) ? (
                     <>
                       {recoveredPromotionResult && (
@@ -1143,7 +1151,8 @@ export default function EvidenceExperience() {
                     financialProfile !== null &&
                     !financialLinkError &&
                     recoveredResult.facts.some(
-                      (fact) => !trustedFactsBySourceFactId.has(fact.sourceFactId),
+                      (fact) => !trustedFactsBySourceFactId.get(fact.sourceFactId)?.source.documentVersion ===
+                        recoveredResult.documentVersionId,
                     ) && (
                     <Button
                       type="primary"
