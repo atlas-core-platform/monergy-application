@@ -229,6 +229,23 @@ export class AccessApi {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   }
+  // Consent is a separate owner: its LOCAL endpoint enforces the authenticated
+  // customer/owner relationship. The browser may not supply actor or tenant scope.
+  customerConsent<T>(customerId: string, signal?: AbortSignal): Promise<T> {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(customerId))
+      return Promise.reject(new AccessApiError(400, 'INVALID_CUSTOMER_ID'));
+    return this.guarded<T>(
+      '/consent-api/local/v1/consents/customers/' + encodeURIComponent(customerId),
+      {
+        method: 'GET',
+        signal,
+        headers: {
+          'X-Monergy-Tenant': this.session.tenantId,
+          'X-Monergy-Session': this.session.authenticationContextId,
+        },
+      },
+    );
+  }
   resourceDirectory(resourceType: string, signal?: AbortSignal): Promise<ResourceDirectory> {
     if (!/^[a-z][a-z0-9-]{0,63}$/.test(resourceType))
       return Promise.reject(new AccessApiError(400, 'INVALID_RESOURCE_TYPE'));
