@@ -92,6 +92,25 @@ public sealed class FinancialProfileAuthorityTests
         Assert.NotEqual(original.FinancialProvenanceId, current.FinancialProvenanceId);
         Assert.Equal(2, current.Revision);
         Assert.Equal([1, 2], repository.ReadFactHistory(current.FinancialFactId).Select(fact => fact.Revision));
+
+        var revisionOne = await application.GetFinancialFactAsync(FinancialProfileTestContext.Request(
+            Vs02ContractNames.GetFinancialFact,
+            new GetFinancialFact(current.FinancialFactId, FinancialProfileTestContext.CustomerId, 1),
+            "request-income-history-1"));
+        var revisionTwo = await application.GetFinancialFactAsync(FinancialProfileTestContext.Request(
+            Vs02ContractNames.GetFinancialFact,
+            new GetFinancialFact(current.FinancialFactId, FinancialProfileTestContext.CustomerId, 2),
+            "request-income-history-2"));
+        var missingRevision = await application.GetFinancialFactAsync(FinancialProfileTestContext.Request(
+            Vs02ContractNames.GetFinancialFact,
+            new GetFinancialFact(current.FinancialFactId, FinancialProfileTestContext.CustomerId, 3),
+            "request-income-history-missing"));
+
+        Assert.Equal(100m, revisionOne.Data?.Value);
+        Assert.Equal(1, revisionOne.Data?.Revision);
+        Assert.Equal(110m, revisionTwo.Data?.Value);
+        Assert.Equal(2, revisionTwo.Data?.Revision);
+        Assert.Equal(ContractErrorCategory.NotFound, missingRevision.Error?.Category);
         Assert.Contains(events, item => item is DomainEvent<FinancialFactChangedPayload> changed && changed.ContractId == "CID-035");
         Assert.Contains(events, item => item is DomainEvent<FinancialProfileChangedPayload> changed && changed.ContractId == "CID-036" && changed.Payload.Revision == 2);
 
