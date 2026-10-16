@@ -759,3 +759,67 @@
     grid-column: 2;
   }
 }
+
+
+/* T1-08 Financial Passport: truthful coverage and freshness for currently supported fact types. */
+.workspace-passport-status {
+  display: grid;
+  gap: 14px;
+}
+.workspace-passport-coverage {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.workspace-passport-coverage article {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 13px;
+  border: 1px solid var(--mw-line);
+  border-radius: 10px;
+  background: var(--monergy-midnight-sidebar);
+}
+.workspace-passport-coverage article.missing {
+  border-style: dashed;
+}
+.workspace-passport-coverage-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 9px;
+  background: var(--monergy-midnight-selected);
+  color: var(--mw-primary);
+}
+.workspace-passport-coverage article.missing .workspace-passport-coverage-icon {
+  color: var(--mw-muted);
+}
+.workspace-passport-coverage article > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+.workspace-passport-coverage strong {
+  font-size: 13px;
+}
+.workspace-passport-coverage small,
+.workspace-passport-scope-note {
+  color: var(--mw-muted);
+  font-size: 11px;
+  line-height: 1.55;
+}
+.workspace-passport-scope-note {
+  margin: 0;
+}
+.workspace-passport-review-link {
+  width: fit-content;
+  color: var(--mw-primary);
+  font-size: var(--monergy-text-label);
+  font-weight: 600;
+}
+@media (max-width: 560px) {
+  .workspace-passport-coverage {
+    grid-template-columns: 1fr;
+  }
+}

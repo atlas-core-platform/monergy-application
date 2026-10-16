@@ -47,6 +47,16 @@ const journeys: {
   },
 ];
 
+const formatPassportDate = (value: string | null) =>
+  value
+    ? new Intl.DateTimeFormat('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        timeZone: 'UTC',
+      }).format(new Date(value))
+    : 'No trusted updates yet';
+
 export default function WorkspaceHome() {
   const { api, authorization } = useWorkspaceSession();
   const context = authorization?.area === 'product' ? authorization.context : null;
@@ -87,10 +97,24 @@ export default function WorkspaceHome() {
     const income = facts.filter((fact) => fact.factType === 'INCOME').length;
     const expenses = facts.filter((fact) => fact.factType === 'EXPENSE').length;
     const sources = new Set(facts.map((fact) => fact.source.documentVersion)).size;
-    const latest = [...facts]
-      .sort((left, right) => right.source.recordedAt.localeCompare(left.source.recordedAt))
-      .slice(0, 3);
-    return { facts: facts.length, income, expenses, sources, latest };
+    const ordered = [...facts].sort((left, right) =>
+      right.source.recordedAt.localeCompare(left.source.recordedAt),
+    );
+    const latest = ordered.slice(0, 3);
+    const coverage = [
+      { label: 'Income', count: income },
+      { label: 'Expenses', count: expenses },
+    ];
+    return {
+      facts: facts.length,
+      income,
+      expenses,
+      sources,
+      latest,
+      latestRecordedAt: ordered[0]?.source.recordedAt ?? null,
+      coverage,
+      coveredCategories: coverage.filter((item) => item.count > 0).length,
+    };
   }, [profile]);
 
   const hasTrustedInformation = snapshot.facts > 0;
@@ -206,6 +230,51 @@ export default function WorkspaceHome() {
                   <small>{canReadDocuments ? 'Documents available to you' : 'Not included in your access'}</small>
                 </article>
               </div>
+              {canReadFinancial && (
+                <div className="workspace-passport-panel workspace-passport-status">
+                  <div className="workspace-passport-heading">
+                    <div>
+                      <p className="workspace-eyebrow">CURRENT COVERAGE &amp; FRESHNESS</p>
+                      <h3>
+                        {snapshot.coveredCategories} of {snapshot.coverage.length} currently supported
+                        categories represented
+                      </h3>
+                    </div>
+                    <span>
+                      {snapshot.latestRecordedAt
+                        ? `Last trusted update ${formatPassportDate(snapshot.latestRecordedAt)}`
+                        : 'No trusted information yet'}
+                    </span>
+                  </div>
+                  <div className="workspace-passport-coverage" aria-label="Financial Passport current coverage">
+                    {snapshot.coverage.map((item) => (
+                      <article key={item.label} className={item.count > 0 ? 'present' : 'missing'}>
+                        <span className="workspace-passport-coverage-icon">
+                          <WorkspaceIcon name={item.count > 0 ? 'check' : 'changes'} size={16} />
+                        </span>
+                        <span>
+                          <strong>{item.label}</strong>
+                          <small>
+                            {item.count > 0
+                              ? `${item.count} trusted ${item.count === 1 ? 'item' : 'items'}`
+                              : 'No trusted items yet'}
+                          </small>
+                        </span>
+                      </article>
+                    ))}
+                  </div>
+                  <p className="workspace-passport-scope-note">
+                    Coverage is limited to the Income and Expense information Monergy currently supports.
+                    It is not a financial health score or a statement that your finances are complete.
+                  </p>
+                  {snapshot.coveredCategories < snapshot.coverage.length &&
+                    capabilities.has('evidence.document.upload') && (
+                      <a className="workspace-passport-review-link" href="/evidence">
+                        Review documents for missing information
+                      </a>
+                    )}
+                </div>
+              )}
               {hasTrustedInformation ? (
                 <div className="workspace-passport-panel">
                   <div className="workspace-passport-heading">

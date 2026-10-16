@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AccessApi } from '../src/access/accessApi';
 import { Context } from '../src/access/workspaceSession';
@@ -127,6 +127,14 @@ it('shows a source-connected Financial Passport without inventing financial scor
     '/finances?fact=ff-income',
   );
   expect(screen.getByText('2 source documents')).toBeVisible();
-  expect(screen.queryByText(/financial health score/i)).not.toBeInTheDocument();
+  expect(screen.getByText(/2 of 2 currently supported categories represented/)).toBeVisible();
+  expect(screen.getByText('Last trusted update 15 Oct 2026')).toBeVisible();
+  const coverage = screen.getByLabelText('Financial Passport current coverage');
+  expect(within(coverage).getByText('Income').closest('article')).toHaveTextContent('1 trusted item');
+  expect(within(coverage).getByText('Expenses').closest('article')).toHaveTextContent('1 trusted item');
+  expect(
+    screen.getByText(/Coverage is limited to the Income and Expense information Monergy currently supports/),
+  ).toBeVisible();
+  expect(screen.queryByRole('heading', { name: /financial health score/i })).not.toBeInTheDocument();
   expect(screen.queryByText(/recommendation/i)).not.toBeInTheDocument();
 });
