@@ -30,6 +30,13 @@ const formatMoney = (fact: ProductFinancialFact) =>
 const factTypeName = (value: string) =>
   ({ INCOME: 'Income', EXPENSE: 'Expense' })[value] ?? value;
 
+type FinancialCategory = 'INCOME' | 'EXPENSE';
+
+const categoryFromLocation = (): FinancialCategory | '' => {
+  const value = new URLSearchParams(window.location.search).get('type')?.toUpperCase();
+  return value === 'INCOME' || value === 'EXPENSE' ? value : '';
+};
+
 const initialFactId = () => new URLSearchParams(window.location.search).get('fact') ?? '';
 
 export default function FinancialProfileExperience() {
@@ -39,6 +46,7 @@ export default function FinancialProfileExperience() {
   const [profile, setProfile] = useState<ProductFinancialProfile | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [activeCategory, setActiveCategory] = useState<FinancialCategory | ''>(categoryFromLocation);
   const [selectedFactId, setSelectedFactId] = useState(initialFactId);
   const [detail, setDetail] = useState<ProductFinancialFactDetail | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
@@ -81,11 +89,12 @@ export default function FinancialProfileExperience() {
   }, [load]);
 
   useEffect(() => {
-    const syncFactFromLocation = () => {
+    const syncFromLocation = () => {
       setSelectedFactId(new URLSearchParams(window.location.search).get('fact') ?? '');
+      setActiveCategory(categoryFromLocation());
     };
-    window.addEventListener('popstate', syncFactFromLocation);
-    return () => window.removeEventListener('popstate', syncFactFromLocation);
+    window.addEventListener('popstate', syncFromLocation);
+    return () => window.removeEventListener('popstate', syncFromLocation);
   }, []);
 
   useEffect(() => {
@@ -118,16 +127,31 @@ export default function FinancialProfileExperience() {
   const groups = useMemo(() => {
     const facts = profile?.facts ?? [];
     return [
-      { key: 'INCOME', title: 'Income', facts: facts.filter((fact) => fact.factType === 'INCOME') },
-      { key: 'EXPENSE', title: 'Expenses', facts: facts.filter((fact) => fact.factType === 'EXPENSE') },
-    ].filter((group) => group.facts.length > 0);
-  }, [profile]);
+      { key: 'INCOME' as const, title: 'Income', facts: facts.filter((fact) => fact.factType === 'INCOME') },
+      { key: 'EXPENSE' as const, title: 'Expenses', facts: facts.filter((fact) => fact.factType === 'EXPENSE') },
+    ].filter(
+      (group) => (!activeCategory || group.key === activeCategory) && group.facts.length > 0,
+    );
+  }, [activeCategory, profile]);
+
+  const selectCategory = (category: FinancialCategory | '') => {
+    setActiveCategory(category);
+    setSelectedFactId('');
+    setDetail(null);
+    setDetailError('');
+    const url = category ? '/finances?type=' + encodeURIComponent(category) : '/finances';
+    if (window.location.pathname + window.location.search !== url)
+      window.history.pushState(null, '', url);
+  };
 
   const openFact = (financialFactId: string) => {
     setSelectedFactId(financialFactId);
     setDetail(null);
     setDetailError('');
-    const url = '/finances?fact=' + encodeURIComponent(financialFactId);
+    const params = new URLSearchParams();
+    if (activeCategory) params.set('type', activeCategory);
+    params.set('fact', financialFactId);
+    const url = '/finances?' + params.toString();
     if (window.location.pathname + window.location.search !== url)
       window.history.pushState(null, '', url);
   };
@@ -136,8 +160,12 @@ export default function FinancialProfileExperience() {
     setSelectedFactId('');
     setDetail(null);
     setDetailError('');
-    if (window.location.pathname === '/finances')
-      window.history.replaceState(null, '', '/finances');
+    if (window.location.pathname === '/finances') {
+      const url = activeCategory
+        ? '/finances?type=' + encodeURIComponent(activeCategory)
+        : '/finances';
+      window.history.replaceState(null, '', url);
+    }
   };
 
   return (
@@ -199,6 +227,27 @@ export default function FinancialProfileExperience() {
               </div>
             </div>
           </section>
+
+          <nav className="product-financial-category-filter" aria-label="Financial information categories">
+            <Button
+              type={activeCategory === '' ? 'primary' : 'default'}
+              onClick={() => selectCategory('')}
+            >
+              All
+            </Button>
+            <Button
+              type={activeCategory === 'INCOME' ? 'primary' : 'default'}
+              onClick={() => selectCategory('INCOME')}
+            >
+              Income
+            </Button>
+            <Button
+              type={activeCategory === 'EXPENSE' ? 'primary' : 'default'}
+              onClick={() => selectCategory('EXPENSE')}
+            >
+              Expenses
+            </Button>
+          </nav>
 
           {groups.map((group) => (
             <section key={group.key} className="product-panel product-financial-section">
@@ -265,6 +314,25 @@ export default function FinancialProfileExperience() {
               </div>
             </section>
           ))}
+          {activeCategory && groups.length === 0 && (
+            <section className="product-panel product-empty-financial product-category-empty">
+              <span className="product-empty-icon">
+                <WorkspaceIcon name="reports" size={28} />
+              </span>
+              <p className="workspace-eyebrow">{activeCategory}</p>
+              <h2>No trusted {activeCategory === 'INCOME' ? 'income' : 'expense'} information yet.</h2>
+              <p>
+                This category has no reviewed financial information yet. Review supported documents
+                and add only the Income or Expense details you have checked.
+              </p>
+              <div className="product-category-empty-actions">
+                <Button type="primary" href="/evidence">
+                  Review documents
+                </Button>
+                <Button onClick={() => selectCategory('')}>Show all financial information</Button>
+              </div>
+            </section>
+          )}
         </>
       ) : canRead && !error ? (
         <section className="product-panel product-empty-financial">
