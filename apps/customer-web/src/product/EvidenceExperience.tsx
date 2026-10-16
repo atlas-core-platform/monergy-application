@@ -952,7 +952,11 @@ export default function EvidenceExperience() {
                   {evidenceByVersion.get(recoveredResultJob.documentVersionId)?.originalFileName ??
                     'Document processing result'}
                 </h3>
-                <p>Resume review from this completed processing result</p>
+                <p>
+                  {canUpdateFinancial && canReadFinancial
+                    ? 'Resume review from this completed processing result'
+                    : 'Read-only recovered processing result'}
+                </p>
               </div>
             </div>
 
