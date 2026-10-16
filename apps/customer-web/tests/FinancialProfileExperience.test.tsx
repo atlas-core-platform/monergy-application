@@ -77,6 +77,7 @@ it('shows trusted financial information with source history and hides raw ids by
           documentVersion: 'document-version-001',
           recordedAt: '2026-10-15T12:00:00Z',
           technicalSourceFactId: 'source-fact-001',
+          technicalProvenanceId: 'provenance-base-001',
         },
       },
     ],
