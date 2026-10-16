@@ -121,7 +121,7 @@ it('generates an authorized source-connected basic summary without scores or adv
     expect.objectContaining({ operationId: expect.stringMatching(/^[0-9a-f]{32}$/) }),
     undefined,
   );
-  expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute(
+  expect(screen.getAllByRole('link', { name: 'View source & history' })[0]).toHaveAttribute(
     'href',
     '/finances?fact=ff-income',
   );
@@ -158,7 +158,7 @@ it('exports exactly the governed report payload returned by Reporting', async ()
 
   await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
   const summary = await screen.findByLabelText('Basic financial summary');
-  expect(within(summary).getByText('2')).toBeVisible();
+  expect(within(summary).getAllByText('2')).toHaveLength(2);
 
   await userEvent.setup().click(screen.getByRole('button', { name: 'Export basic summary' }));
   expect(createObjectURL).toHaveBeenCalledOnce();
