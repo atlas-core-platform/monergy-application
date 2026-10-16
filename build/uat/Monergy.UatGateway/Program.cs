@@ -108,7 +108,7 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     if (!HttpMethods.IsGet(http.Request.Method) || path.StartsWith("/uat-api/", StringComparison.Ordinal) || path.StartsWith("/product-api/", StringComparison.Ordinal) || path.Contains("api/", StringComparison.Ordinal) || path.StartsWith("/contracts/", StringComparison.Ordinal))
     { http.Response.StatusCode = 404; return; }
     // Static files are handled earlier; only known SPA destinations get the shell.
-    if (path is not ("/" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
+    if (path is not ("/" or "/actions" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
         "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
         "/access/activity" or "/access/sessions" or "/operations" or
         "/search" or "/reports" or "/finances" or "/vs02" or "/foundation"))
