@@ -53,7 +53,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-it('shows delegated permissions and expiry/revocation without claiming connected providers', async () => {
+it('shows recorded permissions and expiry/revocation without claiming effective access or connected providers', async () => {
   const api = new AccessApi(session);
   const consent = vi.spyOn(api, 'customerConsent').mockResolvedValue({
     version: 4,
@@ -66,13 +66,13 @@ it('shows delegated permissions and expiry/revocation without claiming connected
   mount(api);
   expect(await screen.findByText('Showing 3 most recent recorded permissions.')).toBeVisible();
   const section = screen.getByRole('region', { name: 'Recorded sharing permissions' });
-  expect(within(section).getByText('Active')).toBeVisible();
+  expect(within(section).getByText('Unexpired record')).toBeVisible();
   expect(within(section).getByText('Expired')).toBeVisible();
   expect(within(section).getByText('Revoked')).toBeVisible();
   expect(consent).toHaveBeenCalledWith('customer-001', expect.any(AbortSignal));
   expect(screen.queryByText('recipient-001')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /revoke/i })).not.toBeInTheDocument();
-  expect(screen.getByText(/Provider connection and refresh permissions are separate/i)).toBeVisible();
+  expect(screen.getByText(/Unexpired does not confirm effective access/i)).toBeVisible();
 });
 
 it('does not fabricate a zero state when consent owner is unavailable', async () => {
