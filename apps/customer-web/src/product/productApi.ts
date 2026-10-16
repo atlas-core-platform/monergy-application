@@ -183,6 +183,9 @@ export async function getEvidenceVersionHistory(
     !history ||
     history.documentId !== documentId ||
     !Array.isArray(history.versions) ||
+    history.versions.length < 1 ||
+    new Set(history.versions.map((version) => version.documentVersionId)).size !== history.versions.length ||
+    new Set(history.versions.map((version) => version.version)).size !== history.versions.length ||
     history.versions.some(
       (version) =>
         !version ||
