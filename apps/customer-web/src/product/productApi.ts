@@ -168,17 +168,31 @@ export function listEvidence(
   return api.product<ProductEvidenceLibrary>('v1/evidence', 'GET', undefined, signal);
 }
 
-export function getEvidenceVersionHistory(
+export async function getEvidenceVersionHistory(
   api: AccessApi,
   documentId: string,
   signal?: AbortSignal,
 ): Promise<ProductEvidenceVersionHistory> {
-  return api.product<ProductEvidenceVersionHistory>(
+  const history = await api.product<ProductEvidenceVersionHistory>(
     `v1/evidence/${encodeURIComponent(documentId)}/versions`,
     'GET',
     undefined,
     signal,
   );
+  if (
+    !history ||
+    history.documentId !== documentId ||
+    !Array.isArray(history.versions) ||
+    history.versions.some(
+      (version) =>
+        !version ||
+        typeof version.documentVersionId !== 'string' ||
+        typeof version.version !== 'number' ||
+        version.version < 1,
+    )
+  )
+    throw new Error('Document version history response is invalid.');
+  return history;
 }
 
 export function getEvidenceSource(
