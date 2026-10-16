@@ -20,6 +20,22 @@ public interface ISearchProjectionSource
     ImmutableArray<DerivedSearchRecord> ReadForCustomer(string customerId);
 }
 
+public interface ICustomerSearchProjectionSource
+{
+    Task PrepareCustomerAsync(
+        string customerId,
+        string authorizationContextId,
+        TrustedSecurityContext security,
+        string operation,
+        string correlationId,
+        CancellationToken cancellationToken);
+}
+
+public sealed class SearchSourceException(ContractError error) : Exception(error.Message)
+{
+    public ContractError Error { get; } = error;
+}
+
 public interface IDerivedSearchIndex
 {
     IndexRefreshResult Rebuild(IEnumerable<DerivedSearchRecord> records);

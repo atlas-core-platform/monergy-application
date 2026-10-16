@@ -1,5 +1,6 @@
 import type { AccessApi } from '../access/accessApi';
 import type { TrustedFinancialReport } from '../reports/types';
+import type { SearchResults } from '../search/types';
 
 export interface ProductEvidenceReceipt {
   operationId: string;
@@ -267,6 +268,23 @@ export function getBasicFinancialReport(
     `v1/reports/${encodeURIComponent(reportId)}`,
     'GET',
     undefined,
+    signal,
+  );
+}
+
+
+export type ProductSearchScope = 'all' | 'documents' | 'financial';
+
+export function searchProductInformation(
+  api: AccessApi,
+  query: string,
+  scope: ProductSearchScope,
+  signal?: AbortSignal,
+): Promise<SearchResults> {
+  return api.product<SearchResults>(
+    'v1/search',
+    'POST',
+    { query, scope },
     signal,
   );
 }

@@ -904,3 +904,93 @@
     justify-content: flex-start;
   }
 }
+
+
+/* T1-11 — current-customer authorized lexical search. */
+.product-search-page {
+  display: grid;
+  gap: 18px;
+}
+.product-search-controls {
+  display: grid;
+  gap: 16px;
+}
+.product-search-controls > div {
+  display: grid;
+  gap: 8px;
+}
+.product-search-controls label,
+.product-search-label {
+  color: var(--monergy-midnight-text);
+  font-size: var(--monergy-text-label);
+  font-weight: 600;
+}
+.product-search-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--monergy-midnight-secondary);
+  font-size: var(--monergy-text-small);
+}
+.product-search-result-heading {
+  margin: 4px 0 14px;
+}
+.product-search-results {
+  display: grid;
+  gap: 12px;
+}
+.product-search-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 14px;
+}
+.product-search-result-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+}
+.product-search-result-main > div {
+  display: grid;
+  gap: 6px;
+}
+.product-search-result-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  color: var(--mw-primary);
+  background: var(--monergy-midnight-selected);
+}
+.product-search-result h3 {
+  margin: 0;
+  color: var(--monergy-midnight-text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.product-search-result p {
+  margin: 0;
+  color: var(--monergy-midnight-secondary);
+  font-size: var(--monergy-text-small);
+  line-height: 1.6;
+}
+.product-search-result .ant-collapse {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--monergy-midnight-border);
+  border-radius: 0;
+}
+.product-search-empty {
+  min-height: 190px;
+  display: grid;
+  place-items: center;
+}
+@media (max-width: 680px) {
+  .product-search-result {
+    grid-template-columns: 1fr;
+  }
+  .product-search-result-action {
+    padding-left: 50px;
+  }
+}

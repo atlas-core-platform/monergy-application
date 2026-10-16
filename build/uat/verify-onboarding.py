@@ -261,12 +261,37 @@ call(report_read_path, session=owner, status=403)
 call(report_read_path, session=second_customer, status=404)
 assert call(report_read_path, session=customer) == basic_report
 
-# Setup is tenant/admin bound and depends on the Access Management owner's v2.2 receipt.
-assert sql('uat_am_t001', "SELECT schema_version::text || '|' || default_access_pack_version FROM am.tenant_identity WHERE singleton;") == '6|2.2'
-assert sql('uat_am_t001', "SELECT count(*) FROM am.default_access_pack_history WHERE pack_version='2.2' AND pack_identity='monergy-default-access-pack/2.2';") == '1'
+# T1-11 searches only the current customer's Documents and trusted Financial information.
+search_path = '/product-api/v1/search'
+call(search_path, 'POST', {'query': 'customer', 'scope': 'all'}, status=401)
+call(search_path, 'POST', {'query': 'customer', 'scope': 'all'}, owner, status=403)
+document_search = call(search_path, 'POST', {'query': 'customer-statement', 'scope': 'documents'}, customer)
+assert document_search['matchMode'] == 'Lexical'
+assert len(document_search['items']) == 1
+assert document_search['items'][0]['resultType'] == 'Document'
+assert document_search['items'][0]['source']['sourceObjectId'] == product_receipt['documentVersionId']
+assert document_search['items'][0]['source']['sourceReferenceId'] == product_receipt['evidenceId']
+financial_search = call(search_path, 'POST', {'query': 'Employment', 'scope': 'financial'}, customer)
+assert financial_search['matchMode'] == 'Lexical'
+assert len(financial_search['items']) == 1
+assert financial_search['items'][0]['resultType'] == 'Financial'
+assert financial_search['items'][0]['source']['sourceObjectId'] == income_fact['financialFactId']
+assert financial_search['items'][0]['source']['provenanceReferenceId'] == income_fact['source']['technicalProvenanceId']
+assert financial_search['items'][0]['source']['calculationLineageReferenceId'] is None
+assert call(search_path, 'POST', {'query': 'customer-statement', 'scope': 'documents'}, second_customer)['items'] == []
+call('/contracts/cid-043/v1', 'POST', envelope(customer, 'SearchFinancialData', {
+    'customerId': 'reference-customer',
+    'query': 'Employment',
+    'matchMode': 'Semantic',
+    'limit': 20,
+}), customer, status=422)
+
+# Setup is tenant/admin bound and depends on the Access Management owner's v2.3 receipt.
+assert sql('uat_am_t001', "SELECT schema_version::text || '|' || default_access_pack_version FROM am.tenant_identity WHERE singleton;") == '6|2.3'
+assert sql('uat_am_t001', "SELECT count(*) FROM am.default_access_pack_history WHERE pack_version='2.3' AND pack_identity='monergy-default-access-pack/2.3';") == '1'
 pack_status = admin('default-access-pack')
-assert pack_status['installedVersion'] == '2.2'
-assert pack_status['installedIdentity'] == 'monergy-default-access-pack/2.2'
+assert pack_status['installedVersion'] == '2.3'
+assert pack_status['installedIdentity'] == 'monergy-default-access-pack/2.3'
 assert pack_status['policyVersion'] == revision()
 
 call('/uat-api/v1/setup', status=401)
@@ -275,8 +300,8 @@ call('/uat-api/v1/setup/activate', 'POST', {}, owner, status=409)
 state = call('/uat-api/v1/setup', session=other_admin)
 assert state['state'] == 'ReadyForAdmin' and state['receiptReference'] is None
 assert state['accessPack']['ready'] is True
-assert state['accessPack']['installedVersion'] == '2.2'
-assert state['accessPack']['installedIdentity'] == 'monergy-default-access-pack/2.2'
+assert state['accessPack']['installedVersion'] == '2.3'
+assert state['accessPack']['installedIdentity'] == 'monergy-default-access-pack/2.3'
 assert state['accessPack']['policyVersion'] == state['policyVersion']
 submission = {'requestId': 'ci-setup-T002', 'expectedPolicyVersion': state['policyVersion'], 'organizationReviewed': True, 'accessReviewed': True}
 call('/uat-api/v1/setup', 'POST', {**submission, 'expectedPolicyVersion': state['policyVersion'] + 1}, other_admin, status=409)
@@ -397,7 +422,7 @@ assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
-           'validated': ['owner-confirmed Default Access Pack 2.2 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'customer-bound basic Financial Summary and exact export from authoritative Financial Profile facts', 'canonical Job Audit delivery',
+           'validated': ['owner-confirmed Default Access Pack 2.3 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'customer-bound basic Financial Summary and exact export from authoritative Financial Profile facts', 'customer-authorized lexical search across current Documents and trusted Financial information', 'canonical Job Audit delivery',
                          'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
                          'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
            'limitations': ['Business data uses owner reference adapters.', 'The processor accepts structured LOCAL/UAT text and does not claim OCR or production AI.', 'Only customer-reviewed Income/Expense source facts are promoted; OCR/production AI and additional financial fact types remain out of scope.', 'Consent outbox delivery is not claimed.']}

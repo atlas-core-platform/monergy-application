@@ -188,6 +188,11 @@ if ($Action -in @('Prepare','Start')) {
                 $config.Monergy.ProductReporting=@{
                     Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'
                 }
+            } elseif ($onboarding -and $service -eq 'search-retrieval') {
+                $config.Monergy.ProductSearch=@{
+                    Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'
+                    FinancialProfileUrl='http://127.0.0.1:5113/'
+                }
             } elseif ($onboarding -and $service -eq 'job-management') {
                 $config.Monergy.DocumentProcessing=@{
                     Enabled='true'; DocumentIntelligenceUrl='http://127.0.0.1:5112/'
@@ -222,6 +227,7 @@ if ($Action -in @('Prepare','Start')) {
             Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake
             JobManagementUrl='http://127.0.0.1:5118/'; JobManagementToken=$state.tokens.jobControl
             FinancialProfileUrl='http://127.0.0.1:5113/'
+            SearchRetrievalUrl='http://127.0.0.1:5115/'
             ReportingUrl='http://127.0.0.1:5116/'
         }
     }
@@ -276,7 +282,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($pack.installedVersion -notin @('2.0','2.1','2.2')) {
+            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3')) {
                 throw 'The Access Management owner has not confirmed a supported Default Access Pack.'
             }
 
