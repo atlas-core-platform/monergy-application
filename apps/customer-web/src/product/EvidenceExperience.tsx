@@ -55,6 +55,9 @@ const formatFinancialValue = (fact: ProductFinancialFact) =>
     currency: fact.currency,
   }).format(fact.value);
 
+const financialSourceKey = (sourceFactId: string, documentVersionId: string) =>
+  sourceFactId + '\u001f' + documentVersionId;
+
 const processingActivityLabel = (state: ProductProcessingActivityItem['state']) =>
   ({
     Scheduled: 'Queued',
@@ -298,25 +301,30 @@ export default function EvidenceExperience() {
     return grouped;
   }, [financialProfile]);
 
-  const trustedFactsBySourceFactId = useMemo(() => {
+  const trustedFactsBySourceKey = useMemo(() => {
     const mapped = new Map<string, ProductFinancialFact>();
     for (const fact of financialProfile?.facts ?? []) {
       if (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE') continue;
-      if (!fact.source.technicalSourceFactId) continue;
-      mapped.set(fact.source.technicalSourceFactId, fact);
+      if (!fact.source.technicalSourceFactId || !fact.source.documentVersion) continue;
+      mapped.set(
+        financialSourceKey(fact.source.technicalSourceFactId, fact.source.documentVersion),
+        fact,
+      );
     }
     return mapped;
   }, [financialProfile]);
 
   useEffect(() => {
-    if (!recoveredResult || trustedFactsBySourceFactId.size === 0) return;
+    if (!recoveredResult || trustedFactsBySourceKey.size === 0) return;
     setRecoveredSelectedSourceFactIds((current) =>
-      current.filter((sourceFactId) => {
-        const trusted = trustedFactsBySourceFactId.get(sourceFactId);
-        return !trusted || trusted.source.documentVersion !== recoveredResult.documentVersionId;
-      }),
+      current.filter(
+        (sourceFactId) =>
+          !trustedFactsBySourceKey.has(
+            financialSourceKey(sourceFactId, recoveredResult.documentVersionId),
+          ),
+      ),
     );
-  }, [recoveredResult, trustedFactsBySourceFactId]);
+  }, [recoveredResult, trustedFactsBySourceKey]);
 
   const visibleEvidence = useMemo(() => {
     const term = query.trim().toLocaleLowerCase();
@@ -1009,11 +1017,9 @@ export default function EvidenceExperience() {
                   </div>
                   <div className="product-fact-list">
                     {recoveredResult.facts.map((fact) => {
-                      const trustedCandidate = trustedFactsBySourceFactId.get(fact.sourceFactId);
-                      const trusted =
-                        trustedCandidate?.source.documentVersion === recoveredResult.documentVersionId
-                          ? trustedCandidate
-                          : undefined;
+                      const trusted = trustedFactsBySourceKey.get(
+                        financialSourceKey(fact.sourceFactId, recoveredResult.documentVersionId),
+                      );
                       const selected = recoveredSelectedSourceFactIds.includes(fact.sourceFactId);
                       const reviewReady =
                         canUpdateFinancial &&
@@ -1089,8 +1095,9 @@ export default function EvidenceExperience() {
                       description="Selection remains unavailable until Monergy can determine which extracted items are already represented."
                     />
                   ) : recoveredResult.facts.every((fact) =>
-                      trustedFactsBySourceFactId.get(fact.sourceFactId)?.source.documentVersion ===
-                        recoveredResult.documentVersionId,
+                      trustedFactsBySourceKey.has(
+                        financialSourceKey(fact.sourceFactId, recoveredResult.documentVersionId),
+                      ),
                     ) ? (
                     <>
                       {recoveredPromotionResult && (
@@ -1152,8 +1159,9 @@ export default function EvidenceExperience() {
                     !financialLinkError &&
                     recoveredResult.facts.some(
                       (fact) =>
-                        trustedFactsBySourceFactId.get(fact.sourceFactId)?.source.documentVersion !==
-                        recoveredResult.documentVersionId,
+                        !trustedFactsBySourceKey.has(
+                          financialSourceKey(fact.sourceFactId, recoveredResult.documentVersionId),
+                        ),
                     ) && (
                     <Button
                       type="primary"
