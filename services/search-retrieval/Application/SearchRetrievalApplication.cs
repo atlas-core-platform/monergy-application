@@ -103,6 +103,27 @@ public sealed class SearchRetrievalApplication(
             request.ContractName, request.CorrelationId, cancellationToken).ConfigureAwait(false);
         if (accessError is not null) { return Rejected<TPayload, SearchResults>(request, accessError); }
 
+        if (projectionSource is ICustomerSearchProjectionSource current)
+        {
+            try
+            {
+                await current.PrepareCustomerAsync(
+                    customerId,
+                    request.Security.Access.AuthorizationContextId,
+                    request.Security,
+                    request.ContractName,
+                    request.CorrelationId,
+                    cancellationToken).ConfigureAwait(false);
+                index.RebuildCustomer(customerId, projectionSource.ReadForCustomer(customerId));
+            }
+            catch (SearchSourceException failure)
+            {
+                return Rejected<TPayload, SearchResults>(
+                    request,
+                    failure.Error with { CorrelationId = request.CorrelationId });
+            }
+        }
+
         var results = index.Search(customerId, request.Security.Access.AuthorizationContextId,
             resultTypes, query, matchMode, limit).Select(item => ToHit(item.Record, item.Score)).ToImmutableArray();
         return ContractResult<SearchResults>.Succeeded(request, new(query.Trim(), matchMode, results));
