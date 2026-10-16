@@ -26,6 +26,15 @@ public sealed record ListDocumentProcessingJobsRequest(
 public sealed record DocumentProcessingActivityView(
     IReadOnlyList<ScheduledJob> Items);
 
+public sealed record ReadDocumentProcessingJobResultRequest(
+    TrustedSecurityContext Security,
+    string JobId,
+    string CustomerId);
+
+public sealed record DocumentProcessingJobReadOnlyView(
+    ScheduledJob Job,
+    DocumentProcessingReadOnlyServiceView Result);
+
 public static class DocumentProcessingJobEndpoints
 {
     public static IEndpointRouteBuilder MapDocumentProcessingJobs(this IEndpointRouteBuilder endpoints, IConfiguration configuration)
@@ -93,6 +102,44 @@ public static class DocumentProcessingJobEndpoints
 
             return Results.Ok(new DocumentProcessingActivityView(
                 jobs.Select(job => job.ToStatus()).ToArray()));
+        });
+
+        endpoints.MapPost("/internal/local/v1/jobs/document-processing/read", async (
+            HttpRequest http,
+            ReadDocumentProcessingJobResultRequest request,
+            IJobRepository repository,
+            TenantAccessClient access,
+            CancellationToken cancellationToken) =>
+        {
+            Require(http, request.Security, token);
+            if (!TenantAccessClient.Identifier(request.JobId, 160) ||
+                request.CustomerId != request.Security.Access.CustomerId)
+                throw new TenantBoundaryException("JOB_RESULT_REQUEST_INVALID", 400);
+
+            var job = await repository.GetAsync(request.JobId, cancellationToken).ConfigureAwait(false);
+            if (job is null ||
+                job.CustomerId != request.CustomerId ||
+                job.JobName != "document-processing")
+                throw new TenantBoundaryException("JOB_RESULT_NOT_FOUND", 404);
+
+            var tenant = http.Headers["X-Monergy-Tenant"].ToString();
+            var decision = await access.EvaluateCustomerAsync(
+                tenant,
+                request.Security.Actor.AuthenticationContextId,
+                "job-management.job.read",
+                request.CustomerId,
+                cancellationToken).ConfigureAwait(false);
+            if (decision.Outcome != "Allow" || decision.ActorId != request.Security.Actor.ActorId)
+                throw new TenantBoundaryException("ACCESS_DENIED", 403);
+            if (job.State != JobState.Completed)
+                throw new TenantBoundaryException("JOB_RESULT_NOT_READY", 409);
+
+            var target = http.HttpContext.RequestServices.GetRequiredService<HttpDocumentProcessingTarget>();
+            var result = await target.ReadCompletedResultAsync(
+                job, request.Security, cancellationToken).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("JOB_RESULT_NOT_FOUND", 404);
+
+            return Results.Ok(new DocumentProcessingJobReadOnlyView(job.ToStatus(), result));
         });
 
         endpoints.MapPost("/internal/local/v1/jobs/status", async (
