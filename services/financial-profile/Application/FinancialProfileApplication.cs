@@ -88,6 +88,7 @@ public interface IFinancialProfileRepository
 
     Task<FinancialFactRecord?> GetFactAsync(
         string financialFactId,
+        int? revision,
         CancellationToken cancellationToken);
 
     Task<FinancialProvenance?> GetProvenanceAsync(
@@ -222,13 +223,14 @@ public sealed class FinancialProfileApplication(
             return Reject<AuthoritativeFinancialFact, GetFinancialFact>(request, contextError);
         }
 
-        if (!ValidQuery(request.Payload.FinancialFactId, request.Payload.CustomerId, request.Security.Access.CustomerId))
+        if (!ValidQuery(request.Payload.FinancialFactId, request.Payload.CustomerId, request.Security.Access.CustomerId) ||
+            request.Payload.Revision is <= 0)
         {
             return ContractResult<AuthoritativeFinancialFact>.Rejected(
                 request, "financial.fact.invalid", ContractErrorCategory.ValidationError, "Financial fact query is invalid.");
         }
 
-        var fact = await repository.GetFactAsync(request.Payload.FinancialFactId, cancellationToken);
+        var fact = await repository.GetFactAsync(request.Payload.FinancialFactId, request.Payload.Revision, cancellationToken);
         if (fact is null || !SameCustomer(fact.CustomerId, request.Payload.CustomerId, request.Security.Access.CustomerId))
         {
             return ContractResult<AuthoritativeFinancialFact>.Rejected(
