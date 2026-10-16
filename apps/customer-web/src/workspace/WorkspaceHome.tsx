@@ -38,12 +38,12 @@ const journeys: {
     action: 'Open search',
   },
   {
-    title: 'Build a financial report',
-    description: 'Bring available financial information together with where it came from.',
+    title: 'Create a basic financial summary',
+    description: 'Bring your trusted financial information into one source-connected exportable view.',
     href: '/reports',
     icon: 'reports',
     capability: 'reporting.report.generate',
-    action: 'Open reports',
+    action: 'Create summary',
   },
 ];
 
