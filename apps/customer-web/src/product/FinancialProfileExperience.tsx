@@ -1,11 +1,13 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
-import { Alert, Button, Collapse, Skeleton, Tag } from 'antd';
+import { Alert, Button, Collapse, Drawer, Skeleton, Spin, Tag } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import {
+  getFinancialFactDetail,
   getFinancialProfile,
   type ProductFinancialFact,
+  type ProductFinancialFactDetail,
   type ProductFinancialProfile,
 } from './productApi';
 import './product.css';
@@ -28,6 +30,8 @@ const formatMoney = (fact: ProductFinancialFact) =>
 const factTypeName = (value: string) =>
   ({ INCOME: 'Income', EXPENSE: 'Expense' })[value] ?? value;
 
+const initialFactId = () => new URLSearchParams(window.location.search).get('fact') ?? '';
+
 export default function FinancialProfileExperience() {
   const { api, authorization } = useWorkspaceSession();
   const product = authorization?.area === 'product' ? authorization.context : null;
@@ -35,6 +39,10 @@ export default function FinancialProfileExperience() {
   const [profile, setProfile] = useState<ProductFinancialProfile | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [selectedFactId, setSelectedFactId] = useState(initialFactId);
+  const [detail, setDetail] = useState<ProductFinancialFactDetail | null>(null);
+  const [detailBusy, setDetailBusy] = useState(false);
+  const [detailError, setDetailError] = useState('');
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -72,6 +80,41 @@ export default function FinancialProfileExperience() {
     };
   }, [load]);
 
+  useEffect(() => {
+    const syncFactFromLocation = () => {
+      setSelectedFactId(new URLSearchParams(window.location.search).get('fact') ?? '');
+    };
+    window.addEventListener('popstate', syncFactFromLocation);
+    return () => window.removeEventListener('popstate', syncFactFromLocation);
+  }, []);
+
+  useEffect(() => {
+    if (!api || !canRead || !selectedFactId) {
+      setDetail(null);
+      return;
+    }
+    const controller = new AbortController();
+    setDetailBusy(true);
+    setDetailError('');
+    setDetail(null);
+    void getFinancialFactDetail(api, selectedFactId, controller.signal)
+      .then(setDetail)
+      .catch((failure) => {
+        if (controller.signal.aborted) return;
+        setDetailError(
+          failure instanceof AccessApiError && failure.status === 403
+            ? "You no longer have access to view this financial information or its source."
+            : failure instanceof AccessApiError && failure.status === 404
+              ? "This financial information is no longer available in your current profile."
+              : "We couldn't load the source history for this item. Try again.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDetailBusy(false);
+      });
+    return () => controller.abort();
+  }, [api, canRead, selectedFactId]);
+
   const groups = useMemo(() => {
     const facts = profile?.facts ?? [];
     return [
@@ -79,6 +122,23 @@ export default function FinancialProfileExperience() {
       { key: 'EXPENSE', title: 'Expenses', facts: facts.filter((fact) => fact.factType === 'EXPENSE') },
     ].filter((group) => group.facts.length > 0);
   }, [profile]);
+
+  const openFact = (financialFactId: string) => {
+    setSelectedFactId(financialFactId);
+    setDetail(null);
+    setDetailError('');
+    const url = '/finances?fact=' + encodeURIComponent(financialFactId);
+    if (window.location.pathname + window.location.search !== url)
+      window.history.pushState(null, '', url);
+  };
+
+  const closeFact = () => {
+    setSelectedFactId('');
+    setDetail(null);
+    setDetailError('');
+    if (window.location.pathname === '/finances')
+      window.history.replaceState(null, '', '/finances');
+  };
 
   return (
     <main className="product-page financial-profile-page">
@@ -163,8 +223,13 @@ export default function FinancialProfileExperience() {
                       <span>Effective {formatDate(fact.effectiveDate)}</span>
                       <strong>Source: {fact.source.sourceName}</strong>
                       <span>
-                        Added {formatDateTime(fact.source.recordedAt)} · revision {fact.revision}
+                        Recorded {formatDateTime(fact.source.recordedAt)} · revision {fact.revision}
                       </span>
+                    </div>
+                    <div className="product-financial-card-actions">
+                      <Button type="link" onClick={() => openFact(fact.financialFactId)}>
+                        View source &amp; history
+                      </Button>
                     </div>
                     <Collapse
                       ghost
@@ -177,6 +242,10 @@ export default function FinancialProfileExperience() {
                               <div>
                                 <dt>Financial fact</dt>
                                 <dd>{fact.financialFactId}</dd>
+                              </div>
+                              <div>
+                                <dt>Financial provenance</dt>
+                                <dd>{fact.source.technicalProvenanceId}</dd>
                               </div>
                               <div>
                                 <dt>Document version</dt>
@@ -213,6 +282,148 @@ export default function FinancialProfileExperience() {
           </Button>
         </section>
       ) : null}
+
+      <Drawer
+        title="Financial information details"
+        aria-label="Financial information details"
+        open={Boolean(selectedFactId)}
+        onClose={closeFact}
+        destroyOnHidden
+        size="large"
+      >
+        {detailBusy && (
+          <div className="product-detail-loading" aria-live="polite">
+            <Spin />
+            <p>Loading source history…</p>
+          </div>
+        )}
+        {detailError && <Alert showIcon type="error" title={detailError} />}
+        {detail && (
+          <div className="product-financial-detail">
+            <section className="product-financial-detail-hero">
+              <div>
+                <Tag>{factTypeName(detail.current.factType)}</Tag>
+                <p className="workspace-eyebrow">TRUSTED INFORMATION</p>
+                <h2>{detail.current.label}</h2>
+                <strong>{formatMoney(detail.current)}</strong>
+              </div>
+              <dl>
+                <div>
+                  <dt>Effective</dt>
+                  <dd>{formatDate(detail.current.effectiveDate)}</dd>
+                </div>
+                <div>
+                  <dt>Current revision</dt>
+                  <dd>{detail.current.revision}</dd>
+                </div>
+                <div>
+                  <dt>Current source</dt>
+                  <dd>{detail.current.source.sourceName}</dd>
+                </div>
+                <div>
+                  <dt>Recorded</dt>
+                  <dd>{formatDateTime(detail.current.source.recordedAt)}</dd>
+                </div>
+              </dl>
+              <Button
+                type="primary"
+                href={
+                  '/evidence?version=' +
+                  encodeURIComponent(detail.current.source.documentVersion)
+                }
+              >
+                Open source document
+              </Button>
+            </section>
+
+            <section className="product-financial-history" aria-labelledby="financial-history-title">
+              <div className="product-section-heading">
+                <div>
+                  <p className="workspace-eyebrow">SOURCE HISTORY</p>
+                  <h2 id="financial-history-title">How this information changed</h2>
+                </div>
+                <span>
+                  {detail.history.length}{' '}
+                  {detail.history.length === 1 ? 'revision' : 'revisions'}
+                </span>
+              </div>
+              <div className="product-financial-history-list">
+                {detail.history.map((revision) => (
+                  <article
+                    key={revision.revision}
+                    className={
+                      revision.revision === detail.current.revision
+                        ? 'product-financial-history-item current'
+                        : 'product-financial-history-item'
+                    }
+                  >
+                    <div className="product-financial-history-heading">
+                      <span>
+                        Revision {revision.revision}
+                        {revision.revision === detail.current.revision && (
+                          <Tag color="success">CURRENT</Tag>
+                        )}
+                      </span>
+                      <strong>{formatMoney(revision)}</strong>
+                    </div>
+                    <div className="product-financial-history-meta">
+                      <span>Effective {formatDate(revision.effectiveDate)}</span>
+                      <span>Source: {revision.source.sourceName}</span>
+                      <span>Recorded {formatDateTime(revision.source.recordedAt)}</span>
+                    </div>
+                    <Button
+                      type="link"
+                      href={
+                        '/evidence?version=' +
+                        encodeURIComponent(revision.source.documentVersion)
+                      }
+                    >
+                      View this source document
+                    </Button>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <Collapse
+              items={[
+                {
+                  key: 'technical',
+                  label: 'Technical details',
+                  children: (
+                    <div className="product-financial-technical-history">
+                      {detail.history.map((revision) => (
+                        <dl className="product-technical-grid" key={revision.revision}>
+                          <div>
+                            <dt>Revision</dt>
+                            <dd>{revision.revision}</dd>
+                          </div>
+                          <div>
+                            <dt>Financial fact</dt>
+                            <dd>{revision.financialFactId}</dd>
+                          </div>
+                          <div>
+                            <dt>Financial provenance</dt>
+                            <dd>{revision.source.technicalProvenanceId}</dd>
+                          </div>
+                          <div>
+                            <dt>Document version</dt>
+                            <dd>{revision.source.documentVersion}</dd>
+                          </div>
+                          <div>
+                            <dt>Source fact</dt>
+                            <dd>{revision.source.technicalSourceFactId}</dd>
+                          </div>
+                        </dl>
+                      ))}
+                    </div>
+                  ),
+                },
+              ]}
+            />
+          </div>
+        )}
+      </Drawer>
     </main>
   );
 }

@@ -39,6 +39,18 @@ public sealed record ProductEvidenceLibrary(
     IReadOnlyList<CustomerEvidenceItem> Items,
     string DataDurability);
 
+public sealed record ProductEvidenceSourceView(
+    string DocumentId,
+    string DocumentVersionId,
+    string EvidenceId,
+    int Version,
+    string SourceName,
+    string OriginalFileName,
+    string ContentType,
+    string ContentSha256,
+    DateTimeOffset ReceivedAt,
+    string DataDurability);
+
 public sealed record ProductDocumentProcessingRequest(string OperationId);
 public sealed record ProductDocumentProcessingView(
     ScheduledJob Job,
@@ -130,6 +142,72 @@ public static class ProductWorkspaceEndpoints
             var library = await evidence.ListAsync(
                 session.TenantId, session.AuthenticationContextId, request, http.RequestAborted).ConfigureAwait(false);
             return Results.Ok(new ProductEvidenceLibrary(library.Items, "Temporary data"));
+        });
+        app.MapGet("/product-api/v1/evidence/source/{documentVersionId}", async (
+            string documentVersionId,
+            HttpContext http,
+            CustomerOwnerClient owners,
+            TenantAccessClient access,
+            ProductEvidenceClient evidence) =>
+        {
+            if (!TenantAccessClient.Identifier(documentVersionId, 160))
+                throw new TenantBoundaryException("DOCUMENT_VERSION_INVALID", 400);
+            var session = await owners.SessionAsync(http).ConfigureAwait(false);
+            var customer = await owners.OwnedCustomerAsync(
+                session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
+            var decision = await access.EvaluateCustomerAsync(
+                http, "evidence.document.read", customer.CustomerId).ConfigureAwait(false);
+            if (decision.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+            var security = Security(session, customer.CustomerId, decision);
+
+            var referenceRequest = new ContractRequest<GetEvidenceReference>(
+                Vs02ContractNames.GetEvidenceReference,
+                ContractGuard.CurrentVersion,
+                "request-evidence-source-" + Guid.NewGuid().ToString("N"),
+                "correlation-evidence-source-" + Guid.NewGuid().ToString("N"),
+                null,
+                security,
+                null,
+                new GetEvidenceReference(documentVersionId, customer.CustomerId));
+            var reference = await evidence.ReferenceAsync(
+                session.TenantId, session.AuthenticationContextId, referenceRequest, http.RequestAborted)
+                .ConfigureAwait(false);
+            if (reference.Outcome == ContractOutcome.Rejected &&
+                reference.Error?.Category == ContractErrorCategory.NotFound)
+                throw new TenantBoundaryException("EVIDENCE_VERSION_NOT_FOUND", 404);
+            if (reference.Outcome != ContractOutcome.Success || reference.Data is null)
+                throw new TenantBoundaryException("EVIDENCE_OWNER_UNAVAILABLE", 503);
+
+            var metadataRequest = new ContractRequest<GetEvidenceMetadata>(
+                Vs02ContractNames.GetEvidenceMetadata,
+                ContractGuard.CurrentVersion,
+                "request-evidence-source-metadata-" + Guid.NewGuid().ToString("N"),
+                "correlation-evidence-source-metadata-" + Guid.NewGuid().ToString("N"),
+                null,
+                security,
+                null,
+                new GetEvidenceMetadata(reference.Data.DocumentId, customer.CustomerId));
+            var metadata = await evidence.MetadataAsync(
+                session.TenantId, session.AuthenticationContextId, metadataRequest, http.RequestAborted)
+                .ConfigureAwait(false);
+            if (metadata.Outcome != ContractOutcome.Success || metadata.Data is null)
+                throw new TenantBoundaryException("EVIDENCE_OWNER_UNAVAILABLE", 503);
+            var version = metadata.Data.Versions.SingleOrDefault(
+                item => item.DocumentVersionId == documentVersionId)
+                ?? throw new TenantBoundaryException("EVIDENCE_VERSION_NOT_FOUND", 404);
+
+            return Results.Ok(new ProductEvidenceSourceView(
+                reference.Data.DocumentId,
+                reference.Data.DocumentVersionId,
+                reference.Data.EvidenceId,
+                version.Version,
+                version.SourceName,
+                version.OriginalFileName,
+                version.ContentType,
+                version.ContentSha256,
+                version.ReceivedAt,
+                "Temporary data"));
         });
         app.MapPost("/product-api/v1/evidence", async (
             ProductEvidenceSubmission submission,
@@ -513,6 +591,56 @@ public sealed class ProductEvidenceClient : IDisposable
             result.Data.Items.Count > body.Payload.Limit || result.Data.Items.Any(item => !ValidLibraryItem(item)))
             throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503);
         return result.Data;
+    }
+
+    public Task<ContractResult<EvidenceReference>> ReferenceAsync(
+        string tenantId,
+        string sessionId,
+        ContractRequest<GetEvidenceReference> body,
+        CancellationToken cancellationToken) =>
+        SendContractAsync<GetEvidenceReference, EvidenceReference>(
+            tenantId, sessionId, "contracts/cid-022/v1", body, cancellationToken);
+
+    public Task<ContractResult<EvidenceMetadata>> MetadataAsync(
+        string tenantId,
+        string sessionId,
+        ContractRequest<GetEvidenceMetadata> body,
+        CancellationToken cancellationToken) =>
+        SendContractAsync<GetEvidenceMetadata, EvidenceMetadata>(
+            tenantId, sessionId, "contracts/cid-021/v1", body, cancellationToken);
+
+    private async Task<ContractResult<TData>> SendContractAsync<TPayload, TData>(
+        string tenantId,
+        string sessionId,
+        string path,
+        ContractRequest<TPayload> body,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, path));
+        request.Headers.Add("X-Monergy-Tenant", tenantId);
+        request.Headers.Add("X-Monergy-Session", sessionId);
+        request.Content = JsonContent.Create(body, options: ContractJson.Options);
+        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if ((int)response.StatusCode >= 500 || (int)response.StatusCode is >= 300 and < 400)
+            throw new TenantBoundaryException("EVIDENCE_OWNER_UNAVAILABLE", 503);
+        if ((int)response.StatusCode is 401 or 403)
+            throw new TenantBoundaryException("ACCESS_DENIED", 403);
+        try
+        {
+            var result = await response.Content.ReadFromJsonAsync<ContractResult<TData>>(
+                ContractJson.Options, cancellationToken).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503);
+            if (!string.Equals(result.ContractName, body.ContractName, StringComparison.Ordinal) ||
+                !string.Equals(result.ContractVersion, body.ContractVersion, StringComparison.Ordinal) ||
+                !string.Equals(result.RequestId, body.RequestId, StringComparison.Ordinal) ||
+                !string.Equals(result.CorrelationId, body.CorrelationId, StringComparison.Ordinal))
+                throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503);
+            return result;
+        }
+        catch (JsonException)
+        {
+            throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503);
+        }
     }
 
     private static bool ValidLibraryItem(CustomerEvidenceItem item) =>

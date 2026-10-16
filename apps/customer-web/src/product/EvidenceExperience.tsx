@@ -1,19 +1,21 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Checkbox, Drawer, Input, Select, Skeleton, Spin, Tag, Upload } from 'antd';
 import type { UploadProps } from 'antd';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import {
   addProcessingFactsToFinancialProfile,
   evidenceTypes,
   getDocumentProcessing,
+  getEvidenceSource,
   listEvidence,
   maximumEvidenceBytes,
   scheduleDocumentProcessing,
   submitEvidence,
   type ProductEvidenceItem,
   type ProductEvidenceReceipt,
+  type ProductEvidenceSource,
   type ProductFinancialPromotionResult,
   type ProductProcessingView,
 } from './productApi';
@@ -54,6 +56,12 @@ export default function EvidenceExperience() {
   const [confirmation, setConfirmation] = useState<ProductEvidenceReceipt | null>(null);
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [libraryError, setLibraryError] = useState('');
+  const sourceVersionFocus = useRef(
+    new URLSearchParams(window.location.search).get('version'),
+  );
+  const [focusedSource, setFocusedSource] = useState<ProductEvidenceSource | null>(null);
+  const [sourceFocusBusy, setSourceFocusBusy] = useState(false);
+  const [sourceFocusError, setSourceFocusError] = useState('');
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [selectedEvidence, setSelectedEvidence] = useState<ProductEvidenceItem | null>(null);
@@ -103,6 +111,31 @@ export default function EvidenceExperience() {
       controller.abort();
     };
   }, [loadLibrary]);
+  useEffect(() => {
+    const version = sourceVersionFocus.current;
+    if (!version || !api || !canRead) return;
+    sourceVersionFocus.current = null;
+    window.history.replaceState(null, '', '/evidence');
+    const controller = new AbortController();
+    setSourceFocusBusy(true);
+    setSourceFocusError('');
+    void getEvidenceSource(api, version, controller.signal)
+      .then(setFocusedSource)
+      .catch((failure) => {
+        if (controller.signal.aborted) return;
+        setSourceFocusError(
+          failure instanceof AccessApiError && failure.status === 403
+            ? "You no longer have access to this source document."
+            : failure instanceof AccessApiError && failure.status === 404
+              ? "The source document version isn't available in your current document access."
+              : "We couldn't open the source document. Try again.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSourceFocusBusy(false);
+      });
+    return () => controller.abort();
+  }, [api, canRead]);
   const visibleEvidence = useMemo(() => {
     const term = query.trim().toLocaleLowerCase();
     return evidence.filter(
@@ -348,6 +381,22 @@ export default function EvidenceExperience() {
             {evidence.length ? `${String(evidence.length)} available` : 'No documents yet'}
           </span>
         </div>
+        {sourceFocusBusy && (
+          <Alert
+            showIcon
+            type="info"
+            title="Opening source document…"
+            className="product-library-alert"
+          />
+        )}
+        {sourceFocusError && (
+          <Alert
+            showIcon
+            type="warning"
+            title={sourceFocusError}
+            className="product-library-alert"
+          />
+        )}
         {confirmation && (
           <Alert
             showIcon
@@ -471,6 +520,67 @@ export default function EvidenceExperience() {
           </div>
         )}
       </section>
+
+      <Drawer
+        title="Source document details"
+        aria-label="Source document details"
+        open={Boolean(focusedSource)}
+        onClose={() => {
+          setFocusedSource(null);
+        }}
+        destroyOnHidden
+        size="default"
+      >
+        {focusedSource && (
+          <div className="product-review product-provenance">
+            <span className="product-review-icon">
+              <WorkspaceIcon name="evidence" size={25} />
+            </span>
+            <Tag color="success">SOURCE DOCUMENT</Tag>
+            <h3>{focusedSource.originalFileName}</h3>
+            <p>{typeName(focusedSource.contentType)}</p>
+            <dl>
+              <div>
+                <dt>Customer</dt>
+                <dd>{product?.customerName}</dd>
+              </div>
+              <div>
+                <dt>Version</dt>
+                <dd>{focusedSource.version}</dd>
+              </div>
+              <div>
+                <dt>Received</dt>
+                <dd>{formatDate(focusedSource.receivedAt)}</dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd>{focusedSource.sourceName}</dd>
+              </div>
+            </dl>
+            <details className="product-review-note">
+              <summary>Technical details</summary>
+              <dl>
+                <div>
+                  <dt>Document ID</dt>
+                  <dd className="product-identifier">{focusedSource.documentId}</dd>
+                </div>
+                <div>
+                  <dt>Version ID</dt>
+                  <dd className="product-identifier">{focusedSource.documentVersionId}</dd>
+                </div>
+                <div>
+                  <dt>Evidence ID</dt>
+                  <dd className="product-identifier">{focusedSource.evidenceId}</dd>
+                </div>
+                <div>
+                  <dt>SHA-256</dt>
+                  <dd className="product-hash">{focusedSource.contentSha256}</dd>
+                </div>
+              </dl>
+            </details>
+          </div>
+        )}
+      </Drawer>
 
       <Drawer
         title="Document details"

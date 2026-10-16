@@ -33,6 +33,19 @@ export interface ProductEvidenceLibrary {
   dataDurability: 'Runtime only';
 }
 
+export interface ProductEvidenceSource {
+  documentId: string;
+  documentVersionId: string;
+  evidenceId: string;
+  version: number;
+  sourceName: string;
+  originalFileName: string;
+  contentType: string;
+  contentSha256: string;
+  receivedAt: string;
+  dataDurability: 'Temporary data';
+}
+
 export interface ProductSourceFact {
   sourceFactId: string;
   customerId: string;
@@ -81,6 +94,7 @@ export interface ProductFinancialSource {
   documentVersion: string;
   recordedAt: string;
   technicalSourceFactId: string;
+  technicalProvenanceId: string;
 }
 
 export interface ProductFinancialFact {
@@ -107,6 +121,11 @@ export interface ProductFinancialPromotionResult {
   confirmed: number;
 }
 
+export interface ProductFinancialFactDetail {
+  current: ProductFinancialFact;
+  history: ProductFinancialFact[];
+}
+
 export const evidenceTypes = ['application/pdf', 'image/png', 'image/jpeg', 'text/plain'];
 export const maximumEvidenceBytes = 1_048_576;
 
@@ -115,6 +134,19 @@ export function listEvidence(
   signal?: AbortSignal,
 ): Promise<ProductEvidenceLibrary> {
   return api.product<ProductEvidenceLibrary>('v1/evidence', 'GET', undefined, signal);
+}
+
+export function getEvidenceSource(
+  api: AccessApi,
+  documentVersionId: string,
+  signal?: AbortSignal,
+): Promise<ProductEvidenceSource> {
+  return api.product<ProductEvidenceSource>(
+    `v1/evidence/source/${encodeURIComponent(documentVersionId)}`,
+    'GET',
+    undefined,
+    signal,
+  );
 }
 
 export async function submitEvidence(
@@ -194,6 +226,19 @@ export function addProcessingFactsToFinancialProfile(
     `v1/financial-profile/from-processing/${encodeURIComponent(jobId)}`,
     'POST',
     { operationId, sourceFactIds },
+    signal,
+  );
+}
+
+export function getFinancialFactDetail(
+  api: AccessApi,
+  financialFactId: string,
+  signal?: AbortSignal,
+): Promise<ProductFinancialFactDetail> {
+  return api.product<ProductFinancialFactDetail>(
+    `v1/financial-profile/facts/${encodeURIComponent(financialFactId)}`,
+    'GET',
+    undefined,
     signal,
   );
 }

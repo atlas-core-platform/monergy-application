@@ -14,7 +14,8 @@ public sealed record ProductFinancialSourceView(
     string SourceName,
     string DocumentVersion,
     DateTimeOffset RecordedAt,
-    string TechnicalSourceFactId);
+    string TechnicalSourceFactId,
+    string TechnicalProvenanceId);
 
 public sealed record ProductFinancialFactView(
     string FinancialFactId,
@@ -36,6 +37,10 @@ public sealed record ProductFinancialProfileView(
 public sealed record ProductFinancialPromotionResult(
     ProductFinancialProfileView Profile,
     int Confirmed);
+
+public sealed record ProductFinancialFactDetailView(
+    ProductFinancialFactView Current,
+    IReadOnlyList<ProductFinancialFactView> History);
 
 public static class ProductFinancialProfileEndpoints
 {
@@ -71,6 +76,50 @@ public static class ProductFinancialProfileEndpoints
 
                 return await ReadProductProfileAsync(
                     http, session, customer, read, access, financial, evidence).ConfigureAwait(false);
+            }));
+
+        app.MapGet("/product-api/v1/financial-profile/facts/{financialFactId}", (
+            string financialFactId,
+            HttpContext http,
+            CustomerOwnerClient owners,
+            TenantAccessClient access,
+            ProductFinancialProfileClient financial,
+            ProductEvidenceClient evidence) =>
+            InvokeAsync(async () =>
+            {
+                if (!TenantAccessClient.Identifier(financialFactId, 160))
+                    throw new TenantBoundaryException("FINANCIAL_FACT_INVALID", 400);
+
+                var session = await owners.SessionAsync(http).ConfigureAwait(false);
+                var customer = await owners.OwnedCustomerAsync(
+                    session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
+                    ?? throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
+
+                var read = await access.EvaluateCustomerAsync(
+                    http, "financial-profile.profile.read", customer.CustomerId).ConfigureAwait(false);
+                if (read.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+
+                var evidenceDecision = await access.EvaluateCustomerAsync(
+                    http, "evidence.document.read", customer.CustomerId).ConfigureAwait(false);
+                if (evidenceDecision.Outcome != "Allow")
+                    throw new TenantBoundaryException("ACCESS_DENIED", 403);
+
+                var current = await ReadFinancialFactExactAsync(
+                    financialFactId, null, session, customer, read, evidenceDecision,
+                    financial, evidence, http.RequestAborted).ConfigureAwait(false)
+                    ?? throw new TenantBoundaryException("FINANCIAL_FACT_NOT_FOUND", 404);
+
+                var history = new List<ProductFinancialFactView>(current.Revision);
+                for (var revision = current.Revision; revision >= 1; revision--)
+                {
+                    var item = await ReadFinancialFactExactAsync(
+                        financialFactId, revision, session, customer, read, evidenceDecision,
+                        financial, evidence, http.RequestAborted).ConfigureAwait(false)
+                        ?? throw new TenantBoundaryException("FINANCIAL_FACT_HISTORY_INCOMPLETE", 503);
+                    history.Add(item);
+                }
+
+                return new ProductFinancialFactDetailView(current, history);
             }));
 
         app.MapPost("/product-api/v1/financial-profile/from-processing/{jobId}", (
@@ -208,24 +257,8 @@ public static class ProductFinancialProfileEndpoints
         if (evidenceDecision.Outcome != "Allow")
             throw new TenantBoundaryException("ACCESS_DENIED", 403);
 
-        var libraryRequest = new ContractRequest<ListCustomerEvidence>(
-            App02ContractNames.ListCustomerEvidence,
-            ContractGuard.CurrentVersion,
-            "request-financial-sources-" + Guid.NewGuid().ToString("N"),
-            "correlation-financial-sources-" + Guid.NewGuid().ToString("N"),
-            null,
-            Security(session, customer.CustomerId, evidenceDecision, null),
-            null,
-            new ListCustomerEvidence(customer.CustomerId, 100));
-        var library = await evidence.ListAsync(
-            session.TenantId,
-            session.AuthenticationContextId,
-            libraryRequest,
-            http.RequestAborted).ConfigureAwait(false);
-        var names = library.Items.ToDictionary(
-            item => item.DocumentVersionId,
-            item => item.OriginalFileName,
-            StringComparer.Ordinal);
+        var names = await ReadEvidenceNamesAsync(
+            session, customer, evidenceDecision, evidence, http.RequestAborted).ConfigureAwait(false);
 
         var facts = new List<ProductFinancialFactView>();
         foreach (var fact in profileResult.Data.Facts.OrderBy(
@@ -258,7 +291,8 @@ public static class ProductFinancialProfileEndpoints
                     names.GetValueOrDefault(provenance.Data.DocumentVersionId, "Uploaded document"),
                     provenance.Data.DocumentVersionId,
                     provenance.Data.RecordedAt,
-                    provenance.Data.SourceFactId)));
+                    provenance.Data.SourceFactId,
+                    provenance.Data.FinancialProvenanceId)));
         }
 
         return new ProductFinancialProfileView(
@@ -267,6 +301,175 @@ public static class ProductFinancialProfileEndpoints
             profileResult.Data.UpdatedAt,
             facts,
             "Temporary data");
+    }
+
+    private static async Task<IReadOnlyDictionary<string, string>> ReadEvidenceNamesAsync(
+        CustomerOwnerSession session,
+        CustomerOwnerWorkspace customer,
+        CustomerAccessDecision evidenceDecision,
+        ProductEvidenceClient evidence,
+        CancellationToken ct)
+    {
+        var libraryRequest = new ContractRequest<ListCustomerEvidence>(
+            App02ContractNames.ListCustomerEvidence,
+            ContractGuard.CurrentVersion,
+            "request-financial-sources-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-sources-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, evidenceDecision, null),
+            null,
+            new ListCustomerEvidence(customer.CustomerId, 100));
+        var library = await evidence.ListAsync(
+            session.TenantId,
+            session.AuthenticationContextId,
+            libraryRequest,
+            ct).ConfigureAwait(false);
+        return library.Items.ToDictionary(
+            item => item.DocumentVersionId,
+            item => item.OriginalFileName,
+            StringComparer.Ordinal);
+    }
+
+    private static async Task<ProductFinancialFactView?> ReadFinancialFactAsync(
+        string financialFactId,
+        int? revision,
+        CustomerOwnerSession session,
+        CustomerOwnerWorkspace customer,
+        CustomerAccessDecision profileDecision,
+        ProductFinancialProfileClient financial,
+        IReadOnlyDictionary<string, string> sourceNames,
+        CancellationToken ct)
+    {
+        var factRequest = new ContractRequest<GetFinancialFact>(
+            Vs02ContractNames.GetFinancialFact,
+            ContractGuard.CurrentVersion,
+            "request-financial-fact-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-fact-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, profileDecision, null),
+            null,
+            new GetFinancialFact(financialFactId, customer.CustomerId, revision));
+        var factResult = await financial.FactAsync(factRequest, ct).ConfigureAwait(false);
+        if (factResult.Outcome == ContractOutcome.Rejected &&
+            factResult.Error?.Category == ContractErrorCategory.NotFound)
+            return null;
+        if (factResult.Outcome != ContractOutcome.Success || factResult.Data is null)
+            throw new TenantBoundaryException("FINANCIAL_PROFILE_OWNER_UNAVAILABLE", 503);
+
+        var provenanceRequest = new ContractRequest<GetFinancialProvenance>(
+            Vs02ContractNames.GetFinancialProvenance,
+            ContractGuard.CurrentVersion,
+            "request-financial-source-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-source-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, profileDecision, null),
+            null,
+            new GetFinancialProvenance(factResult.Data.FinancialProvenanceId, customer.CustomerId));
+        var provenance = await financial.ProvenanceAsync(provenanceRequest, ct).ConfigureAwait(false);
+        if (provenance.Outcome != ContractOutcome.Success || provenance.Data is null)
+            throw new TenantBoundaryException("FINANCIAL_PROFILE_PROVENANCE_UNAVAILABLE", 503);
+
+        return new ProductFinancialFactView(
+            factResult.Data.FinancialFactId,
+            factResult.Data.FactType,
+            factResult.Data.Label,
+            factResult.Data.Value,
+            factResult.Data.Currency,
+            factResult.Data.EffectiveDate,
+            factResult.Data.Revision,
+            new ProductFinancialSourceView(
+                sourceNames.GetValueOrDefault(provenance.Data.DocumentVersionId, "Uploaded document"),
+                provenance.Data.DocumentVersionId,
+                provenance.Data.RecordedAt,
+                provenance.Data.SourceFactId,
+                provenance.Data.FinancialProvenanceId));
+    }
+
+    private static async Task<ProductFinancialFactView?> ReadFinancialFactExactAsync(
+        string financialFactId,
+        int? revision,
+        CustomerOwnerSession session,
+        CustomerOwnerWorkspace customer,
+        CustomerAccessDecision profileDecision,
+        CustomerAccessDecision evidenceDecision,
+        ProductFinancialProfileClient financial,
+        ProductEvidenceClient evidence,
+        CancellationToken ct)
+    {
+        var factRequest = new ContractRequest<GetFinancialFact>(
+            Vs02ContractNames.GetFinancialFact,
+            ContractGuard.CurrentVersion,
+            "request-financial-fact-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-fact-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, profileDecision, null),
+            null,
+            new GetFinancialFact(financialFactId, customer.CustomerId, revision));
+        var factResult = await financial.FactAsync(factRequest, ct).ConfigureAwait(false);
+        if (factResult.Outcome == ContractOutcome.Rejected &&
+            factResult.Error?.Category == ContractErrorCategory.NotFound)
+            return null;
+        if (factResult.Outcome != ContractOutcome.Success || factResult.Data is null)
+            throw new TenantBoundaryException("FINANCIAL_PROFILE_OWNER_UNAVAILABLE", 503);
+
+        var provenanceRequest = new ContractRequest<GetFinancialProvenance>(
+            Vs02ContractNames.GetFinancialProvenance,
+            ContractGuard.CurrentVersion,
+            "request-financial-source-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-source-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, profileDecision, null),
+            null,
+            new GetFinancialProvenance(factResult.Data.FinancialProvenanceId, customer.CustomerId));
+        var provenance = await financial.ProvenanceAsync(provenanceRequest, ct).ConfigureAwait(false);
+        if (provenance.Outcome != ContractOutcome.Success || provenance.Data is null)
+            throw new TenantBoundaryException("FINANCIAL_PROFILE_PROVENANCE_UNAVAILABLE", 503);
+
+        var referenceRequest = new ContractRequest<GetEvidenceReference>(
+            Vs02ContractNames.GetEvidenceReference,
+            ContractGuard.CurrentVersion,
+            "request-financial-evidence-reference-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-evidence-reference-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, evidenceDecision, null),
+            null,
+            new GetEvidenceReference(provenance.Data.DocumentVersionId, customer.CustomerId));
+        var reference = await evidence.ReferenceAsync(
+            session.TenantId, session.AuthenticationContextId, referenceRequest, ct).ConfigureAwait(false);
+        if (reference.Outcome != ContractOutcome.Success || reference.Data is null)
+            throw new TenantBoundaryException("FINANCIAL_SOURCE_DOCUMENT_UNAVAILABLE", 404);
+
+        var metadataRequest = new ContractRequest<GetEvidenceMetadata>(
+            Vs02ContractNames.GetEvidenceMetadata,
+            ContractGuard.CurrentVersion,
+            "request-financial-evidence-metadata-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-evidence-metadata-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, evidenceDecision, null),
+            null,
+            new GetEvidenceMetadata(reference.Data.DocumentId, customer.CustomerId));
+        var metadata = await evidence.MetadataAsync(
+            session.TenantId, session.AuthenticationContextId, metadataRequest, ct).ConfigureAwait(false);
+        if (metadata.Outcome != ContractOutcome.Success || metadata.Data is null)
+            throw new TenantBoundaryException("FINANCIAL_SOURCE_DOCUMENT_UNAVAILABLE", 404);
+        var version = metadata.Data.Versions.SingleOrDefault(
+            item => item.DocumentVersionId == provenance.Data.DocumentVersionId)
+            ?? throw new TenantBoundaryException("FINANCIAL_SOURCE_DOCUMENT_UNAVAILABLE", 404);
+
+        return new ProductFinancialFactView(
+            factResult.Data.FinancialFactId,
+            factResult.Data.FactType,
+            factResult.Data.Label,
+            factResult.Data.Value,
+            factResult.Data.Currency,
+            factResult.Data.EffectiveDate,
+            factResult.Data.Revision,
+            new ProductFinancialSourceView(
+                version.OriginalFileName,
+                provenance.Data.DocumentVersionId,
+                provenance.Data.RecordedAt,
+                provenance.Data.SourceFactId,
+                provenance.Data.FinancialProvenanceId));
     }
 
     private static TrustedSecurityContext Security(
@@ -330,6 +533,11 @@ public sealed class ProductFinancialProfileClient : IDisposable
         ContractRequest<NormalizeSourceFacts> request,
         CancellationToken ct) =>
         SendAsync<NormalizeSourceFacts, NormalizationResult>("contracts/cid-031/v1", request, ct);
+
+    public Task<ContractResult<AuthoritativeFinancialFact>> FactAsync(
+        ContractRequest<GetFinancialFact> request,
+        CancellationToken ct) =>
+        SendAsync<GetFinancialFact, AuthoritativeFinancialFact>("contracts/cid-032/v1", request, ct);
 
     public Task<ContractResult<FinancialProvenance>> ProvenanceAsync(
         ContractRequest<GetFinancialProvenance> request,

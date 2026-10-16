@@ -2,7 +2,7 @@ import { FoundationProvider } from '@monergy/ui-foundation';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { AccessApi } from '../src/access/accessApi';
+import { AccessApi, AccessApiError } from '../src/access/accessApi';
 import { Context } from '../src/access/workspaceSession';
 import EvidenceExperience from '../src/product/EvidenceExperience';
 
@@ -60,6 +60,7 @@ function mount(
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.history.replaceState(null, '', '/');
 });
 
 it('reviews the exact file before submitting and shows the upload confirmation', async () => {
@@ -346,4 +347,58 @@ it('requires explicit source-fact selection before updating Financial informatio
     },
     undefined,
   );
+});
+
+it('opens the exact authorized source document version from Financial Passport history', async () => {
+  window.history.replaceState(null, '', '/evidence?version=document-version-002');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+    if (path === 'v1/evidence/source/document-version-002')
+      return Promise.resolve({
+        documentId: 'document-002',
+        documentVersionId: 'document-version-002',
+        evidenceId: 'evidence-002',
+        version: 2,
+        sourceName: 'Customer upload',
+        originalFileName: 'updated-income.txt',
+        contentType: 'text/plain',
+        contentSha256: 'b'.repeat(64),
+        receivedAt: '2026-10-15T00:00:00Z',
+        dataDurability: 'Temporary data',
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read']);
+
+  const drawer = await screen.findByRole('dialog', { name: 'Source document details' });
+  expect(drawer).toHaveTextContent('updated-income.txt');
+  expect(drawer).toHaveTextContent('Version');
+  expect(drawer).toHaveTextContent('2');
+  expect(drawer).toHaveTextContent('Customer upload');
+  expect(window.location.pathname).toBe('/evidence');
+  expect(window.location.search).toBe('');
+});
+
+it('fails closed when a requested source document version is outside current Evidence access', async () => {
+  window.history.replaceState(null, '', '/evidence?version=document-version-hidden');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+    if (path === 'v1/evidence/source/document-version-hidden')
+      return Promise.reject(new AccessApiError(404, 'EVIDENCE_VERSION_NOT_FOUND'));
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read']);
+
+  expect(
+    await screen.findByText("The source document version isn't available in your current document access."),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole('dialog', { name: 'Source document details' }),
+  ).not.toBeInTheDocument();
 });

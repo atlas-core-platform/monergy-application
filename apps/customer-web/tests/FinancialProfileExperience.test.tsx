@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AccessApi } from '../src/access/accessApi';
@@ -53,6 +53,7 @@ function mount(api: AccessApi) {
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.history.replaceState(null, '', '/');
 });
 
 it('shows trusted financial information with source history and hides raw ids by default', async () => {
@@ -76,6 +77,7 @@ it('shows trusted financial information with source history and hides raw ids by
           documentVersion: 'document-version-001',
           recordedAt: '2026-10-15T12:00:00Z',
           technicalSourceFactId: 'source-fact-001',
+          technicalProvenanceId: 'provenance-base-001',
         },
       },
     ],
@@ -93,4 +95,118 @@ it('shows trusted financial information with source history and hides raw ids by
   expect(screen.getByText('ff-income')).toBeVisible();
   expect(screen.getByText('document-version-001')).toBeVisible();
   expect(screen.getByText('source-fact-001')).toBeVisible();
+});
+
+it('opens a bounded trusted-fact drill-down with revision and source history', async () => {
+  const api = new AccessApi(session);
+  const current = {
+    financialFactId: 'ff-income',
+    factType: 'INCOME',
+    label: 'Employment income',
+    value: 125000,
+    currency: 'USD',
+    effectiveDate: '2026-10-01',
+    revision: 2,
+    source: {
+      sourceName: 'income-current.txt',
+      documentVersion: 'document-version-002',
+      recordedAt: '2026-10-15T12:00:00Z',
+      technicalSourceFactId: 'source-fact-002',
+      technicalProvenanceId: 'provenance-002',
+    },
+  };
+  const revisionOne = {
+    ...current,
+    value: 120000,
+    revision: 1,
+    source: {
+      sourceName: 'income-original.txt',
+      documentVersion: 'document-version-001',
+      recordedAt: '2026-10-14T12:00:00Z',
+      technicalSourceFactId: 'source-fact-001',
+      technicalProvenanceId: 'provenance-001',
+    },
+  };
+
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/financial-profile')
+      return Promise.resolve({
+        financialProfileId: 'financial-profile-reference-customer',
+        revision: 2,
+        updatedAt: current.source.recordedAt,
+        dataDurability: 'Temporary data',
+        facts: [current],
+      }) as never;
+    if (path === 'v1/financial-profile/facts/ff-income')
+      return Promise.resolve({ current, history: [current, revisionOne] }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'View source & history' }));
+
+  const drawer = await screen.findByRole('dialog', { name: 'Financial information details' });
+  expect(drawer).toHaveTextContent('Employment income');
+  expect(drawer).toHaveTextContent('$125,000.00');
+  expect(drawer).toHaveTextContent('Revision 2');
+  expect(drawer).toHaveTextContent('Revision 1');
+  expect(drawer).toHaveTextContent('$120,000.00');
+  expect(drawer).toHaveTextContent('income-current.txt');
+  expect(drawer).toHaveTextContent('income-original.txt');
+
+  const sourceLinks = within(drawer).getAllByRole('link', { name: 'View this source document' });
+  expect(sourceLinks[0]).toHaveAttribute(
+    'href',
+    '/evidence?version=document-version-002',
+  );
+  expect(sourceLinks[1]).toHaveAttribute(
+    'href',
+    '/evidence?version=document-version-001',
+  );
+
+  await user.click(within(drawer).getByText('Technical details'));
+  expect(drawer).toHaveTextContent('provenance-002');
+  expect(drawer).toHaveTextContent('source-fact-001');
+  expect(drawer).toHaveTextContent('document-version-001');
+});
+
+it('opens a Passport deep link directly to the requested trusted fact', async () => {
+  window.history.replaceState(null, '', '/finances?fact=ff-income');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    const fact = {
+      financialFactId: 'ff-income',
+      factType: 'INCOME',
+      label: 'Employment income',
+      value: 125000,
+      currency: 'USD',
+      effectiveDate: '2026-10-01',
+      revision: 1,
+      source: {
+        sourceName: 'income-statement.txt',
+        documentVersion: 'document-version-001',
+        recordedAt: '2026-10-15T12:00:00Z',
+        technicalSourceFactId: 'source-fact-001',
+        technicalProvenanceId: 'provenance-001',
+      },
+    };
+    if (path === 'v1/financial-profile')
+      return Promise.resolve({
+        financialProfileId: 'financial-profile-reference-customer',
+        revision: 1,
+        updatedAt: fact.source.recordedAt,
+        dataDurability: 'Temporary data',
+        facts: [fact],
+      }) as never;
+    if (path === 'v1/financial-profile/facts/ff-income')
+      return Promise.resolve({ current: fact, history: [fact] }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api);
+
+  const drawer = await screen.findByRole('dialog', { name: 'Financial information details' });
+  expect(drawer).toHaveTextContent('Employment income');
+  expect(drawer).toHaveTextContent('1 revision');
 });

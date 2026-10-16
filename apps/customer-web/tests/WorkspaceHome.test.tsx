@@ -81,6 +81,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
               documentVersion: 'document-version-001',
               recordedAt: '2026-10-15T12:00:00Z',
               technicalSourceFactId: 'source-fact-001',
+              technicalProvenanceId: 'provenance-income-001',
             },
           },
           {
@@ -96,6 +97,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
               documentVersion: 'document-version-002',
               recordedAt: '2026-10-14T12:00:00Z',
               technicalSourceFactId: 'source-fact-002',
+              technicalProvenanceId: 'provenance-expense-002',
             },
           },
         ],
@@ -120,6 +122,10 @@ it('shows a source-connected Financial Passport without inventing financial scor
   expect(screen.getByText('Expense items')).toBeVisible();
   expect(screen.getByText('Employment income')).toBeVisible();
   expect(screen.getByText('income-statement.txt')).toBeVisible();
+  expect(screen.getByText('Employment income').closest('a')).toHaveAttribute(
+    'href',
+    '/finances?fact=ff-income',
+  );
   expect(screen.getByText('2 source documents')).toBeVisible();
   expect(screen.queryByText(/financial health score/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/recommendation/i)).not.toBeInTheDocument();

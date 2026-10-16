@@ -158,7 +158,10 @@ public sealed record NormalizationResult(IReadOnlyList<NormalizedFinancialFact> 
 
 public sealed record GetFinancialProfile(string FinancialProfileId, string CustomerId);
 
-public sealed record GetFinancialFact(string FinancialFactId, string CustomerId);
+public sealed record GetFinancialFact(
+    string FinancialFactId,
+    string CustomerId,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? Revision = null);
 
 public sealed record AuthoritativeFinancialFact(
     string FinancialFactId,

@@ -171,12 +171,22 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
         }
     }
 
-    public Task<FinancialFactRecord?> GetFactAsync(string financialFactId, CancellationToken cancellationToken)
+    public Task<FinancialFactRecord?> GetFactAsync(
+        string financialFactId,
+        int? revision,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         lock (sync)
         {
-            factsById.TryGetValue(financialFactId, out var value);
+            if (revision is null)
+            {
+                factsById.TryGetValue(financialFactId, out var current);
+                return Task.FromResult(current);
+            }
+            var value = factHistory.TryGetValue(financialFactId, out var history)
+                ? history.SingleOrDefault(item => item.Revision == revision.Value)
+                : null;
             return Task.FromResult(value);
         }
     }
