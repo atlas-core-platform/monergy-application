@@ -1408,3 +1408,28 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* T1-19 — reconcile recovered candidates with current trusted Financial facts. */
+.product-fact-card.trusted {
+  border-color: var(--monergy-midnight-control-border);
+  background: var(--monergy-midnight-selected);
+}
+.product-fact-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.product-fact-tags .ant-tag {
+  margin: 0;
+}
+.product-fact-trust-link {
+  width: fit-content;
+  color: var(--mw-primary);
+  font-size: var(--monergy-text-small);
+  font-weight: 600;
+}
+.product-fact-trust-link:hover {
+  text-decoration: underline;
+}
