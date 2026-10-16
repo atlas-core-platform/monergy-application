@@ -1253,3 +1253,96 @@
     padding-left: 0;
   }
 }
+
+
+/* T1-15 — exact Evidence-owned Document version history. */
+.product-document-history {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0;
+  padding: 14px;
+  text-align: left;
+  border: 1px solid var(--mw-line);
+  border-radius: 10px;
+  background: var(--monergy-midnight-sidebar);
+}
+.product-document-history-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+.product-document-history-heading .workspace-eyebrow {
+  margin-bottom: 5px;
+}
+.product-document-history-heading h4 {
+  margin: 0;
+  color: var(--mw-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.product-document-history-heading > span,
+.product-document-history-note {
+  color: var(--mw-muted);
+  font-size: var(--monergy-text-small);
+}
+.product-document-history-list {
+  display: grid;
+  gap: 8px;
+}
+.product-document-history-list > article {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--mw-line);
+  border-radius: 9px;
+  background: var(--monergy-midnight-surface);
+}
+.product-document-history-list > article.current {
+  border-color: var(--monergy-midnight-control-border);
+  background: var(--monergy-midnight-selected);
+}
+.product-document-history-version,
+.product-document-history-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.product-document-history-version {
+  align-items: start;
+}
+.product-document-history-version .ant-tag {
+  width: fit-content;
+  margin: 0;
+}
+.product-document-history-list strong {
+  overflow: hidden;
+  color: var(--mw-ink);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.product-document-history-list small {
+  color: var(--mw-muted);
+  font-size: 10px;
+}
+.product-document-history-note {
+  margin: 0;
+  line-height: 1.55;
+}
+@media (max-width: 680px) {
+  .product-document-history-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+  .product-document-history-list > article {
+    grid-template-columns: 74px minmax(0, 1fr);
+  }
+  .product-document-history-list > article .ant-btn {
+    grid-column: 2;
+    justify-self: start;
+    padding-left: 0;
+  }
+}
