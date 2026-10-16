@@ -34,6 +34,7 @@ T1-01 through T1-19 preserve existing individual CTO acceptance and merge eviden
 - Active correction: `work/t1-20-consent-session-safety`, code revision `de958ad906ce63b8c68181f8879e9b8c1b1fefb3`. Abort every request, including manual refresh, on customer/session change or unmount; prevent stale data, errors and busy-state changes even when transport ignores cancellation. Scope displayed results to the current tenant, actor, authentication context, subject version, customer and API instance.
 - Evidence: [T1-20 correction verification](evidence/t1-20-consent-session-safety-20261017.md). Frontend component/type/lint and focused backend tests passed. These do not replace live owner-backed UAT.
 - Paired Expert correction: `work/t1-20-verification-continuity`; retain T1-20 as active while runtime evidence is pending and expose correction evidence without promoting acceptance or rewriting extraction locks.
+- Test-only Evidence follow-up: `a113683527e3b464829a3552bed66f69568bdb56` scopes the duplicate filename assertion to loaded processing activity. SOURCE_REVIEWED_RERUN_PENDING: the workspace exec-server is disconnected; four recovered-review timeouts remain undiagnosed. Earlier passing counts apply only to the earlier tested revision.
 - Completion remains pending. No development GitHub Actions, release approval or product acceptance is inferred.
 
 ## Complete scope inventory and remaining reconciliation

@@ -57,3 +57,22 @@ node --test tests/source-lock-current.test.js tests/product-source-reconciliatio
 Paired branch: `monergy-system-expert/work/t1-20-verification-continuity`. Record this correction at its exact code revision as a candidate, keep T1-20 active while verification is pending, correct the obsolete Active label to Unexpired record, and preserve source-versus-runtime evidence boundaries. The scoped tests must not be represented as full T1-20 acceptance.
 
 Complete the isolated owner-backed UAT and full Expert consistency/recompilation checks before closing T1-20 or merging this correction as fully verified. Then proceed to named-recipient resolution and explicit revocation subject to existing owner contracts and OD-09 constraints. No development GitHub Actions were triggered.
+
+## Evidence-test follow-up during workspace outage
+
+Test-only follow-up revision: `a113683527e3b464829a3552bed66f69568bdb56`. **SOURCE_REVIEWED_RERUN_PENDING**. The earlier executed checks above belong to code `de958ad906ce63b8c68181f8879e9b8c1b1fefb3`; they do not establish a pass for this follow-up.
+
+The recent durable-activity test queried the filename globally even though both the document library and processing activity render it. It also waited for a heading that exists before either request completes. The test now scopes filename, status, attempt and Open document assertions to the named Recent document processing region and waits for its filename to load. All 28 Evidence tests and their behavior checks remain present. No production code or timeout changes accompany this follow-up.
+
+Source inspection of the other four failures confirms that the fixtures provide Completed processing records and Evidence/Job read capabilities, and the component offers View result under those conditions. Initial library/activity loads use zero-delay timers; the shared setup does not install fake timers. These observations do not establish the cause of the four timeouts. The earlier isolated resumed-review pass is insufficient to close them.
+
+The workspace exec-server connection failed before this continuation. Repository access remains available, but no shell/runtime executor is exposed. Consequently the corrected test, the four timeouts, TypeScript after this edit, and full Expert checks have **not been rerun**. No new passing-test count is claimed.
+
+Resume in a working workspace at this exact follow-up (or its documentation-only descendant):
+
+```sh
+pnpm --dir apps/customer-web exec vitest run tests/ConsentExperience.test.tsx tests/EvidenceExperience.test.tsx
+pnpm --dir apps/customer-web exec tsc --noEmit -p tsconfig.json
+```
+
+If the four recovered-review timeouts persist, inspect the DOM and request-call state at the failing View result wait before changing product behavior or test timeouts. Keep the existing no-mutation and exact source-fact/document-version assertions. The full live owner UAT and compiled Expert checks remain separate required gates.
