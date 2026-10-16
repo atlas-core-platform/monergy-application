@@ -217,7 +217,10 @@ export default function WorkspaceHome() {
                   </div>
                   <div className="workspace-passport-list">
                     {snapshot.latest.map((fact) => (
-                      <a href="/finances" key={fact.financialFactId}>
+                      <a
+                        href={'/finances?fact=' + encodeURIComponent(fact.financialFactId)}
+                        key={fact.financialFactId}
+                      >
                         <span>
                           <strong>{fact.label}</strong>
                           <small>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'EXPENSE' ? 'Expense' : fact.factType}</small>
