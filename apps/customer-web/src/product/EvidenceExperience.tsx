@@ -1084,12 +1084,26 @@ export default function EvidenceExperience() {
                   ) : recoveredResult.facts.every((fact) =>
                       trustedFactsBySourceFactId.has(fact.sourceFactId),
                     ) ? (
-                    <Alert
-                      showIcon
-                      type="success"
-                      title="All supported items from this run are already trusted"
-                      description="Each extracted item in this completed run is already represented in current Financial information. Use the item links above to inspect the trusted facts."
-                    />
+                    <>
+                      {recoveredPromotionResult && (
+                        <Alert
+                          showIcon
+                          type="success"
+                          title={
+                            String(recoveredPromotionResult.confirmed) +
+                            (recoveredPromotionResult.confirmed === 1
+                              ? ' item added to Financial information'
+                              : ' items added to Financial information')
+                          }
+                        />
+                      )}
+                      <Alert
+                        showIcon
+                        type="success"
+                        title="All supported items from this run are already trusted"
+                        description="Each extracted item in this completed run is already represented in current Financial information. Use the item links above to inspect the trusted facts."
+                      />
+                    </>
                   ) : (
                     <>
                       <Alert
