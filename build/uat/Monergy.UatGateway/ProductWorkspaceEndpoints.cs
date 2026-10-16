@@ -515,6 +515,56 @@ public sealed class ProductEvidenceClient : IDisposable
         return result.Data;
     }
 
+    public Task<ContractResult<EvidenceReference>> ReferenceAsync(
+        string tenantId,
+        string sessionId,
+        ContractRequest<GetEvidenceReference> body,
+        CancellationToken cancellationToken) =>
+        SendContractAsync<GetEvidenceReference, EvidenceReference>(
+            tenantId, sessionId, "contracts/cid-022/v1", body, cancellationToken);
+
+    public Task<ContractResult<EvidenceMetadata>> MetadataAsync(
+        string tenantId,
+        string sessionId,
+        ContractRequest<GetEvidenceMetadata> body,
+        CancellationToken cancellationToken) =>
+        SendContractAsync<GetEvidenceMetadata, EvidenceMetadata>(
+            tenantId, sessionId, "contracts/cid-021/v1", body, cancellationToken);
+
+    private async Task<ContractResult<TData>> SendContractAsync<TPayload, TData>(
+        string tenantId,
+        string sessionId,
+        string path,
+        ContractRequest<TPayload> body,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, path));
+        request.Headers.Add("X-Monergy-Tenant", tenantId);
+        request.Headers.Add("X-Monergy-Session", sessionId);
+        request.Content = JsonContent.Create(body, options: ContractJson.Options);
+        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if ((int)response.StatusCode >= 500 || (int)response.StatusCode is >= 300 and < 400)
+            throw new TenantBoundaryException("EVIDENCE_OWNER_UNAVAILABLE", 503);
+        if ((int)response.StatusCode is 401 or 403)
+            throw new TenantBoundaryException("ACCESS_DENIED", 403);
+        try
+        {
+            var result = await response.Content.ReadFromJsonAsync<ContractResult<TData>>(
+                ContractJson.Options, cancellationToken).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503);
+            if (!string.Equals(result.ContractName, body.ContractName, StringComparison.Ordinal) ||
+                !string.Equals(result.ContractVersion, body.ContractVersion, StringComparison.Ordinal) ||
+                !string.Equals(result.RequestId, body.RequestId, StringComparison.Ordinal) ||
+                !string.Equals(result.CorrelationId, body.CorrelationId, StringComparison.Ordinal))
+                throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503);
+            return result;
+        }
+        catch (JsonException)
+        {
+            throw new TenantBoundaryException("EVIDENCE_OWNER_RESPONSE_INVALID", 503);
+        }
+    }
+
     private static bool ValidLibraryItem(CustomerEvidenceItem item) =>
         TenantAccessClient.Identifier(item.DocumentId, 160) &&
         TenantAccessClient.Identifier(item.DocumentVersionId, 160) &&
