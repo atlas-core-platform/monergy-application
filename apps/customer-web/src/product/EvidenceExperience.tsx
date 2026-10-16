@@ -85,6 +85,7 @@ export default function EvidenceExperience() {
       try {
         const library = await listEvidence(api, signal);
         setEvidence(library.items);
+        setLibraryLoaded(true);
       } catch (failure) {
         if (!signal?.aborted) {
           setLibraryError(
@@ -94,10 +95,7 @@ export default function EvidenceExperience() {
           );
         }
       } finally {
-        if (!signal?.aborted) {
-          setLibraryBusy(false);
-          setLibraryLoaded(true);
-        }
+        if (!signal?.aborted) setLibraryBusy(false);
       }
     },
     [api, canRead],
