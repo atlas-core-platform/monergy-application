@@ -500,6 +500,17 @@ public static class ProductWorkspaceEndpoints
                 jobId,
                 customer.CustomerId,
                 http.RequestAborted).ConfigureAwait(false);
+            if (result.Result.Facts.Count is < 1 or > 100 ||
+                result.Result.Facts.Select(fact => fact.SourceFactId)
+                    .Distinct(StringComparer.Ordinal).Count() != result.Result.Facts.Count ||
+                result.Result.Facts.Any(fact =>
+                    fact.FactType is not ("INCOME" or "EXPENSE") ||
+                    !TenantAccessClient.Identifier(fact.SourceFactId, 160) ||
+                    string.IsNullOrWhiteSpace(fact.Label) || fact.Label.Length > 160 ||
+                    string.IsNullOrWhiteSpace(fact.Currency) || fact.Currency.Length is < 3 or > 16 ||
+                    string.IsNullOrWhiteSpace(fact.SourceLocation) || fact.SourceLocation.Length > 160 ||
+                    fact.Confidence is < 0m or > 1m))
+                throw new TenantBoundaryException("PROCESSING_RESULT_INVALID", 503);
 
             return Results.Ok(new ProductProcessingResultView(
                 result.Job.JobId,
