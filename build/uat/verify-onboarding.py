@@ -226,6 +226,16 @@ assert fact_detail['current']['source']['technicalProvenanceId']
 assert len(fact_detail['history']) == 1
 assert fact_detail['history'][0] == fact_detail['current']
 
+source_detail_path = '/product-api/v1/evidence/source/' + product_receipt['documentVersionId']
+call(source_detail_path, status=401)
+call(source_detail_path, session=owner, status=403)
+call(source_detail_path, session=second_customer, status=404)
+source_detail = call(source_detail_path, session=customer)
+assert source_detail['documentId'] == product_receipt['documentId']
+assert source_detail['documentVersionId'] == product_receipt['documentVersionId']
+assert source_detail['originalFileName'] == 'customer-statement.txt'
+assert source_detail['version'] == 1
+
 # Setup is tenant/admin bound and depends on the Access Management owner's v2.1 receipt.
 assert sql('uat_am_t001', "SELECT schema_version::text || '|' || default_access_pack_version FROM am.tenant_identity WHERE singleton;") == '6|2.1'
 assert sql('uat_am_t001', "SELECT count(*) FROM am.default_access_pack_history WHERE pack_version='2.1' AND pack_identity='monergy-default-access-pack/2.1';") == '1'
@@ -362,7 +372,7 @@ assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
-           'validated': ['owner-confirmed Default Access Pack 2.1 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down', 'canonical Job Audit delivery',
+           'validated': ['owner-confirmed Default Access Pack 2.1 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'canonical Job Audit delivery',
                          'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
                          'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
            'limitations': ['Business data uses owner reference adapters.', 'The processor accepts structured LOCAL/UAT text and does not claim OCR or production AI.', 'Only customer-reviewed Income/Expense source facts are promoted; OCR/production AI and additional financial fact types remain out of scope.', 'Consent outbox delivery is not claimed.']}
