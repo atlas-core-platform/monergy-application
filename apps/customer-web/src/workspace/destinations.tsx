@@ -7,6 +7,7 @@ export const destinations: WorkspaceDestination[] = [
   { id: 'finances', label: 'Financial information', icon: 'reports', href: '/finances' },
   { id: 'search', label: 'Search', icon: 'search', href: '/search' },
   { id: 'reports', label: 'Reports', icon: 'reports', href: '/reports' },
+  { id: 'consent', label: 'Consent & privacy', icon: 'check', href: '/consent' },
 ];
 
 export const productModule = {
