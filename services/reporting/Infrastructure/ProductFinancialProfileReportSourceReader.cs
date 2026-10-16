@@ -41,10 +41,15 @@ public sealed class ProductFinancialProfileReportSourceReader(
                 "Current reporting authorization is required.", context.CorrelationId);
         }
 
+        var sourceSecurity = context.Security with
+        {
+            Workload = new WorkloadContext("reporting", "local-uat-reporting:" + proof.TenantId),
+        };
         var profileId = "financial-profile-" + context.CustomerId;
         var profileRequest = Request(
             ReportingSourceRequestId("profile"),
             context,
+            sourceSecurity,
             Vs02ContractNames.GetFinancialProfile,
             new GetFinancialProfile(profileId, context.CustomerId));
         var profileResult = await SendAsync<GetFinancialProfile, FinancialProfileDetails>(
@@ -84,6 +89,7 @@ public sealed class ProductFinancialProfileReportSourceReader(
             var provenanceRequest = Request(
                 ReportingSourceRequestId("provenance"),
                 context,
+                sourceSecurity,
                 Vs02ContractNames.GetFinancialProvenance,
                 new GetFinancialProvenance(fact.FinancialProvenanceId, context.CustomerId));
             var provenanceResult = await SendAsync<GetFinancialProvenance, FinancialProvenance>(
@@ -122,9 +128,10 @@ public sealed class ProductFinancialProfileReportSourceReader(
             null);
     }
 
-    private ContractRequest<TPayload> Request<TPayload>(
+    private static ContractRequest<TPayload> Request<TPayload>(
         string requestId,
         ReportSourceReadContext context,
+        TrustedSecurityContext security,
         string contractName,
         TPayload payload) => new(
             contractName,
@@ -132,7 +139,7 @@ public sealed class ProductFinancialProfileReportSourceReader(
             requestId,
             context.CorrelationId,
             context.CausationId,
-            context.Security,
+            security,
             null,
             payload);
 
