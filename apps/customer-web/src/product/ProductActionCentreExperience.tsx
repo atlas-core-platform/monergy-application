@@ -151,6 +151,9 @@ export default function ProductActionCentreExperience() {
   ]);
 
   const hasReadableState = canReadDocuments || canReadFinancial;
+  const attentionStateComplete =
+    (!canReadDocuments || documentCount !== null) &&
+    (!canReadFinancial || profile !== null);
 
   return (
     <main className="product-page product-action-centre">
@@ -229,7 +232,9 @@ export default function ProductActionCentreExperience() {
                       ' ' +
                       (attention.length === 1 ? 'item' : 'items') +
                       ' from supported journeys'
-                    : 'Nothing currently needs attention in the supported journeys'}
+                    : attentionStateComplete
+                      ? 'Nothing currently needs attention in the supported journeys'
+                      : 'Current attention could not be fully determined'}
                 </h2>
               </div>
               <span>Deterministic · not ranked</span>
@@ -251,6 +256,17 @@ export default function ProductActionCentreExperience() {
                     )}
                   </article>
                 ))}
+              </div>
+            ) : !attentionStateComplete ? (
+              <div className="product-action-clear">
+                <WorkspaceIcon name="changes" size={23} />
+                <div>
+                  <strong>Some current information is unavailable.</strong>
+                  <p>
+                    Monergy will not infer a clear or missing-information state until the supported
+                    Documents and Financial information needed for this view can be refreshed.
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="product-action-clear">
