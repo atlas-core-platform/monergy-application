@@ -26,6 +26,8 @@ The existing `default` UAT profile might not include Consent databases. For Cons
 .\build\uat\Invoke-MonergyUat.ps1 -Action Credentials -Profile consent-t120 -Tenant T001 -Actor A100
 ```
 
+The new named profile may leave A100 without a business role by default. First use the Organization Administrator account to assign the implemented Customer role/resource access where needed, then sign out and establish a new A100 session; an administrator role by itself never supplies customer financial access.
+
 Sign in using **your own local key** without recording it. Visit `http://127.0.0.1:4183/consent`. Verify authenticated/customer-owned entry, known empty versus service unavailable (never a fabricated empty state), refresh, and test-only temporary-data labeling. If applicable existing delegated grants exist, verify exact unexpired/expired/revoked **recorded** states. An unexpired grant is **not** proof of effective authorization; the current owner, actor and permissions are evaluated separately on protected actions.
 
 Verify denied/cross-tenant requests and no disclosed other-customer records with the existing Consent owner integration checks. Do not seed grants in a retained customer profile solely to make a screen look populated. Run minimal extra owner tests only if a failure suggests a boundary issue.
