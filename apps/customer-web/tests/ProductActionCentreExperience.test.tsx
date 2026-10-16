@@ -207,5 +207,10 @@ it('never turns an unavailable Financial Profile into a false zero-information a
   expect(
     screen.queryByText('Your Documents do not contain any trusted financial information yet.'),
   ).not.toBeInTheDocument();
+  expect(screen.getByText('Current attention could not be fully determined')).toBeVisible();
+  expect(screen.getByText('Some current information is unavailable.')).toBeVisible();
+  expect(
+    screen.queryByText('Nothing currently needs attention in the supported journeys'),
+  ).not.toBeInTheDocument();
   expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
 });
