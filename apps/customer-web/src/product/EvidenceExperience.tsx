@@ -12,6 +12,7 @@ import {
   getEvidenceVersionHistory,
   getFinancialProfile,
   getProcessingActivity,
+  getRecoveredProcessingResult,
   listEvidence,
   maximumEvidenceBytes,
   scheduleDocumentProcessing,
@@ -25,6 +26,7 @@ import {
   type ProductFinancialPromotionResult,
   type ProductProcessingActivityItem,
   type ProductProcessingView,
+  type ProductRecoveredProcessingResult,
 } from './productApi';
 import './product.css';
 
@@ -114,6 +116,12 @@ export default function EvidenceExperience() {
   const [processingActivityBusy, setProcessingActivityBusy] = useState(false);
   const [processingActivityError, setProcessingActivityError] = useState('');
   const [processingActivityLoaded, setProcessingActivityLoaded] = useState(false);
+  const [recoveredResultJob, setRecoveredResultJob] =
+    useState<ProductProcessingActivityItem | null>(null);
+  const [recoveredResult, setRecoveredResult] =
+    useState<ProductRecoveredProcessingResult | null>(null);
+  const [recoveredResultBusy, setRecoveredResultBusy] = useState(false);
+  const [recoveredResultError, setRecoveredResultError] = useState('');
   const [processingBusy, setProcessingBusy] = useState(false);
   const [processingError, setProcessingError] = useState('');
   const [selectedSourceFactIds, setSelectedSourceFactIds] = useState<string[]>([]);
@@ -387,6 +395,39 @@ export default function EvidenceExperience() {
       setBusy(false);
     }
   };
+  const openRecoveredProcessingResult = async (item: ProductProcessingActivityItem) => {
+    if (!api || !canReadProcessingActivity || !canRead || item.state !== 'Completed') return;
+    setRecoveredResultJob(item);
+    setRecoveredResult(null);
+    setRecoveredResultError('');
+    setRecoveredResultBusy(true);
+    try {
+      const result = await getRecoveredProcessingResult(api, item.jobId);
+      if (result.jobId !== item.jobId || result.documentVersionId !== item.documentVersionId)
+        throw new Error('Recovered processing result identity mismatch.');
+      setRecoveredResult(result);
+    } catch (failure) {
+      setRecoveredResultError(
+        failure instanceof AccessApiError && failure.status === 403
+          ? "You no longer have access to this processing result."
+          : failure instanceof AccessApiError && failure.status === 404
+            ? "This processing result isn't available in your current access."
+            : failure instanceof AccessApiError && failure.status === 409
+              ? "This processing result isn't ready yet."
+              : "We couldn't open this processing result.",
+      );
+    } finally {
+      setRecoveredResultBusy(false);
+    }
+  };
+
+  const closeRecoveredProcessingResult = () => {
+    if (recoveredResultBusy) return;
+    setRecoveredResultJob(null);
+    setRecoveredResult(null);
+    setRecoveredResultError('');
+  };
+
   const closeProcessing = () => {
     if (processingBusy || promotionBusy) return;
     setProcessingEvidence(null);
@@ -799,16 +840,28 @@ export default function EvidenceExperience() {
                   <Tag color={processingActivityColor(item.state)}>
                     {processingActivityLabel(item.state)}
                   </Tag>
-                  {document && canRead && (
-                    <Button
-                      type="link"
-                      onClick={() => {
-                        setSelectedEvidence(document);
-                      }}
-                    >
-                      Open document
-                    </Button>
-                  )}
+                  <div className="product-processing-activity-actions">
+                    {item.state === 'Completed' && canReadProcessingActivity && canRead && (
+                      <Button
+                        type="link"
+                        onClick={() => {
+                          void openRecoveredProcessingResult(item);
+                        }}
+                      >
+                        View result
+                      </Button>
+                    )}
+                    {document && canRead && (
+                      <Button
+                        type="link"
+                        onClick={() => {
+                          setSelectedEvidence(document);
+                        }}
+                      >
+                        Open document
+                      </Button>
+                    )}
+                  </div>
                 </article>
               );
             })}
@@ -819,6 +872,116 @@ export default function EvidenceExperience() {
           controls are not part of the Customer workspace.
         </p>
       </section>
+
+      <Drawer
+        title="Processing result"
+        aria-label="Processing result"
+        open={Boolean(recoveredResultJob)}
+        onClose={closeRecoveredProcessingResult}
+        destroyOnHidden
+        size="default"
+        closable={!recoveredResultBusy}
+        mask={{ closable: !recoveredResultBusy }}
+      >
+        {recoveredResultJob && (
+          <div className="product-processing-review product-recovered-processing">
+            <div className="product-processing-hero">
+              <span className="product-review-icon">
+                <WorkspaceIcon name="check" size={25} />
+              </span>
+              <div>
+                <Tag color="success">COMPLETED</Tag>
+                <h3>
+                  {evidenceByVersion.get(recoveredResultJob.documentVersionId)?.originalFileName ??
+                    'Document processing result'}
+                </h3>
+                <p>Read-only recovered processing result</p>
+              </div>
+            </div>
+
+            {recoveredResultBusy ? (
+              <Skeleton active paragraph={{ rows: 5 }} />
+            ) : recoveredResultError ? (
+              <Alert showIcon type="warning" title={recoveredResultError} />
+            ) : recoveredResult ? (
+              <>
+                <div className="product-recovered-processing-summary">
+                  <span>
+                    Updated <strong>{formatDate(recoveredResult.updatedAt)}</strong>
+                  </span>
+                  <span>
+                    Extracted items <strong>{recoveredResult.facts.length}</strong>
+                  </span>
+                </div>
+                <section className="product-facts" aria-labelledby="recovered-source-facts-title">
+                  <div className="product-section-heading">
+                    <div>
+                      <p className="workspace-eyebrow">EXTRACTED INFORMATION</p>
+                      <h2 id="recovered-source-facts-title">Information found in this processing run</h2>
+                    </div>
+                    <span>{recoveredResult.facts.length} items</span>
+                  </div>
+                  <div className="product-fact-list">
+                    {recoveredResult.facts.map((fact) => (
+                      <article className="product-fact-card" key={fact.sourceFactId}>
+                        <div>
+                          <Tag>{fact.factType === 'INCOME' ? 'Income' : 'Expense'}</Tag>
+                          <strong>{fact.label}</strong>
+                          <span>
+                            {fact.sourceLocation} · {fact.effectiveDate}
+                          </span>
+                        </div>
+                        <div className="product-fact-value">
+                          <strong>
+                            {new Intl.NumberFormat(undefined, {
+                              style: 'currency',
+                              currency: fact.currency,
+                            }).format(fact.candidateValue)}
+                          </strong>
+                          <span>{Math.round(fact.confidence * 100)}% confidence</span>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+                <Alert
+                  showIcon
+                  type="info"
+                  title="This recovered view is read-only"
+                  description="It shows the candidate information produced by this completed processing run. You cannot select, add, retry or change information from this recovered result."
+                />
+                <div className="product-drawer-actions">
+                  {evidenceByVersion.has(recoveredResult.documentVersionId) && (
+                    <Button
+                      onClick={() => {
+                        const document = evidenceByVersion.get(recoveredResult.documentVersionId);
+                        if (!document) return;
+                        closeRecoveredProcessingResult();
+                        setSelectedEvidence(document);
+                      }}
+                    >
+                      Open document
+                    </Button>
+                  )}
+                </div>
+                <details className="product-review-note">
+                  <summary>Technical details</summary>
+                  <dl>
+                    <div>
+                      <dt>Job ID</dt>
+                      <dd className="product-identifier">{recoveredResult.jobId}</dd>
+                    </div>
+                    <div>
+                      <dt>Version ID</dt>
+                      <dd className="product-identifier">{recoveredResult.documentVersionId}</dd>
+                    </div>
+                  </dl>
+                </details>
+              </>
+            ) : null}
+          </div>
+        )}
+      </Drawer>
 
       <Drawer
         title="Source document details"
