@@ -174,6 +174,7 @@ export default function EvidenceExperience() {
   const linkedFactsByVersion = useMemo(() => {
     const grouped = new Map<string, ProductFinancialFact[]>();
     for (const fact of financialProfile?.facts ?? []) {
+      if (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE') continue;
       const current = grouped.get(fact.source.documentVersion) ?? [];
       current.push(fact);
       grouped.set(fact.source.documentVersion, current);
@@ -353,8 +354,8 @@ export default function EvidenceExperience() {
           <p className="workspace-eyebrow">DOCUMENTS</p>
           <h1>Keep your financial documents together.</h1>
           <p>
-            Add documents to {product?.customerName ?? 'your workspace'} and review the information
-            Monergy can find in them.
+            Add documents to {product?.customerName ?? 'your workspace'}, review supported details,
+            and see which trusted Income or Expense items use each exact document version.
           </p>
         </div>
         <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
