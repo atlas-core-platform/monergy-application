@@ -526,6 +526,8 @@ public sealed class ProductDocumentProcessingClient : IDisposable
             Json, cancellationToken).ConfigureAwait(false)
             ?? throw new TenantBoundaryException("JOB_OWNER_RESPONSE_INVALID", 503);
         if (view.Items.Count > limit ||
+            view.Items.Select(job => job.JobId).Distinct(StringComparer.Ordinal).Count() != view.Items.Count ||
+            view.Items.Zip(view.Items.Skip(1)).Any(pair => pair.First.UpdatedAt < pair.Second.UpdatedAt) ||
             view.Items.Any(job =>
                 job.CustomerId != customerId ||
                 job.JobName != "document-processing" ||
