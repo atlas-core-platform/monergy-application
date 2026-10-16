@@ -114,9 +114,29 @@ public static class ProductReportingEndpoints
                 ContractErrorCategory.DependencyFailure or ContractErrorCategory.TemporarilyUnavailable => 503,
                 _ => 400,
             });
-        if (result.Data.CustomerId != customerId)
+        var report = result.Data;
+        if (report.CustomerId != customerId ||
+            report.State != "GENERATED" ||
+            !TenantAccessClient.Identifier(report.ReportId, 160) ||
+            !report.ReportId.StartsWith("report-", StringComparison.Ordinal) ||
+            report.Items.Length is < 1 or > 100 ||
+            report.Items.Any(item =>
+                item.Source.SourceType != "FinancialFact" ||
+                item.Source.AuthoritativeOwner != "Financial Profile Service" ||
+                string.IsNullOrWhiteSpace(item.Source.SourceId) ||
+                string.IsNullOrWhiteSpace(item.Source.EvidenceReferenceId) ||
+                string.IsNullOrWhiteSpace(item.Source.FinancialProvenanceReferenceId) ||
+                item.Source.CalculationLineageReferenceId is not null) ||
+            report.CalculationLineageReferences.Length != 0 ||
+            report.AiResponseTraceReference is not null ||
+            report.SourceFinancialReferences.Length !=
+                report.Items.Select(item => item.Source.SourceId).Distinct(StringComparer.Ordinal).Count() ||
+            report.Export.MediaType != "application/json" ||
+            report.Export.FileName != $"trusted-financial-report-{report.ReportId}.json" ||
+            report.Export.Sha256.Length != 64 ||
+            !report.Export.Sha256.All(char.IsAsciiHexDigit))
             throw new TenantBoundaryException("REPORTING_OWNER_RESPONSE_INVALID", 503);
-        return result.Data;
+        return report;
     }
 
     private static TrustedSecurityContext Security(
