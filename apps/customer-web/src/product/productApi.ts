@@ -94,6 +94,27 @@ export interface ProductProcessingActivityView {
   dataDurability: 'Temporary data';
 }
 
+export interface ProductRecoveredProcessingFact {
+  sourceFactId: string;
+  factType: 'INCOME' | 'EXPENSE';
+  label: string;
+  candidateValue: number;
+  currency: string;
+  effectiveDate: string;
+  sourceLocation: string;
+  confidence: number;
+  documentVersionId: string;
+}
+
+export interface ProductRecoveredProcessingResult {
+  jobId: string;
+  documentVersionId: string;
+  state: 'Completed';
+  updatedAt: string;
+  facts: ProductRecoveredProcessingFact[];
+  dataDurability: 'Temporary data';
+}
+
 export interface ProductProcessingView {
   job: {
     jobId: string;
@@ -255,6 +276,38 @@ export function scheduleDocumentProcessing(
     { operationId },
     signal,
   );
+}
+
+export async function getRecoveredProcessingResult(
+  api: AccessApi,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ProductRecoveredProcessingResult> {
+  const result = await api.product<ProductRecoveredProcessingResult>(
+    `v1/processing-result/${encodeURIComponent(jobId)}`,
+    'GET',
+    undefined,
+    signal,
+  );
+  if (
+    !result ||
+    result.jobId !== jobId ||
+    result.state !== 'Completed' ||
+    !result.documentVersionId ||
+    !Array.isArray(result.facts) ||
+    result.facts.length < 1 ||
+    new Set(result.facts.map((fact) => fact.sourceFactId)).size !== result.facts.length ||
+    result.facts.some(
+      (fact) =>
+        !fact ||
+        (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE') ||
+        fact.documentVersionId !== result.documentVersionId ||
+        fact.confidence < 0 ||
+        fact.confidence > 1,
+    )
+  )
+    throw new Error('Recovered processing result response is invalid.');
+  return result;
 }
 
 export function getProcessingActivity(

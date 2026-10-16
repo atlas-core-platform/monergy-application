@@ -28,6 +28,23 @@ the emitted facts remain non-authoritative inputs to later normalization.
 - Committed fact collections and success-event payloads are owner-frozen
   snapshots; repository reads do not expose mutable collection aliases.
 
+## T1-17 read-only completed-result projection
+
+T1-17 adds a separate workload-only LOCAL/UAT read projection for a completed
+document-processing result. This path is not an execution contract and does not
+reuse the execution-policy check.
+
+Job Management first authorizes the Customer's `job-management.job.read` and
+`evidence.document.read` access, then calls Document Intelligence with the
+trusted Job Management workload and the durable processing/document/customer
+identity. Document Intelligence reads the existing processing repository
+directly and returns candidate facts only for the exact completed record.
+
+The projection does not invoke extraction, retry, reprocessing, normalization,
+or Financial Profile mutation. The customer product response further narrows
+the result to accepted Income/Expense candidate fields and omits customer,
+Evidence, implementation-version and failure/retry internals.
+
 ## Targeted verification
 
 Run from the repository root:

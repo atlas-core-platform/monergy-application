@@ -931,3 +931,200 @@ it('fails closed when Document history response identity does not match the sele
     await within(drawer).findByText("We couldn't refresh this document's version history."),
   ).toBeVisible();
 });
+
+
+it('reopens a completed processing result read-only from durable activity', async () => {
+  const api = new AccessApi(session);
+  const document = {
+    documentId: 'document-result',
+    documentVersionId: 'document-version-result',
+    evidenceId: 'evidence-result',
+    version: 1,
+    sourceName: 'Customer upload',
+    originalFileName: 'recovered-result.txt',
+    contentType: 'text/plain',
+    contentLength: 64,
+    contentSha256: '7'.repeat(64),
+    receivedAt: '2026-10-16T08:00:00Z',
+    createdAt: '2026-10-16T08:00:00Z',
+  };
+  const request = vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ items: [document], dataDurability: 'Temporary data' }) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-recovered',
+            documentVersionId: document.documentVersionId,
+            state: 'Completed',
+            attempt: 1,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+      }) as never;
+    if (path === 'v1/processing-result/job-processing-recovered')
+      return Promise.resolve({
+        jobId: 'job-processing-recovered',
+        documentVersionId: document.documentVersionId,
+        state: 'Completed',
+        updatedAt: '2026-10-16T09:00:00Z',
+        dataDurability: 'Temporary data',
+        facts: [
+          {
+            sourceFactId: 'source-fact-income',
+            factType: 'INCOME',
+            label: 'Employment income',
+            candidateValue: 125000,
+            currency: 'USD',
+            effectiveDate: '2026-10-01',
+            sourceLocation: 'line 1',
+            confidence: 0.98,
+            documentVersionId: document.documentVersionId,
+          },
+          {
+            sourceFactId: 'source-fact-expense',
+            factType: 'EXPENSE',
+            label: 'Housing',
+            candidateValue: 2500,
+            currency: 'USD',
+            effectiveDate: '2026-10-01',
+            sourceLocation: 'line 2',
+            confidence: 0.96,
+            documentVersionId: document.documentVersionId,
+          },
+        ],
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read', 'job-management.job.read']);
+  const user = userEvent.setup();
+
+  await user.click(await screen.findByRole('button', { name: 'View result' }));
+
+  const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
+  expect(drawer).toHaveTextContent('recovered-result.txt');
+  expect(drawer).toHaveTextContent('Employment income');
+  expect(drawer).toHaveTextContent('$125,000.00');
+  expect(drawer).toHaveTextContent('98% confidence');
+  expect(drawer).toHaveTextContent('Housing');
+  expect(drawer).toHaveTextContent('This recovered view is read-only');
+  expect(within(drawer).queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(
+    within(drawer).queryByRole('button', { name: 'Add selected information' }),
+  ).not.toBeInTheDocument();
+  expect(request).toHaveBeenCalledWith(
+    'v1/processing-result/job-processing-recovered',
+    'GET',
+    undefined,
+    undefined,
+  );
+});
+
+it('does not expose recovered processing content with job-read alone', async () => {
+  const api = new AccessApi(session);
+  const request = vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-status-only',
+            documentVersionId: 'document-version-status-only',
+            state: 'Completed',
+            attempt: 1,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['job-management.job.read']);
+
+  expect(await screen.findByText('Completed')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'View result' })).not.toBeInTheDocument();
+  expect(
+    request.mock.calls.some(([path]) => String(path).startsWith('v1/processing-result/')),
+  ).toBe(false);
+});
+
+it('keeps failed processing activity as status only and never offers a recovered result', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ items: [], dataDurability: 'Temporary data' }) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-failed-result',
+            documentVersionId: 'document-version-failed-result',
+            state: 'Failed',
+            attempt: 1,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read', 'job-management.job.read']);
+
+  expect(await screen.findByText("Couldn't complete")).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'View result' })).not.toBeInTheDocument();
+});
+
+it('fails closed when a recovered processing result is no longer available', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({
+        items: [
+          {
+            documentId: 'document-gone',
+            documentVersionId: 'document-version-gone',
+            evidenceId: 'evidence-gone',
+            version: 1,
+            sourceName: 'Customer upload',
+            originalFileName: 'gone.txt',
+            contentType: 'text/plain',
+            contentLength: 24,
+            contentSha256: '8'.repeat(64),
+            receivedAt: '2026-10-16T08:00:00Z',
+            createdAt: '2026-10-16T08:00:00Z',
+          },
+        ],
+        dataDurability: 'Temporary data',
+      }) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-gone',
+            documentVersionId: 'document-version-gone',
+            state: 'Completed',
+            attempt: 1,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+      }) as never;
+    if (path === 'v1/processing-result/job-processing-gone')
+      return Promise.reject(new AccessApiError(404, 'PROCESSING_RESULT_NOT_FOUND'));
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read', 'job-management.job.read']);
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'View result' }));
+
+  const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
+  expect(drawer).toHaveTextContent(
+    "This processing result isn't available in your current access.",
+  );
+  expect(drawer).not.toHaveTextContent('Add selected information');
+});

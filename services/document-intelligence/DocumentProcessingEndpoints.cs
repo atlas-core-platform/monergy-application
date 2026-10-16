@@ -11,6 +11,19 @@ public sealed record DocumentProcessingView(
     ProcessingStatus Status,
     IReadOnlyList<ValidatedSourceFact> Facts);
 
+public sealed record ReadDocumentProcessingResult(
+    TrustedSecurityContext Security,
+    string ProcessingId,
+    string DocumentVersionId,
+    string CustomerId);
+
+public sealed record DocumentProcessingReadOnlyView(
+    string ProcessingId,
+    string DocumentVersionId,
+    ProcessingState State,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<ValidatedSourceFact> Facts);
+
 public static class DocumentProcessingEndpoints
 {
     public static IEndpointRouteBuilder MapDocumentProcessing(this IEndpointRouteBuilder endpoints, IConfiguration configuration)
@@ -28,6 +41,41 @@ public static class DocumentProcessingEndpoints
             var result = await application.ProcessDocumentAsync(request, cancellationToken).ConfigureAwait(false);
             return await ToViewAsync(result, repository, cancellationToken).ConfigureAwait(false);
         });
+        endpoints.MapPost("/internal/local/v1/document-processing/read", async (
+            HttpRequest httpRequest,
+            ReadDocumentProcessingResult request,
+            IDocumentProcessingRepository repository,
+            CancellationToken cancellationToken) =>
+        {
+            Require(httpRequest, request.Security, token);
+            if (!TenantAccessClient.Identifier(request.ProcessingId, 160) ||
+                !TenantAccessClient.Identifier(request.DocumentVersionId, 160) ||
+                !TenantAccessClient.Identifier(request.CustomerId, 160) ||
+                request.CustomerId != request.Security.Access.CustomerId)
+                throw new TenantBoundaryException("PROCESSING_READ_REQUEST_INVALID", 400);
+
+            var record = await repository.GetAsync(request.ProcessingId, cancellationToken).ConfigureAwait(false);
+            if (record is null ||
+                record.CustomerId != request.CustomerId ||
+                record.DocumentVersionId != request.DocumentVersionId)
+                throw new TenantBoundaryException("PROCESSING_RESULT_NOT_FOUND", 404);
+
+            IReadOnlyList<ValidatedSourceFact> facts = record.State == ProcessingState.Completed
+                ? record.Facts
+                : [];
+            if (facts.Any(fact =>
+                fact.CustomerId != record.CustomerId ||
+                fact.DocumentVersionId != record.DocumentVersionId))
+                throw new TenantBoundaryException("PROCESSING_RESULT_INVALID", 503);
+
+            return Results.Ok(new DocumentProcessingReadOnlyView(
+                record.ProcessingId,
+                record.DocumentVersionId,
+                record.State,
+                record.UpdatedAt,
+                facts));
+        });
+
         endpoints.MapPost("/internal/local/v1/document-processing/status", async (
             HttpRequest httpRequest,
             ContractRequest<GetProcessingStatus> request,

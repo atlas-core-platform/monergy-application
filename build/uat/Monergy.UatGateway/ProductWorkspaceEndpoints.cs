@@ -75,6 +75,25 @@ public sealed record ProductProcessingActivityView(
     IReadOnlyList<ProductProcessingActivityItem> Items,
     string DataDurability);
 
+public sealed record ProductProcessingResultFact(
+    string SourceFactId,
+    string FactType,
+    string Label,
+    decimal CandidateValue,
+    string Currency,
+    DateOnly EffectiveDate,
+    string SourceLocation,
+    decimal Confidence,
+    string DocumentVersionId);
+
+public sealed record ProductProcessingResultView(
+    string JobId,
+    string DocumentVersionId,
+    JobState State,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<ProductProcessingResultFact> Facts,
+    string DataDurability);
+
 public static class ProductWorkspaceEndpoints
 {
     private static readonly string[] ProductCapabilities =
@@ -452,6 +471,65 @@ public static class ProductWorkspaceEndpoints
                 "Temporary data"));
         });
 
+        app.MapGet("/product-api/v1/processing-result/{jobId}", async (
+            string jobId,
+            HttpContext http,
+            CustomerOwnerClient owners,
+            TenantAccessClient access,
+            ProductDocumentProcessingClient processing) =>
+        {
+            if (!TenantAccessClient.Identifier(jobId, 160) ||
+                !jobId.StartsWith("job-processing-", StringComparison.Ordinal))
+                throw new TenantBoundaryException("PROCESSING_JOB_INVALID", 400);
+
+            var session = await owners.SessionAsync(http).ConfigureAwait(false);
+            var customer = await owners.OwnedCustomerAsync(
+                session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
+            var jobDecision = await access.EvaluateCustomerAsync(
+                http, "job-management.job.read", customer.CustomerId).ConfigureAwait(false);
+            var evidenceDecision = await access.EvaluateCustomerAsync(
+                http, "evidence.document.read", customer.CustomerId).ConfigureAwait(false);
+            if (jobDecision.Outcome != "Allow" || evidenceDecision.Outcome != "Allow")
+                throw new TenantBoundaryException("ACCESS_DENIED", 403);
+
+            var security = Security(session, customer.CustomerId, jobDecision);
+            var result = await processing.ReadCompletedResultAsync(
+                session.TenantId,
+                security,
+                jobId,
+                customer.CustomerId,
+                http.RequestAborted).ConfigureAwait(false);
+            if (result.Result.Facts.Count is < 1 or > 100 ||
+                result.Result.Facts.Select(fact => fact.SourceFactId)
+                    .Distinct(StringComparer.Ordinal).Count() != result.Result.Facts.Count ||
+                result.Result.Facts.Any(fact =>
+                    fact.FactType is not ("INCOME" or "EXPENSE") ||
+                    !TenantAccessClient.Identifier(fact.SourceFactId, 160) ||
+                    string.IsNullOrWhiteSpace(fact.Label) || fact.Label.Length > 160 ||
+                    string.IsNullOrWhiteSpace(fact.Currency) || fact.Currency.Length is < 3 or > 16 ||
+                    string.IsNullOrWhiteSpace(fact.SourceLocation) || fact.SourceLocation.Length > 160 ||
+                    fact.Confidence is < 0m or > 1m))
+                throw new TenantBoundaryException("PROCESSING_RESULT_INVALID", 503);
+
+            return Results.Ok(new ProductProcessingResultView(
+                result.Job.JobId,
+                result.Job.PayloadReference,
+                result.Job.State,
+                result.Result.UpdatedAt,
+                result.Result.Facts.Select(fact => new ProductProcessingResultFact(
+                    fact.SourceFactId,
+                    fact.FactType,
+                    fact.Label,
+                    fact.CandidateValue,
+                    fact.Currency,
+                    fact.EffectiveDate,
+                    fact.SourceLocation,
+                    fact.Confidence,
+                    fact.DocumentVersionId)).ToArray(),
+                "Temporary data"));
+        });
+
         app.MapGet("/product-api/v1/processing/{jobId}", async (
             string jobId,
             HttpContext http,
@@ -569,6 +647,22 @@ public sealed class ProductDocumentProcessingClient : IDisposable
     private sealed record DocumentProcessingActivityView(
         IReadOnlyList<ScheduledJob> Items);
 
+    private sealed record ReadDocumentProcessingJobResultRequest(
+        TrustedSecurityContext Security,
+        string JobId,
+        string CustomerId);
+
+    public sealed record DocumentProcessingReadOnlyServiceView(
+        string ProcessingId,
+        string DocumentVersionId,
+        ProcessingState State,
+        DateTimeOffset UpdatedAt,
+        IReadOnlyList<ValidatedSourceFact> Facts);
+
+    public sealed record DocumentProcessingJobReadOnlyView(
+        ScheduledJob Job,
+        DocumentProcessingReadOnlyServiceView Result);
+
     public async Task<IReadOnlyList<ScheduledJob>> ActivityAsync(
         string tenantId,
         TrustedSecurityContext security,
@@ -599,6 +693,52 @@ public sealed class ProductDocumentProcessingClient : IDisposable
                 !TenantAccessClient.Identifier(job.PayloadReference, 160)))
             throw new TenantBoundaryException("JOB_OWNER_RESPONSE_INVALID", 503);
         return view.Items;
+    }
+
+    public async Task<DocumentProcessingJobReadOnlyView> ReadCompletedResultAsync(
+        string tenantId,
+        TrustedSecurityContext security,
+        string jobId,
+        string customerId,
+        CancellationToken cancellationToken)
+    {
+        using var request = Message(
+            HttpMethod.Post,
+            "internal/local/v1/jobs/document-processing/read",
+            tenantId,
+            new ReadDocumentProcessingJobResultRequest(security, jobId, customerId));
+        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+            throw new TenantBoundaryException(response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.Forbidden => "ACCESS_DENIED",
+                System.Net.HttpStatusCode.NotFound => "PROCESSING_RESULT_NOT_FOUND",
+                System.Net.HttpStatusCode.Conflict => "PROCESSING_RESULT_NOT_READY",
+                _ => "JOB_OWNER_UNAVAILABLE",
+            }, response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.Forbidden => 403,
+                System.Net.HttpStatusCode.NotFound => 404,
+                System.Net.HttpStatusCode.Conflict => 409,
+                _ => 503,
+            });
+
+        var view = await response.Content.ReadFromJsonAsync<DocumentProcessingJobReadOnlyView>(
+            Json, cancellationToken).ConfigureAwait(false)
+            ?? throw new TenantBoundaryException("JOB_OWNER_RESPONSE_INVALID", 503);
+        if (view.Job.JobId != jobId ||
+            view.Job.CustomerId != customerId ||
+            view.Job.JobName != "document-processing" ||
+            view.Job.State != JobState.Completed ||
+            view.Result.State != ProcessingState.Completed ||
+            view.Result.ProcessingId.Length is < 1 or > 160 ||
+            view.Result.DocumentVersionId != view.Job.PayloadReference ||
+            view.Result.Facts.Any(fact =>
+                fact.CustomerId != customerId ||
+                fact.DocumentVersionId != view.Job.PayloadReference))
+            throw new TenantBoundaryException("JOB_OWNER_RESPONSE_INVALID", 503);
+
+        return view;
     }
 
     public async Task<ProductDocumentProcessingView> StatusAsync(
