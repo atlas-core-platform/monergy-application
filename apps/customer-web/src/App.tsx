@@ -16,7 +16,7 @@ const TenantSetupGate = lazy(() =>
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const SearchExperience = lazy(() => import('./search/SearchExperience'));
-const ReportsExperience = lazy(() => import('./reports/ReportsExperience'));
+const ProductReportsExperience = lazy(() => import('./product/ProductReportsExperience'));
 const EvidenceExperience = lazy(() => import('./product/EvidenceExperience'));
 const FinancialProfileExperience = lazy(() => import('./product/FinancialProfileExperience'));
 const AccessExperience = lazy(() => import('./access/AccessExperience'));
@@ -153,7 +153,7 @@ function RouteContent() {
           </main>
         }
       >
-        <ReportsExperience />
+        <ProductReportsExperience />
       </Suspense>
     );
   }
