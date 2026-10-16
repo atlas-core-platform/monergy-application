@@ -118,7 +118,7 @@ export default function ProductActionCentreExperience() {
               ? '1 document is still being processed.'
               : String(processingState.inProgress) + ' documents are still being processed.',
           description:
-            'Open Documents to see the current read-only processing status. Processing does not change Financial information until you review and confirm supported details.',
+            'Recent durable processing activity shows work still in progress. Open Documents to see the read-only status. Processing does not change Financial information until you review and confirm supported details.',
           href: '/evidence',
           action: 'View processing activity',
         });
@@ -131,7 +131,7 @@ export default function ProductActionCentreExperience() {
               ? "1 document processing run couldn't complete."
               : String(processingState.failed) + " document processing runs couldn't complete.",
           description:
-            'Open Documents to review the durable status. Retry, cancellation and support controls are not available from the Customer workspace.',
+            'Recent durable processing activity shows a run that could not complete. Open Documents to review the read-only status. Retry, cancellation and support controls are not available from the Customer workspace.',
           href: '/evidence',
           action: 'View processing activity',
         });
@@ -297,7 +297,7 @@ export default function ProductActionCentreExperience() {
                 <WorkspaceIcon name="changes" size={20} />
               </span>
               <div>
-                <span>Processing attention</span>
+                <span>Recent processing attention</span>
                 <strong>
                   {canReadProcessingActivity && processingActivity !== null
                     ? processingState.attentionCount
@@ -318,7 +318,7 @@ export default function ProductActionCentreExperience() {
                       (attention.length === 1 ? 'item' : 'items') +
                       ' from supported journeys'
                     : attentionStateComplete
-                      ? 'Nothing currently needs attention in the supported journeys'
+                      ? 'No attention items are visible in the currently loaded supported state'
                       : 'Current attention could not be fully determined'}
                 </h2>
               </div>
@@ -358,10 +358,12 @@ export default function ProductActionCentreExperience() {
               <div className="product-action-clear">
                 <WorkspaceIcon name="check" size={23} />
                 <div>
-                  <strong>No current attention items from the supported Documents, Financial information or processing journeys.</strong>
+                  <strong>No attention items are visible in the currently loaded supported state.</strong>
                   <p>
-                    This does not mean your overall finances are complete. It only reflects the
-                    Income, Expense and document-processing journeys Monergy currently supports.
+                    This does not mean your overall finances are complete, and it is not a lifetime
+                    processing-history claim. It reflects the current Documents, supported Income
+                    and Expense information, and recent processing activity returned by the bounded
+                    product APIs.
                   </p>
                 </div>
                 <Button href="/finances">View Financial information</Button>
