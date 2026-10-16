@@ -29,6 +29,8 @@ public sealed class FinancialProfileContractCompatibilityTests
         var currentRoundTrip = JsonSerializer.Deserialize<GetFinancialFact>(currentJson, ContractJson.Options);
         var historicalRoundTrip = JsonSerializer.Deserialize<GetFinancialFact>(historicalJson, ContractJson.Options);
 
+        Assert.DoesNotContain("\"revision\"", currentJson, StringComparison.Ordinal);
+        Assert.Contains("\"revision\":2", historicalJson, StringComparison.Ordinal);
         Assert.Null(currentRoundTrip?.Revision);
         Assert.Equal(2, historicalRoundTrip?.Revision);
         Assert.Equal(current.FinancialFactId, historicalRoundTrip?.FinancialFactId);
