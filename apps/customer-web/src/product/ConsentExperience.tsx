@@ -50,6 +50,8 @@ export default function ConsentExperience() {
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     if (!api || !customerId) return;
+    // Never retain the previous customer's permissions while a new owner lookup runs.
+    setOverview(null);
     setBusy(true);
     setError('');
     try {
