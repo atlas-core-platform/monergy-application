@@ -48,6 +48,23 @@ export interface ProductEvidenceSource {
   dataDurability: 'Temporary data';
 }
 
+export interface ProductEvidenceVersion {
+  documentVersionId: string;
+  evidenceId: string;
+  version: number;
+  sourceName: string;
+  originalFileName: string;
+  contentType: string;
+  contentSha256: string;
+  receivedAt: string;
+}
+
+export interface ProductEvidenceVersionHistory {
+  documentId: string;
+  versions: ProductEvidenceVersion[];
+  dataDurability: 'Temporary data';
+}
+
 export interface ProductSourceFact {
   sourceFactId: string;
   customerId: string;
@@ -149,6 +166,19 @@ export function listEvidence(
   signal?: AbortSignal,
 ): Promise<ProductEvidenceLibrary> {
   return api.product<ProductEvidenceLibrary>('v1/evidence', 'GET', undefined, signal);
+}
+
+export function getEvidenceVersionHistory(
+  api: AccessApi,
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<ProductEvidenceVersionHistory> {
+  return api.product<ProductEvidenceVersionHistory>(
+    `v1/evidence/${encodeURIComponent(documentId)}/versions`,
+    'GET',
+    undefined,
+    signal,
+  );
 }
 
 export function getEvidenceSource(
