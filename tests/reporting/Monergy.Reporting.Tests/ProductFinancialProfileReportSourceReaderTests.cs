@@ -1,0 +1,207 @@
+using System.Net;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
+using Monergy.Contracts;
+using Monergy.Platform;
+using Monergy.Services.Reporting.Application;
+using Monergy.Services.Reporting.Infrastructure;
+using Xunit;
+
+namespace Monergy.Reporting.Tests;
+
+public sealed class ProductFinancialProfileReportSourceReaderTests
+{
+    [Fact]
+    public async Task ReadsOnlyCurrentSupportedFinancialFactsWithExactProvenance()
+    {
+        var handler = new FinancialProfileHandler();
+        var accessor = Accessor();
+        var reader = Reader(handler, accessor);
+
+        var snapshot = await reader.ReadAsync(new(
+            "reference-customer",
+            Security(),
+            "report-request-1",
+            "report-correlation-1",
+            null), CancellationToken.None);
+
+        Assert.NotNull(snapshot);
+        Assert.Equal("reference-customer", snapshot.CustomerId);
+        Assert.Equal(2, snapshot.Items.Length);
+        Assert.Contains(snapshot.Items, item =>
+            item.Label == "Employment income" &&
+            item.Value == 125000m &&
+            item.Unit == "USD" &&
+            item.Source.SourceId == "ff-income" &&
+            item.Source.EvidenceReferenceId == "evidence-income" &&
+            item.Source.FinancialProvenanceReferenceId == "provenance-income" &&
+            item.Source.CalculationLineageReferenceId is null);
+        Assert.Contains(snapshot.Items, item =>
+            item.Label == "Rent" &&
+            item.Source.SourceId == "ff-expense" &&
+            item.Source.EvidenceReferenceId == "evidence-expense");
+        Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-future");
+        Assert.All(handler.Requests, request =>
+        {
+            Assert.Equal("T001", request.Tenant);
+            Assert.Equal("customer-session", request.Session);
+        });
+    }
+
+    [Fact]
+    public async Task MissingReportingBoundaryProofFailsClosedBeforeOwnerRead()
+    {
+        var handler = new FinancialProfileHandler();
+        var reader = Reader(handler, new HttpContextAccessor { HttpContext = new DefaultHttpContext() });
+
+        var failure = await Assert.ThrowsAsync<ReportSourceException>(() => reader.ReadAsync(new(
+            "reference-customer",
+            Security(),
+            "report-request-1",
+            "report-correlation-1",
+            null), CancellationToken.None));
+
+        Assert.Equal("report.source.boundary-invalid", failure.Error.Code);
+        Assert.Empty(handler.Requests);
+    }
+
+    [Fact]
+    public async Task CrossCustomerProvenanceFailsClosed()
+    {
+        var handler = new FinancialProfileHandler { CrossCustomerProvenance = true };
+        var reader = Reader(handler, Accessor());
+
+        var failure = await Assert.ThrowsAsync<ReportSourceException>(() => reader.ReadAsync(new(
+            "reference-customer",
+            Security(),
+            "report-request-1",
+            "report-correlation-1",
+            null), CancellationToken.None));
+
+        Assert.Equal("report.source.provenance-boundary-invalid", failure.Error.Code);
+    }
+
+    private static ProductFinancialProfileReportSourceReader Reader(
+        HttpMessageHandler handler,
+        IHttpContextAccessor accessor)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?>
+            {
+                ["Monergy:ExecutionZone"] = "LOCAL",
+                ["Monergy:ProductReporting:Enabled"] = "true",
+                ["Monergy:ProductReporting:FinancialProfileUrl"] = "http://127.0.0.1:5113/",
+            }).Build();
+        return new(new TestHttpClientFactory(handler), accessor, configuration);
+    }
+
+    private static IHttpContextAccessor Accessor()
+    {
+        var http = new DefaultHttpContext();
+        http.Features.Set(new TenantBoundaryProof(
+            "T001",
+            "A100",
+            "customer-session",
+            "reference-customer",
+            ReportingContractNames.GenerateReport,
+            "reporting.report.generate",
+            "decision-reporting"));
+        return new HttpContextAccessor { HttpContext = http };
+    }
+
+    private static TrustedSecurityContext Security() => new(
+        new ActorContext("A100", "Customer", DateTimeOffset.UnixEpoch, "customer-session"),
+        new WorkloadContext("customer-web", "local-uat-workspace:T001"),
+        new AccessContext("customer-advice", null, "decision-reporting", "reference-customer"));
+
+    private sealed class TestHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler, false);
+    }
+
+    private sealed class FinancialProfileHandler : HttpMessageHandler
+    {
+        public bool CrossCustomerProvenance { get; set; }
+        public List<(string Path, string Tenant, string Session)> Requests { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            Requests.Add((
+                request.RequestUri!.AbsolutePath,
+                request.Headers.GetValues("X-Monergy-Tenant").Single(),
+                request.Headers.GetValues("X-Monergy-Session").Single()));
+
+            return request.RequestUri.AbsolutePath switch
+            {
+                "/contracts/cid-030/v1" => Profile(body),
+                "/contracts/cid-033/v1" => Provenance(body),
+                _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+            };
+        }
+
+        private static HttpResponseMessage Profile(string body)
+        {
+            var request = System.Text.Json.JsonSerializer.Deserialize<ContractRequest<GetFinancialProfile>>(
+                body, ContractJson.Options)!;
+            var at = DateTimeOffset.Parse("2026-10-16T09:00:00Z");
+            var facts = new[]
+            {
+                new AuthoritativeFinancialFact(
+                    "ff-income", "financial-profile-reference-customer", "reference-customer",
+                    "INCOME", "Employment income", 125000m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-income"),
+                new AuthoritativeFinancialFact(
+                    "ff-expense", "financial-profile-reference-customer", "reference-customer",
+                    "EXPENSE", "Rent", 2500m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-expense"),
+                new AuthoritativeFinancialFact(
+                    "ff-future", "financial-profile-reference-customer", "reference-customer",
+                    "INVESTMENT", "Future gated investment", 500m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-future"),
+            };
+            return Success(request, new FinancialProfileDetails(
+                "financial-profile-reference-customer",
+                "reference-customer",
+                3,
+                at,
+                facts));
+        }
+
+        private HttpResponseMessage Provenance(string body)
+        {
+            var request = System.Text.Json.JsonSerializer.Deserialize<ContractRequest<GetFinancialProvenance>>(
+                body, ContractJson.Options)!;
+            var income = request.Payload.FinancialProvenanceId == "provenance-income";
+            var customer = CrossCustomerProvenance ? "other-customer" : "reference-customer";
+            return Success(request, new FinancialProvenance(
+                request.Payload.FinancialProvenanceId,
+                income ? "ff-income" : "ff-expense",
+                customer,
+                income ? "evidence-income" : "evidence-expense",
+                income ? "document-version-income" : "document-version-expense",
+                income ? "source-income" : "source-expense",
+                "extractor/1",
+                "validator/1",
+                "reviewed-document-facts/1.0.0",
+                "A100",
+                "document-intelligence",
+                DateTimeOffset.Parse("2026-10-16T08:00:00Z"),
+                "financial-correlation",
+                null));
+        }
+
+        private static HttpResponseMessage Success<TPayload, TData>(
+            ContractRequest<TPayload> request,
+            TData data) =>
+            new(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(
+                    ContractResult<TData>.Succeeded(request, data),
+                    options: ContractJson.Options),
+            };
+    }
+}
