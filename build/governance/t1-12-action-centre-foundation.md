@@ -49,7 +49,8 @@ Rules are evaluated in this order and are intentionally bounded:
 
 - An owner/API failure is **unknown**, never zero.
 - Unknown Document or Financial state must not generate a missing-data attention item.
-- Partial successful state may remain visible with a warning for the unavailable owner.
+- The “nothing currently needs attention” clear state is permitted only when every readable input needed by this projection is successfully known.
+- Partial successful state may remain visible with a warning for the unavailable owner; incomplete state is never presented as clear.
 - The page is protected by the existing customer workspace/session gate.
 - No browser-selected customer identity is introduced.
 
