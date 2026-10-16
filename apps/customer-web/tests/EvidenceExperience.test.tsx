@@ -2,7 +2,7 @@ import { FoundationProvider } from '@monergy/ui-foundation';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { AccessApi } from '../src/access/accessApi';
+import { AccessApi, AccessApiError } from '../src/access/accessApi';
 import { Context } from '../src/access/workspaceSession';
 import EvidenceExperience from '../src/product/EvidenceExperience';
 
