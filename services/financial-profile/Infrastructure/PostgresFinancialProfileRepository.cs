@@ -194,13 +194,19 @@ public sealed class PostgresFinancialProfileRepository : IFinancialProfileReposi
             facts.OrderBy(item => item.FactType, StringComparer.Ordinal).ThenBy(item => item.FinancialFactId, StringComparer.Ordinal).ToArray());
     }
 
-    public async Task<FinancialFactRecord?> GetFactAsync(string financialFactId, CancellationToken cancellationToken)
+    public async Task<FinancialFactRecord?> GetFactAsync(
+        string financialFactId,
+        int? revision,
+        CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         return await connection.QuerySingleOrDefaultAsync<FinancialFactRecord>(new CommandDefinition($"""
             SELECT {FactColumns} FROM financial_profile.fact_revisions
-            WHERE financial_fact_id=@id ORDER BY revision DESC LIMIT 1;
-            """, new { id = financialFactId }, cancellationToken: cancellationToken));
+            WHERE financial_fact_id=@id
+              AND (@revision IS NULL OR revision=@revision)
+            ORDER BY revision DESC
+            LIMIT 1;
+            """, new { id = financialFactId, revision }, cancellationToken: cancellationToken));
     }
 
     public async Task<FinancialProvenance?> GetProvenanceAsync(string provenanceId, CancellationToken cancellationToken)
