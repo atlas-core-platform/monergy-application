@@ -81,6 +81,14 @@ export default function FinancialProfileExperience() {
   }, [load]);
 
   useEffect(() => {
+    const syncFactFromLocation = () => {
+      setSelectedFactId(new URLSearchParams(window.location.search).get('fact') ?? '');
+    };
+    window.addEventListener('popstate', syncFactFromLocation);
+    return () => window.removeEventListener('popstate', syncFactFromLocation);
+  }, []);
+
+  useEffect(() => {
     if (!api || !canRead || !selectedFactId) {
       setDetail(null);
       return;
