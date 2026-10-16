@@ -460,6 +460,22 @@ it('sorts Documents deterministically and links an exact document version to tru
               technicalProvenanceId: 'provenance-income',
             },
           },
+          {
+            financialFactId: 'ff-future',
+            factType: 'INVESTMENT',
+            label: 'Future investment',
+            value: 500,
+            currency: 'USD',
+            effectiveDate: '2026-10-01',
+            revision: 1,
+            source: {
+              sourceName: 'annual-income.pdf',
+              documentVersion: 'document-version-001',
+              recordedAt: '2026-10-15T09:00:00Z',
+              technicalSourceFactId: 'source-future',
+              technicalProvenanceId: 'provenance-future',
+            },
+          },
         ],
       }) as never;
     return Promise.reject(new Error('unexpected product endpoint'));
@@ -486,6 +502,7 @@ it('sorts Documents deterministically and links an exact document version to tru
   expect(drawer).toHaveTextContent('Trusted information using this document version');
   expect(drawer).toHaveTextContent('Employment income');
   expect(drawer).toHaveTextContent('$125,000.00');
+  expect(drawer).not.toHaveTextContent('Future investment');
   expect(within(drawer).getByRole('link', { name: /Employment income/ })).toHaveAttribute(
     'href',
     '/finances?fact=ff-income',
