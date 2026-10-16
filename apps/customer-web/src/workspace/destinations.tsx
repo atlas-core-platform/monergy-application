@@ -39,8 +39,8 @@ export const productModule = {
       <p>
         Recent document-processing status remains visible in Documents after you close the review
         drawer or return later. For completed runs, you can reopen the extracted candidate
-        information in a read-only result view. Retry, cancel, support and recovered-result
-        promotion controls are not exposed.
+        information and, when your current Financial Profile access allows it, resume the same
+        explicit review-and-confirm flow. Retry, cancel and support controls are not exposed.
       </p>
       <h3>Know this environment</h3>
       <p>
