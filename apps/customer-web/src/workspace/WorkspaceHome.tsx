@@ -102,8 +102,8 @@ export default function WorkspaceHome() {
     );
     const latest = ordered.slice(0, 3);
     const coverage = [
-      { label: 'Income', count: income },
-      { label: 'Expenses', count: expenses },
+      { key: 'INCOME', label: 'Income', count: income },
+      { key: 'EXPENSE', label: 'Expenses', count: expenses },
     ];
     return {
       facts: facts.length,
@@ -248,7 +248,12 @@ export default function WorkspaceHome() {
                   </div>
                   <div className="workspace-passport-coverage" aria-label="Financial Passport current coverage">
                     {snapshot.coverage.map((item) => (
-                      <article key={item.label} className={item.count > 0 ? 'present' : 'missing'}>
+                      <a
+                        key={item.label}
+                        className={item.count > 0 ? 'present' : 'missing'}
+                        href={'/finances?type=' + encodeURIComponent(item.key)}
+                        aria-label={'View ' + item.label + ' financial information'}
+                      >
                         <span className="workspace-passport-coverage-icon">
                           <WorkspaceIcon name={item.count > 0 ? 'check' : 'changes'} size={16} />
                         </span>
@@ -260,7 +265,8 @@ export default function WorkspaceHome() {
                               : 'No trusted items yet'}
                           </small>
                         </span>
-                      </article>
+                        <WorkspaceIcon name="arrow" size={15} />
+                      </a>
                     ))}
                   </div>
                   <p className="workspace-passport-scope-note">
