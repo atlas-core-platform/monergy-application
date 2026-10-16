@@ -15,7 +15,19 @@ public static class ReportingRegistration
             new("reporting", "reference-reporting-workload"),
             new("REFERENCE_REPORTING", null, "reference-reporting-authorization", "reference-customer")));
         services.AddSingleton<IReportingAuthorizationPolicy>(authorization);
-        services.AddSingleton<IReportSourceReader>(new ReferenceReportSourceReader(configuration));
+        if (ProductFinancialProfileReportSourceReader.Selected(configuration))
+        {
+            services.AddHttpContextAccessor();
+            AddSourceClient(
+                services,
+                ProductFinancialProfileReportSourceReader.FinancialProfileClient,
+                TenantAccessIntegration.Required(configuration, "Monergy:ProductReporting:FinancialProfileUrl"));
+            services.AddSingleton<IReportSourceReader, ProductFinancialProfileReportSourceReader>();
+        }
+        else
+        {
+            services.AddSingleton<IReportSourceReader>(new ReferenceReportSourceReader(configuration));
+        }
         services.AddSingleton<IReportRepository>(new InMemoryReportRepository(configuration));
         services.AddSingleton(TimeProvider.System);
         services.AddTransient<ReportingApplication>();

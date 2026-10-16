@@ -26,7 +26,11 @@ internal static class Topology
         var available = false;
         try { using var response = await client.GetAsync(service.Url + service.HealthPath, timeout.Token).ConfigureAwait(false); available = response.IsSuccessStatusCode; }
         catch (Exception error) when (error is HttpRequestException or OperationCanceledException) { }
-        var implementation = onboarding && service.Id == "consent" ? "Durable local customer Consent, expiry and revocation" : service.Implementation;
+        var implementation = onboarding && service.Id == "consent"
+            ? "Durable local customer Consent, expiry and revocation"
+            : onboarding && service.Id == "reporting"
+                ? "Customer basic summaries from Financial Profile; report storage is volatile"
+                : service.Implementation;
         return new ServiceState(service.Id, service.Label, implementation, available);
     }));
 }

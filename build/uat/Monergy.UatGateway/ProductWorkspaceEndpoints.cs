@@ -70,6 +70,7 @@ public static class ProductWorkspaceEndpoints
         "financial-profile.profile.update",
         "search.query.execute",
         "reporting.report.generate",
+        "reporting.report.read",
     ];
     private static readonly HashSet<string> SupportedContentTypes = new(StringComparer.OrdinalIgnoreCase)
     { "application/pdf", "image/png", "image/jpeg", "text/plain" };

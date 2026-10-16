@@ -808,3 +808,99 @@
   justify-content: center;
   gap: 8px;
 }
+
+
+/* T1-10 — customer-bound basic financial summary and export. */
+.product-report-page {
+  display: grid;
+  gap: 18px;
+}
+.product-report-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.product-report-content {
+  display: grid;
+  gap: 16px;
+}
+.product-report-content .product-section-heading {
+  margin: 0;
+}
+.product-report-items {
+  display: grid;
+  gap: 12px;
+}
+.product-report-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--monergy-midnight-border);
+  border-radius: 12px;
+  background: var(--monergy-midnight-sidebar);
+}
+.product-report-item > div:first-child {
+  display: grid;
+  gap: 6px;
+}
+.product-report-item h3 {
+  margin: 0;
+  color: var(--monergy-midnight-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+.product-report-item > div:first-child > strong {
+  color: var(--monergy-midnight-text);
+  font-size: 22px;
+}
+.product-report-item-actions {
+  display: flex;
+  align-items: start;
+}
+.product-report-item .ant-collapse {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--monergy-midnight-border);
+  border-radius: 0;
+}
+.product-report-boundary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 14px;
+}
+.product-report-boundary .workspace-eyebrow {
+  margin-bottom: 6px;
+}
+.product-report-boundary h2 {
+  margin: 0;
+  color: var(--monergy-midnight-text);
+  font-size: 16px;
+}
+.product-report-boundary p:last-child {
+  margin: 6px 0 0;
+  color: var(--monergy-midnight-secondary);
+  font-size: var(--monergy-text-small);
+  line-height: 1.6;
+}
+.product-report-refresh {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.product-report-refresh > a {
+  color: var(--mw-primary);
+  font-size: var(--monergy-text-label);
+  font-weight: 600;
+}
+@media (max-width: 760px) {
+  .product-report-summary {
+    grid-template-columns: 1fr;
+  }
+  .product-report-item {
+    grid-template-columns: 1fr;
+  }
+  .product-report-item-actions {
+    justify-content: flex-start;
+  }
+}
