@@ -89,6 +89,13 @@ public sealed record DocumentProcessingServiceView(
     ProcessingStatus Status,
     IReadOnlyList<ValidatedSourceFact> Facts);
 
+public sealed record DocumentProcessingReadOnlyServiceView(
+    string ProcessingId,
+    string DocumentVersionId,
+    ProcessingState State,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<ValidatedSourceFact> Facts);
+
 public sealed class HttpDocumentProcessingTarget : IJobExecutionTarget, IDisposable
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
@@ -158,6 +165,61 @@ public sealed class HttpDocumentProcessingTarget : IJobExecutionTarget, IDisposa
         { return JobExecutionResult.Failed("job.document-processing.timeout", true); }
         catch (Exception error) when (error is HttpRequestException or JsonException or NotSupportedException)
         { return JobExecutionResult.Failed("job.document-processing.owner-unavailable", true); }
+    }
+
+    public async Task<DocumentProcessingReadOnlyServiceView?> ReadCompletedResultAsync(
+        DurableJobRecord job,
+        TrustedSecurityContext security,
+        CancellationToken cancellationToken)
+    {
+        if (job.JobName != "document-processing" ||
+            job.State != JobState.Completed ||
+            string.IsNullOrWhiteSpace(job.OutcomeReference) ||
+            !TenantAccessClient.Identifier(job.OutcomeReference, 160) ||
+            !TenantAccessClient.Identifier(job.PayloadReference, 160))
+            return null;
+
+        var tenant = LocalTenantSecurityContext.RequireTenant(
+            security.Workload?.WorkloadIdentityId, null, "local-uat-workspace");
+        var ownerSecurity = security with
+        {
+            Workload = new WorkloadContext("job-management", "job-management:" + tenant),
+        };
+        using var message = new HttpRequestMessage(HttpMethod.Post,
+            new Uri(endpoint, "internal/local/v1/document-processing/read"));
+        message.Headers.Add("X-Monergy-Tenant", tenant);
+        message.Headers.Add("X-Monergy-Document-Token", token);
+        message.Content = JsonContent.Create(new
+        {
+            security = ownerSecurity,
+            processingId = job.OutcomeReference,
+            documentVersionId = job.PayloadReference,
+            customerId = job.CustomerId,
+        });
+        try
+        {
+            using var response = await client.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.NotFound) return null;
+            if (!response.IsSuccessStatusCode)
+                throw new TenantBoundaryException(response.StatusCode == HttpStatusCode.Forbidden
+                    ? "ACCESS_DENIED" : "DOCUMENT_PROCESSING_OWNER_UNAVAILABLE",
+                    response.StatusCode == HttpStatusCode.Forbidden ? 403 : 503);
+            var value = await response.Content.ReadFromJsonAsync<DocumentProcessingReadOnlyServiceView>(
+                Json, cancellationToken).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("DOCUMENT_PROCESSING_RESPONSE_INVALID", 503);
+            if (value.ProcessingId != job.OutcomeReference ||
+                value.DocumentVersionId != job.PayloadReference ||
+                value.State != ProcessingState.Completed ||
+                value.Facts.Any(fact =>
+                    fact.CustomerId != job.CustomerId ||
+                    fact.DocumentVersionId != job.PayloadReference))
+                throw new TenantBoundaryException("DOCUMENT_PROCESSING_RESPONSE_INVALID", 503);
+            return value;
+        }
+        catch (Exception error) when (error is HttpRequestException or JsonException or NotSupportedException)
+        { throw new TenantBoundaryException("DOCUMENT_PROCESSING_OWNER_UNAVAILABLE", 503); }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        { throw new TenantBoundaryException("DOCUMENT_PROCESSING_OWNER_UNAVAILABLE", 503); }
     }
 
     public async Task<DocumentProcessingServiceView?> GetStatusAsync(
