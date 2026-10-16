@@ -208,6 +208,25 @@ assert activity_item['updatedAt']
 assert 'failureCode' not in activity_item and 'retryable' not in activity_item
 assert processing_activity['dataDurability'] == 'Temporary data'
 
+# T1-17 reopens a completed processing result through read-only job + Evidence access.
+processing_result_path = '/product-api/v1/processing-result/' + processing['job']['jobId']
+call(processing_result_path, status=401)
+call(processing_result_path, session=owner, status=403)
+call(processing_result_path, session=second_customer, status=404)
+processing_result = call(processing_result_path, session=customer)
+assert processing_result['jobId'] == processing['job']['jobId']
+assert processing_result['documentVersionId'] == product_receipt['documentVersionId']
+assert processing_result['state'] == 'Completed'
+assert processing_result['dataDurability'] == 'Temporary data'
+assert [(fact['factType'], fact['label']) for fact in processing_result['facts']] == [
+    ('INCOME', 'Employment income'), ('EXPENSE', 'Housing')]
+assert all(fact['documentVersionId'] == product_receipt['documentVersionId']
+           for fact in processing_result['facts'])
+assert all('customerId' not in fact and 'evidenceId' not in fact
+           and 'extractionVersion' not in fact and 'validationVersion' not in fact
+           for fact in processing_result['facts'])
+assert 'failureCode' not in processing_result and 'retryable' not in processing_result
+
 # APP-04 keeps extracted facts review-only until the customer explicitly confirms selected items.
 financial_before = call('/product-api/v1/financial-profile', session=customer)
 assert financial_before['revision'] == 0 and financial_before['facts'] == []
@@ -454,7 +473,7 @@ assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
-           'validated': ['owner-confirmed Default Access Pack 2.4 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library, exact version history and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'customer-bound basic Financial Summary and exact export from authoritative Financial Profile facts', 'customer-authorized lexical search across current Documents and trusted Financial information', 'recoverable read-only Customer document-processing activity from durable Job Management', 'canonical Job Audit delivery',
+           'validated': ['owner-confirmed Default Access Pack 2.4 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library, exact version history and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'customer-bound basic Financial Summary and exact export from authoritative Financial Profile facts', 'customer-authorized lexical search across current Documents and trusted Financial information', 'recoverable read-only Customer document-processing activity and completed result drill-down from durable Job Management', 'canonical Job Audit delivery',
                          'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
                          'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
            'limitations': ['Business data uses owner reference adapters.', 'The processor accepts structured LOCAL/UAT text and does not claim OCR or production AI.', 'Only customer-reviewed Income/Expense source facts are promoted; OCR/production AI and additional financial fact types remain out of scope.', 'Consent outbox delivery is not claimed.']}
