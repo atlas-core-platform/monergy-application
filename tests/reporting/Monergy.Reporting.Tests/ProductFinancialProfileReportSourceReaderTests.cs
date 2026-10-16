@@ -46,6 +46,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         {
             Assert.Equal("T001", request.Tenant);
             Assert.Equal("customer-session", request.Session);
+            Assert.Equal("reporting", request.Workload);
         });
     }
 
@@ -123,17 +124,19 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
     private sealed class FinancialProfileHandler : HttpMessageHandler
     {
         public bool CrossCustomerProvenance { get; set; }
-        public List<(string Path, string Tenant, string Session)> Requests { get; } = [];
+        public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
             var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            using var document = System.Text.Json.JsonDocument.Parse(body);
             Requests.Add((
                 request.RequestUri!.AbsolutePath,
                 request.Headers.GetValues("X-Monergy-Tenant").Single(),
-                request.Headers.GetValues("X-Monergy-Session").Single()));
+                request.Headers.GetValues("X-Monergy-Session").Single(),
+                document.RootElement.GetProperty("security").GetProperty("workload").GetProperty("workloadId").GetString()!));
 
             return request.RequestUri.AbsolutePath switch
             {
