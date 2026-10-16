@@ -234,8 +234,12 @@ public sealed partial class PostgresAccessAdministration(
             var tenantUpdated = await connection.ExecuteAsync(Command("""
                 UPDATE am.tenant_identity
                 SET default_access_pack_version=@PackVersion,default_access_pack_installed_at=clock_timestamp()
-                WHERE singleton AND default_access_pack_version='1.0';
-                """, new { PackVersion = DefaultAccessPack.Version }, transaction, ct)).ConfigureAwait(false);
+                WHERE singleton AND default_access_pack_version=@ExpectedPackVersion;
+                """, new
+            {
+                PackVersion = DefaultAccessPack.Version,
+                ExpectedPackVersion = plan.InstalledVersion
+            }, transaction, ct)).ConfigureAwait(false);
             AccessInput.Require(tenantUpdated == 1, "DEFAULT_ACCESS_PACK_VERSION_CONFLICT", 409);
 
             var nextVersion = await connection.ExecuteScalarAsync<long>(Command("""
@@ -508,6 +512,11 @@ public sealed partial class PostgresAccessAdministration(
         {
             baselinePermissions = DefaultAccessPack.Version2Permissions;
             baselineRoles = DefaultAccessPack.Version2Roles;
+        }
+        else if (string.Equals(installedVersion, "2.1", StringComparison.Ordinal))
+        {
+            baselinePermissions = DefaultAccessPack.Version2Permissions;
+            baselineRoles = DefaultAccessPack.Version21Roles;
         }
         else
         {
