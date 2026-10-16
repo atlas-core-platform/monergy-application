@@ -64,6 +64,19 @@ export interface ProductSourceFact {
   validationVersion: string;
 }
 
+export interface ProductProcessingActivityItem {
+  jobId: string;
+  documentVersionId: string;
+  state: 'Scheduled' | 'Running' | 'CancellationRequested' | 'Completed' | 'Failed' | 'Cancelled';
+  attempt: number;
+  updatedAt: string;
+}
+
+export interface ProductProcessingActivityView {
+  items: ProductProcessingActivityItem[];
+  dataDurability: 'Temporary data';
+}
+
 export interface ProductProcessingView {
   job: {
     jobId: string;
@@ -193,6 +206,18 @@ export function scheduleDocumentProcessing(
     `v1/evidence/${encodeURIComponent(documentVersionId)}/processing`,
     'POST',
     { operationId },
+    signal,
+  );
+}
+
+export function getProcessingActivity(
+  api: AccessApi,
+  signal?: AbortSignal,
+): Promise<ProductProcessingActivityView> {
+  return api.product<ProductProcessingActivityView>(
+    'v1/processing-activity',
+    'GET',
+    undefined,
     signal,
   );
 }
