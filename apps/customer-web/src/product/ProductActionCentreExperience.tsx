@@ -115,8 +115,8 @@ export default function ProductActionCentreExperience() {
           id: 'processing-in-progress',
           title:
             processingState.inProgress === 1
-              ? '1 document is still being processed.'
-              : String(processingState.inProgress) + ' documents are still being processed.',
+              ? '1 document processing run is still active.'
+              : String(processingState.inProgress) + ' document processing runs are still active.',
           description:
             'Recent durable processing activity shows work still in progress. Open Documents to see the read-only status. Processing does not change Financial information until you review and confirm supported details.',
           href: '/evidence',
