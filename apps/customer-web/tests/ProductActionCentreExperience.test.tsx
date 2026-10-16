@@ -279,6 +279,13 @@ it('aggregates durable processing attention without turning jobs into tasks', as
             updatedAt: '2026-10-16T08:59:00Z',
           },
           {
+            jobId: 'job-processing-stopping',
+            documentVersionId: 'document-version-006',
+            state: 'CancellationRequested',
+            attempt: 1,
+            updatedAt: '2026-10-16T08:58:30Z',
+          },
+          {
             jobId: 'job-processing-failed',
             documentVersionId: 'document-version-003',
             state: 'Failed',
@@ -306,9 +313,9 @@ it('aggregates durable processing attention without turning jobs into tasks', as
 
   mount(api);
 
-  expect(await screen.findByText('2 document processing runs are still active.')).toBeVisible();
+  expect(await screen.findByText('3 document processing runs are still active.')).toBeVisible();
   expect(screen.getByText("1 document processing run couldn't complete.")).toBeVisible();
-  expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('3');
+  expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('4');
   expect(screen.getByText('2 items from supported journeys')).toBeVisible();
   const links = screen.getAllByRole('link', { name: 'View processing activity' });
   expect(links).toHaveLength(2);
