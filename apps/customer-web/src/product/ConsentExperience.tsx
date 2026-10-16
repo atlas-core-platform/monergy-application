@@ -34,7 +34,7 @@ function validOverview(value: unknown, customerId: string): value is ConsentOver
 }
 function status(item: DelegatedConsent) {
   if (item.revokedAt !== null) return 'Revoked';
-  return Date.parse(item.expiresAt) <= Date.now() ? 'Expired' : 'Active';
+  return Date.parse(item.expiresAt) <= Date.now() ? 'Expired' : 'Unexpired record';
 }
 function formatted(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' })
@@ -89,7 +89,7 @@ export default function ConsentExperience() {
       </div>
       <Alert showIcon type="info"
         title="About these permissions"
-        description="This view covers up to 100 recent delegated customer-advice grants. Your own access to your financial information is not a delegated grant. Provider connection and refresh permissions are separate, and are not shown as connected here."
+        description="This view covers up to 100 recent delegated customer-advice grants. Unexpired does not confirm effective access: current customer, actor, owner version, and permissions are checked separately when protected information is requested. Provider connections are not shown here."
       />
       <div className="product-drawer-actions">
         <Button onClick={() => void refresh()} disabled={!api || !customerId || busy}>
@@ -116,11 +116,11 @@ export default function ConsentExperience() {
                 <article key={item.id} className="product-fact-card">
                   <div>
                     <span className="product-fact-tags">
-                      <Tag color={current === 'Active' ? 'success' : 'default'}>{current}</Tag>
+                      <Tag color={current === 'Unexpired record' ? 'processing' : 'default'}>{current}</Tag>
                     </span>
                     <strong>Customer-advice permission</strong>
                     <p>Recipient name is not available in this view. Permission is recorded for a specific recipient, not everyone in an organization.</p>
-                    <p>{item.capabilityIds.length} specifically authorized operations.</p>
+                    <p>{item.capabilityIds.length} operations recorded in this grant; current access is evaluated separately.</p>
                     <p>Expires: {formatted(item.expiresAt)}</p>
                     {item.revokedAt && <p>Revoked: {formatted(item.revokedAt)}</p>}
                     <details>
