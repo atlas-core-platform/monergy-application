@@ -227,7 +227,8 @@ assert all('customerId' not in fact and 'evidenceId' not in fact
            for fact in processing_result['facts'])
 assert 'failureCode' not in processing_result and 'retryable' not in processing_result
 
-# APP-04 keeps extracted facts review-only until the customer explicitly confirms selected items.
+# T1-18 resumes Financial review from the durable completed processing result.
+# Candidate facts remain review-only until the customer explicitly confirms selected items.
 financial_before = call('/product-api/v1/financial-profile', session=customer)
 assert financial_before['revision'] == 0 and financial_before['facts'] == []
 assert call('/product-api/v1/financial-profile', session=second_customer)['facts'] == []
@@ -473,7 +474,7 @@ assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
-           'validated': ['owner-confirmed Default Access Pack 2.4 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library, exact version history and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'customer-bound basic Financial Summary and exact export from authoritative Financial Profile facts', 'customer-authorized lexical search across current Documents and trusted Financial information', 'recoverable read-only Customer document-processing activity and completed result drill-down from durable Job Management', 'canonical Job Audit delivery',
+           'validated': ['owner-confirmed Default Access Pack 2.4 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library, exact version history and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'customer-bound basic Financial Summary and exact export from authoritative Financial Profile facts', 'customer-authorized lexical search across current Documents and trusted Financial information', 'recoverable Customer document-processing activity, completed result drill-down and resumable reviewed Financial promotion from durable Job Management', 'canonical Job Audit delivery',
                          'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
                          'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
            'limitations': ['Business data uses owner reference adapters.', 'The processor accepts structured LOCAL/UAT text and does not claim OCR or production AI.', 'Only customer-reviewed Income/Expense source facts are promoted; OCR/production AI and additional financial fact types remain out of scope.', 'Consent outbox delivery is not claimed.']}
