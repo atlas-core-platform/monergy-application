@@ -60,7 +60,7 @@ public static class DocumentProcessingEndpoints
                 record.DocumentVersionId != request.DocumentVersionId)
                 throw new TenantBoundaryException("PROCESSING_RESULT_NOT_FOUND", 404);
 
-            var facts = record.State == ProcessingState.Completed
+            IReadOnlyList<ValidatedSourceFact> facts = record.State == ProcessingState.Completed
                 ? record.Facts
                 : [];
             if (facts.Any(fact =>
