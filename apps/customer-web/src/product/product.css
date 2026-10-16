@@ -1169,6 +1169,13 @@
   }
 }
 @media (max-width: 680px) {
+  .product-library-controls {
+    grid-template-columns: 1fr;
+  }
+  .product-library-controls .ant-btn {
+    grid-column: auto;
+    width: 100%;
+  }
   .product-document-links-list > a {
     grid-template-columns: minmax(0, 1fr) auto;
   }
