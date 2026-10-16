@@ -81,6 +81,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
               documentVersion: 'document-version-001',
               recordedAt: '2026-10-15T12:00:00Z',
               technicalSourceFactId: 'source-fact-001',
+              technicalProvenanceId: 'provenance-income-001',
             },
           },
           {
@@ -96,6 +97,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
               documentVersion: 'document-version-002',
               recordedAt: '2026-10-14T12:00:00Z',
               technicalSourceFactId: 'source-fact-002',
+              technicalProvenanceId: 'provenance-expense-002',
             },
           },
         ],
