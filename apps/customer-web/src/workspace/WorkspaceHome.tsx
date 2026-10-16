@@ -23,7 +23,7 @@ const journeys: {
   },
   {
     title: 'Review current attention',
-    description: 'See bounded attention items derived from your current Documents and trusted financial information.',
+    description: 'See bounded attention items from current Documents, trusted financial information and recent processing status.',
     href: '/actions',
     icon: 'changes',
     capability: 'financial-profile.profile.read',

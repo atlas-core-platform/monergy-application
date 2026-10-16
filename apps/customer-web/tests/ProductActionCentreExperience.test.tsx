@@ -17,6 +17,7 @@ const capabilities = [
   'evidence.document.read',
   'evidence.document.upload',
   'financial-profile.profile.read',
+  'job-management.job.read',
 ];
 
 function mount(api: AccessApi, granted = capabilities) {
@@ -108,6 +109,8 @@ it('shows a bounded add-document attention item when the customer has no Documen
     if (path === 'v1/evidence')
       return Promise.resolve({ dataDurability: 'Runtime only', items: [] }) as never;
     if (path === 'v1/financial-profile') return Promise.resolve(profile([])) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
     throw new Error('unexpected endpoint');
   });
 
@@ -128,6 +131,8 @@ it('shows review-documents attention without claiming extracted information is t
         items: [{ documentVersionId: 'document-version-001' }],
       }) as never;
     if (path === 'v1/financial-profile') return Promise.resolve(profile([])) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
     throw new Error('unexpected endpoint');
   });
 
@@ -149,6 +154,8 @@ it('shows only the missing supported category after trusted information exists',
         items: [{ documentVersionId: 'document-version-001' }],
       }) as never;
     if (path === 'v1/financial-profile') return Promise.resolve(profile([income])) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
     throw new Error('unexpected endpoint');
   });
 
@@ -173,24 +180,30 @@ it('shows a truthful clear state when both currently supported categories are re
         ],
       }) as never;
     if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
     throw new Error('unexpected endpoint');
   });
 
   mount(api);
 
   expect(
-    await screen.findByText('Nothing currently needs attention in the supported journeys'),
+    await screen.findByText('No attention items are visible in the currently loaded supported state'),
   ).toBeVisible();
   expect(
     screen.getByText(/This does not mean your overall finances are complete/),
   ).toBeVisible();
+  expect(screen.getByText(/not a lifetime processing-history claim/)).toBeVisible();
   expect(screen.getByText('2 of 2')).toBeVisible();
+  expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('0');
 });
 
 it('does not present a clear state when only one bounded input is authorized', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
     throw new Error('unexpected endpoint');
   });
 
@@ -200,7 +213,7 @@ it('does not present a clear state when only one bounded input is authorized', a
     await screen.findByText('Current attention could not be fully determined'),
   ).toBeVisible();
   expect(
-    screen.queryByText('Nothing currently needs attention in the supported journeys'),
+    screen.queryByText('No attention items are visible in the currently loaded supported state'),
   ).not.toBeInTheDocument();
 });
 
@@ -213,6 +226,8 @@ it('never turns an unavailable Financial Profile into a false zero-information a
         items: [{ documentVersionId: 'document-version-001' }],
       }) as never;
     if (path === 'v1/financial-profile') return Promise.reject(new Error('owner unavailable')) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
     throw new Error('unexpected endpoint');
   });
 
@@ -227,7 +242,143 @@ it('never turns an unavailable Financial Profile into a false zero-information a
   expect(screen.getByText('Current attention could not be fully determined')).toBeVisible();
   expect(screen.getByText('Some current information is unavailable.')).toBeVisible();
   expect(
-    screen.queryByText('Nothing currently needs attention in the supported journeys'),
+    screen.queryByText('No attention items are visible in the currently loaded supported state'),
   ).not.toBeInTheDocument();
   expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+});
+
+
+it('aggregates durable processing attention without turning jobs into tasks', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          { documentVersionId: 'document-version-001' },
+          { documentVersionId: 'document-version-002' },
+        ],
+      }) as never;
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-running',
+            documentVersionId: 'document-version-001',
+            state: 'Running',
+            attempt: 1,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+          {
+            jobId: 'job-processing-scheduled',
+            documentVersionId: 'document-version-002',
+            state: 'Scheduled',
+            attempt: 0,
+            updatedAt: '2026-10-16T08:59:00Z',
+          },
+          {
+            jobId: 'job-processing-stopping',
+            documentVersionId: 'document-version-006',
+            state: 'CancellationRequested',
+            attempt: 1,
+            updatedAt: '2026-10-16T08:58:30Z',
+          },
+          {
+            jobId: 'job-processing-failed',
+            documentVersionId: 'document-version-003',
+            state: 'Failed',
+            attempt: 2,
+            updatedAt: '2026-10-16T08:58:00Z',
+          },
+          {
+            jobId: 'job-processing-completed',
+            documentVersionId: 'document-version-004',
+            state: 'Completed',
+            attempt: 1,
+            updatedAt: '2026-10-16T08:57:00Z',
+          },
+          {
+            jobId: 'job-processing-cancelled',
+            documentVersionId: 'document-version-005',
+            state: 'Cancelled',
+            attempt: 0,
+            updatedAt: '2026-10-16T08:56:00Z',
+          },
+        ],
+      }) as never;
+    throw new Error('unexpected endpoint');
+  });
+
+  mount(api);
+
+  expect(await screen.findByText('3 document processing runs are still active.')).toBeVisible();
+  expect(screen.getByText("1 document processing run couldn't complete.")).toBeVisible();
+  expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('4');
+  expect(screen.getByText('2 items from supported journeys')).toBeVisible();
+  const links = screen.getAllByRole('link', { name: 'View processing activity' });
+  expect(links).toHaveLength(2);
+  expect(links[0]).toHaveAttribute('href', '/evidence');
+  expect(screen.queryByText(/completed processing needs attention/i)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument();
+});
+
+it('never turns unavailable processing activity into an all-clear Action Centre', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          { documentVersionId: 'document-version-001' },
+          { documentVersionId: 'document-version-002' },
+        ],
+      }) as never;
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    if (path === 'v1/processing-activity') return Promise.reject(new Error('job owner unavailable')) as never;
+    throw new Error('unexpected endpoint');
+  });
+
+  mount(api);
+
+  expect(
+    await screen.findByText("We couldn't refresh document processing attention."),
+  ).toBeVisible();
+  expect(screen.getByText('Current attention could not be fully determined')).toBeVisible();
+  expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('—');
+  expect(
+    screen.queryByText('No attention items are visible in the currently loaded supported state'),
+  ).not.toBeInTheDocument();
+});
+
+it('does not infer processing all-clear when job read is outside the current access package', async () => {
+  const api = new AccessApi(session);
+  const request = vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          { documentVersionId: 'document-version-001' },
+          { documentVersionId: 'document-version-002' },
+        ],
+      }) as never;
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    throw new Error('unexpected endpoint');
+  });
+
+  mount(api, [
+    'evidence.document.read',
+    'evidence.document.upload',
+    'financial-profile.profile.read',
+  ]);
+
+  expect(
+    await screen.findByText("Recent processing attention isn't included in your current access"),
+  ).toBeVisible();
+  expect(screen.getByText('Current attention could not be fully determined')).toBeVisible();
+  expect(
+    request.mock.calls.some(([path]) => path === 'v1/processing-activity'),
+  ).toBe(false);
 });
