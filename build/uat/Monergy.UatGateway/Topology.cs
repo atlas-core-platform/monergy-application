@@ -30,7 +30,9 @@ internal static class Topology
             ? "Durable local customer Consent, expiry and revocation"
             : onboarding && service.Id == "reporting"
                 ? "Customer basic summaries from Financial Profile; report storage is volatile"
-                : service.Implementation;
+                : onboarding && service.Id == "search-retrieval"
+                    ? "Customer lexical search over current Documents and Financial Profile; derived index is rebuildable"
+                    : service.Implementation;
         return new ServiceState(service.Id, service.Label, implementation, available);
     }));
 }
