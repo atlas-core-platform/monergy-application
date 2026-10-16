@@ -1,7 +1,7 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Checkbox, Drawer, Input, Select, Skeleton, Spin, Tag, Upload } from 'antd';
 import type { UploadProps } from 'antd';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import {
@@ -54,6 +54,11 @@ export default function EvidenceExperience() {
   const [confirmation, setConfirmation] = useState<ProductEvidenceReceipt | null>(null);
   const [libraryBusy, setLibraryBusy] = useState(false);
   const [libraryError, setLibraryError] = useState('');
+  const [libraryLoaded, setLibraryLoaded] = useState(false);
+  const [sourceFocusMessage, setSourceFocusMessage] = useState('');
+  const sourceVersionFocus = useRef(
+    new URLSearchParams(window.location.search).get('version'),
+  );
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [selectedEvidence, setSelectedEvidence] = useState<ProductEvidenceItem | null>(null);
@@ -75,6 +80,7 @@ export default function EvidenceExperience() {
         return;
       }
       setLibraryBusy(true);
+      setLibraryLoaded(false);
       setLibraryError('');
       try {
         const library = await listEvidence(api, signal);
@@ -88,7 +94,10 @@ export default function EvidenceExperience() {
           );
         }
       } finally {
-        if (!signal?.aborted) setLibraryBusy(false);
+        if (!signal?.aborted) {
+          setLibraryBusy(false);
+          setLibraryLoaded(true);
+        }
       }
     },
     [api, canRead],
@@ -103,6 +112,21 @@ export default function EvidenceExperience() {
       controller.abort();
     };
   }, [loadLibrary]);
+  useEffect(() => {
+    const version = sourceVersionFocus.current;
+    if (!version || !libraryLoaded || !canRead) return;
+    const match = evidence.find((item) => item.documentVersionId === version);
+    sourceVersionFocus.current = null;
+    window.history.replaceState(null, '', '/evidence');
+    if (match) {
+      setSelectedEvidence(match);
+      setSourceFocusMessage('');
+    } else {
+      setSourceFocusMessage(
+        "The source document version isn't available in your current document access.",
+      );
+    }
+  }, [canRead, evidence, libraryLoaded]);
   const visibleEvidence = useMemo(() => {
     const term = query.trim().toLocaleLowerCase();
     return evidence.filter(
@@ -348,6 +372,14 @@ export default function EvidenceExperience() {
             {evidence.length ? `${String(evidence.length)} available` : 'No documents yet'}
           </span>
         </div>
+        {sourceFocusMessage && (
+          <Alert
+            showIcon
+            type="warning"
+            title={sourceFocusMessage}
+            className="product-library-alert"
+          />
+        )}
         {confirmation && (
           <Alert
             showIcon
