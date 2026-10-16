@@ -245,6 +245,7 @@ assert [(fact['factType'], fact['label']) for fact in promoted['profile']['facts
     ('EXPENSE', 'Housing'), ('INCOME', 'Employment income')]
 assert all(fact['source']['sourceName'] == 'customer-statement.txt' for fact in promoted['profile']['facts'])
 assert all(fact['source']['documentVersion'] == product_receipt['documentVersionId'] for fact in promoted['profile']['facts'])
+assert sorted(fact['source']['technicalSourceFactId'] for fact in promoted['profile']['facts']) == sorted(source_fact_ids)
 assert call(promotion_path, 'POST', promotion_body, customer) == promoted
 call(promotion_path, 'POST', {**promotion_body, 'sourceFactIds': source_fact_ids[:1]}, customer, status=409)
 call('/contracts/cid-031/v1', 'POST', envelope(customer, 'NormalizeSourceFacts', {
