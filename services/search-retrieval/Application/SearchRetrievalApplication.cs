@@ -103,6 +103,15 @@ public sealed class SearchRetrievalApplication(
             request.ContractName, request.CorrelationId, cancellationToken).ConfigureAwait(false);
         if (accessError is not null) { return Rejected<TPayload, SearchResults>(request, accessError); }
 
+        if (projectionSource is ICustomerSearchProjectionSource && matchMode != SearchMatchMode.Lexical)
+        {
+            return ContractResult<SearchResults>.Rejected(
+                request,
+                "search.match-mode.unsupported",
+                ContractErrorCategory.UnsupportedOperation,
+                "Customer search currently supports lexical matching only.");
+        }
+
         if (projectionSource is ICustomerSearchProjectionSource current)
         {
             try
