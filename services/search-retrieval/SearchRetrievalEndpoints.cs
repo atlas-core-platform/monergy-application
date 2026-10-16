@@ -29,6 +29,8 @@ public static class SearchRetrievalEndpoints
         _ when result.Error?.Category == ContractErrorCategory.AccessDenied => Results.Json(result, statusCode: 403),
         _ when result.Error?.Category is ContractErrorCategory.DependencyFailure or ContractErrorCategory.TemporarilyUnavailable =>
             Results.Json(result, statusCode: 503),
+        _ when result.Error?.Category == ContractErrorCategory.UnsupportedOperation =>
+            Results.Json(result, statusCode: 422),
         _ => Results.Json(result, statusCode: 400),
     };
 }
