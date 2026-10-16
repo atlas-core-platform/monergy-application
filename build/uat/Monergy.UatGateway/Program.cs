@@ -15,6 +15,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.AddTenantSetup();
 builder.AddProductWorkspace();
 builder.AddProductFinancialProfile();
+builder.AddProductReporting();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
 builder.Services.AddSingleton(new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
 { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1_048_576 });
@@ -38,6 +39,7 @@ app.UseRouting();
 app.MapTenantSetup();
 app.MapProductWorkspace();
 app.MapProductFinancialProfile();
+app.MapProductReporting();
 app.MapGet("/health/live", () => Results.Ok(new { profile = "local-uat", productionAccepted = false }));
 app.MapGet("/health/ready", async (HttpClient client, CancellationToken ct) =>
 {
