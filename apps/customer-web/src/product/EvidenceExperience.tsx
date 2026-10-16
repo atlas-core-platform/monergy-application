@@ -1151,7 +1151,8 @@ export default function EvidenceExperience() {
                     financialProfile !== null &&
                     !financialLinkError &&
                     recoveredResult.facts.some(
-                      (fact) => !trustedFactsBySourceFactId.get(fact.sourceFactId)?.source.documentVersion ===
+                      (fact) =>
+                        trustedFactsBySourceFactId.get(fact.sourceFactId)?.source.documentVersion !==
                         recoveredResult.documentVersionId,
                     ) && (
                     <Button
