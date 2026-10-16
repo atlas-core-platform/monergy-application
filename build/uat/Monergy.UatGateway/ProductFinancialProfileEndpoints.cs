@@ -104,20 +104,17 @@ public static class ProductFinancialProfileEndpoints
                 if (evidenceDecision.Outcome != "Allow")
                     throw new TenantBoundaryException("ACCESS_DENIED", 403);
 
-                var names = await ReadEvidenceNamesAsync(
-                    session, customer, evidenceDecision, evidence, http.RequestAborted).ConfigureAwait(false);
-
-                var current = await ReadFinancialFactAsync(
-                    financialFactId, null, session, customer, read, financial, names, http.RequestAborted)
-                    .ConfigureAwait(false)
+                var current = await ReadFinancialFactExactAsync(
+                    financialFactId, null, session, customer, read, evidenceDecision,
+                    financial, evidence, http.RequestAborted).ConfigureAwait(false)
                     ?? throw new TenantBoundaryException("FINANCIAL_FACT_NOT_FOUND", 404);
 
                 var history = new List<ProductFinancialFactView>(current.Revision);
                 for (var revision = current.Revision; revision >= 1; revision--)
                 {
-                    var item = await ReadFinancialFactAsync(
-                        financialFactId, revision, session, customer, read, financial, names, http.RequestAborted)
-                        .ConfigureAwait(false)
+                    var item = await ReadFinancialFactExactAsync(
+                        financialFactId, revision, session, customer, read, evidenceDecision,
+                        financial, evidence, http.RequestAborted).ConfigureAwait(false)
                         ?? throw new TenantBoundaryException("FINANCIAL_FACT_HISTORY_INCOMPLETE", 503);
                     history.Add(item);
                 }
@@ -382,6 +379,93 @@ public static class ProductFinancialProfileEndpoints
             factResult.Data.Revision,
             new ProductFinancialSourceView(
                 sourceNames.GetValueOrDefault(provenance.Data.DocumentVersionId, "Uploaded document"),
+                provenance.Data.DocumentVersionId,
+                provenance.Data.RecordedAt,
+                provenance.Data.SourceFactId,
+                provenance.Data.FinancialProvenanceId));
+    }
+
+    private static async Task<ProductFinancialFactView?> ReadFinancialFactExactAsync(
+        string financialFactId,
+        int? revision,
+        CustomerOwnerSession session,
+        CustomerOwnerWorkspace customer,
+        CustomerAccessDecision profileDecision,
+        CustomerAccessDecision evidenceDecision,
+        ProductFinancialProfileClient financial,
+        ProductEvidenceClient evidence,
+        CancellationToken ct)
+    {
+        var factRequest = new ContractRequest<GetFinancialFact>(
+            Vs02ContractNames.GetFinancialFact,
+            ContractGuard.CurrentVersion,
+            "request-financial-fact-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-fact-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, profileDecision, null),
+            null,
+            new GetFinancialFact(financialFactId, customer.CustomerId, revision));
+        var factResult = await financial.FactAsync(factRequest, ct).ConfigureAwait(false);
+        if (factResult.Outcome == ContractOutcome.Rejected &&
+            factResult.Error?.Category == ContractErrorCategory.NotFound)
+            return null;
+        if (factResult.Outcome != ContractOutcome.Success || factResult.Data is null)
+            throw new TenantBoundaryException("FINANCIAL_PROFILE_OWNER_UNAVAILABLE", 503);
+
+        var provenanceRequest = new ContractRequest<GetFinancialProvenance>(
+            Vs02ContractNames.GetFinancialProvenance,
+            ContractGuard.CurrentVersion,
+            "request-financial-source-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-source-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, profileDecision, null),
+            null,
+            new GetFinancialProvenance(factResult.Data.FinancialProvenanceId, customer.CustomerId));
+        var provenance = await financial.ProvenanceAsync(provenanceRequest, ct).ConfigureAwait(false);
+        if (provenance.Outcome != ContractOutcome.Success || provenance.Data is null)
+            throw new TenantBoundaryException("FINANCIAL_PROFILE_PROVENANCE_UNAVAILABLE", 503);
+
+        var referenceRequest = new ContractRequest<GetEvidenceReference>(
+            Vs02ContractNames.GetEvidenceReference,
+            ContractGuard.CurrentVersion,
+            "request-financial-evidence-reference-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-evidence-reference-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, evidenceDecision, null),
+            null,
+            new GetEvidenceReference(provenance.Data.DocumentVersionId, customer.CustomerId));
+        var reference = await evidence.ReferenceAsync(
+            session.TenantId, session.AuthenticationContextId, referenceRequest, ct).ConfigureAwait(false);
+        if (reference.Outcome != ContractOutcome.Success || reference.Data is null)
+            throw new TenantBoundaryException("FINANCIAL_SOURCE_DOCUMENT_UNAVAILABLE", 404);
+
+        var metadataRequest = new ContractRequest<GetEvidenceMetadata>(
+            Vs02ContractNames.GetEvidenceMetadata,
+            ContractGuard.CurrentVersion,
+            "request-financial-evidence-metadata-" + Guid.NewGuid().ToString("N"),
+            "correlation-financial-evidence-metadata-" + Guid.NewGuid().ToString("N"),
+            null,
+            Security(session, customer.CustomerId, evidenceDecision, null),
+            null,
+            new GetEvidenceMetadata(reference.Data.DocumentId, customer.CustomerId));
+        var metadata = await evidence.MetadataAsync(
+            session.TenantId, session.AuthenticationContextId, metadataRequest, ct).ConfigureAwait(false);
+        if (metadata.Outcome != ContractOutcome.Success || metadata.Data is null)
+            throw new TenantBoundaryException("FINANCIAL_SOURCE_DOCUMENT_UNAVAILABLE", 404);
+        var version = metadata.Data.Versions.SingleOrDefault(
+            item => item.DocumentVersionId == provenance.Data.DocumentVersionId)
+            ?? throw new TenantBoundaryException("FINANCIAL_SOURCE_DOCUMENT_UNAVAILABLE", 404);
+
+        return new ProductFinancialFactView(
+            factResult.Data.FinancialFactId,
+            factResult.Data.FactType,
+            factResult.Data.Label,
+            factResult.Data.Value,
+            factResult.Data.Currency,
+            factResult.Data.EffectiveDate,
+            factResult.Data.Revision,
+            new ProductFinancialSourceView(
+                version.OriginalFileName,
                 provenance.Data.DocumentVersionId,
                 provenance.Data.RecordedAt,
                 provenance.Data.SourceFactId,
