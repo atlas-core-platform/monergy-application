@@ -669,10 +669,12 @@ it('recovers recent durable document-processing activity and opens the matching 
   mount(api, ['evidence.document.read', 'job-management.job.read']);
   const user = userEvent.setup();
 
-  expect(await screen.findByText('Recent document processing')).toBeVisible();
-  expect(screen.getByText('activity-statement.txt')).toBeVisible();
-  expect(screen.getByText('Completed')).toBeVisible();
-  expect(screen.getByText(/Attempt 1/)).toBeVisible();
+  const activity = within(
+    screen.getByRole('region', { name: 'Recent document processing' }),
+  );
+  expect(await activity.findByText('activity-statement.txt')).toBeVisible();
+  expect(activity.getByText('Completed')).toBeVisible();
+  expect(activity.getByText(/Attempt 1/)).toBeVisible();
   expect(request).toHaveBeenCalledWith(
     'v1/processing-activity',
     'GET',
@@ -680,7 +682,7 @@ it('recovers recent durable document-processing activity and opens the matching 
     expect.any(AbortSignal),
   );
 
-  await user.click(screen.getByRole('button', { name: 'Open document' }));
+  await user.click(activity.getByRole('button', { name: 'Open document' }));
   expect(await screen.findByRole('dialog', { name: 'Document details' })).toHaveTextContent(
     'activity-statement.txt',
   );
