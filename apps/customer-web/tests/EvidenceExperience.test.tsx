@@ -402,3 +402,231 @@ it('fails closed when a requested source document version is outside current Evi
     screen.queryByRole('dialog', { name: 'Source document details' }),
   ).not.toBeInTheDocument();
 });
+
+
+it('sorts Documents deterministically and links an exact document version to trusted financial information', async () => {
+  const api = new AccessApi(session);
+  const documents = [
+    {
+      documentId: 'document-002',
+      documentVersionId: 'document-version-002',
+      evidenceId: 'evidence-002',
+      version: 1,
+      sourceName: 'Customer upload',
+      originalFileName: 'zeta-expense.txt',
+      contentType: 'text/plain',
+      contentLength: 32,
+      contentSha256: 'd'.repeat(64),
+      receivedAt: '2026-10-15T08:00:00Z',
+      createdAt: '2026-10-15T08:00:00Z',
+    },
+    {
+      documentId: 'document-001',
+      documentVersionId: 'document-version-001',
+      evidenceId: 'evidence-001',
+      version: 1,
+      sourceName: 'Customer upload',
+      originalFileName: 'annual-income.pdf',
+      contentType: 'application/pdf',
+      contentLength: 1024,
+      contentSha256: 'c'.repeat(64),
+      receivedAt: '2026-10-14T08:00:00Z',
+      createdAt: '2026-10-14T08:00:00Z',
+    },
+  ];
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ dataDurability: 'Temporary data', items: documents }) as never;
+    if (path === 'v1/financial-profile')
+      return Promise.resolve({
+        financialProfileId: 'financial-profile-reference-customer',
+        revision: 1,
+        updatedAt: '2026-10-15T09:00:00Z',
+        dataDurability: 'Temporary data',
+        facts: [
+          {
+            financialFactId: 'ff-income',
+            factType: 'INCOME',
+            label: 'Employment income',
+            value: 125000,
+            currency: 'USD',
+            effectiveDate: '2026-10-01',
+            revision: 1,
+            source: {
+              sourceName: 'annual-income.pdf',
+              documentVersion: 'document-version-001',
+              recordedAt: '2026-10-15T09:00:00Z',
+              technicalSourceFactId: 'source-income',
+              technicalProvenanceId: 'provenance-income',
+            },
+          },
+          {
+            financialFactId: 'ff-future',
+            factType: 'INVESTMENT',
+            label: 'Future investment',
+            value: 500,
+            currency: 'USD',
+            effectiveDate: '2026-10-01',
+            revision: 1,
+            source: {
+              sourceName: 'annual-income.pdf',
+              documentVersion: 'document-version-001',
+              recordedAt: '2026-10-15T09:00:00Z',
+              technicalSourceFactId: 'source-future',
+              technicalProvenanceId: 'provenance-future',
+            },
+          },
+        ],
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read', 'financial-profile.profile.read']);
+  const user = userEvent.setup();
+
+  const initial = await screen.findAllByRole('button', { name: /View document details for/ });
+  expect(initial[0]).toHaveAccessibleName('View document details for zeta-expense.txt');
+  expect(screen.getByText('1 trusted item')).toBeVisible();
+  expect(screen.getByText('0 trusted items')).toBeVisible();
+
+  await user.click(screen.getByLabelText('Sort documents'));
+  await user.click(await screen.findByText('File name A–Z'));
+
+  const sorted = screen.getAllByRole('button', { name: /View document details for/ });
+  expect(sorted[0]).toHaveAccessibleName('View document details for annual-income.pdf');
+
+  await user.click(
+    screen.getByRole('button', { name: 'View document details for annual-income.pdf' }),
+  );
+  const drawer = await screen.findByRole('dialog', { name: 'Document details' });
+  expect(drawer).toHaveTextContent('Trusted information using this document version');
+  expect(drawer).toHaveTextContent('Employment income');
+  expect(drawer).toHaveTextContent('$125,000.00');
+  expect(drawer).not.toHaveTextContent('Future investment');
+  expect(within(drawer).getByRole('link', { name: /Employment income/ })).toHaveAttribute(
+    'href',
+    '/finances?fact=ff-income',
+  );
+  expect(drawer).toHaveTextContent('Customer upload');
+  expect(drawer).toHaveTextContent('Received');
+});
+
+it('shows a truthful no-link state only after Financial Profile has loaded successfully', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            documentId: 'document-002',
+            documentVersionId: 'document-version-002',
+            evidenceId: 'evidence-002',
+            version: 1,
+            sourceName: 'Customer upload',
+            originalFileName: 'unlinked.pdf',
+            contentType: 'application/pdf',
+            contentLength: 256,
+            contentSha256: 'e'.repeat(64),
+            receivedAt: '2026-10-15T08:00:00Z',
+            createdAt: '2026-10-15T08:00:00Z',
+          },
+        ],
+      }) as never;
+    if (path === 'v1/financial-profile')
+      return Promise.resolve({
+        financialProfileId: 'financial-profile-reference-customer',
+        revision: 0,
+        updatedAt: null,
+        dataDurability: 'Temporary data',
+        facts: [],
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read', 'financial-profile.profile.read']);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'View document details for unlinked.pdf' }),
+  );
+
+  const drawer = await screen.findByRole('dialog', { name: 'Document details' });
+  expect(drawer).toHaveTextContent(
+    'No trusted Income or Expense information currently uses this document version.',
+  );
+  expect(screen.getByText('0 trusted items')).toBeVisible();
+});
+
+it('never turns an unavailable Financial Profile into a false zero-linked state', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            documentId: 'document-003',
+            documentVersionId: 'document-version-003',
+            evidenceId: 'evidence-003',
+            version: 1,
+            sourceName: 'Customer upload',
+            originalFileName: 'unknown-links.pdf',
+            contentType: 'application/pdf',
+            contentLength: 256,
+            contentSha256: 'f'.repeat(64),
+            receivedAt: '2026-10-15T08:00:00Z',
+            createdAt: '2026-10-15T08:00:00Z',
+          },
+        ],
+      }) as never;
+    if (path === 'v1/financial-profile')
+      return Promise.reject(new AccessApiError(503, 'FINANCIAL_PROFILE_OWNER_UNAVAILABLE'));
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read', 'financial-profile.profile.read']);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'View document details for unknown-links.pdf' }),
+  );
+
+  const drawer = await screen.findByRole('dialog', { name: 'Document details' });
+  expect(drawer).toHaveTextContent("We couldn't refresh linked financial information.");
+  expect(drawer).not.toHaveTextContent(
+    'No trusted Income or Expense information currently uses this document version.',
+  );
+  expect(screen.queryByText('0 trusted items')).not.toBeInTheDocument();
+});
+
+it('keeps linked Financial information hidden when it is outside the current access package', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    dataDurability: 'Temporary data',
+    items: [
+      {
+        documentId: 'document-004',
+        documentVersionId: 'document-version-004',
+        evidenceId: 'evidence-004',
+        version: 1,
+        sourceName: 'Customer upload',
+        originalFileName: 'document-only.pdf',
+        contentType: 'application/pdf',
+        contentLength: 256,
+        contentSha256: 'a'.repeat(64),
+        receivedAt: '2026-10-15T08:00:00Z',
+        createdAt: '2026-10-15T08:00:00Z',
+      },
+    ],
+  } as never);
+
+  mount(api, ['evidence.document.read']);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'View document details for document-only.pdf' }),
+  );
+
+  const drawer = await screen.findByRole('dialog', { name: 'Document details' });
+  expect(drawer).toHaveTextContent(
+    'Linked financial information is not included in your current access.',
+  );
+});
