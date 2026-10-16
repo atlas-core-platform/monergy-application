@@ -1,18 +1,16 @@
-# Authorized Search & Provenance Retrieval — D07 candidate
+# Search & Retrieval Service
 
-This boundary implements the five CTO-authorized MWP-03-D07 Features at
-`SIMULATOR` evidence level for `LOCAL` and `CI_EPHEMERAL` only.
+Search & Retrieval owns only derived, rebuildable search representations. Evidence and Financial Profile remain authoritative for the customer information surfaced by search.
 
-The in-memory document, financial and deterministic semantic indexes are
-`DERIVED_REBUILDABLE`. Evidence Service, Financial Profile Service and Financial
-Rules Service remain authoritative; every result retains source, provenance and,
-where applicable, calculation-lineage references.
+## Governed execution profiles
 
-CID-042, CID-043 and CID-044 are exposed as authorized query endpoints. CID-046
-is the derived-index refresh job boundary. The implementation consumes CID-007,
-CID-023, CID-024, CID-033, CID-034, CID-035, CID-036 and CID-039 without taking
-ownership of their meaning.
+The historical MWP-03-D07 reference adapter remains available only at its recorded `SIMULATOR` evidence level in `LOCAL` and `CI_EPHEMERAL`. Its static document, financial and calculation fixtures and deterministic semantic representation remain engineering evidence; they are not live customer information or a production search-quality claim.
 
-The semantic representation is deterministic reference behavior, not a
-production embedding-quality claim. No AI/model, provider, database, broker,
-physical search store or vector product is selected.
+T1-11 adds a separate LOCAL/UAT product projection source. When `Monergy:ProductSearch:Enabled=true`, each customer query is freshly authorized and the derived customer index is rebuilt from:
+
+- the current Evidence customer document library for Document results; and
+- the current Financial Profile for supported `INCOME` and `EXPENSE` Financial results, with exact Financial provenance.
+
+The product profile supports **lexical matching only**. Semantic matching is rejected at the Search owner boundary. Calculation results, AI/embedding behavior, provider selection, physical search/vector infrastructure and cross-customer retrieval are not part of T1-11.
+
+Every product result remains `DERIVED_REBUILDABLE` and carries the authoritative source object/reference needed to navigate back to the exact Document version or Financial fact. This LOCAL/UAT integration is not Production acceptance.
