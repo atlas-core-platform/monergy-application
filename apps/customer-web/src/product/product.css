@@ -787,3 +787,24 @@
   }
 }
 
+
+
+/* T1-09 — Financial Passport category drill-down. */
+.product-financial-category-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 14px 0;
+}
+.product-financial-category-filter .ant-btn {
+  min-width: 88px;
+}
+.product-category-empty {
+  min-height: 240px;
+}
+.product-category-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
