@@ -123,13 +123,22 @@ public static class DocumentProcessingJobEndpoints
                 throw new TenantBoundaryException("JOB_RESULT_NOT_FOUND", 404);
 
             var tenant = http.Headers["X-Monergy-Tenant"].ToString();
-            var decision = await access.EvaluateCustomerAsync(
+            var jobDecision = await access.EvaluateCustomerAsync(
                 tenant,
                 request.Security.Actor.AuthenticationContextId,
                 "job-management.job.read",
                 request.CustomerId,
                 cancellationToken).ConfigureAwait(false);
-            if (decision.Outcome != "Allow" || decision.ActorId != request.Security.Actor.ActorId)
+            var evidenceDecision = await access.EvaluateCustomerAsync(
+                tenant,
+                request.Security.Actor.AuthenticationContextId,
+                "evidence.document.read",
+                request.CustomerId,
+                cancellationToken).ConfigureAwait(false);
+            if (jobDecision.Outcome != "Allow" ||
+                evidenceDecision.Outcome != "Allow" ||
+                jobDecision.ActorId != request.Security.Actor.ActorId ||
+                evidenceDecision.ActorId != request.Security.Actor.ActorId)
                 throw new TenantBoundaryException("ACCESS_DENIED", 403);
             if (job.State != JobState.Completed)
                 throw new TenantBoundaryException("JOB_RESULT_NOT_READY", 409);
