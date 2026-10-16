@@ -187,6 +187,23 @@ it('shows a truthful clear state when both currently supported categories are re
   expect(screen.getByText('2 of 2')).toBeVisible();
 });
 
+it('does not present a clear state when only one bounded input is authorized', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    throw new Error('unexpected endpoint');
+  });
+
+  mount(api, ['financial-profile.profile.read']);
+
+  expect(
+    await screen.findByText('Current attention could not be fully determined'),
+  ).toBeVisible();
+  expect(
+    screen.queryByText('Nothing currently needs attention in the supported journeys'),
+  ).not.toBeInTheDocument();
+});
+
 it('never turns an unavailable Financial Profile into a false zero-information attention item', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
