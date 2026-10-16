@@ -9,6 +9,7 @@ import {
   evidenceTypes,
   getDocumentProcessing,
   getEvidenceSource,
+  getEvidenceVersionHistory,
   getFinancialProfile,
   getProcessingActivity,
   listEvidence,
@@ -18,6 +19,7 @@ import {
   type ProductEvidenceItem,
   type ProductEvidenceReceipt,
   type ProductEvidenceSource,
+  type ProductEvidenceVersionHistory,
   type ProductFinancialFact,
   type ProductFinancialProfile,
   type ProductFinancialPromotionResult,
@@ -103,6 +105,9 @@ export default function EvidenceExperience() {
   const [financialProfile, setFinancialProfile] = useState<ProductFinancialProfile | null>(null);
   const [financialLinkError, setFinancialLinkError] = useState('');
   const [selectedEvidence, setSelectedEvidence] = useState<ProductEvidenceItem | null>(null);
+  const [versionHistory, setVersionHistory] = useState<ProductEvidenceVersionHistory | null>(null);
+  const [versionHistoryBusy, setVersionHistoryBusy] = useState(false);
+  const [versionHistoryError, setVersionHistoryError] = useState('');
   const [processingEvidence, setProcessingEvidence] = useState<ProductEvidenceItem | null>(null);
   const [processing, setProcessing] = useState<ProductProcessingView | null>(null);
   const [processingActivity, setProcessingActivity] = useState<ProductProcessingActivityItem[]>([]);
@@ -215,6 +220,36 @@ export default function EvidenceExperience() {
     return () => controller.abort();
   }, [api, canReadFinancial]);
   useEffect(() => {
+    if (!selectedEvidence || !api || !canRead) {
+      setVersionHistory(null);
+      setVersionHistoryError('');
+      setVersionHistoryBusy(false);
+      return;
+    }
+    const controller = new AbortController();
+    setVersionHistory(null);
+    setVersionHistoryError('');
+    setVersionHistoryBusy(true);
+    void getEvidenceVersionHistory(api, selectedEvidence.documentId, controller.signal)
+      .then(setVersionHistory)
+      .catch((failure) => {
+        if (controller.signal.aborted) return;
+        setVersionHistory(null);
+        setVersionHistoryError(
+          failure instanceof AccessApiError && failure.status === 403
+            ? "You no longer have access to this document history."
+            : failure instanceof AccessApiError && failure.status === 404
+              ? "This document history isn't available in your current document access."
+              : "We couldn't refresh this document's version history.",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setVersionHistoryBusy(false);
+      });
+    return () => controller.abort();
+  }, [api, canRead, selectedEvidence]);
+
+  useEffect(() => {
     const version = sourceVersionFocus.current;
     if (!version || !api || !canRead) return;
     sourceVersionFocus.current = null;
@@ -283,6 +318,28 @@ export default function EvidenceExperience() {
         : [],
     [linkedFactsByVersion, selectedEvidence],
   );
+  const openDocumentVersion = async (documentVersionId: string) => {
+    if (!api || !canRead || versionHistoryBusy) return;
+    setVersionHistoryBusy(true);
+    setVersionHistoryError('');
+    try {
+      const source = await getEvidenceSource(api, documentVersionId);
+      setSelectedEvidence(null);
+      setVersionHistory(null);
+      setFocusedSource(source);
+    } catch (failure) {
+      setVersionHistoryError(
+        failure instanceof AccessApiError && failure.status === 403
+          ? "You no longer have access to this document version."
+          : failure instanceof AccessApiError && failure.status === 404
+            ? "This document version isn't available in your current document access."
+            : "We couldn't open this document version.",
+      );
+    } finally {
+      setVersionHistoryBusy(false);
+    }
+  };
+
   const issue = useMemo(() => {
     if (!candidate) return '';
     if (!evidenceTypes.includes(candidate.type))
@@ -830,6 +887,8 @@ export default function EvidenceExperience() {
         open={Boolean(selectedEvidence)}
         onClose={() => {
           setSelectedEvidence(null);
+          setVersionHistory(null);
+          setVersionHistoryError('');
         }}
         destroyOnHidden
         size="default"
@@ -867,6 +926,63 @@ export default function EvidenceExperience() {
                 <dd>{selectedEvidence.sourceName}</dd>
               </div>
             </dl>
+            <section className="product-document-history" aria-labelledby="document-version-history-title">
+              <div className="product-document-history-heading">
+                <div>
+                  <p className="workspace-eyebrow">VERSION HISTORY</p>
+                  <h4 id="document-version-history-title">Versions of this document</h4>
+                </div>
+                {versionHistory && (
+                  <span>
+                    {versionHistory.versions.length}{' '}
+                    {versionHistory.versions.length === 1 ? 'version' : 'versions'}
+                  </span>
+                )}
+              </div>
+              {versionHistoryError ? (
+                <Alert showIcon type="warning" title={versionHistoryError} />
+              ) : versionHistoryBusy && versionHistory === null ? (
+                <Skeleton active paragraph={{ rows: 2 }} />
+              ) : versionHistory ? (
+                <div className="product-document-history-list">
+                  {versionHistory.versions.map((version) => {
+                    const selected = version.documentVersionId === selectedEvidence.documentVersionId;
+                    return (
+                      <article
+                        key={version.documentVersionId}
+                        className={selected ? 'current' : undefined}
+                      >
+                        <span className="product-document-history-version">
+                          <strong>Version {version.version}</strong>
+                          {selected && <Tag color="blue">OPEN</Tag>}
+                        </span>
+                        <span className="product-document-history-copy">
+                          <strong>{version.originalFileName}</strong>
+                          <small>
+                            {typeName(version.contentType)} · Received {formatDate(version.receivedAt)}
+                          </small>
+                          <small>{version.sourceName}</small>
+                        </span>
+                        <Button
+                          type={selected ? 'default' : 'link'}
+                          disabled={selected || versionHistoryBusy}
+                          onClick={() => {
+                            void openDocumentVersion(version.documentVersionId);
+                          }}
+                        >
+                          {selected ? 'Current view' : 'Open version'}
+                        </Button>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <p className="product-document-history-note">
+                Version history comes from Evidence metadata. Opening a version rechecks your
+                current document access before showing exact source details.
+              </p>
+            </section>
+
             <section className="product-document-links" aria-labelledby="document-financial-links-title">
               <div>
                 <p className="workspace-eyebrow">RELATED FINANCIAL INFORMATION</p>

@@ -48,6 +48,23 @@ export interface ProductEvidenceSource {
   dataDurability: 'Temporary data';
 }
 
+export interface ProductEvidenceVersion {
+  documentVersionId: string;
+  evidenceId: string;
+  version: number;
+  sourceName: string;
+  originalFileName: string;
+  contentType: string;
+  contentSha256: string;
+  receivedAt: string;
+}
+
+export interface ProductEvidenceVersionHistory {
+  documentId: string;
+  versions: ProductEvidenceVersion[];
+  dataDurability: 'Temporary data';
+}
+
 export interface ProductSourceFact {
   sourceFactId: string;
   customerId: string;
@@ -149,6 +166,36 @@ export function listEvidence(
   signal?: AbortSignal,
 ): Promise<ProductEvidenceLibrary> {
   return api.product<ProductEvidenceLibrary>('v1/evidence', 'GET', undefined, signal);
+}
+
+export async function getEvidenceVersionHistory(
+  api: AccessApi,
+  documentId: string,
+  signal?: AbortSignal,
+): Promise<ProductEvidenceVersionHistory> {
+  const history = await api.product<ProductEvidenceVersionHistory>(
+    `v1/evidence/${encodeURIComponent(documentId)}/versions`,
+    'GET',
+    undefined,
+    signal,
+  );
+  if (
+    !history ||
+    history.documentId !== documentId ||
+    !Array.isArray(history.versions) ||
+    history.versions.length < 1 ||
+    new Set(history.versions.map((version) => version.documentVersionId)).size !== history.versions.length ||
+    new Set(history.versions.map((version) => version.version)).size !== history.versions.length ||
+    history.versions.some(
+      (version) =>
+        !version ||
+        typeof version.documentVersionId !== 'string' ||
+        typeof version.version !== 'number' ||
+        version.version < 1,
+    )
+  )
+    throw new Error('Document version history response is invalid.');
+  return history;
 }
 
 export function getEvidenceSource(

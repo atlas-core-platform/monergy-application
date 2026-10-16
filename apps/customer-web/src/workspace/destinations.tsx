@@ -30,9 +30,10 @@ export const productModule = {
       </p>
       <h3>Follow the source</h3>
       <p>
-        Open Document details to see when a document was uploaded and, when needed, expand Technical
-        details for its immutable identifiers and integrity hash. A confirmed upload does not change
-        Financial information until you explicitly review and add supported details.
+        Open Document details to see when a document was uploaded, review its Evidence-owned version
+        history, and open an exact historical version when needed. Technical details retain immutable
+        identifiers and integrity hashes. A confirmed upload does not change Financial information
+        until you explicitly review and add supported details.
       </p>
       <h3>Track processing</h3>
       <p>

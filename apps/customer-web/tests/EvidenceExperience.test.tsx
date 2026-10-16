@@ -758,3 +758,176 @@ it('does not call processing activity when the current access package lacks job 
     expect.anything(),
   );
 });
+
+
+it('loads authorized Document version history lazily and opens an exact historical version', async () => {
+  const api = new AccessApi(session);
+  const current = {
+    documentId: 'document-history',
+    documentVersionId: 'document-version-002',
+    evidenceId: 'evidence-002',
+    version: 2,
+    sourceName: 'Customer upload',
+    originalFileName: 'income-updated.txt',
+    contentType: 'text/plain',
+    contentLength: 40,
+    contentSha256: '2'.repeat(64),
+    receivedAt: '2026-10-16T09:00:00Z',
+    createdAt: '2026-10-16T09:00:00Z',
+  };
+  const request = vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ items: [current], dataDurability: 'Temporary data' }) as never;
+    if (path === 'v1/evidence/document-history/versions')
+      return Promise.resolve({
+        documentId: 'document-history',
+        dataDurability: 'Temporary data',
+        versions: [
+          {
+            documentVersionId: 'document-version-002',
+            evidenceId: 'evidence-002',
+            version: 2,
+            sourceName: 'Customer upload',
+            originalFileName: 'income-updated.txt',
+            contentType: 'text/plain',
+            contentSha256: '2'.repeat(64),
+            receivedAt: '2026-10-16T09:00:00Z',
+          },
+          {
+            documentVersionId: 'document-version-001',
+            evidenceId: 'evidence-001',
+            version: 1,
+            sourceName: 'Customer upload',
+            originalFileName: 'income-original.txt',
+            contentType: 'text/plain',
+            contentSha256: '1'.repeat(64),
+            receivedAt: '2026-10-15T09:00:00Z',
+          },
+        ],
+      }) as never;
+    if (path === 'v1/evidence/source/document-version-001')
+      return Promise.resolve({
+        documentId: 'document-history',
+        documentVersionId: 'document-version-001',
+        evidenceId: 'evidence-001',
+        version: 1,
+        sourceName: 'Customer upload',
+        originalFileName: 'income-original.txt',
+        contentType: 'text/plain',
+        contentSha256: '1'.repeat(64),
+        receivedAt: '2026-10-15T09:00:00Z',
+        dataDurability: 'Temporary data',
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read']);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'View document details for income-updated.txt' }),
+  );
+
+  const drawer = await screen.findByRole('dialog', { name: 'Document details' });
+  expect(await within(drawer).findByText('Versions of this document')).toBeVisible();
+  expect(within(drawer).getByText('2 versions')).toBeVisible();
+  expect(within(drawer).getByText('Version 2')).toBeVisible();
+  expect(within(drawer).getByText('Version 1')).toBeVisible();
+  expect(within(drawer).getByText('income-original.txt')).toBeVisible();
+  expect(within(drawer).getByRole('button', { name: 'Current view' })).toBeDisabled();
+
+  await user.click(within(drawer).getByRole('button', { name: 'Open version' }));
+
+  const source = await screen.findByRole('dialog', { name: 'Source document details' });
+  expect(source).toHaveTextContent('income-original.txt');
+  expect(source).toHaveTextContent('Version');
+  expect(source).toHaveTextContent('1');
+  expect(request).toHaveBeenCalledWith(
+    'v1/evidence/source/document-version-001',
+    'GET',
+    undefined,
+    undefined,
+  );
+});
+
+it('keeps Document history unavailable distinct from a one-version history', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({
+        items: [
+          {
+            documentId: 'document-history-failure',
+            documentVersionId: 'document-version-failure',
+            evidenceId: 'evidence-failure',
+            version: 1,
+            sourceName: 'Customer upload',
+            originalFileName: 'history-failure.pdf',
+            contentType: 'application/pdf',
+            contentLength: 256,
+            contentSha256: 'f'.repeat(64),
+            receivedAt: '2026-10-16T09:00:00Z',
+            createdAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+        dataDurability: 'Temporary data',
+      }) as never;
+    if (path === 'v1/evidence/document-history-failure/versions')
+      return Promise.reject(new AccessApiError(503, 'EVIDENCE_OWNER_UNAVAILABLE'));
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read']);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'View document details for history-failure.pdf' }),
+  );
+
+  const drawer = await screen.findByRole('dialog', { name: 'Document details' });
+  expect(
+    await within(drawer).findByText("We couldn't refresh this document's version history."),
+  ).toBeVisible();
+  expect(within(drawer).queryByText('1 version')).not.toBeInTheDocument();
+});
+
+it('fails closed when Document history response identity does not match the selected Document', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({
+        items: [
+          {
+            documentId: 'document-history-expected',
+            documentVersionId: 'document-version-expected',
+            evidenceId: 'evidence-expected',
+            version: 1,
+            sourceName: 'Customer upload',
+            originalFileName: 'history-identity.pdf',
+            contentType: 'application/pdf',
+            contentLength: 256,
+            contentSha256: 'a'.repeat(64),
+            receivedAt: '2026-10-16T09:00:00Z',
+            createdAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+        dataDurability: 'Temporary data',
+      }) as never;
+    if (path === 'v1/evidence/document-history-expected/versions')
+      return Promise.resolve({
+        documentId: 'document-history-other',
+        dataDurability: 'Temporary data',
+        versions: [],
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read']);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'View document details for history-identity.pdf' }),
+  );
+
+  const drawer = await screen.findByRole('dialog', { name: 'Document details' });
+  expect(
+    await within(drawer).findByText("We couldn't refresh this document's version history."),
+  ).toBeVisible();
+});

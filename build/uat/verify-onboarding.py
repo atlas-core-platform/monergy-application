@@ -143,6 +143,23 @@ assert product_library['items'][0]['contentSha256'] == product_receipt['contentS
 assert 'contentReference' not in product_library['items'][0]
 assert call('/product-api/v1/evidence', session=second_customer)['items'] == []
 
+# T1-15 exposes Evidence-owned version history only through the current Customer boundary.
+version_history_path = '/product-api/v1/evidence/' + product_receipt['documentId'] + '/versions'
+call(version_history_path, status=401)
+call(version_history_path, session=owner, status=403)
+call(version_history_path, session=second_customer, status=404)
+version_history = call(version_history_path, session=customer)
+assert version_history['documentId'] == product_receipt['documentId']
+assert version_history['dataDurability'] == 'Temporary data'
+assert len(version_history['versions']) == 1
+assert version_history['versions'][0]['documentVersionId'] == product_receipt['documentVersionId']
+assert version_history['versions'][0]['evidenceId'] == product_receipt['evidenceId']
+assert version_history['versions'][0]['version'] == 1
+assert version_history['versions'][0]['originalFileName'] == 'customer-statement.txt'
+assert version_history['versions'][0]['sourceName'] == 'Customer upload'
+assert version_history['versions'][0]['contentSha256'] == product_receipt['contentSha256']
+assert 'contentReference' not in version_history['versions'][0]
+
 # APP-03 schedules an owner-governed job, resolves the exact Evidence version and returns only candidate facts.
 processing_path = '/product-api/v1/evidence/' + product_receipt['documentVersionId'] + '/processing'
 processing_operation = 'c' * 32
@@ -437,7 +454,7 @@ assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
-           'validated': ['owner-confirmed Default Access Pack 2.4 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'customer-bound basic Financial Summary and exact export from authoritative Financial Profile facts', 'customer-authorized lexical search across current Documents and trusted Financial information', 'recoverable read-only Customer document-processing activity from durable Job Management', 'canonical Job Audit delivery',
+           'validated': ['owner-confirmed Default Access Pack 2.4 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library, exact version history and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'customer-bound basic Financial Summary and exact export from authoritative Financial Profile facts', 'customer-authorized lexical search across current Documents and trusted Financial information', 'recoverable read-only Customer document-processing activity from durable Job Management', 'canonical Job Audit delivery',
                          'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
                          'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
            'limitations': ['Business data uses owner reference adapters.', 'The processor accepts structured LOCAL/UAT text and does not claim OCR or production AI.', 'Only customer-reviewed Income/Expense source facts are promoted; OCR/production AI and additional financial fact types remain out of scope.', 'Consent outbox delivery is not claimed.']}
