@@ -699,6 +699,14 @@ export default function EvidenceExperience() {
                 <dt>Uploaded</dt>
                 <dd>{formatDate(selectedEvidence.createdAt)}</dd>
               </div>
+              <div>
+                <dt>Received</dt>
+                <dd>{formatDate(selectedEvidence.receivedAt)}</dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd>{selectedEvidence.sourceName}</dd>
+              </div>
             </dl>
             <section className="product-document-links" aria-labelledby="document-financial-links-title">
               <div>
