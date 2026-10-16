@@ -76,9 +76,13 @@ public sealed class ProductSearchProjectionSource(
                 "The product search source does not support this operation.", correlationId),
         };
 
+        var refreshedType = operation == SearchContractNames.SearchDocuments
+            ? SearchResultType.Document
+            : SearchResultType.Financial;
         lock (sync)
         {
-            records = records.Where(item => item.CustomerId != customerId)
+            records = records.Where(item =>
+                    item.CustomerId != customerId || item.ResultType != refreshedType)
                 .Concat(refreshed)
                 .OrderBy(item => item.SearchRecordId, StringComparer.Ordinal)
                 .ToImmutableArray();
