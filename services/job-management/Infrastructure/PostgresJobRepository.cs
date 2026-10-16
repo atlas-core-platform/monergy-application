@@ -118,6 +118,36 @@ public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
         return await FindAsync(connection, null, jobId, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<DurableJobRecord>> ListCustomerAsync(
+        string customerId, string jobName, int limit, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(customerId) || string.IsNullOrWhiteSpace(jobName) ||
+            limit is < 1 or > 100)
+            throw new ArgumentException("A customer, job name and limit from 1 to 100 are required.");
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var rows = (await connection.QueryAsync<JobRow>(new CommandDefinition("""
+            SELECT job_id AS JobId, job_name AS JobName, job_version AS JobVersion,
+                   owner_service AS OwnerService, payload_reference AS PayloadReference,
+                   customer_id AS CustomerId, request_id AS RequestId, correlation_id AS CorrelationId,
+                   causation_id AS CausationId, security_context::text AS SecurityJson,
+                   idempotency_key AS IdempotencyKey, payload_fingerprint AS PayloadFingerprint,
+                   state AS State, attempt AS Attempt, retry_count AS RetryCount,
+                   replay_count AS ReplayCount,
+                   requested_at AS RequestedAt, scheduled_at AS ScheduledAt,
+                   next_attempt_at AS NextAttemptAt, cancellation_requested_at AS CancellationRequestedAt,
+                   terminal_at AS TerminalAt, failure_code AS FailureCode, retryable AS Retryable,
+                   outcome_reference AS OutcomeReference, lease_owner AS LeaseOwner,
+                   lease_token AS LeaseToken, lease_expires_at AS LeaseExpiresAt,
+                   reconciliation_required AS ReconciliationRequired, updated_at AS UpdatedAt
+            FROM job_management.jobs
+            WHERE customer_id=@customerId AND job_name=@jobName
+            ORDER BY updated_at DESC, job_id
+            LIMIT @limit;
+            """, new { customerId, jobName, limit }, cancellationToken: cancellationToken))
+            .ConfigureAwait(false)).ToArray();
+        return rows.Select(row => row.ToRecord()).ToArray();
+    }
+
     public async Task<JobLease?> ClaimAsync(string jobId, string workerId, DateTimeOffset now,
         TimeSpan leaseDuration, CancellationToken cancellationToken)
     {

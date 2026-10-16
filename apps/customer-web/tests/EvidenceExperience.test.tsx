@@ -630,3 +630,131 @@ it('keeps linked Financial information hidden when it is outside the current acc
     'Linked financial information is not included in your current access.',
   );
 });
+
+
+it('recovers recent durable document-processing activity and opens the matching authorized Document', async () => {
+  const api = new AccessApi(session);
+  const item = {
+    documentId: 'document-activity',
+    documentVersionId: 'document-version-activity',
+    evidenceId: 'evidence-activity',
+    version: 1,
+    sourceName: 'Customer upload',
+    originalFileName: 'activity-statement.txt',
+    contentType: 'text/plain',
+    contentLength: 64,
+    contentSha256: '9'.repeat(64),
+    receivedAt: '2026-10-16T08:00:00Z',
+    createdAt: '2026-10-16T08:00:00Z',
+  };
+  const request = vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ items: [item], dataDurability: 'Temporary data' }) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-activity',
+            documentVersionId: item.documentVersionId,
+            state: 'Completed',
+            attempt: 1,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read', 'job-management.job.read']);
+  const user = userEvent.setup();
+
+  expect(await screen.findByText('Recent document processing')).toBeVisible();
+  expect(screen.getByText('activity-statement.txt')).toBeVisible();
+  expect(screen.getByText('Completed')).toBeVisible();
+  expect(screen.getByText(/Attempt 1/)).toBeVisible();
+  expect(request).toHaveBeenCalledWith(
+    'v1/processing-activity',
+    'GET',
+    undefined,
+    expect.any(AbortSignal),
+  );
+
+  await user.click(screen.getByRole('button', { name: 'Open document' }));
+  expect(await screen.findByRole('dialog', { name: 'Document details' })).toHaveTextContent(
+    'activity-statement.txt',
+  );
+  expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument();
+});
+
+it('shows failed processing as a read-only failure state without exposing retry or support controls', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ items: [], dataDurability: 'Temporary data' }) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-failed',
+            documentVersionId: 'document-version-failed',
+            state: 'Failed',
+            attempt: 2,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+      }) as never;
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read', 'job-management.job.read']);
+
+  expect(await screen.findByText("Couldn't complete")).toBeVisible();
+  expect(screen.getByText('Document processing')).toBeVisible();
+  expect(screen.getByText(/Attempt 2/)).toBeVisible();
+  expect(
+    screen.getByText(/Retry, cancellation, reconciliation and support controls are not part/),
+  ).toBeVisible();
+  expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /cancel/i })).not.toBeInTheDocument();
+});
+
+it('never turns unavailable Job Management activity into an empty history', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ items: [], dataDurability: 'Temporary data' }) as never;
+    if (path === 'v1/processing-activity')
+      return Promise.reject(new AccessApiError(503, 'JOB_OWNER_UNAVAILABLE'));
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, ['evidence.document.read', 'job-management.job.read']);
+
+  expect(
+    await screen.findByText("We couldn't refresh document processing activity."),
+  ).toBeVisible();
+  expect(screen.queryByText('No document processing activity yet.')).not.toBeInTheDocument();
+});
+
+it('does not call processing activity when the current access package lacks job read authority', async () => {
+  const api = new AccessApi(session);
+  const request = vi.spyOn(api, 'product').mockResolvedValue({
+    items: [],
+    dataDurability: 'Temporary data',
+  } as never);
+
+  mount(api, ['evidence.document.read']);
+
+  expect(
+    screen.getByText("Processing activity isn't included in your current access"),
+  ).toBeVisible();
+  expect(request).not.toHaveBeenCalledWith(
+    'v1/processing-activity',
+    expect.anything(),
+    expect.anything(),
+    expect.anything(),
+  );
+});

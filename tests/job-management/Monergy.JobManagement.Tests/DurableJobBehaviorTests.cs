@@ -26,6 +26,53 @@ public sealed class DurableJobBehaviorTests
     }
 
     [Fact]
+    public async Task CustomerJobListingIsBoundedFilteredAndNewestFirst()
+    {
+        var repository = new InMemoryJobRepository();
+        var clock = new MutableTimeProvider(JobTestContext.Now);
+        var app = App(repository, clock);
+
+        var first = JobTestContext.Schedule("job-activity-a", "key-activity-a") with
+        {
+            Payload = JobTestContext.Schedule("job-activity-a", "key-activity-a").Payload with
+            {
+                JobName = "document-processing",
+                PayloadReference = "document-version-a",
+            },
+        };
+        var second = JobTestContext.Schedule("job-activity-b", "key-activity-b") with
+        {
+            Payload = JobTestContext.Schedule("job-activity-b", "key-activity-b").Payload with
+            {
+                JobName = "document-processing",
+                PayloadReference = "document-version-b",
+            },
+        };
+        var unrelated = JobTestContext.Schedule("job-other", "key-other");
+
+        await app.ScheduleJobAsync(first);
+        clock.Advance(TimeSpan.FromMinutes(1));
+        await app.ScheduleJobAsync(second);
+        await app.ScheduleJobAsync(unrelated);
+        clock.Advance(TimeSpan.FromMinutes(1));
+        await app.StartAsync("job-activity-a");
+
+        var listed = await repository.ListCustomerAsync(
+            JobTestContext.CustomerId, "document-processing", 20, default);
+
+        Assert.Equal(2, listed.Count);
+        Assert.Equal("job-activity-a", listed[0].JobId);
+        Assert.Equal("job-activity-b", listed[1].JobId);
+        Assert.All(listed, job =>
+        {
+            Assert.Equal(JobTestContext.CustomerId, job.CustomerId);
+            Assert.Equal("document-processing", job.JobName);
+        });
+        Assert.Empty(await repository.ListCustomerAsync(
+            "customer-other", "document-processing", 20, default));
+    }
+
+    [Fact]
     public async Task AutomaticRetryReevaluatesAuthorizationAndConsentWithoutReplay()
     {
         var repository = new InMemoryJobRepository();

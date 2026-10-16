@@ -101,6 +101,8 @@ public interface IJobRepository
     string AdapterKind { get; }
     Task<(DurableJobRecord Job, bool Created)> ScheduleAsync(JobSubmission submission, CancellationToken cancellationToken);
     Task<DurableJobRecord?> GetAsync(string jobId, CancellationToken cancellationToken);
+    Task<IReadOnlyList<DurableJobRecord>> ListCustomerAsync(
+        string customerId, string jobName, int limit, CancellationToken cancellationToken);
     Task<JobLease?> ClaimAsync(string jobId, string workerId, DateTimeOffset now, TimeSpan leaseDuration,
         CancellationToken cancellationToken);
     Task<JobLease?> ClaimNextAsync(string workerId, DateTimeOffset now, TimeSpan leaseDuration,

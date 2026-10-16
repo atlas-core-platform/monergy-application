@@ -10,6 +10,7 @@ import {
   getDocumentProcessing,
   getEvidenceSource,
   getFinancialProfile,
+  getProcessingActivity,
   listEvidence,
   maximumEvidenceBytes,
   scheduleDocumentProcessing,
@@ -20,6 +21,7 @@ import {
   type ProductFinancialFact,
   type ProductFinancialProfile,
   type ProductFinancialPromotionResult,
+  type ProductProcessingActivityItem,
   type ProductProcessingView,
 } from './productApi';
 import './product.css';
@@ -49,6 +51,27 @@ const formatFinancialValue = (fact: ProductFinancialFact) =>
     currency: fact.currency,
   }).format(fact.value);
 
+const processingActivityLabel = (state: ProductProcessingActivityItem['state']) =>
+  ({
+    Scheduled: 'Queued',
+    Running: 'Extracting details',
+    CancellationRequested: 'Stopping',
+    Completed: 'Completed',
+    Failed: "Couldn't complete",
+    Cancelled: 'Cancelled',
+  })[state];
+
+const processingActivityColor = (state: ProductProcessingActivityItem['state']) =>
+  state === 'Completed'
+    ? 'success'
+    : state === 'Failed'
+      ? 'error'
+      : state === 'Cancelled'
+        ? 'default'
+        : state === 'Running'
+          ? 'processing'
+          : 'warning';
+
 export default function EvidenceExperience() {
   const { api, authorization } = useWorkspaceSession();
   const product = authorization?.area === 'product' ? authorization.context : null;
@@ -56,6 +79,8 @@ export default function EvidenceExperience() {
   const canRead = product?.capabilities.includes('evidence.document.read') ?? false;
   const canProcess =
     product?.capabilities.includes('document-intelligence.document.process') ?? false;
+  const canReadProcessingActivity =
+    product?.capabilities.includes('job-management.job.read') ?? false;
   const canUpdateFinancial =
     product?.capabilities.includes('financial-profile.profile.update') ?? false;
   const canReadFinancial =
@@ -80,6 +105,10 @@ export default function EvidenceExperience() {
   const [selectedEvidence, setSelectedEvidence] = useState<ProductEvidenceItem | null>(null);
   const [processingEvidence, setProcessingEvidence] = useState<ProductEvidenceItem | null>(null);
   const [processing, setProcessing] = useState<ProductProcessingView | null>(null);
+  const [processingActivity, setProcessingActivity] = useState<ProductProcessingActivityItem[]>([]);
+  const [processingActivityBusy, setProcessingActivityBusy] = useState(false);
+  const [processingActivityError, setProcessingActivityError] = useState('');
+  const [processingActivityLoaded, setProcessingActivityLoaded] = useState(false);
   const [processingBusy, setProcessingBusy] = useState(false);
   const [processingError, setProcessingError] = useState('');
   const [selectedSourceFactIds, setSelectedSourceFactIds] = useState<string[]>([]);
@@ -114,6 +143,35 @@ export default function EvidenceExperience() {
     },
     [api, canRead],
   );
+  const loadProcessingActivity = useCallback(
+    async (signal?: AbortSignal) => {
+      if (!api || !canReadProcessingActivity) {
+        setProcessingActivity([]);
+        setProcessingActivityLoaded(false);
+        return;
+      }
+      setProcessingActivityBusy(true);
+      setProcessingActivityError('');
+      try {
+        const activity = await getProcessingActivity(api, signal);
+        setProcessingActivity(activity.items);
+        setProcessingActivityLoaded(true);
+      } catch (failure) {
+        if (!signal?.aborted) {
+          setProcessingActivityLoaded(false);
+          setProcessingActivityError(
+            failure instanceof AccessApiError && failure.status === 403
+              ? "Processing activity isn't included in your current access."
+              : "We couldn't refresh document processing activity.",
+          );
+        }
+      } finally {
+        if (!signal?.aborted) setProcessingActivityBusy(false);
+      }
+    },
+    [api, canReadProcessingActivity],
+  );
+
   useEffect(() => {
     const controller = new AbortController();
     const start = window.setTimeout(() => {
@@ -124,6 +182,16 @@ export default function EvidenceExperience() {
       controller.abort();
     };
   }, [loadLibrary]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const start = window.setTimeout(() => {
+      void loadProcessingActivity(controller.signal);
+    }, 0);
+    return () => {
+      window.clearTimeout(start);
+      controller.abort();
+    };
+  }, [loadProcessingActivity]);
   useEffect(() => {
     if (!api || !canReadFinancial) {
       setFinancialProfile(null);
@@ -200,6 +268,11 @@ export default function EvidenceExperience() {
       return sortOrder === 'oldest' ? compared : -compared;
     });
   }, [evidence, query, sortOrder, typeFilter]);
+
+  const evidenceByVersion = useMemo(
+    () => new Map(evidence.map((item) => [item.documentVersionId, item])),
+    [evidence],
+  );
 
   const selectedLinkedFacts = useMemo(
     () =>
@@ -303,6 +376,7 @@ export default function EvidenceExperience() {
     } finally {
       controller.abort();
       setProcessingBusy(false);
+      void loadProcessingActivity();
     }
   };
   const toggleSourceFact = (sourceFactId: string, checked: boolean) => {
@@ -603,6 +677,90 @@ export default function EvidenceExperience() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="product-recent product-processing-activity" aria-labelledby="processing-activity-title">
+        <div className="product-section-heading">
+          <div>
+            <p className="workspace-eyebrow">PROCESSING ACTIVITY</p>
+            <h2 id="processing-activity-title">Recent document processing</h2>
+          </div>
+          <Button
+            loading={processingActivityBusy}
+            disabled={!canReadProcessingActivity}
+            onClick={() => {
+              void loadProcessingActivity();
+            }}
+          >
+            Refresh
+          </Button>
+        </div>
+        {!canReadProcessingActivity ? (
+          <Alert
+            showIcon
+            type="warning"
+            title="Processing activity isn't included in your current access"
+            description="Your organization administrator can review the current Customer access package."
+            className="product-library-alert"
+          />
+        ) : processingActivityError ? (
+          <Alert
+            showIcon
+            type="warning"
+            title={processingActivityError}
+            className="product-library-alert"
+          />
+        ) : processingActivityBusy && !processingActivityLoaded ? (
+          <Skeleton active paragraph={{ rows: 2 }} className="product-library-loading" />
+        ) : processingActivityLoaded && processingActivity.length === 0 ? (
+          <div className="product-empty">
+            <WorkspaceIcon name="changes" size={24} />
+            <div>
+              <strong>No document processing activity yet.</strong>
+              <p>Processing appears here after you extract details from a supported document.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="product-processing-activity-list">
+            {processingActivity.map((item) => {
+              const document = evidenceByVersion.get(item.documentVersionId);
+              return (
+                <article className="product-processing-activity-item" key={item.jobId}>
+                  <span className="product-processing-activity-icon">
+                    <WorkspaceIcon
+                      name={item.state === 'Completed' ? 'check' : 'changes'}
+                      size={18}
+                    />
+                  </span>
+                  <div>
+                    <strong>{document?.originalFileName ?? 'Document processing'}</strong>
+                    <span>
+                      Updated {formatDate(item.updatedAt)}
+                      {item.attempt > 0 ? ' · Attempt ' + String(item.attempt) : ''}
+                    </span>
+                  </div>
+                  <Tag color={processingActivityColor(item.state)}>
+                    {processingActivityLabel(item.state)}
+                  </Tag>
+                  {document && canRead && (
+                    <Button
+                      type="link"
+                      onClick={() => {
+                        setSelectedEvidence(document);
+                      }}
+                    >
+                      Open document
+                    </Button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+        )}
+        <p className="product-processing-activity-note">
+          This is read-only processing status. Retry, cancellation, reconciliation and support
+          controls are not part of the Customer workspace.
+        </p>
       </section>
 
       <Drawer

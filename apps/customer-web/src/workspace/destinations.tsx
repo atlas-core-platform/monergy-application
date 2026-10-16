@@ -34,6 +34,12 @@ export const productModule = {
         details for its immutable identifiers and integrity hash. A confirmed upload does not change
         Financial information until you explicitly review and add supported details.
       </p>
+      <h3>Track processing</h3>
+      <p>
+        Recent document-processing status remains visible in Documents after you close the review
+        drawer or return later. This Customer view is read-only and does not expose retry, cancel or
+        support controls.
+      </p>
       <h3>Know this environment</h3>
       <p>
         This is a test environment and its data may be reset. Production retention and release

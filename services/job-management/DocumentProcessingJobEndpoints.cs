@@ -18,6 +18,14 @@ public sealed record DocumentProcessingJobView(
     ProcessingStatus? Processing,
     IReadOnlyList<ValidatedSourceFact> Facts);
 
+public sealed record ListDocumentProcessingJobsRequest(
+    TrustedSecurityContext Security,
+    string CustomerId,
+    int Limit = 20);
+
+public sealed record DocumentProcessingActivityView(
+    IReadOnlyList<ScheduledJob> Items);
+
 public static class DocumentProcessingJobEndpoints
 {
     public static IEndpointRouteBuilder MapDocumentProcessingJobs(this IEndpointRouteBuilder endpoints, IConfiguration configuration)
@@ -51,6 +59,42 @@ public static class DocumentProcessingJobEndpoints
             };
             return ToResult(await application.ScheduleJobAsync(normalized, cancellationToken).ConfigureAwait(false));
         });
+        endpoints.MapPost("/internal/local/v1/jobs/document-processing/list", async (
+            HttpRequest http,
+            ListDocumentProcessingJobsRequest request,
+            IJobRepository repository,
+            TenantAccessClient access,
+            CancellationToken cancellationToken) =>
+        {
+            Require(http, request.Security, token);
+            if (request.CustomerId != request.Security.Access.CustomerId ||
+                request.Limit is < 1 or > 100)
+                throw new TenantBoundaryException("JOB_ACTIVITY_REQUEST_INVALID", 400);
+
+            var tenant = http.Headers["X-Monergy-Tenant"].ToString();
+            var decision = await access.EvaluateCustomerAsync(
+                tenant,
+                request.Security.Actor.AuthenticationContextId,
+                "job-management.job.read",
+                request.CustomerId,
+                cancellationToken).ConfigureAwait(false);
+            if (decision.Outcome != "Allow" || decision.ActorId != request.Security.Actor.ActorId)
+                throw new TenantBoundaryException("ACCESS_DENIED", 403);
+
+            var jobs = await repository.ListCustomerAsync(
+                request.CustomerId,
+                "document-processing",
+                request.Limit,
+                cancellationToken).ConfigureAwait(false);
+            if (jobs.Any(job =>
+                job.CustomerId != request.CustomerId ||
+                job.JobName != "document-processing"))
+                throw new TenantBoundaryException("JOB_ACTIVITY_RESPONSE_INVALID", 503);
+
+            return Results.Ok(new DocumentProcessingActivityView(
+                jobs.Select(job => job.ToStatus()).ToArray()));
+        });
+
         endpoints.MapPost("/internal/local/v1/jobs/status", async (
             HttpRequest http,
             ContractRequest<GetJobStatus> request,

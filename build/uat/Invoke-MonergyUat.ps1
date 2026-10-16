@@ -282,7 +282,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3')) {
+            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4')) {
                 throw 'The Access Management owner has not confirmed a supported Default Access Pack.'
             }
 
