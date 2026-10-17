@@ -1,6 +1,8 @@
 # T1-20 — Focused Local Acceptance & System Expert Synchronization
 
-Status: **CANDIDATE; DO NOT MERGE BEFORE REQUIRED EVIDENCE**. No development GitHub Actions.
+Status: **SOURCE MERGED; RUNTIME VERIFICATION PENDING**. Application PR #67 and Expert PR #19 were merged; the original candidate instructions below describe the required evidence, not their current PR state. No development GitHub Actions.
+
+Continuation: [request-lifecycle correction evidence](evidence/t1-20-consent-session-safety-20261017.md) records 8 passing component tests, a passing TypeScript check and consent-file lint, and 32 passing focused backend tests. Owner-backed UAT and complete source-matched Expert verification remain open. Do not equate those unit tests with a live service/database/browser journey.
 Original base: `monergy-application@241da03742893d8c362503365a6fa8f1fad80d36` (PR #66).
 Candidate app branch: `work/t1-20-customer-consent-visibility`.
 Paired Expert branch: `work/t1-20-source-synchronization`, PR #19.

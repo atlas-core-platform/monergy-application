@@ -1,6 +1,6 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · CTO execution baseline from application main `241da03742893d8c362503365a6fa8f1fad80d36` (T1-19).
+Status: ACTIVE · Source baseline is application main `36d03b08c243cf9fa5c4f381f2837e4851ce9114` (T1-20 merged, runtime verification pending). T1-19 remains the preceding baseline; merging source did not close T1-20 verification.
 This file tracks bounded implementation units; the accepted 81-feature catalog and 151 requirement IDs remain authoritative for requirements identity, and the AR-003 persona and capability catalogs remain authoritative for planned journeys.
 One current implementation unit may be a subset of one canonical feature. Engineering completion never proves an entire business feature complete.
 
@@ -12,7 +12,7 @@ Each unit requires: owner-backed UI/API/data behavior; tenant/customer access, a
 
 | Priority | Unit | Requirement/feature | Source/owner boundary | Current state | Next dependency |
 | --- | --- | --- | --- | --- | --- |
-| P0 | T1-20 View current delegated customer consent | MR §§6, 23, 39; MON-CON family; COV-005; M2-WS02-E03-F01 | Consent owner + current Customer & Identity session + customer UI | CANDIDATE_SOURCE_ONLY; focused tests and Expert synchronization pending | Existing owner-grant list; no new provider or permission |
+| P0 / active | T1-20 View current delegated customer consent; close request-lifecycle defect | MR §§6, 23, 39; MON-CON family; COV-005; M2-WS02-E03-F01 | Consent owner + current Customer & Identity session + customer UI | SOURCE_MERGED_RUNTIME_PENDING; request-lifecycle correction has 8 passing component tests and 32 passing owner-policy/materialization/tenant-boundary tests | Isolated owner-backed UAT and complete source-matched Expert verification remain open |
 | P0 | T1-21 Named recipient and explicit revoke journey | Same | Customer & Identity recipient names + Consent revision-controlled revoke + customer UI | NOT_STARTED | Named recipient resolution; revocation confirmation and concurrent revision evidence; OD-09 constraints |
 | P0 | Expand Financial Passport beyond Income/Expense by one governed fact domain per unit | MR §§2,13,20,41; M2-WS04-E01/E02 | Financial Profile owner and customer UI | FOUNDATIONS_EXIST; customer journeys partial | Approved domain input/mutation semantics and evidence source; no fabricated net worth |
 | P0 | Document classification/OCR one supported file type at a time | MR §§10–12, 41; M2-WS03-E02 | Evidence → Document Intelligence → Financial Profile | STRUCTURED_TEXT_LOCAL_ONLY | Approved extraction/quality controls; production provider decision remains gated |
@@ -27,12 +27,23 @@ Each unit requires: owner-backed UI/API/data behavior; tenant/customer access, a
 
 T1-01 through T1-19 preserve existing individual CTO acceptance and merge evidence, including PR #66 at application main `241da03742893d8c362503365a6fa8f1fad80d36`. They are **not** collectively a complete Monergy product. The current implementation crosswalk remains scoped at Income/Expense for the customer-facing Financial Passport and structured-text extraction.
 
-## Current linked candidate records
+## Current linked source and correction records
 
-- Application: [PR #67](https://github.com/atlas-core-platform/monergy-application/pull/67) — DRAFT, source changes present, tests not executed.
-- System Expert: [PR #19](https://github.com/atlas-core-platform/monergy-system-expert/pull/19) — DRAFT, product source history through T1-19 and candidate T1-20 knowledge.
-- Evidence tier: SOURCE_CROSS_CHECK_ONLY. Full React/Vitest and LOCAL/UAT owner-boundary verification still mandatory.
-- Merge gate: both reviewed candidate source checks, focused local tests, and System Expert consistency verification must pass. No GitHub Actions in development.
+- Application [PR #67](https://github.com/atlas-core-platform/monergy-application/pull/67) is merged at `36d03b08c243cf9fa5c4f381f2837e4851ce9114`; its earlier DRAFT label is historical.
+- System Expert [PR #19](https://github.com/atlas-core-platform/monergy-system-expert/pull/19) is merged at `301e85e9fd65830deec47490222fda112d561e3c`. Its historical compiled graph is still stale.
+- Active correction: `work/t1-20-consent-session-safety`, code revision `de958ad906ce63b8c68181f8879e9b8c1b1fefb3`. Abort every request, including manual refresh, on customer/session change or unmount; prevent stale data, errors and busy-state changes even when transport ignores cancellation. Scope displayed results to the current tenant, actor, authentication context, subject version, customer and API instance.
+- Evidence: [T1-20 correction verification](evidence/t1-20-consent-session-safety-20261017.md). Frontend component/type/lint and focused backend tests passed. These do not replace live owner-backed UAT.
+- Paired Expert correction: `work/t1-20-verification-continuity`; retain T1-20 as active while runtime evidence is pending and expose correction evidence without promoting acceptance or rewriting extraction locks.
+- Test-only Evidence follow-up: `a113683527e3b464829a3552bed66f69568bdb56` scopes the duplicate filename assertion to loaded processing activity. SOURCE_REVIEWED_RERUN_PENDING: the workspace exec-server is disconnected; four recovered-review timeouts remain undiagnosed. Earlier passing counts apply only to the earlier tested revision.
+- Completion remains pending. No development GitHub Actions, release approval or product acceptance is inferred.
+
+## Complete scope inventory and remaining reconciliation
+
+Use the existing [AR-003 coverage matrix at the inspected revision](https://github.com/atlas-core-platform/monergy-architecture/blob/90934b51b2b203795acf95da2252a2cf1a1d1f4c/docs/15-Architecture-Revisions/AR-003/Product-Capability-Coverage-Matrix.md) for all 62 capability rows, 151 normalized requirements, 81 features, 50 master-requirement sections and 16 recording-derived candidates. Its historical implementation-state cells are not current-source verification. This tracker owns the execution queue and new implementation evidence; the matrix owns requirement identities and approved journey/dependency mappings.
+
+The ten queue groups above are prioritization groups, not ten exhaustive requirements or a completion denominator. Current-source reconciliation of the remaining capability rows is still outstanding. Do not report a product completion percentage or zero remaining gaps from this queue.
+
+The master requirements and the supplied two-video analysis were inspected during this continuation. The independent shared-conversation URL could not be retrieved; no requirement was inferred from it. Provider choices, finance methodology, professional workflows and production decisions retain their existing gates. Next executable work remains T1-20 verification/remediation; named-recipient/revocation work follows its applicable dependencies.
 
 ## T1-20 boundary and evidence
 
@@ -42,8 +53,8 @@ T1-01 through T1-19 preserve existing individual CTO acceptance and merge eviden
 - Consent owner verifies current trusted session, active customer and exact owner actor. Client also rejects malformed or other-customer response records.
 - No grant/revoke/mutate functionality, self-consent fabrication, new service contract, new database, or product authority added.
 - Source evidence: `apps/customer-web/src/product/ConsentExperience.tsx`, `apps/customer-web/src/access/accessApi.ts`, `apps/customer-web/tests/ConsentExperience.test.tsx`, UAT Gateway SPA route.
-- Status **CANDIDATE** until focused component + local UAT and System Expert consistency proof. See `build/governance/T1-20-LOCAL-ACCEPTANCE.md` for the bounded no-Actions verification path. Do not merge or mark complete before those checks.
+- Status **SOURCE_MERGED_RUNTIME_PENDING**. Focused component and owner-policy tests now have evidence; local UAT and complete System Expert consistency proof remain outstanding. See `build/governance/T1-20-LOCAL-ACCEPTANCE.md` for the bounded no-Actions verification path. The correction remains a candidate until its outstanding checks are satisfied.
 
 ## Mandatory System Expert coupling
 
-T1-20 sync partner: `monergy-system-expert` candidate on its own governed branch. The expert must not mark T1-20 accepted before merged app source and tests; it must show application `main` through T1-19, precise planned/implemented stage and retained no-claim boundaries. Existing old accepted T1-01 to T1-06 source locks are historical, never overwritten as if they were the newest.
+T1-20 sync partner: `monergy-system-expert`. It must show application main through source-merged T1-20, preserve runtime-verification gaps, and keep T1-20 active until those gaps close. Existing accepted T1-01 to T1-06 source locks are historical, never overwritten as if newly extracted.
