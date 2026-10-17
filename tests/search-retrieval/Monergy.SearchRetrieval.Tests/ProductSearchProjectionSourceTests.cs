@@ -68,7 +68,7 @@ public sealed class ProductSearchProjectionSourceTests
             item.Source.SourceObjectId == "ff-expense");
         Assert.Contains(records, item =>
             item.Title == "Loan source amount" &&
-            item.Summary.Contains("not outstanding balance", StringComparison.Ordinal) &&
+            item.SearchableText.Contains("not outstanding balance", StringComparison.Ordinal) &&
             item.Source.SourceObjectId == "ff-loan" &&
             item.Source.ProvenanceReferenceId == "provenance-loan");
         Assert.DoesNotContain(records, item => item.Source.SourceObjectId == "ff-investment");
