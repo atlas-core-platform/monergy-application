@@ -76,9 +76,9 @@ export default function ProductSearchExperience() {
           <p className="workspace-eyebrow">SEARCH</p>
           <h1>Find information already in your Monergy workspace.</h1>
           <p>
-            Search your current Documents and trusted Income or Expense information. Results are
+            Search your current Documents and trusted Income, Expense or Loan source facts. Results are
             rebuilt from the current authorized sources and link back to the exact document or
-            financial item. This search currently uses lexical matching only.
+            financial item. Loan source amounts are not verified outstanding balances, EMI or eligibility. This search uses lexical matching only.
           </p>
         </div>
         <Tag className="product-environment">
