@@ -378,3 +378,36 @@ it('shows reviewed Asset source figures with exact source, not a verified valuat
   expect(screen.queryByText(/Total net worth|Verified valuation/i)).not.toBeInTheDocument();
   expect(window.location.pathname + window.location.search).toBe('/finances?type=ASSET');
 });
+
+it('shows reviewed Investment source figures with exact source, not a market valuation', async () => {
+  window.history.replaceState(null, '', '/finances?type=INVESTMENT');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 5,
+    updatedAt: '2026-10-17T06:45:00Z',
+    dataDurability: 'Temporary data',
+    facts: [{
+      financialFactId: 'ff-investment-source',
+      factType: 'INVESTMENT',
+      label: 'Investment amount stated in source document',
+      value: 50000,
+      currency: 'INR',
+      effectiveDate: '2026-10-16',
+      revision: 1,
+      source: {
+        sourceName: 'investment-source.txt',
+        documentVersion: 'document-version-investment',
+        recordedAt: '2026-10-17T06:45:00Z',
+        technicalSourceFactId: 'source-fact-investment',
+        technicalProvenanceId: 'provenance-investment',
+      },
+    }],
+  });
+  mount(api);
+  expect(await screen.findByText('Investment amount stated in source document')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Investment source figures' })).toBeVisible();
+  expect(screen.getByText('Source: investment-source.txt')).toBeVisible();
+  expect(window.location.pathname + window.location.search).toBe('/finances?type=INVESTMENT');
+  expect(screen.queryByText(/verified NAV|live market value|portfolio return/i)).not.toBeInTheDocument();
+});

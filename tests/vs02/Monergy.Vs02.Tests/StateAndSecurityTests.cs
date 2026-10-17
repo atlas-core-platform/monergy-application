@@ -78,11 +78,19 @@ public sealed class StateAndSecurityTests
             "text/plain");
         var source = new EvidenceContent(reference,
             "LOAN|Car loan amount stated on document|400000.00|INR|2026-10-16|line:1|0.96\n" +
-            "ASSET|Document-stated property figure|900000.00|INR|2026-10-16|line:2|0.95");
+            "ASSET|Document-stated property figure|900000.00|INR|2026-10-16|line:2|0.95\n" +
+            "INVESTMENT|Investment amount stated in document|50000.00|INR|2026-10-16|line:3|0.94");
         var facts = await new FixtureDocumentExtractor().ExtractAsync(
             source, "processing-loan-test", CancellationToken.None);
 
-        Assert.Equal(2, facts.Count);
+        Assert.Equal(3, facts.Count);
+        var investment = Assert.Single(facts, item => item.FactType == "INVESTMENT");
+        Assert.Equal("Investment amount stated in document", investment.Label);
+        Assert.Equal(50000m, investment.CandidateValue);
+        Assert.Equal("INR", investment.Currency);
+        Assert.Equal("document-version-loan-test", investment.DocumentVersionId);
+        Assert.Equal("evidence-loan-test", investment.EvidenceId);
+        // No NAV, market pricing, holdings reconstruction, performance or valuation is inferred.
         var fact = Assert.Single(facts, item => item.FactType == "LOAN");
         var asset = Assert.Single(facts, item => item.FactType == "ASSET");
         Assert.Equal("Document-stated property figure", asset.Label);
