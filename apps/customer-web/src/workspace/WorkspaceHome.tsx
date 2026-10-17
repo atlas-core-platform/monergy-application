@@ -31,7 +31,7 @@ const journeys: {
   },
   {
     title: 'Review financial information',
-    description: 'See trusted Income, Expense, Loan and Asset source information linked to its source document.',
+    description: 'See trusted Income, Expense, Loan, Asset and Investment source information linked to its document.',
     href: '/finances',
     icon: 'reports',
     capability: 'financial-profile.profile.read',
@@ -106,6 +106,7 @@ export default function WorkspaceHome() {
     const expenses = facts.filter((fact) => fact.factType === 'EXPENSE').length;
     const loans = facts.filter((fact) => fact.factType === 'LOAN').length;
     const assets = facts.filter((fact) => fact.factType === 'ASSET').length;
+    const investments = facts.filter((fact) => fact.factType === 'INVESTMENT').length;
     const sources = new Set(facts.map((fact) => fact.source.documentVersion)).size;
     const ordered = [...facts].sort((left, right) =>
       right.source.recordedAt.localeCompare(left.source.recordedAt),
@@ -116,6 +117,7 @@ export default function WorkspaceHome() {
       { key: 'EXPENSE', label: 'Expenses', count: expenses },
       { key: 'LOAN', label: 'Loan information', count: loans },
       { key: 'ASSET', label: 'Asset source figures', count: assets },
+      { key: 'INVESTMENT', label: 'Investment source figures', count: investments },
     ];
     return {
       facts: facts.length,
@@ -123,6 +125,7 @@ export default function WorkspaceHome() {
       expenses,
       loans,
       assets,
+      investments,
       sources,
       latest,
       latestRecordedAt: ordered[0]?.source.recordedAt ?? null,
@@ -152,7 +155,7 @@ export default function WorkspaceHome() {
           <h2 id="workspace-hero-title">Start with what you already have.</h2>
           <p>
             Add a financial document. Monergy keeps the document and source details connected so
-            you can review extracted Income, Expense, Loan or Asset source information before explicitly adding it to
+            you can review extracted Income, Expense, Loan, Asset or Investment source information before explicitly adding it to
             your trusted financial information.
           </p>
           {capabilities.has('evidence.document.upload') ? (
@@ -289,7 +292,7 @@ export default function WorkspaceHome() {
                     ))}
                   </div>
                   <p className="workspace-passport-scope-note">
-                    Coverage is limited to Income, Expense, Loan and Asset source facts. Asset source figures are not verified valuations or net-worth totals.
+                    Coverage is limited to Income, Expense, Loan, Asset and Investment source facts. Asset and Investment figures are document-stated amounts, not independently verified values, market prices, portfolio performance or net-worth totals.
                     It is not a financial health score or a statement that your finances are complete.
                   </p>
                   {snapshot.coveredCategories < snapshot.coverage.length &&
@@ -317,7 +320,7 @@ export default function WorkspaceHome() {
                       >
                         <span>
                           <strong>{fact.label}</strong>
-                          <small>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'EXPENSE' ? 'Expense' : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType}</small>
+                          <small>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'EXPENSE' ? 'Expense' : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType}</small>
                         </span>
                         <span>
                           <small>Source</small>
@@ -333,7 +336,7 @@ export default function WorkspaceHome() {
                   <WorkspaceIcon name="reports" size={22} />
                   <div>
                     <strong>Your Financial Passport is ready for trusted information.</strong>
-                    <p>Review supported Income, Expense, Loan or Asset source details from Documents and choose what to add.</p>
+                    <p>Review supported Income, Expense, Loan, Asset or Investment source details from Documents and choose what to add.</p>
                   </div>
                   {capabilities.has('evidence.document.upload') && <a href="/evidence">Review documents</a>}
                 </div>
