@@ -293,7 +293,7 @@ export default function EvidenceExperience() {
   const linkedFactsByVersion = useMemo(() => {
     const grouped = new Map<string, ProductFinancialFact[]>();
     for (const fact of financialProfile?.facts ?? []) {
-      if (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE' && fact.factType !== 'LOAN' && fact.factType !== 'ASSET' && fact.factType !== 'INVESTMENT' && fact.factType !== 'INSURANCE') continue;
+      if (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE' && fact.factType !== 'LOAN' && fact.factType !== 'ASSET' && fact.factType !== 'INVESTMENT' && fact.factType !== 'INSURANCE' && fact.factType !== 'TAX') continue;
       const current = grouped.get(fact.source.documentVersion) ?? [];
       current.push(fact);
       grouped.set(fact.source.documentVersion, current);
@@ -304,7 +304,7 @@ export default function EvidenceExperience() {
   const trustedFactsBySourceKey = useMemo(() => {
     const mapped = new Map<string, ProductFinancialFact>();
     for (const fact of financialProfile?.facts ?? []) {
-      if (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE' && fact.factType !== 'LOAN' && fact.factType !== 'ASSET' && fact.factType !== 'INVESTMENT' && fact.factType !== 'INSURANCE') continue;
+      if (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE' && fact.factType !== 'LOAN' && fact.factType !== 'ASSET' && fact.factType !== 'INVESTMENT' && fact.factType !== 'INSURANCE' && fact.factType !== 'TAX') continue;
       if (!fact.source.technicalSourceFactId || !fact.source.documentVersion) continue;
       mapped.set(
         financialSourceKey(fact.source.technicalSourceFactId, fact.source.documentVersion),
@@ -1049,7 +1049,7 @@ export default function EvidenceExperience() {
                           )}
                           <div>
                             <span className="product-fact-tags">
-                              <Tag>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INSURANCE' ? 'Insurance source figure' : 'Expense'}</Tag>
+                              <Tag>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INSURANCE' ? 'Insurance source figure' : fact.factType === 'TAX' ? 'Tax source figure' : 'Expense'}</Tag>
                               {trusted && <Tag color="success">ALREADY TRUSTED</Tag>}
                             </span>
                             <strong>{fact.label}</strong>
@@ -1400,7 +1400,7 @@ export default function EvidenceExperience() {
                             ? 'Income'
                             : fact.factType === 'EXPENSE'
                               ? 'Expense'
-                              : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INSURANCE' ? 'Insurance source figure' : fact.factType}
+                              : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INSURANCE' ? 'Insurance source figure' : fact.factType === 'TAX' ? 'Tax source figure' : fact.factType}
                         </small>
                       </span>
                       <strong>{formatFinancialValue(fact)}</strong>
@@ -1617,7 +1617,7 @@ export default function EvidenceExperience() {
                             ? 'Income'
                             : fact.factType === 'EXPENSE'
                               ? 'Expense'
-                              : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INSURANCE' ? 'Insurance source figure' : fact.factType}
+                              : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INSURANCE' ? 'Insurance source figure' : fact.factType === 'TAX' ? 'Tax source figure' : fact.factType}
                         </Tag>
                         <strong>{fact.label}</strong>
                         <span>
