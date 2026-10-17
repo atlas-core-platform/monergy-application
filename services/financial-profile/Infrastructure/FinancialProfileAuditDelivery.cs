@@ -30,7 +30,7 @@ public sealed class HttpFinancialProfileAuditEventConsumer(
     public async Task<bool> ConsumeAsync(AuditableEvent source, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(source);
-        var fact = await repository.GetFactAsync(source.SubjectId, cancellationToken).ConfigureAwait(false)
+        var fact = await repository.GetFactAsync(source.SubjectId, null, cancellationToken).ConfigureAwait(false)
             ?? throw new InvalidOperationException("The Financial Profile audit source fact is unavailable.");
         if (!tenants.CustomerTenants.TryGetValue(fact.CustomerId, out var tenantId))
             throw new InvalidOperationException("The Financial Profile audit source has no governed tenant binding.");

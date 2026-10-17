@@ -98,7 +98,7 @@ public static class ProductSearchEndpoints
             payload);
     }
 
-    private static IReadOnlyList<SearchHit> ReadResult(
+    private static ImmutableArray<SearchHit> ReadResult(
         ContractResult<SearchResults> result,
         string query,
         SearchResultType expectedType)

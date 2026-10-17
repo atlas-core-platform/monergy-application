@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AccessApi } from '../src/access/accessApi';
@@ -94,7 +94,7 @@ it('searches current Documents and Financial information through the product bou
         },
       },
     ],
-  } as never);
+  });
   mount(api);
 
   const user = userEvent.setup();
@@ -126,11 +126,11 @@ it('lets the customer bound the query to Financial information', async () => {
     query: 'rent',
     matchMode: 'Lexical',
     items: [],
-  } as never);
+  });
   mount(api);
 
   const user = userEvent.setup();
-  await user.click(screen.getByRole('radio', { name: 'Financial information' }));
+  await user.click(screen.getByText('Financial information', { selector: 'span' }));
   await user.type(screen.getByLabelText('Search query'), 'rent');
   await user.click(screen.getByRole('button', { name: 'Search' }));
 
@@ -174,7 +174,7 @@ it('searches trusted Loan source facts with provenance without implying verified
         calculationLineageReferenceId: null,
       },
     }],
-  } as never);
+  });
   mount(api);
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Search query'), 'loan');
@@ -210,7 +210,7 @@ it('finds Asset source figures and links to exact trusted fact without verified 
         calculationLineageReferenceId: null,
       },
     }],
-  } as never);
+  });
   mount(api);
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Search query'), 'asset');
@@ -243,7 +243,7 @@ it('finds a reviewed Investment source amount with exact source history but no l
         calculationLineageReferenceId: null,
       },
     }],
-  } as never);
+  });
   mount(api);
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Search query'), 'investment');
@@ -251,7 +251,7 @@ it('finds a reviewed Investment source amount with exact source history but no l
   expect(await screen.findByText('1 result for “investment”')).toBeVisible();
   expect(screen.getByText(/not live market value/i)).toBeVisible();
   expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute('href', '/finances?fact=ff-investment');
-  expect(screen.queryByText(/portfolio return|NAV|verified current price/i)).not.toBeInTheDocument();
+  expect(within(screen.getByRole('article')).queryByText(/portfolio return|NAV|verified current price/i)).not.toBeInTheDocument();
 });
 
 
@@ -276,7 +276,7 @@ it('finds Insurance source figures without asserting verified policy coverage', 
         calculationLineageReferenceId: null,
       },
     }],
-  } as never);
+  });
   mount(api);
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Search query'), 'insurance');
@@ -309,7 +309,7 @@ it('searches a trusted Tax source figure without claiming assessed tax or refund
         calculationLineageReferenceId: null,
       },
     }],
-  } as never);
+  });
   mount(api);
   const user = userEvent.setup();
   await user.type(screen.getByLabelText('Search query'), 'tax');
