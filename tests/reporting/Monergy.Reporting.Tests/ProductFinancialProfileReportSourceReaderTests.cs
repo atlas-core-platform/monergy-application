@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Http;
@@ -57,7 +58,8 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             item.Source.FinancialProvenanceReferenceId == "provenance-investment" &&
             item.Source.CalculationLineageReferenceId is null);
         Assert.Contains(snapshot.Items, item => item.Label == "Insurance source figure" && item.Source.SourceId == "ff-insurance" && item.Source.FinancialProvenanceReferenceId == "provenance-insurance" && item.Source.CalculationLineageReferenceId is null);
-        Assert.Contains(snapshot.Items, item => item.Label == "Tax source figure" && item.Source.SourceId == "ff-tax" && item.Source.FinancialProvenanceReferenceId == "provenance-tax" && item.Source.CalculationLineageReferenceId is null);
+        Assert.Contains(snapshot.Items, item => item.Label == "Tax source figure" && item.Value == 14000m && item.Source.SourceId == "ff-tax" && item.Source.EvidenceReferenceId == "evidence-tax" && item.Source.FinancialProvenanceReferenceId == "provenance-tax" && item.Source.CalculationLineageReferenceId is null);
+        Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-unsupported");
         Assert.All(handler.Requests, request =>
         {
             Assert.Equal("T001", request.Tenant);
@@ -99,6 +101,16 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         Assert.Equal("report.source.provenance-boundary-invalid", failure.Error.Code);
     }
 
+    [Fact]
+    public async Task TaxSourceWithMismatchedFactProvenanceFailsClosed()
+    {
+        var handler = new FinancialProfileHandler { MismatchedTaxProvenance = true };
+        var failure = await Assert.ThrowsAsync<ReportSourceException>(() => Reader(handler, Accessor())
+            .ReadAsync(new("reference-customer", Security(), "tax-request", "tax-correlation", null),
+                CancellationToken.None));
+        Assert.Equal("report.source.provenance-boundary-invalid", failure.Error.Code);
+    }
+
     private static ProductFinancialProfileReportSourceReader Reader(
         HttpMessageHandler handler,
         IHttpContextAccessor accessor)
@@ -113,7 +125,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         return new(new TestHttpClientFactory(handler), accessor, configuration);
     }
 
-    private static IHttpContextAccessor Accessor()
+    private static HttpContextAccessor Accessor()
     {
         var http = new DefaultHttpContext();
         http.Features.Set(new TenantBoundaryProof(
@@ -140,6 +152,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
     private sealed class FinancialProfileHandler : HttpMessageHandler
     {
         public bool CrossCustomerProvenance { get; set; }
+        public bool MismatchedTaxProvenance { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
@@ -166,7 +179,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         {
             var request = System.Text.Json.JsonSerializer.Deserialize<ContractRequest<GetFinancialProfile>>(
                 body, ContractJson.Options)!;
-            var at = DateTimeOffset.Parse("2026-10-16T09:00:00Z");
+            var at = DateTimeOffset.Parse("2026-10-16T09:00:00Z", CultureInfo.InvariantCulture);
             var facts = new[]
             {
                 new AuthoritativeFinancialFact(
@@ -197,6 +210,10 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                     "ff-tax", "financial-profile-reference-customer", "reference-customer",
                     "TAX", "Tax source figure", 14000m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-tax"),
+                new AuthoritativeFinancialFact(
+                    "ff-unsupported", "financial-profile-reference-customer", "reference-customer",
+                    "UNSUPPORTED", "Unsupported source", 10m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-unsupported"),
             };
             return Success(request, new FinancialProfileDetails(
                 "financial-profile-reference-customer",
@@ -219,7 +236,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             var customer = CrossCustomerProvenance ? "other-customer" : "reference-customer";
             return Success(request, new FinancialProvenance(
                 request.Payload.FinancialProvenanceId,
-                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : investment ? "ff-investment" : insurance ? "ff-insurance" : tax ? "ff-tax" : "ff-expense",
+                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : investment ? "ff-investment" : insurance ? "ff-insurance" : tax ? (MismatchedTaxProvenance ? "ff-wrong-tax" : "ff-tax") : "ff-expense",
                 customer,
                 income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : investment ? "evidence-investment" : insurance ? "evidence-insurance" : tax ? "evidence-tax" : "evidence-expense",
                 income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : investment ? "document-version-investment" : insurance ? "document-version-insurance" : tax ? "document-version-tax" : "document-version-expense",
@@ -229,7 +246,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                 "reviewed-document-facts/1.0.0",
                 "A100",
                 "document-intelligence",
-                DateTimeOffset.Parse("2026-10-16T08:00:00Z"),
+                DateTimeOffset.Parse("2026-10-16T08:00:00Z", CultureInfo.InvariantCulture),
                 "financial-correlation",
                 null));
         }

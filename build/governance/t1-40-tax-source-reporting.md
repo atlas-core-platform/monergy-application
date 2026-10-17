@@ -1,17 +1,18 @@
-# T1-40 — Tax Source Figures in Basic Customer Report
+# T1-40 — Reviewed Tax source figures in basic Reports
 
-Source candidate only. Based on Application main `875693478d7b3d870ed8c32fc301d116a27ac89d` (T1-39 Tax Search).
+Base Application main: `653b28e8271790a719ce5c630accbb180b857f98` (native verification remediation #88).
+Requirements: Master §§13,20,30,41; M2-WS08-E02-F01/F03 (partial).
 
-Customer generates existing basic source-connected Report. Reporting Service uses current authorized Financial Profile CID-030 and exact CID-033 source provenance. Reviewed TAX source figures join Income, Expense, Loan, Asset, Investment and Insurance records as individual report line items. The JSON export continues to represent the exact generated report, not assessed taxes, return status, tax refund, tax payable, fiscal liability, taxpayer certification or advice.
+Reporting's existing LOCAL/UAT product adapter now includes explicitly reviewed `TAX` Financial Profile facts, alongside Income, Expense, Loan, Asset, Investment and Insurance. It reads the current authorized customer through CID-030 and validates every exact CID-033 fact/provenance/Evidence association. Reporting remains the report owner; Financial Profile remains the financial-data authority. No new table, permission, contract, tax calculation, filing, provider, refund or assessed-liability claim.
 
-No new report type, service contract, persistent table, user permission, tax formula, external provider or tax-administration workflow.
+The Customer sees the source figure in basic Reports, opens its exact `/finances?fact=` history, and exports the unchanged Reporting-owned JSON content. The page explicitly distinguishes document-stated Tax figures from assessed taxes owed, accepted filings and refunds.
 
-## Focused verification required, not executed
-```powershell
-dotnet test tests/reporting/Monergy.Reporting.Tests --configuration Release --filter FullyQualifiedName~ProductFinancialProfileReportSourceReaderTests
-pnpm --dir apps/customer-web exec vitest run tests/ProductReportsExperience.test.tsx
-pnpm --dir apps/customer-web exec tsc --noEmit -p tsconfig.json
-```
-LOCAL UAT: explicitly reviewed Tax source → Financial Profile → customer Basic Reports → exact source and history, plus negative other-customer cases. No development GitHub Actions.
+## Focused verification
 
-System Expert companion: `work/t1-40-tax-report-expert`. Report is a bounded source-linked current-customer fact list, not assessed tax or professional acceptance. Compiled Expert consistency and local owner execution pending.
+- Reporting owner tests: **4 passed**, including Tax fact/provenance inclusion, unsupported-type exclusion, missing authorization boundary, cross-customer denial and specifically mismatched Tax provenance rejection.
+- Reports component suite: **8 passed**. The new Tax check reads the downloaded Blob and verifies its text exactly equals Reporting's export payload; no client reconstruction.
+- TypeScript and modified-test lint: **passed**. The final Tax export check also passed independently after its FileReader type guard was added.
+- Reports source retains **3 pre-existing lint findings**, unchanged from the base; no new source lint finding.
+- No development GitHub Actions. Docker/PostgreSQL-backed owner UAT and full source-matched Expert graph compilation remain **not run**; no full product acceptance is claimed.
+
+System Expert partner records the Reporting → Financial Profile CID-030/CID-033 → Customer Reports/source history/export journey. A maintenance receipt preserves the intervening tested #88 source merge while retaining historical acceptance/source locks. Next functional unit: Tax source coverage in Action Centre.

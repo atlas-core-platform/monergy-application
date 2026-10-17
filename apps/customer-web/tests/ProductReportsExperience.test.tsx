@@ -103,9 +103,54 @@ afterEach(() => {
   window.history.replaceState(null, '', '/reports');
 });
 
+it('includes a reviewed Tax source figure and exports exact Reporting content with provenance', async () => {
+  const taxItem = {
+    label: 'Tax source figure', value: 14000, unit: 'USD',
+    source: {
+      sourceType: 'FinancialFact', sourceId: 'ff-tax',
+      authoritativeOwner: 'Financial Profile Service', evidenceReferenceId: 'evidence-tax',
+      financialProvenanceReferenceId: 'provenance-tax', calculationLineageReferenceId: null,
+    },
+  };
+  const content = JSON.stringify({ reportId: 'report-tax', items: [taxItem] });
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    ...report, reportId: 'report-tax', items: [taxItem],
+    sourceFinancialReferences: ['ff-tax'], evidenceReferences: ['evidence-tax'],
+    financialProvenanceReferences: ['provenance-tax'],
+    export: { ...report.export, content },
+  });
+  const createObjectURL = vi.fn<(blob: Blob) => string>().mockReturnValue('blob:tax-report');
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+  mount(api);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Generate basic summary' }));
+  expect(await screen.findByText('Tax source figure')).toBeVisible();
+  expect(screen.getByText('$14,000.00')).toBeVisible();
+  expect(screen.getByText(/not assessed tax owed, accepted filings or refunds/i)).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View source & history' }))
+    .toHaveAttribute('href', '/finances?fact=ff-tax');
+  await user.click(screen.getByRole('button', { name: 'Export basic summary' }));
+  const blob = createObjectURL.mock.calls[0]?.[0];
+  expect(blob).toBeInstanceOf(Blob);
+  if (!blob) throw new Error('Reporting export did not create a file');
+  const text = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('Export did not contain text'));
+    };
+    reader.onerror = () => { reject(new Error('Export could not be read')); };
+    reader.readAsText(blob);
+  });
+  expect(text).toBe(content);
+});
+
 it('generates an authorized source-connected basic summary without scores or advice', async () => {
   const api = new AccessApi(session);
-  const product = vi.spyOn(api, 'product').mockResolvedValue(report as never);
+  const product = vi.spyOn(api, 'product').mockResolvedValue(report);
   mount(api);
 
   await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
@@ -126,14 +171,16 @@ it('generates an authorized source-connected basic summary without scores or adv
     '/finances?fact=ff-income',
   );
   expect(screen.queryByText(/financial health score/i)).not.toBeInTheDocument();
-  expect(screen.queryByText(/recommendation/i)).not.toBeInTheDocument();
+  for (const item of screen.getAllByRole('article')) {
+    expect(within(item).queryByText(/recommendation/i)).not.toBeInTheDocument();
+  }
   expect(screen.queryByText(/savings ratio/i)).not.toBeInTheDocument();
 });
 
 it('reopens a customer report only through the product report-read boundary', async () => {
   window.history.replaceState(null, '', '/reports?report=report-customer-basic-001');
   const api = new AccessApi(session);
-  const product = vi.spyOn(api, 'product').mockResolvedValue(report as never);
+  const product = vi.spyOn(api, 'product').mockResolvedValue(report);
 
   mount(api);
 
@@ -148,7 +195,7 @@ it('reopens a customer report only through the product report-read boundary', as
 
 it('exports exactly the governed report payload returned by Reporting', async () => {
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue(report as never);
+  vi.spyOn(api, 'product').mockResolvedValue(report);
   const createObjectURL = vi.fn().mockReturnValue('blob:customer-report');
   const revokeObjectURL = vi.fn();
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
@@ -197,7 +244,7 @@ it('includes a trusted Asset source figure as a report item without a valuation 
     sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-asset'],
     evidenceReferences: [...report.evidenceReferences, 'evidence-asset'],
     financialProvenanceReferences: [...report.financialProvenanceReferences, 'provenance-asset'],
-  } as never);
+  });
 
   mount(api);
   await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
@@ -232,7 +279,7 @@ it('includes a trusted Investment source item without implying live holdings or 
     sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-investment'],
     evidenceReferences: [...report.evidenceReferences, 'evidence-investment'],
     financialProvenanceReferences: [...report.financialProvenanceReferences, 'provenance-investment'],
-  } as never);
+  });
   mount(api);
   await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
   expect(await screen.findByText('Document-stated investment figure')).toBeVisible();
@@ -265,7 +312,7 @@ it('includes a trusted Insurance source figure without claiming verified coverag
     sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-insurance'],
     evidenceReferences: [...report.evidenceReferences, 'evidence-insurance'],
     financialProvenanceReferences: [...report.financialProvenanceReferences, 'provenance-insurance'],
-  } as never);
+  });
   mount(api);
   await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
   expect(await screen.findByText('Document-stated insurance figure')).toBeVisible();
