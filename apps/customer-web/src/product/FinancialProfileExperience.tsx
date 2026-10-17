@@ -28,13 +28,13 @@ const formatMoney = (fact: ProductFinancialFact) =>
   }).format(fact.value);
 
 const factTypeName = (value: string) =>
-  ({ INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information', ASSET: 'Asset source figure', INVESTMENT: 'Investment source figure', INSURANCE: 'Insurance source figure' })[value] ?? value;
+  ({ INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information', ASSET: 'Asset source figure', INVESTMENT: 'Investment source figure', INSURANCE: 'Insurance source figure', TAX: 'Tax source figure' })[value] ?? value;
 
-type FinancialCategory = 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT' | 'INSURANCE';
+type FinancialCategory = 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT' | 'INSURANCE' | 'TAX';
 
 const categoryFromLocation = (): FinancialCategory | '' => {
   const value = new URLSearchParams(window.location.search).get('type')?.toUpperCase();
-  return value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' || value === 'ASSET' || value === 'INVESTMENT' || value === 'INSURANCE' ? value : '';
+  return value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' || value === 'ASSET' || value === 'INVESTMENT' || value === 'INSURANCE' || value === 'TAX' ? value : '';
 };
 
 const initialFactId = () => new URLSearchParams(window.location.search).get('fact') ?? '';
@@ -133,6 +133,7 @@ export default function FinancialProfileExperience() {
       { key: 'ASSET' as const, title: 'Asset source figures', facts: facts.filter((fact) => fact.factType === 'ASSET') },
       { key: 'INVESTMENT' as const, title: 'Investment source figures', facts: facts.filter((fact) => fact.factType === 'INVESTMENT') },
       { key: 'INSURANCE' as const, title: 'Insurance source figures', facts: facts.filter((fact) => fact.factType === 'INSURANCE') },
+      { key: 'TAX' as const, title: 'Tax source figures', facts: facts.filter((fact) => fact.factType === 'TAX') },
     ].filter(
       (group) => (!activeCategory || group.key === activeCategory) && group.facts.length > 0,
     );
@@ -275,6 +276,9 @@ export default function FinancialProfileExperience() {
             >
               Insurance source figures
             </Button>
+            <Button type={activeCategory === 'TAX' ? 'primary' : 'default'} onClick={() => selectCategory('TAX')}>
+              Tax source figures
+            </Button>
           </nav>
 
           {groups.map((group) => (
@@ -348,10 +352,10 @@ export default function FinancialProfileExperience() {
                 <WorkspaceIcon name="reports" size={28} />
               </span>
               <p className="workspace-eyebrow">{activeCategory}</p>
-              <h2>No trusted {activeCategory === 'INCOME' ? 'income' : activeCategory === 'LOAN' ? 'loan' : activeCategory === 'ASSET' ? 'asset' : activeCategory === 'INVESTMENT' ? 'investment' : activeCategory === 'INSURANCE' ? 'insurance' : 'expense'} information yet.</h2>
+              <h2>No trusted {activeCategory === 'INCOME' ? 'income' : activeCategory === 'LOAN' ? 'loan' : activeCategory === 'ASSET' ? 'asset' : activeCategory === 'INVESTMENT' ? 'investment' : activeCategory === 'INSURANCE' ? 'insurance' : activeCategory === 'TAX' ? 'tax' : 'expense'} information yet.</h2>
               <p>
                 This category has no reviewed financial information yet. Review supported documents
-                and add only the Income, Expense, Loan, Asset, Investment or Insurance source details you have checked.
+                and add only the Income, Expense, Loan, Asset, Investment, Insurance or Tax source details you have checked.
               </p>
               <div className="product-category-empty-actions">
                 <Button type="primary" href="/evidence">
