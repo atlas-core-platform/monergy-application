@@ -243,3 +243,114 @@ it('aborts a manual refresh when leaving the consent view', async () => {
     await late.promise;
   });
 });
+
+
+it('requires recognition of exact recipient and grant before owner-backed revocation', async () => {
+  const api = new AccessApi(session);
+  const before = {
+    version: 4,
+    items: [{
+      id: 'grant-001', customerId: 'customer-001', actorId: 'recipient-001',
+      purpose: 'customer-advice', capabilityIds: ['financial-profile.profile.read'],
+      expiresAt: '2099-01-01T00:00:00Z', revokedAt: null,
+    }],
+  };
+  const after = {
+    version: 5,
+    items: [{ ...before.items[0], revokedAt: '2026-10-17T07:00:00Z' }],
+  };
+  const list = vi.spyOn(api, 'customerConsent')
+    .mockResolvedValueOnce(before)
+    .mockResolvedValueOnce(after);
+  const revoked = vi.spyOn(api, 'revokeCustomerConsent').mockResolvedValue({
+    id: 'grant-001', customerId: 'customer-001', actorId: 'recipient-001',
+    operation: 'Revoked', version: 5, evidenceReference: 'consent-evidence-001',
+  });
+  mount(api);
+  const user = userEvent.setup();
+  await screen.findByText('Unexpired record');
+  await user.click(screen.getByRole('button', { name: 'Stop sharing' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Confirm stopping a sharing permission' });
+  expect(within(dialog).getByText(/recipient-001/)).toBeVisible();
+  expect(within(dialog).getByText(/grant-001/)).toBeVisible();
+  const confirm = within(dialog).getByRole('button', { name: 'Stop sharing' });
+  expect(confirm).toBeDisabled();
+  expect(revoked).not.toHaveBeenCalled();
+  await user.click(within(dialog).getByRole('checkbox', { name: /I recognize this recipient reference/i }));
+  expect(confirm).toBeEnabled();
+  await user.click(confirm);
+  expect(await screen.findByText('Revoked')).toBeVisible();
+  expect(revoked).toHaveBeenCalledWith(
+    'customer-001', 'grant-001', 4, expect.stringMatching(/^[a-f0-9]{32}$/),
+    expect.any(AbortSignal),
+  );
+  expect(list).toHaveBeenCalledTimes(2);
+  expect(screen.queryByRole('button', { name: 'Stop sharing' })).not.toBeInTheDocument();
+});
+
+it('does not infer successful revocation after an unavailable or conflicting owner response', async () => {
+  const api = new AccessApi(session);
+  const list = vi.spyOn(api, 'customerConsent').mockResolvedValue({
+    version: 7,
+    items: [{
+      id: 'grant-conflict', customerId: 'customer-001', actorId: 'recipient-007',
+      purpose: 'customer-advice', capabilityIds: ['evidence.document.read'],
+      expiresAt: '2099-01-01T00:00:00Z', revokedAt: null,
+    }],
+  });
+  const revoke = vi.spyOn(api, 'revokeCustomerConsent').mockRejectedValue(new Error('lost acknowledgement'));
+  mount(api);
+  const user = userEvent.setup();
+  await screen.findByText('Unexpired record');
+  await user.click(screen.getByRole('button', { name: 'Stop sharing' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Confirm stopping a sharing permission' });
+  await user.click(within(dialog).getByRole('checkbox', { name: /I recognize this recipient reference/i }));
+  await user.click(within(dialog).getByRole('button', { name: 'Stop sharing' }));
+  expect(await screen.findByText('Revocation needs verification')).toBeVisible();
+  expect(screen.queryByText('Unexpired record')).not.toBeInTheDocument();
+  expect(revoke).toHaveBeenCalledTimes(1);
+  await user.click(screen.getByRole('button', { name: 'Refresh permissions' }));
+  expect(list).toHaveBeenCalledTimes(2);
+  // After an unknown outcome Monergy does not automatically retry a mutating request.
+  expect(revoke).toHaveBeenCalledTimes(1);
+});
+
+it('never offers revocation controls for an expired or already revoked record', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'customerConsent').mockResolvedValue({
+    version: 2,
+    items: [
+      { id: 'expired', customerId: 'customer-001', actorId: 'one', purpose: 'customer-advice',
+        capabilityIds: ['financial-profile.profile.read'], expiresAt: '2001-01-01T00:00:00Z', revokedAt: null },
+      { id: 'revoked', customerId: 'customer-001', actorId: 'two', purpose: 'customer-advice',
+        capabilityIds: ['financial-profile.profile.read'], expiresAt: '2099-01-01T00:00:00Z', revokedAt: '2026-10-15T00:00:00Z' },
+    ],
+  });
+  mount(api);
+  expect(await screen.findByText('Expired')).toBeVisible();
+  expect(screen.getByText('Revoked')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Stop sharing' })).not.toBeInTheDocument();
+});
+
+it('rejects mismatched mutation receipts and does not claim a completed revocation', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'customerConsent').mockResolvedValue({
+    version: 9,
+    items: [{ id: 'grant-009', customerId: 'customer-001', actorId: 'recipient-009',
+      purpose: 'customer-advice', capabilityIds: ['evidence.document.read'],
+      expiresAt: '2099-01-01T00:00:00Z', revokedAt: null }],
+  });
+  vi.spyOn(api, 'revokeCustomerConsent').mockResolvedValue({
+    id: 'another-grant', customerId: 'customer-001', actorId: 'recipient-009',
+    operation: 'Revoked', version: 10, evidenceReference: 'other-evidence',
+  });
+  mount(api);
+  const user = userEvent.setup();
+  await screen.findByText('Unexpired record');
+  await user.click(screen.getByRole('button', { name: 'Stop sharing' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Confirm stopping a sharing permission' });
+  await user.click(within(dialog).getByRole('checkbox', { name: /I recognize this recipient reference/i }));
+  await user.click(within(dialog).getByRole('button', { name: 'Stop sharing' }));
+  expect(await screen.findByText('Revocation needs verification')).toBeVisible();
+  expect(screen.queryByText('Unexpired record')).not.toBeInTheDocument();
+});
