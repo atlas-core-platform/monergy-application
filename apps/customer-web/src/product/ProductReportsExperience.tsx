@@ -101,7 +101,7 @@ export default function ProductReportsExperience() {
           <p>
             This summary contains the currently supported financial information already in your
             Financial Profile and keeps each item connected to its source. It is not a formal report
-            pack, financial-health score, recommendation, or advice. Included Loan source amounts do not establish verified outstanding balances, EMI, or eligibility.
+            pack, financial-health score, recommendation, or advice. Included Loan source amounts do not establish verified outstanding balances, EMI, or eligibility. Asset source figures are document-reported values, not independently verified valuations or net-worth totals.
           </p>
         </div>
         <Tag className="product-environment">

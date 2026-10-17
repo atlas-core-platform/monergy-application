@@ -28,7 +28,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
 
         Assert.NotNull(snapshot);
         Assert.Equal("reference-customer", snapshot.CustomerId);
-        Assert.Equal(3, snapshot.Items.Length);
+        Assert.Equal(4, snapshot.Items.Length);
         Assert.Contains(snapshot.Items, item =>
             item.Label == "Employment income" &&
             item.Value == 125000m &&
@@ -42,6 +42,13 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             item.Source.SourceId == "ff-expense" &&
             item.Source.EvidenceReferenceId == "evidence-expense");
         Assert.Contains(snapshot.Items, item => item.Label == "Loan source amount" && item.Value == 85000m && item.Source.SourceId == "ff-loan" && item.Source.FinancialProvenanceReferenceId == "provenance-loan" && item.Source.CalculationLineageReferenceId is null);
+        Assert.Contains(snapshot.Items, item =>
+            item.Label == "Asset source figure" &&
+            item.Value == 900000m &&
+            item.Source.SourceId == "ff-asset" &&
+            item.Source.EvidenceReferenceId == "evidence-asset" &&
+            item.Source.FinancialProvenanceReferenceId == "provenance-asset" &&
+            item.Source.CalculationLineageReferenceId is null);
         Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-future");
         Assert.All(handler.Requests, request =>
         {
@@ -167,6 +174,10 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                     "LOAN", "Loan source amount", 85000m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-loan"),
                 new AuthoritativeFinancialFact(
+                    "ff-asset", "financial-profile-reference-customer", "reference-customer",
+                    "ASSET", "Asset source figure", 900000m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-asset"),
+                new AuthoritativeFinancialFact(
                     "ff-future", "financial-profile-reference-customer", "reference-customer",
                     "INVESTMENT", "Future gated investment", 500m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-future"),
@@ -185,14 +196,15 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                 body, ContractJson.Options)!;
             var income = request.Payload.FinancialProvenanceId == "provenance-income";
             var loan = request.Payload.FinancialProvenanceId == "provenance-loan";
+            var asset = request.Payload.FinancialProvenanceId == "provenance-asset";
             var customer = CrossCustomerProvenance ? "other-customer" : "reference-customer";
             return Success(request, new FinancialProvenance(
                 request.Payload.FinancialProvenanceId,
-                income ? "ff-income" : loan ? "ff-loan" : "ff-expense",
+                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : "ff-expense",
                 customer,
-                income ? "evidence-income" : loan ? "evidence-loan" : "evidence-expense",
-                income ? "document-version-income" : loan ? "document-version-loan" : "document-version-expense",
-                income ? "source-income" : loan ? "source-loan" : "source-expense",
+                income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : "evidence-expense",
+                income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : "document-version-expense",
+                income ? "source-income" : loan ? "source-loan" : asset ? "source-asset" : "source-expense",
                 "extractor/1",
                 "validator/1",
                 "reviewed-document-facts/1.0.0",

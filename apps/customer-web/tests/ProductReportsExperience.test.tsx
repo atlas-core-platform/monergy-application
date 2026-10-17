@@ -174,3 +174,38 @@ it('keeps the journey unavailable when the current access pack has not granted R
   ).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Generate basic summary' })).not.toBeInTheDocument();
 });
+
+
+it('includes a trusted Asset source figure as a report item without a valuation or net-worth claim', async () => {
+  const api = new AccessApi(session);
+  const assetItem = {
+    label: 'Document-stated property figure',
+    value: 900000,
+    unit: 'USD',
+    source: {
+      sourceType: 'FinancialFact',
+      sourceId: 'ff-asset',
+      authoritativeOwner: 'Financial Profile Service',
+      evidenceReferenceId: 'evidence-asset',
+      financialProvenanceReferenceId: 'provenance-asset',
+      calculationLineageReferenceId: null,
+    },
+  };
+  vi.spyOn(api, 'product').mockResolvedValue({
+    ...report,
+    items: [...report.items, assetItem],
+    sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-asset'],
+    evidenceReferences: [...report.evidenceReferences, 'evidence-asset'],
+    financialProvenanceReferences: [...report.financialProvenanceReferences, 'provenance-asset'],
+  } as never);
+
+  mount(api);
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
+
+  expect(await screen.findByText('Document-stated property figure')).toBeVisible();
+  expect(screen.getByText('$900,000.00')).toBeVisible();
+  expect(screen.getByText(/Asset source figures are document-reported values, not independently verified valuations/i)).toBeVisible();
+  const sources = screen.getAllByRole('link', { name: 'View source & history' });
+  expect(sources[2]).toHaveAttribute('href', '/finances?fact=ff-asset');
+  expect(screen.queryByText(/verified net worth|approved collateral valuation/i)).not.toBeInTheDocument();
+});

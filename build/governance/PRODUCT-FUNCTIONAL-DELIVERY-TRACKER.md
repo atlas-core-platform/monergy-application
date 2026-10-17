@@ -1,6 +1,6 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Source baseline is application main `f34e74530eca84727ae11773c5f016a8a516030d` (T1-22 recipient labels PR #70 merged, runtime verification pending), Expert main `3d4707293a4864c01d90dedc449d99fa797d0923` (PR #22). Neither merge certifies full UAT.
+Status: ACTIVE · Working baseline is Application `fbfc89d09bf54d61adc479c4b5680e6970e17f9d` (merged T1-28 Search), System Expert `5e951117fc6ea6c1c41786f65c4722c18de89f78` (merged T1-28 provenance). These record source merges, not runtime acceptance. T1-29 Asset Reporting is the current bounded candidate.
 This file tracks bounded implementation units; the accepted 81-feature catalog and 151 requirement IDs remain authoritative for requirements identity, and the AR-003 persona and capability catalogs remain authoritative for planned journeys.
 One current implementation unit may be a subset of one canonical feature. Engineering completion never proves an entire business feature complete.
 
@@ -15,7 +15,8 @@ Each unit requires: owner-backed UI/API/data behavior; tenant/customer access, a
 | P0 / carry-forward verification | T1-20 View delegated consent; request-lifecycle correction | MR §§6,23,39; COV-005; M2-WS02-E03-F01 | Consent owner + current Customer & Identity session + customer UI | SOURCE_MERGED_RUNTIME_PENDING (PR #68, Expert #20); prior 8 component and 32 backend focused tests passed | Isolated owner-backed UAT and full Expert source-matched model verification remain outstanding; do not present as released |
 | P0 / carry-forward verification | T1-21 Explicitly stop one recorded delegated sharing grant | MR §§6,23,39; MON-CON; COV-005; M2-WS02-E03-F01 | Existing Consent DELETE, revision/audit, customer confirmation UI | MERGED_MAIN_SOURCE_UNVERIFIED (application #69, Expert #21); standalone guarded API checks passed | React/TypeScript, full owner-backed local UAT and complete Expert recompile outstanding |
 | P0 / carry-forward verification | T1-22 Show tenant-scoped recipient identity labels on recorded grants | MR §§6,39; COV-005; M2-WS02-E03-F01 | C&I principal label → Consent authorized grant list → Customer consent UI | MERGED_MAIN_SOURCE_UNVERIFIED (#70 / Expert #22; focused local/UAT outstanding) | Exact customer ownership recheck, C&I workload-only endpoint, no arbitrary actor directory, UI fallback and Expert sync |
-| P0 / active implementation | T1-23 Loan source amount in Financial Passport | Master §§13,17,20,41; M2-WS04-E01-F03 / M2-WS03-E02-F02 partial | Document Intelligence → Job Management → Evidence → Financial Profile → My Finances | CANDIDATE_SOURCE_NOT_TESTED; typed LOAN fact and category, explicit review, provenance, UI/source tests authored | Exact local extractor/UI/UAT, no outstanding-balance assumption, paired Expert sync |
+| P0 / carry-forward verification | T1-23 through T1-28: Loan/Asset source facts and linked Search/Reports/Action Centre | Master §§12–15,20,30,41; WS03/04/07/08 partial | Evidence → Document Intelligence → Financial Profile → Search / Reporting / Customer pages | SOURCE_MERGED_RUNTIME_UNVERIFIED: App PR #71–76 and Expert PR #23–28; tests authored, no native UAT proof | Focused local testing and exact-source compiled Expert verification; maintain no-balance/no-valuation claims |
+| P0 / active implementation | T1-29: Asset source figures in basic Reports | Master §§13,20,30,41; M2-WS08-E02-F01/F03 partial | Reporting → Financial Profile CID-030/033 → Customer Reports | SOURCE_CANDIDATE_UNTESTED | Focused Reporting owner tests + customer UI + Expert knowledge and local UAT |
 | P0 | Expand Financial Passport beyond Income/Expense by one governed fact domain per unit | MR §§2,13,20,41; M2-WS04-E01/E02 | Financial Profile owner and customer UI | FOUNDATIONS_EXIST; customer journeys partial | Approved domain input/mutation semantics and evidence source; no fabricated net worth |
 | P0 | Document classification/OCR one supported file type at a time | MR §§10–12, 41; M2-WS03-E02 | Evidence → Document Intelligence → Financial Profile | STRUCTURED_TEXT_LOCAL_ONLY | Approved extraction/quality controls; production provider decision remains gated |
 | P1 | Connected customer sources, one authorized provider route at a time | MR §§7–8,23–25,41; WS06 E03 | Provider catalog → tenant config → customer authorization → Gateway | NO_LIVE_PROVIDER_ACCEPTANCE | OD-04/05/06/09, licensed route and keys |
@@ -24,6 +25,19 @@ Each unit requires: owner-backed UI/API/data behavior; tenant/customer access, a
 | P1 | Formal financial packs/goals and actionable tasks | MR §§30,37–39; WS08 | Reporting, Financial Rules, Job Management | BASIC_SUMMARY_ONLY | Formal report scope C-14, goals/score gates |
 | P2 | Advisor, DSA, lender and professional workspaces | MR §§4,32,43; AR-003, MON-RDC | Assigned business resources with role+permission+Consent | FUTURE_GATED | Owners for cases/applications/verification and OD-02/09/10 |
 | P2 | Production identity, regulated integrations and operational launch | MR §§27–28,45–47; WS01/02/09 | Identity, security, deployment and operations | STAGE_GATES_BLOCKED | OD-10/12/13/14/15 and acceptance evidence |
+
+## Current source-merged functional increments (verification incomplete)
+
+| Unit | Application PR / merge SHA | Expert PR / merge SHA | End-to-end state |
+| --- | --- | --- | --- |
+| T1-23 | #71 · `f9c8f1afef9dd89cb2c1582ac9672b5c163b4b18` | #23 · `2f45ea47fd779a021aa48870a20b389b71a09b73` | Loan source fact / Passport; runtime pending |
+| T1-24 | #72 · `396a3067bd27312ff24094e503d79ece8be347f9` | #24 · `609ee335dfa16835f3ea462f4500ed453e5181f0` | Loan source Search; runtime pending |
+| T1-25 | #73 · `82beb92f21df6fb6875e8618b8a0c1d520322b1a` | #25 · `a94946ca2c02174604b1d4470a75bc13e886129f` | Loan source Reporting; runtime pending |
+| T1-26 | #74 · `3b141c1894d5844cbbc6f6690958a902b2fe3ccd` | #26 · `8ca52ac1f68df882d0d55202ed31b020fffceb32` | Action Centre Loan coverage; runtime pending |
+| T1-27 | #75 · `0495bd0705dca215c854765a2af3a343538529de` | #27 · `d25701389f68b7bd3574291848b6c9cb568b3a3d` | Asset source fact / Passport; runtime pending |
+| T1-28 | #76 · `fbfc89d09bf54d61adc479c4b5680e6970e17f9d` | #28 · `5e951117fc6ea6c1c41786f65c4722c18de89f78` | Asset source Search; runtime pending |
+
+**Completion denominator remains the original 151 normalized requirements and 81 canonical features, augmented by approved AR-003 extensions, not the T1 count.** No percentage of functionally complete product is inferred from source merges. The latest source-head receipts above supersede stale historical queue labels below. No GitHub Actions in development.
 
 ## Prior accepted sequence
 
