@@ -31,7 +31,7 @@ const journeys: {
   },
   {
     title: 'Review financial information',
-    description: 'See trusted income and expense information together with the source document behind each item.',
+    description: 'See trusted Income, Expense and Loan information, each linked to its source document.',
     href: '/finances',
     icon: 'reports',
     capability: 'financial-profile.profile.read',
@@ -104,6 +104,7 @@ export default function WorkspaceHome() {
     const facts = profile?.facts ?? [];
     const income = facts.filter((fact) => fact.factType === 'INCOME').length;
     const expenses = facts.filter((fact) => fact.factType === 'EXPENSE').length;
+    const loans = facts.filter((fact) => fact.factType === 'LOAN').length;
     const sources = new Set(facts.map((fact) => fact.source.documentVersion)).size;
     const ordered = [...facts].sort((left, right) =>
       right.source.recordedAt.localeCompare(left.source.recordedAt),
@@ -112,11 +113,13 @@ export default function WorkspaceHome() {
     const coverage = [
       { key: 'INCOME', label: 'Income', count: income },
       { key: 'EXPENSE', label: 'Expenses', count: expenses },
+      { key: 'LOAN', label: 'Loan information', count: loans },
     ];
     return {
       facts: facts.length,
       income,
       expenses,
+      loans,
       sources,
       latest,
       latestRecordedAt: ordered[0]?.source.recordedAt ?? null,
@@ -146,7 +149,7 @@ export default function WorkspaceHome() {
           <h2 id="workspace-hero-title">Start with what you already have.</h2>
           <p>
             Add a financial document. Monergy keeps the document and source details connected so
-            you can review extracted Income or Expense information before explicitly adding it to
+            you can review extracted Income, Expense or Loan information before explicitly adding it to
             your trusted financial information.
           </p>
           {capabilities.has('evidence.document.upload') ? (
@@ -233,6 +236,11 @@ export default function WorkspaceHome() {
                   <small>Source-connected Expense records</small>
                 </article>
                 <article className="workspace-passport-card">
+                  <span>Loan information items</span>
+                  <strong>{canReadFinancial ? snapshot.loans : '—'}</strong>
+                  <small>Source-connected Loan fact records, not an outstanding-debt total</small>
+                </article>
+                <article className="workspace-passport-card">
                   <span>Documents</span>
                   <strong>{documentCount ?? '—'}</strong>
                   <small>{canReadDocuments ? 'Documents available to you' : 'Not included in your access'}</small>
@@ -278,7 +286,7 @@ export default function WorkspaceHome() {
                     ))}
                   </div>
                   <p className="workspace-passport-scope-note">
-                    Coverage is limited to the Income and Expense information Monergy currently supports.
+                    Coverage is limited to the Income, Expense and Loan fact information Monergy currently supports.
                     It is not a financial health score or a statement that your finances are complete.
                   </p>
                   {snapshot.coveredCategories < snapshot.coverage.length &&
@@ -306,7 +314,7 @@ export default function WorkspaceHome() {
                       >
                         <span>
                           <strong>{fact.label}</strong>
-                          <small>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'EXPENSE' ? 'Expense' : fact.factType}</small>
+                          <small>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'EXPENSE' ? 'Expense' : fact.factType === 'LOAN' ? 'Loan information' : fact.factType}</small>
                         </span>
                         <span>
                           <small>Source</small>
@@ -322,7 +330,7 @@ export default function WorkspaceHome() {
                   <WorkspaceIcon name="reports" size={22} />
                   <div>
                     <strong>Your Financial Passport is ready for trusted information.</strong>
-                    <p>Review supported Income or Expense details from Documents and choose what to add.</p>
+                    <p>Review supported Income, Expense or Loan details from Documents and choose what to add.</p>
                   </div>
                   {capabilities.has('evidence.document.upload') && <a href="/evidence">Review documents</a>}
                 </div>
