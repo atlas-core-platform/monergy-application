@@ -81,6 +81,23 @@ const income = {
   },
 };
 
+const loan = {
+  financialFactId: 'ff-loan',
+  factType: 'LOAN',
+  label: 'Loan source amount',
+  value: 85000,
+  currency: 'USD',
+  effectiveDate: '2026-10-01',
+  revision: 1,
+  source: {
+    sourceName: 'loan.txt',
+    documentVersion: 'document-version-loan',
+    recordedAt: '2026-10-16T07:00:00Z',
+    technicalSourceFactId: 'source-loan',
+    technicalProvenanceId: 'provenance-loan',
+  },
+};
+
 const expense = {
   financialFactId: 'ff-expense',
   factType: 'EXPENSE',
@@ -118,7 +135,7 @@ it('shows a bounded add-document attention item when the customer has no Documen
 
   expect(await screen.findByText('No financial documents have been added yet.')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Add document' })).toHaveAttribute('href', '/evidence');
-  expect(screen.getByText('0 of 2')).toBeVisible();
+  expect(screen.getByText('0 of 3')).toBeVisible();
   expect(screen.queryByText(/recommendation engine/i)).not.toBeInTheDocument();
 });
 
@@ -165,10 +182,11 @@ it('shows only the missing supported category after trusted information exists',
     await screen.findByText('No trusted Expense information is currently represented.'),
   ).toBeVisible();
   expect(screen.queryByText('No trusted Income information is currently represented.')).not.toBeInTheDocument();
-  expect(screen.getByText('1 of 2')).toBeVisible();
+  expect(screen.getByText('No trusted Loan source information is currently represented.')).toBeVisible();
+  expect(screen.getByText('1 of 3')).toBeVisible();
 });
 
-it('shows a truthful clear state when both currently supported categories are represented', async () => {
+it('shows a truthful clear state when all three currently supported source categories are represented', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
@@ -179,7 +197,7 @@ it('shows a truthful clear state when both currently supported categories are re
           { documentVersionId: 'document-version-002' },
         ],
       }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan])) as never;
     if (path === 'v1/processing-activity')
       return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
     throw new Error('unexpected endpoint');
@@ -194,14 +212,14 @@ it('shows a truthful clear state when both currently supported categories are re
     screen.getByText(/This does not mean your overall finances are complete/),
   ).toBeVisible();
   expect(screen.getByText(/not a lifetime processing-history claim/)).toBeVisible();
-  expect(screen.getByText('2 of 2')).toBeVisible();
+  expect(screen.getByText('3 of 3')).toBeVisible();
   expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('0');
 });
 
 it('does not present a clear state when only one bounded input is authorized', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan])) as never;
     if (path === 'v1/processing-activity')
       return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
     throw new Error('unexpected endpoint');
@@ -259,7 +277,7 @@ it('aggregates durable processing attention without turning jobs into tasks', as
           { documentVersionId: 'document-version-002' },
         ],
       }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan])) as never;
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -336,7 +354,7 @@ it('never turns unavailable processing activity into an all-clear Action Centre'
           { documentVersionId: 'document-version-002' },
         ],
       }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan])) as never;
     if (path === 'v1/processing-activity') return Promise.reject(new Error('job owner unavailable')) as never;
     throw new Error('unexpected endpoint');
   });
@@ -364,7 +382,7 @@ it('does not infer processing all-clear when job read is outside the current acc
           { documentVersionId: 'document-version-002' },
         ],
       }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense])) as never;
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan])) as never;
     throw new Error('unexpected endpoint');
   });
 
