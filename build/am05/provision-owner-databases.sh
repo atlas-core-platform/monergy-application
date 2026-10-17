@@ -23,6 +23,8 @@ SELECT format('GRANT UPDATE(version) ON customer_identity.access_policy_version 
 SELECT format('GRANT INSERT ON customer_identity.access_event_inbox TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT(actor_id,normalized_email) ON customer_identity.tenant_principals TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT ON customer_identity.provisioning_receipts TO %I', :'runtime') \gexec
+SELECT format('GRANT INSERT,UPDATE ON customer_identity.email_access_challenges TO %I', :'runtime') \gexec
+SELECT format('GRANT INSERT ON customer_identity.email_access_events TO %I', :'runtime') \gexec
 SQL
     else
       docker exec -i "$container_id" psql -U postgres -d "$database" -v ON_ERROR_STOP=1 --set=tenant="$tenant" --set=runtime="$runtime" <<'SQL'

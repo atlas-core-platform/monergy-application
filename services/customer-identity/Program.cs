@@ -23,6 +23,7 @@ if (tenantIntegration)
     builder.Services.AddTenantSessionAuthority(builder.Configuration);
 }
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);
+var customerEmailAccess = tenantIntegration && builder.Services.AddCustomerEmailAccess(builder.Configuration);
 if (referenceAdapters)
 {
     builder.Services.AddCustomerIdentityReferenceAdapters(builder.Configuration);
@@ -36,7 +37,11 @@ if (referenceAdapters)
     app.MapCustomerIdentityContracts();
 }
 
-if (tenantIntegration) app.MapTenantSessionAuthority();
+if (tenantIntegration)
+{
+    app.MapTenantSessionAuthority();
+    app.MapCustomerEmailAccess(customerEmailAccess);
+}
 
 await app.RunAsync();
 

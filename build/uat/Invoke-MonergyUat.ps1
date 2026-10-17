@@ -6,7 +6,8 @@ param(
     [ValidateSet('T001','T002')][string]$Tenant = 'T001',
     [ValidateSet('A900','A100','A200','A300')][string]$Actor = 'A900',
     [switch]$ConfirmReset,
-    [switch]$EnableOnboarding
+    [switch]$EnableOnboarding,
+    [switch]$EnableEmailAccess
 )
 $ErrorActionPreference = 'Stop'
 if ($EnableOnboarding -and $Profile -eq 'default') { throw 'Use a new named profile for onboarding, for example -Profile onboarding -EnableOnboarding. The retained default profile is not upgraded.' }
@@ -98,10 +99,17 @@ if (-not (Test-Path $profileFile)) {
 }
 $state = Get-Content $profileFile -Raw | ConvertFrom-Json
 $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
+if ($EnableEmailAccess -and -not $onboarding) { throw 'Customer email access requires an onboarding profile with verified customer ownership.' }
+if ($EnableEmailAccess -and $Action -in @('Prepare','Start')) {
+    foreach ($name in @('MONERGY_EMAIL_SMTP_HOST','MONERGY_EMAIL_SMTP_USER','MONERGY_EMAIL_SMTP_PASSWORD','MONERGY_EMAIL_FROM')) {
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) { throw "Customer email delivery requires $name in the operator environment." }
+    }
+}
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
 if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
     $requiredTokens = @('financialAuditEvent')
+    if ($EnableEmailAccess) { $requiredTokens += 'emailAccess' }
     if ($onboarding) {
         $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel')
     }
@@ -163,6 +171,15 @@ if ($Action -in @('Prepare','Start')) {
                     @{ TenantId='T002'; ResourceId='C002'; DisplayName='Sample Customer Two'; SecondaryLabel='Additional UAT customer' }
                 )
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.CustomerIdentityDatabases[$db.tenant] = Connection $db 'runtime' }
+                if ($EnableEmailAccess) {
+                    $smtpPort = 587
+                    if (-not [string]::IsNullOrWhiteSpace($env:MONERGY_EMAIL_SMTP_PORT)) { $smtpPort = [int]$env:MONERGY_EMAIL_SMTP_PORT }
+                    $config.Monergy.CustomerEmailAccess = @{
+                        Enabled='true'; SmtpHost=$env:MONERGY_EMAIL_SMTP_HOST; SmtpPort=$smtpPort
+                        SmtpUser=$env:MONERGY_EMAIL_SMTP_USER; SmtpPassword=$env:MONERGY_EMAIL_SMTP_PASSWORD
+                        From=$env:MONERGY_EMAIL_FROM; Secret=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.emailAccess))
+                    }
+                }
             } elseif ($service -eq 'consent') {
                 $integration.ConsentDatabases=@{}
                 foreach ($db in $state.databases | Where-Object service -eq 'consent') { $integration.ConsentDatabases[$db.tenant] = Connection $db 'runtime' }

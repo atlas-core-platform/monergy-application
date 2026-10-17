@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-43",
+  "applicationBase": "4ced1c28f62a73fd7759e623b55253b210f0cbf8",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "migrations": [
+    {
+      "path": "services/customer-identity/migrations/0004_customer_email_access.sql",
+      "sha256": "f8431ab4874d310217e15dc64006c26e1c84efd28cfc7a03e4da1fef173dfbb9"
+    }
+  ]
+}
