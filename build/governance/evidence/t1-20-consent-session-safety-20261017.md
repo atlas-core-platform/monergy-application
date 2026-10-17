@@ -76,3 +76,27 @@ pnpm --dir apps/customer-web exec tsc --noEmit -p tsconfig.json
 ```
 
 If the four recovered-review timeouts persist, inspect the DOM and request-call state at the failing View result wait before changing product behavior or test timeouts. Keep the existing no-mutation and exact source-fact/document-version assertions. The full live owner UAT and compiled Expert checks remain separate required gates.
+
+
+## Focused recovered-result test stabilization — 17 October 2026
+
+Source-only test revision: `2484abd609d76f14f1ff8a33dfb1fa435cd8d63a`, **NOT RERUN**.
+
+The eight recovered-result tests now share a bounded helper which:
+1. targets the `Recent document processing` region;
+2. waits for the owner-backed `Completed` job state;
+3. invokes that region's `View result` action; and
+4. preserves the original detailed financial-truth, authorization, idempotency, and provenance assertions.
+
+This replaces a page-wide `View result` lookup without increasing timeouts or changing production code. It distinguishes a failure to load durable processing activity from a later recovered-result drawer/promotion failure.
+
+The previous 31 passing / 5 failing combined-suite result belongs to the earlier tested revision, **not** to this new helper. The cause of the four recovered-review timeouts remains unverified until a fresh focused run. No new pass counts are claimed.
+
+Required local rerun, without hosted GitHub Actions:
+
+```sh
+pnpm --dir apps/customer-web exec vitest run tests/ConsentExperience.test.tsx tests/EvidenceExperience.test.tsx
+pnpm --dir apps/customer-web exec tsc --noEmit -p tsconfig.json
+```
+
+If timeouts remain, capture which boundary failed (`Completed` row, `View result`, drawer, or result fetch) and the mocked API call list. Do not increase global test timeouts or weaken business assertions without diagnosing the cause.
