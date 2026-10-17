@@ -220,3 +220,36 @@ it('finds Asset source figures and links to exact trusted fact without verified 
   expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute('href', '/finances?fact=ff-asset');
   expect(screen.queryByText(/verified net worth|certified asset/i)).not.toBeInTheDocument();
 });
+
+
+it('finds a reviewed Investment source amount with exact source history but no live market-value claim', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    query: 'investment',
+    matchMode: 'Lexical',
+    items: [{
+      searchRecordId: 'search-financial-ff-investment',
+      resultType: 'Financial',
+      title: 'Document-stated investment figure',
+      summary: 'Investment source figure (not live market value) 500 USD effective 2026-10-01',
+      authoritativeOwner: 'Financial Profile Service',
+      representationState: 'DERIVED_REBUILDABLE',
+      score: 1,
+      source: {
+        sourceObjectType: 'FinancialFact',
+        sourceObjectId: 'ff-investment',
+        sourceReferenceId: 'financial-profile-reference-customer',
+        provenanceReferenceId: 'provenance-investment',
+        calculationLineageReferenceId: null,
+      },
+    }],
+  } as never);
+  mount(api);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Search query'), 'investment');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+  expect(await screen.findByText('1 result for “investment”')).toBeVisible();
+  expect(screen.getByText(/not live market value/i)).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute('href', '/finances?fact=ff-investment');
+  expect(screen.queryByText(/portfolio return|NAV|verified current price/i)).not.toBeInTheDocument();
+});

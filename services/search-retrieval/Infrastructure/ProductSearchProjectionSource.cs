@@ -17,7 +17,7 @@ public sealed class ProductSearchProjectionSource(
     public const string EvidenceClient = "product-search-evidence";
     public const string FinancialProfileClient = "product-search-financial-profile";
     private static readonly HashSet<string> SupportedFactTypes = new(StringComparer.Ordinal)
-    { "INCOME", "EXPENSE", "LOAN", "ASSET" };
+    { "INCOME", "EXPENSE", "LOAN", "ASSET", "INVESTMENT" };
     private readonly object sync = new();
     private ImmutableArray<DerivedSearchRecord> records = [];
     private readonly Uri evidenceEndpoint = TenantAccessIntegration.LoopbackRoot(
@@ -222,7 +222,7 @@ public sealed class ProductSearchProjectionSource(
                 authorizationContextId,
                 SearchResultType.Financial,
                 fact.Label,
-                $"{(fact.FactType == "INCOME" ? "Income" : fact.FactType == "EXPENSE" ? "Expense" : fact.FactType == "LOAN" ? "Loan source amount (not outstanding balance)" : "Asset source figure (not verified valuation)")} {fact.Value} {fact.Currency} effective {fact.EffectiveDate:yyyy-MM-dd}",
+                $"{(fact.FactType == "INCOME" ? "Income" : fact.FactType == "EXPENSE" ? "Expense" : fact.FactType == "LOAN" ? "Loan source amount (not outstanding balance)" : fact.FactType == "ASSET" ? "Asset source figure (not verified valuation)" : "Investment source figure (not live market value)")} {fact.Value} {fact.Currency} effective {fact.EffectiveDate:yyyy-MM-dd}",
                 SearchAuthority.FinancialProfileService,
                 new SearchSourceReference(
                     "FinancialFact",
