@@ -11,6 +11,7 @@ public sealed record CustomerOwnerWorkspace(string TenantId, string CustomerId, 
     string? SecondaryLabel, string OwnerActorId, long Version, bool Active);
 public sealed record CustomerOwnerSession(string TenantId, string ActorId, string AuthenticationContextId, long SubjectVersion, DateTimeOffset ExpiresAt);
 public sealed record CustomerOwnerMembership(string TenantId, string ActorId, bool Active, long SubjectVersion, long PolicyVersion);
+public sealed record CustomerOwnerRecipientLabel(string TenantId, string ActorId, string RecipientLabel);
 
 // LOCAL/CI owner ports only. Workload tokens never come from request headers or
 // leave their intended destination. Session validation retains C&I authority.
@@ -87,6 +88,25 @@ public sealed class CustomerOwnerClient : IDisposable
             !TenantAccessClient.Identifier(value.ActorId, 128) || value.ExpiresAt <= DateTimeOffset.UtcNow)
             throw new TenantBoundaryException("TENANT_SESSION_INVALID", 401);
         return value;
+    }
+
+    public async Task<string?> RecipientLabelAsync(string tenant, string actor, CancellationToken ct)
+    {
+        if (!TenantAccessClient.Identifier(actor, 128)) throw new TenantBoundaryException("INVALID_ACTOR", 400);
+        try
+        {
+            var result = await SendAsync<CustomerOwnerRecipientLabel>(identity,
+                "internal/v1/consent-recipient-label/" + Uri.EscapeDataString(actor),
+                tenant, contextToken, null, ct).ConfigureAwait(false);
+            if (result.TenantId != tenant || result.ActorId != actor ||
+                string.IsNullOrWhiteSpace(result.RecipientLabel) || result.RecipientLabel.Length > 320)
+                throw new TenantBoundaryException("RECIPIENT_LABEL_INVALID", 503);
+            return result.RecipientLabel;
+        }
+        catch (TenantBoundaryException failure) when (failure.Status == 404)
+        {
+            return null;
+        }
     }
 
     public async Task RequireActiveMemberAsync(string tenant, string actor, CancellationToken ct)
