@@ -79,12 +79,19 @@ public sealed class StateAndSecurityTests
         var source = new EvidenceContent(reference,
             "LOAN|Car loan amount stated on document|400000.00|INR|2026-10-16|line:1|0.96\n" +
             "ASSET|Document-stated property figure|900000.00|INR|2026-10-16|line:2|0.95\n" +
-            "INVESTMENT|Investment amount stated in document|50000.00|INR|2026-10-16|line:3|0.94");
+            "INVESTMENT|Investment amount stated in document|50000.00|INR|2026-10-16|line:3|0.94\n" +
+            "INSURANCE|Insurance amount recorded in document|120000.00|INR|2026-10-16|line:4|0.93");
         var facts = await new FixtureDocumentExtractor().ExtractAsync(
             source, "processing-loan-test", CancellationToken.None);
 
-        Assert.Equal(3, facts.Count);
+        Assert.Equal(4, facts.Count);
         var investment = Assert.Single(facts, item => item.FactType == "INVESTMENT");
+        var insurance = Assert.Single(facts, item => item.FactType == "INSURANCE");
+        Assert.Equal("Insurance amount recorded in document", insurance.Label);
+        Assert.Equal(120000m, insurance.CandidateValue);
+        Assert.Equal("document-version-loan-test", insurance.DocumentVersionId);
+        Assert.Equal("evidence-loan-test", insurance.EvidenceId);
+        // Document-stated insurance figure is not certified coverage, claim or cash value.
         Assert.Equal("Investment amount stated in document", investment.Label);
         Assert.Equal(50000m, investment.CandidateValue);
         Assert.Equal("INR", investment.Currency);
