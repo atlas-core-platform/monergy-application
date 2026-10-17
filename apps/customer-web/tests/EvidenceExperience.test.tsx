@@ -62,6 +62,14 @@ afterEach(() => {
   vi.restoreAllMocks();
   window.history.replaceState(null, '', '/');
 });
+async function openCompletedProcessingResult(user: ReturnType<typeof userEvent.setup>) {
+  // Wait for the owner-backed activity row, not an unrelated page control.
+  // This gives a precise failing boundary if the durable processing list never loads.
+  const activity = within(screen.getByRole('region', { name: 'Recent document processing' }));
+  expect(await activity.findByText('Completed')).toBeVisible();
+  await user.click(activity.getByRole('button', { name: 'View result' }));
+}
+
 
 it('reviews the exact file before submitting and shows the upload confirmation', async () => {
   const api = new AccessApi(session);
@@ -1004,7 +1012,7 @@ it('reopens a completed processing result read-only from durable activity', asyn
   mount(api, ['evidence.document.read', 'job-management.job.read']);
   const user = userEvent.setup();
 
-  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  await openCompletedProcessingResult(user);
 
   const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
   expect(drawer).toHaveTextContent('recovered-result.txt');
@@ -1122,7 +1130,7 @@ it('fails closed when a recovered processing result is no longer available', asy
 
   mount(api, ['evidence.document.read', 'job-management.job.read']);
   const user = userEvent.setup();
-  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  await openCompletedProcessingResult(user);
 
   const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
   expect(drawer).toHaveTextContent(
@@ -1243,7 +1251,7 @@ it('resumes explicit Financial review from a recovered completed result', async 
   ]);
   const user = userEvent.setup();
 
-  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  await openCompletedProcessingResult(user);
   const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
 
   expect(drawer).toHaveTextContent('Resume review from this completed processing result');
@@ -1348,7 +1356,7 @@ it('keeps recovered review read-only when Financial Profile update is not author
   ]);
   const user = userEvent.setup();
 
-  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  await openCompletedProcessingResult(user);
   const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
 
   expect(drawer).toHaveTextContent('This recovered view is read-only');
@@ -1498,7 +1506,7 @@ it('reconciles mixed recovered candidates and submits only still-untrusted sourc
   ]);
   const user = userEvent.setup();
 
-  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  await openCompletedProcessingResult(user);
   const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
 
   expect(drawer).toHaveTextContent('ALREADY TRUSTED');
@@ -1647,7 +1655,7 @@ it('shows an all-trusted recovered review without duplicate promotion controls a
   ]);
   const user = userEvent.setup();
 
-  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  await openCompletedProcessingResult(user);
   const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
 
   expect(drawer).toHaveTextContent('All supported items from this run are already trusted');
@@ -1733,7 +1741,7 @@ it('keeps recovered review non-selectable when trusted Financial state is unavai
   ]);
   const user = userEvent.setup();
 
-  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  await openCompletedProcessingResult(user);
   const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
 
   expect(
@@ -1839,7 +1847,7 @@ it('does not reconcile a source fact from a different document version as alread
   ]);
   const user = userEvent.setup();
 
-  await user.click(await screen.findByRole('button', { name: 'View result' }));
+  await openCompletedProcessingResult(user);
   const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
 
   expect(drawer).not.toHaveTextContent('ALREADY TRUSTED');
