@@ -1049,7 +1049,7 @@ export default function EvidenceExperience() {
                           )}
                           <div>
                             <span className="product-fact-tags">
-                              <Tag>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : 'Expense'}</Tag>
+                              <Tag>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : 'Expense'}</Tag>
                               {trusted && <Tag color="success">ALREADY TRUSTED</Tag>}
                             </span>
                             <strong>{fact.label}</strong>
