@@ -21,8 +21,9 @@ public sealed class PostgresCustomers(PostgresTenantSessions sessions) : ITenant
         await using var connection = await sessions.OpenAsync(tenantId, cancellationToken).ConfigureAwait(false);
         // Bounded UAT owner directory; production pagination is a separate contract.
         return (await connection.QueryAsync<TenantCustomerResource>(new CommandDefinition("""
-            SELECT customer_id AS ResourceId,display_name AS DisplayName,secondary_label AS SecondaryLabel
-            FROM customer_identity.customers WHERE active ORDER BY display_name,customer_id LIMIT 1000;
+            SELECT c.customer_id AS ResourceId,coalesce(p.display_name,c.display_name) AS DisplayName,c.secondary_label AS SecondaryLabel
+            FROM customer_identity.customers c LEFT JOIN customer_identity.customer_profiles p ON p.customer_id=c.customer_id
+            WHERE c.active ORDER BY coalesce(p.display_name,c.display_name),c.customer_id LIMIT 1000;
             """, cancellationToken: cancellationToken)).ConfigureAwait(false)).ToArray();
     }
 
@@ -35,11 +36,11 @@ public sealed class PostgresCustomers(PostgresTenantSessions sessions) : ITenant
             throw new TenantBoundaryException("INVALID_ACTOR", 400);
         await using var connection = await sessions.OpenAsync(tenantId, cancellationToken).ConfigureAwait(false);
         var matches = (await connection.QueryAsync<CustomerWorkspaceContext>(new CommandDefinition("""
-            SELECT @TenantId AS TenantId,customer_id AS CustomerId,display_name AS DisplayName,
-                secondary_label AS SecondaryLabel,owner_actor_id AS OwnerActorId,version AS Version,active AS Active
-            FROM customer_identity.customers
-            WHERE owner_actor_id=@ActorId AND active
-            ORDER BY customer_id
+            SELECT @TenantId AS TenantId,c.customer_id AS CustomerId,coalesce(p.display_name,c.display_name) AS DisplayName,
+                c.secondary_label AS SecondaryLabel,c.owner_actor_id AS OwnerActorId,c.version AS Version,c.active AS Active
+            FROM customer_identity.customers c LEFT JOIN customer_identity.customer_profiles p ON p.customer_id=c.customer_id
+            WHERE c.owner_actor_id=@ActorId AND c.active
+            ORDER BY c.customer_id
             LIMIT 2;
             """, new { TenantId = tenantId, ActorId = actorId }, cancellationToken: cancellationToken)).ConfigureAwait(false)).ToArray();
         return matches.Length switch

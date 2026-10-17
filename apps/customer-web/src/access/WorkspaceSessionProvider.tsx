@@ -218,6 +218,23 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     connectUsing(tenant, (signal) => establishSession(tenant, key, signal)), [connectUsing]);
   const connectEmail = useCallback((tenant: string, challengeId: string, code: string) =>
     connectUsing(tenant, (signal) => confirmCustomerEmailCode(tenant, challengeId, code, signal), true), [connectUsing]);
+  const refreshContext = useCallback(async () => {
+    const current = candidate.current;
+    const signal = request.current?.signal;
+    const id = epoch.current;
+    if (!current || !signal || !validSession(current, current.tenantId))
+      throw new AccessApiError(401, 'SESSION_EXPIRED');
+    try {
+      const authorization = await verify(current, area, signal);
+      if (id !== epoch.current || !mounted.current) throw new AccessApiError(401, 'SESSION_CHANGED');
+      productContextMemory.current = authorization.area === 'product' ? authorization.context : null;
+      setState(previous => ({ ...previous, authorization }));
+    } catch (failure) {
+      if (id === epoch.current && mounted.current)
+        leave('Your workspace could not be verified. Reconnect before continuing.', failure instanceof AccessApiError && failure.status === 503);
+      throw failure;
+    }
+  }, [area, leave]);
   const retry = useCallback(async () => {
     const current = candidate.current;
     if (!current || !validSession(current, current.tenantId)) {
@@ -309,7 +326,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     };
   }, [state.session, leave, retry]);
   return (
-    <Context.Provider value={{ ...state, connect, connectEmail, retry, signOut, cancel }}>
+    <Context.Provider value={{ ...state, connect, connectEmail, refreshContext, retry, signOut, cancel }}>
       {children}
     </Context.Provider>
   );
