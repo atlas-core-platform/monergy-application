@@ -28,13 +28,13 @@ const formatMoney = (fact: ProductFinancialFact) =>
   }).format(fact.value);
 
 const factTypeName = (value: string) =>
-  ({ INCOME: 'Income', EXPENSE: 'Expense' })[value] ?? value;
+  ({ INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information' })[value] ?? value;
 
-type FinancialCategory = 'INCOME' | 'EXPENSE';
+type FinancialCategory = 'INCOME' | 'EXPENSE' | 'LOAN';
 
 const categoryFromLocation = (): FinancialCategory | '' => {
   const value = new URLSearchParams(window.location.search).get('type')?.toUpperCase();
-  return value === 'INCOME' || value === 'EXPENSE' ? value : '';
+  return value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' ? value : '';
 };
 
 const initialFactId = () => new URLSearchParams(window.location.search).get('fact') ?? '';
@@ -129,6 +129,7 @@ export default function FinancialProfileExperience() {
     return [
       { key: 'INCOME' as const, title: 'Income', facts: facts.filter((fact) => fact.factType === 'INCOME') },
       { key: 'EXPENSE' as const, title: 'Expenses', facts: facts.filter((fact) => fact.factType === 'EXPENSE') },
+      { key: 'LOAN' as const, title: 'Loan information', facts: facts.filter((fact) => fact.factType === 'LOAN') },
     ].filter(
       (group) => (!activeCategory || group.key === activeCategory) && group.facts.length > 0,
     );
@@ -247,6 +248,12 @@ export default function FinancialProfileExperience() {
             >
               Expenses
             </Button>
+            <Button
+              type={activeCategory === 'LOAN' ? 'primary' : 'default'}
+              onClick={() => selectCategory('LOAN')}
+            >
+              Loan information
+            </Button>
           </nav>
 
           {groups.map((group) => (
@@ -320,10 +327,10 @@ export default function FinancialProfileExperience() {
                 <WorkspaceIcon name="reports" size={28} />
               </span>
               <p className="workspace-eyebrow">{activeCategory}</p>
-              <h2>No trusted {activeCategory === 'INCOME' ? 'income' : 'expense'} information yet.</h2>
+              <h2>No trusted {activeCategory === 'INCOME' ? 'income' : activeCategory === 'LOAN' ? 'loan' : 'expense'} information yet.</h2>
               <p>
                 This category has no reviewed financial information yet. Review supported documents
-                and add only the Income or Expense details you have checked.
+                and add only the Income, Expense or Loan details you have checked.
               </p>
               <div className="product-category-empty-actions">
                 <Button type="primary" href="/evidence">
@@ -342,7 +349,7 @@ export default function FinancialProfileExperience() {
           <p className="workspace-eyebrow">NOTHING ADDED YET</p>
           <h2>Your financial information will appear here after you review it.</h2>
           <p>
-            Open a supported document, extract its Income or Expense details, select the items you
+            Open a supported document, extract its Income, Expense or Loan details, select the items you
             have checked, and explicitly add them to your financial information.
           </p>
           <Button type="primary" href="/evidence">
