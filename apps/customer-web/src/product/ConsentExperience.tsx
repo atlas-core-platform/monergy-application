@@ -286,7 +286,7 @@ export default function ConsentExperience() {
         onOk={() => { void revoke(); }}
         onCancel={() => { if (!revokeBusy) { setRevokeIntent(null); setRevokeConfirmed(false); } }}
         closable={!revokeBusy}
-        mask={{ closable: !revokeBusy }}
+        maskClosable={!revokeBusy}
       >
         <Alert showIcon type="warning" title="Recipient name not available"
           description="Monergy only has a recipient reference for this recorded grant. Do not proceed unless you recognize the exact recipient and grant below." />
