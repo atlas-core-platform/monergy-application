@@ -65,6 +65,36 @@ public sealed class StateAndSecurityTests
         Assert.Null(await repository.GetAsync("processing-revoked", CancellationToken.None));
     }
 
+    [Fact]
+    public async Task StructuredTextLoanAmountRemainsNonAuthoritativeCandidateWithExactEvidence()
+    {
+        var reference = new EvidenceReference(
+            "evidence-loan-test",
+            "document-loan-test",
+            "document-version-loan-test",
+            Vs02TestContext.CustomerId,
+            Vs02TestContext.ContentReference,
+            Vs02TestContext.ContentSha256,
+            "text/plain");
+        var source = new EvidenceContent(reference,
+            "LOAN|Car loan amount stated on document|400000.00|INR|2026-10-16|line:1|0.96\\n" +
+            "ASSET|Unsupported asset type in this bounded processor|900000.00|INR|2026-10-16|line:2|0.95");
+        var facts = await new FixtureDocumentExtractor().ExtractAsync(
+            source, "processing-loan-test", CancellationToken.None);
+
+        var fact = Assert.Single(facts);
+        Assert.Equal("LOAN", fact.FactType);
+        Assert.Equal("Car loan amount stated on document", fact.Label);
+        Assert.Equal(400000m, fact.CandidateValue);
+        Assert.Equal("INR", fact.Currency);
+        Assert.Equal(Vs02TestContext.CustomerId, fact.CustomerId);
+        Assert.Equal("document-version-loan-test", fact.DocumentVersionId);
+        Assert.Equal("evidence-loan-test", fact.EvidenceId);
+        Assert.Equal(FixtureDocumentExtractor.ExtractionVersion, fact.ExtractionVersion);
+        // Extracted loan value is a proposed fact, not an outstanding liability
+        // or a loan-account balance; Customer/Financial Profile must review it.
+    }
+
     private sealed class MissingEvidenceReader : IEvidenceContentReader
     {
         public Task<EvidenceContent?> ReadAsync(
