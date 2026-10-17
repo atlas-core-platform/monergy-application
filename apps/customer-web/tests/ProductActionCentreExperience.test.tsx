@@ -147,10 +147,10 @@ it('shows a bounded add-document attention item when the customer has no Documen
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ dataDurability: 'Runtime only', items: [] }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([])) as never;
+      return Promise.resolve({ dataDurability: 'Runtime only', items: [] });
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([]));
     if (path === 'v1/processing-activity')
-      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] });
     throw new Error('unexpected endpoint');
   });
 
@@ -169,10 +169,10 @@ it('shows review-documents attention without claiming extracted information is t
       return Promise.resolve({
         dataDurability: 'Runtime only',
         items: [{ documentVersionId: 'document-version-001' }],
-      }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([])) as never;
+      });
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([]));
     if (path === 'v1/processing-activity')
-      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] });
     throw new Error('unexpected endpoint');
   });
 
@@ -192,10 +192,10 @@ it('shows only the missing supported category after trusted information exists',
       return Promise.resolve({
         dataDurability: 'Runtime only',
         items: [{ documentVersionId: 'document-version-001' }],
-      }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income])) as never;
+      });
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income]));
     if (path === 'v1/processing-activity')
-      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] });
     throw new Error('unexpected endpoint');
   });
 
@@ -222,10 +222,10 @@ it('shows a truthful clear state when all five currently supported source catego
           { documentVersionId: 'document-version-001' },
           { documentVersionId: 'document-version-002' },
         ],
-      }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance])) as never;
+      });
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
     if (path === 'v1/processing-activity')
-      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] });
     throw new Error('unexpected endpoint');
   });
 
@@ -245,9 +245,9 @@ it('shows a truthful clear state when all five currently supported source catego
 it('does not present a clear state when only one bounded input is authorized', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance])) as never;
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
     if (path === 'v1/processing-activity')
-      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] });
     throw new Error('unexpected endpoint');
   });
 
@@ -268,10 +268,10 @@ it('never turns an unavailable Financial Profile into a false zero-information a
       return Promise.resolve({
         dataDurability: 'Runtime only',
         items: [{ documentVersionId: 'document-version-001' }],
-      }) as never;
-    if (path === 'v1/financial-profile') return Promise.reject(new Error('owner unavailable')) as never;
+      });
+    if (path === 'v1/financial-profile') return Promise.reject(new Error('owner unavailable'));
     if (path === 'v1/processing-activity')
-      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] });
     throw new Error('unexpected endpoint');
   });
 
@@ -302,8 +302,8 @@ it('aggregates durable processing attention without turning jobs into tasks', as
           { documentVersionId: 'document-version-001' },
           { documentVersionId: 'document-version-002' },
         ],
-      }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance])) as never;
+      });
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -351,7 +351,7 @@ it('aggregates durable processing attention without turning jobs into tasks', as
             updatedAt: '2026-10-16T08:56:00Z',
           },
         ],
-      }) as never;
+      });
     throw new Error('unexpected endpoint');
   });
 
@@ -379,9 +379,9 @@ it('never turns unavailable processing activity into an all-clear Action Centre'
           { documentVersionId: 'document-version-001' },
           { documentVersionId: 'document-version-002' },
         ],
-      }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance])) as never;
-    if (path === 'v1/processing-activity') return Promise.reject(new Error('job owner unavailable')) as never;
+      });
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
+    if (path === 'v1/processing-activity') return Promise.reject(new Error('job owner unavailable'));
     throw new Error('unexpected endpoint');
   });
 
@@ -407,8 +407,8 @@ it('does not infer processing all-clear when job read is outside the current acc
           { documentVersionId: 'document-version-001' },
           { documentVersionId: 'document-version-002' },
         ],
-      }) as never;
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance])) as never;
+      });
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
     throw new Error('unexpected endpoint');
   });
 
@@ -419,7 +419,7 @@ it('does not infer processing all-clear when job read is outside the current acc
   ]);
 
   expect(
-    await screen.findByText("Recent processing attention isn't included in your current access"),
+    await screen.findByText("Processing attention isn't included in your current access"),
   ).toBeVisible();
   expect(screen.getByText('Current attention could not be fully determined')).toBeVisible();
   expect(

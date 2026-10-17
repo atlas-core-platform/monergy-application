@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { act, cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AccessApi } from '../src/access/accessApi';
@@ -271,7 +271,7 @@ it('requires recognition of exact recipient and grant before owner-backed revoca
   await screen.findByText('Unexpired record');
   await user.click(screen.getByRole('button', { name: 'Stop sharing' }));
   const dialog = await screen.findByRole('dialog', { name: 'Confirm stopping a sharing permission' });
-  expect(within(dialog).getByText(/recipient-001/)).toBeVisible();
+  await waitFor(() => expect(within(dialog).getByText(/recipient-001/)).toBeVisible());
   expect(within(dialog).getByText(/grant-001/)).toBeVisible();
   const confirm = within(dialog).getByRole('button', { name: 'Stop sharing' });
   expect(confirm).toBeDisabled();
@@ -372,7 +372,7 @@ it('displays the owner-resolved recipient label on a recorded grant and confirms
   expect(await screen.findByText('advisor@example.com')).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Stop sharing' }));
   const dialog = await screen.findByRole('dialog', { name: 'Confirm stopping a sharing permission' });
-  expect(within(dialog).getByText('advisor@example.com')).toBeVisible();
+  await waitFor(() => expect(within(dialog).getByText('advisor@example.com')).toBeVisible());
   expect(within(dialog).getByText(/ci-1234/)).toBeVisible();
   expect(within(dialog).getByText(/consent-to-advisor/)).toBeVisible();
   expect(within(dialog).queryByText('Recipient label not available')).not.toBeInTheDocument();

@@ -310,8 +310,9 @@ it('requires explicit source-fact selection before updating Financial informatio
     'financial-profile.profile.update',
   ]);
   const user = userEvent.setup();
+  await screen.findByText('financial-facts.txt');
   await user.click(
-    await screen.findByRole('button', { name: 'View document details for financial-facts.txt' }),
+    screen.getByRole('button', { name: 'View document details for financial-facts.txt' }),
   );
   const provenance = screen.getByRole('dialog', { name: 'Document details' });
   await user.click(within(provenance).getByRole('button', { name: 'Extract details' }));
@@ -332,7 +333,7 @@ it('requires explicit source-fact selection before updating Financial informatio
   expect(add).toBeDisabled();
   expect(
     request.mock.calls.filter(([path]) =>
-      String(path).includes('v1/financial-profile/from-processing/'),
+      path.includes('v1/financial-profile/from-processing/'),
     ),
   ).toHaveLength(0);
 
@@ -362,7 +363,7 @@ it('opens the exact authorized source document version from Financial Passport h
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] });
     if (path === 'v1/evidence/source/document-version-002')
       return Promise.resolve({
         documentId: 'document-002',
@@ -375,7 +376,7 @@ it('opens the exact authorized source document version from Financial Passport h
         contentSha256: 'b'.repeat(64),
         receivedAt: '2026-10-15T00:00:00Z',
         dataDurability: 'Temporary data',
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -395,7 +396,7 @@ it('fails closed when a requested source document version is outside current Evi
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ dataDurability: 'Temporary data', items: [] }) as never;
+      return Promise.resolve({ dataDurability: 'Temporary data', items: [] });
     if (path === 'v1/evidence/source/document-version-hidden')
       return Promise.reject(new AccessApiError(404, 'EVIDENCE_VERSION_NOT_FOUND'));
     return Promise.reject(new Error('unexpected product endpoint'));
@@ -444,7 +445,7 @@ it('sorts Documents deterministically and links an exact document version to tru
   ];
   vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ dataDurability: 'Temporary data', items: documents }) as never;
+      return Promise.resolve({ dataDurability: 'Temporary data', items: documents });
     if (path === 'v1/financial-profile')
       return Promise.resolve({
         financialProfileId: 'financial-profile-reference-customer',
@@ -470,7 +471,7 @@ it('sorts Documents deterministically and links an exact document version to tru
           },
           {
             financialFactId: 'ff-future',
-            factType: 'INVESTMENT',
+            factType: 'UNSUPPORTED',
             label: 'Future investment',
             value: 500,
             currency: 'USD',
@@ -485,14 +486,15 @@ it('sorts Documents deterministically and links an exact document version to tru
             },
           },
         ],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
   mount(api, ['evidence.document.read', 'financial-profile.profile.read']);
   const user = userEvent.setup();
 
-  const initial = await screen.findAllByRole('button', { name: /View document details for/ });
+  await screen.findByText('zeta-expense.txt');
+  const initial = screen.getAllByRole('button', { name: /View document details for/ });
   expect(initial[0]).toHaveAccessibleName('View document details for zeta-expense.txt');
   expect(screen.getByText('1 trusted item')).toBeVisible();
   expect(screen.getByText('0 trusted items')).toBeVisible();
@@ -540,7 +542,7 @@ it('shows a truthful no-link state only after Financial Profile has loaded succe
             createdAt: '2026-10-15T08:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/financial-profile')
       return Promise.resolve({
         financialProfileId: 'financial-profile-reference-customer',
@@ -548,7 +550,7 @@ it('shows a truthful no-link state only after Financial Profile has loaded succe
         updatedAt: null,
         dataDurability: 'Temporary data',
         facts: [],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -560,7 +562,7 @@ it('shows a truthful no-link state only after Financial Profile has loaded succe
 
   const drawer = await screen.findByRole('dialog', { name: 'Document details' });
   expect(drawer).toHaveTextContent(
-    'No trusted Income or Expense information currently uses this document version.',
+    'No trusted financial information currently uses this document version.',
   );
   expect(screen.getByText('0 trusted items')).toBeVisible();
 });
@@ -586,7 +588,7 @@ it('never turns an unavailable Financial Profile into a false zero-linked state'
             createdAt: '2026-10-15T08:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/financial-profile')
       return Promise.reject(new AccessApiError(503, 'FINANCIAL_PROFILE_OWNER_UNAVAILABLE'));
     return Promise.reject(new Error('unexpected product endpoint'));
@@ -625,7 +627,7 @@ it('keeps linked Financial information hidden when it is outside the current acc
         createdAt: '2026-10-15T08:00:00Z',
       },
     ],
-  } as never);
+  });
 
   mount(api, ['evidence.document.read']);
   const user = userEvent.setup();
@@ -657,7 +659,7 @@ it('recovers recent durable document-processing activity and opens the matching 
   };
   const request = vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ items: [item], dataDurability: 'Temporary data' }) as never;
+      return Promise.resolve({ items: [item], dataDurability: 'Temporary data' });
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -670,7 +672,7 @@ it('recovers recent durable document-processing activity and opens the matching 
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -702,7 +704,7 @@ it('shows failed processing as a read-only failure state without exposing retry 
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ items: [], dataDurability: 'Temporary data' }) as never;
+      return Promise.resolve({ items: [], dataDurability: 'Temporary data' });
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -715,7 +717,7 @@ it('shows failed processing as a read-only failure state without exposing retry 
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -735,7 +737,7 @@ it('never turns unavailable Job Management activity into an empty history', asyn
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ items: [], dataDurability: 'Temporary data' }) as never;
+      return Promise.resolve({ items: [], dataDurability: 'Temporary data' });
     if (path === 'v1/processing-activity')
       return Promise.reject(new AccessApiError(503, 'JOB_OWNER_UNAVAILABLE'));
     return Promise.reject(new Error('unexpected product endpoint'));
@@ -749,12 +751,12 @@ it('never turns unavailable Job Management activity into an empty history', asyn
   expect(screen.queryByText('No document processing activity yet.')).not.toBeInTheDocument();
 });
 
-it('does not call processing activity when the current access package lacks job read authority', async () => {
+it('does not call processing activity when the current access package lacks job read authority', () => {
   const api = new AccessApi(session);
   const request = vi.spyOn(api, 'product').mockResolvedValue({
     items: [],
     dataDurability: 'Temporary data',
-  } as never);
+  });
 
   mount(api, ['evidence.document.read']);
 
@@ -787,7 +789,7 @@ it('loads authorized Document version history lazily and opens an exact historic
   };
   const request = vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ items: [current], dataDurability: 'Temporary data' }) as never;
+      return Promise.resolve({ items: [current], dataDurability: 'Temporary data' });
     if (path === 'v1/evidence/document-history/versions')
       return Promise.resolve({
         documentId: 'document-history',
@@ -814,7 +816,7 @@ it('loads authorized Document version history lazily and opens an exact historic
             receivedAt: '2026-10-15T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/evidence/source/document-version-001')
       return Promise.resolve({
         documentId: 'document-history',
@@ -827,7 +829,7 @@ it('loads authorized Document version history lazily and opens an exact historic
         contentSha256: '1'.repeat(64),
         receivedAt: '2026-10-15T09:00:00Z',
         dataDurability: 'Temporary data',
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -880,7 +882,7 @@ it('keeps Document history unavailable distinct from a one-version history', asy
           },
         ],
         dataDurability: 'Temporary data',
-      }) as never;
+      });
     if (path === 'v1/evidence/document-history-failure/versions')
       return Promise.reject(new AccessApiError(503, 'EVIDENCE_OWNER_UNAVAILABLE'));
     return Promise.reject(new Error('unexpected product endpoint'));
@@ -888,8 +890,9 @@ it('keeps Document history unavailable distinct from a one-version history', asy
 
   mount(api, ['evidence.document.read']);
   const user = userEvent.setup();
+  await screen.findByText('history-failure.pdf');
   await user.click(
-    await screen.findByRole('button', { name: 'View document details for history-failure.pdf' }),
+    screen.getByRole('button', { name: 'View document details for history-failure.pdf' }),
   );
 
   const drawer = await screen.findByRole('dialog', { name: 'Document details' });
@@ -920,20 +923,21 @@ it('fails closed when Document history response identity does not match the sele
           },
         ],
         dataDurability: 'Temporary data',
-      }) as never;
+      });
     if (path === 'v1/evidence/document-history-expected/versions')
       return Promise.resolve({
         documentId: 'document-history-other',
         dataDurability: 'Temporary data',
         versions: [],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
   mount(api, ['evidence.document.read']);
   const user = userEvent.setup();
+  await screen.findByText('history-identity.pdf');
   await user.click(
-    await screen.findByRole('button', { name: 'View document details for history-identity.pdf' }),
+    screen.getByRole('button', { name: 'View document details for history-identity.pdf' }),
   );
 
   const drawer = await screen.findByRole('dialog', { name: 'Document details' });
@@ -960,7 +964,7 @@ it('reopens a completed processing result read-only from durable activity', asyn
   };
   const request = vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ items: [document], dataDurability: 'Temporary data' }) as never;
+      return Promise.resolve({ items: [document], dataDurability: 'Temporary data' });
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -973,7 +977,7 @@ it('reopens a completed processing result read-only from durable activity', asyn
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/processing-result/job-processing-recovered')
       return Promise.resolve({
         jobId: 'job-processing-recovered',
@@ -1005,7 +1009,7 @@ it('reopens a completed processing result read-only from durable activity', asyn
             documentVersionId: document.documentVersionId,
           },
         ],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -1048,7 +1052,7 @@ it('does not expose recovered processing content with job-read alone', async () 
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -1057,7 +1061,7 @@ it('does not expose recovered processing content with job-read alone', async () 
   expect(await screen.findByText('Completed')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'View result' })).not.toBeInTheDocument();
   expect(
-    request.mock.calls.some(([path]) => String(path).startsWith('v1/processing-result/')),
+    request.mock.calls.some(([path]) => path.startsWith('v1/processing-result/')),
   ).toBe(false);
 });
 
@@ -1065,7 +1069,7 @@ it('keeps failed processing activity as status only and never offers a recovered
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ items: [], dataDurability: 'Temporary data' }) as never;
+      return Promise.resolve({ items: [], dataDurability: 'Temporary data' });
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -1078,7 +1082,7 @@ it('keeps failed processing activity as status only and never offers a recovered
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -1109,7 +1113,7 @@ it('fails closed when a recovered processing result is no longer available', asy
           },
         ],
         dataDurability: 'Temporary data',
-      }) as never;
+      });
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -1122,7 +1126,7 @@ it('fails closed when a recovered processing result is no longer available', asy
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/processing-result/job-processing-gone')
       return Promise.reject(new AccessApiError(404, 'PROCESSING_RESULT_NOT_FOUND'));
     return Promise.reject(new Error('unexpected product endpoint'));
@@ -1188,9 +1192,9 @@ it('resumes explicit Financial review from a recovered completed result', async 
   };
   const request = vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
     if (path === 'v1/evidence')
-      return Promise.resolve({ items: [document], dataDurability: 'Temporary data' }) as never;
+      return Promise.resolve({ items: [document], dataDurability: 'Temporary data' });
     if (path === 'v1/financial-profile')
-      return Promise.resolve(emptyProfile) as never;
+      return Promise.resolve(emptyProfile);
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -1203,7 +1207,7 @@ it('resumes explicit Financial review from a recovered completed result', async 
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/processing-result/job-processing-resume')
       return Promise.resolve({
         jobId: 'job-processing-resume',
@@ -1224,7 +1228,7 @@ it('resumes explicit Financial review from a recovered completed result', async 
             documentVersionId: document.documentVersionId,
           },
         ],
-      }) as never;
+      });
     if (
       path === 'v1/financial-profile/from-processing/job-processing-resume' &&
       method === 'POST'
@@ -1238,7 +1242,7 @@ it('resumes explicit Financial review from a recovered completed result', async 
       return Promise.resolve({
         profile: promotedProfile,
         confirmed: 1,
-      }) as never;
+      });
     }
     return Promise.reject(new Error('unexpected product endpoint'));
   });
@@ -1303,7 +1307,7 @@ it('keeps recovered review read-only when Financial Profile update is not author
           },
         ],
         dataDurability: 'Temporary data',
-      }) as never;
+      });
     if (path === 'v1/financial-profile')
       return Promise.resolve({
         financialProfileId: 'financial-profile-reference-customer',
@@ -1311,7 +1315,7 @@ it('keeps recovered review read-only when Financial Profile update is not author
         updatedAt: null,
         dataDurability: 'Temporary data',
         facts: [],
-      }) as never;
+      });
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -1324,7 +1328,7 @@ it('keeps recovered review read-only when Financial Profile update is not author
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/processing-result/job-processing-readonly-resume')
       return Promise.resolve({
         jobId: 'job-processing-readonly-resume',
@@ -1345,7 +1349,7 @@ it('keeps recovered review read-only when Financial Profile update is not author
             documentVersionId: 'document-version-readonly-resume',
           },
         ],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -1421,7 +1425,7 @@ it('reconciles mixed recovered candidates and submits only still-untrusted sourc
             createdAt: '2026-10-16T08:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/financial-profile')
       return Promise.resolve({
         financialProfileId: 'financial-profile-reference-customer',
@@ -1429,7 +1433,7 @@ it('reconciles mixed recovered candidates and submits only still-untrusted sourc
         updatedAt: '2026-10-16T09:00:00Z',
         dataDurability: 'Temporary data',
         facts: [trustedIncome],
-      }) as never;
+      });
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -1442,7 +1446,7 @@ it('reconciles mixed recovered candidates and submits only still-untrusted sourc
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/processing-result/job-processing-mixed-review')
       return Promise.resolve({
         jobId: 'job-processing-mixed-review',
@@ -1474,7 +1478,7 @@ it('reconciles mixed recovered candidates and submits only still-untrusted sourc
             documentVersionId,
           },
         ],
-      }) as never;
+      });
     if (
       path === 'v1/financial-profile/from-processing/job-processing-mixed-review' &&
       method === 'POST'
@@ -1493,7 +1497,7 @@ it('reconciles mixed recovered candidates and submits only still-untrusted sourc
           dataDurability: 'Temporary data',
           facts: [trustedIncome, trustedExpense],
         },
-      }) as never;
+      });
     }
     return Promise.reject(new Error('unexpected product endpoint'));
   });
@@ -1590,7 +1594,7 @@ it('shows an all-trusted recovered review without duplicate promotion controls a
             createdAt: '2026-10-16T08:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/financial-profile')
       return Promise.resolve({
         financialProfileId: 'financial-profile-reference-customer',
@@ -1598,7 +1602,7 @@ it('shows an all-trusted recovered review without duplicate promotion controls a
         updatedAt: '2026-10-16T09:01:00Z',
         dataDurability: 'Temporary data',
         facts,
-      }) as never;
+      });
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -1611,7 +1615,7 @@ it('shows an all-trusted recovered review without duplicate promotion controls a
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/processing-result/job-processing-all-trusted')
       return Promise.resolve({
         jobId: 'job-processing-all-trusted',
@@ -1643,7 +1647,7 @@ it('shows an all-trusted recovered review without duplicate promotion controls a
             documentVersionId,
           },
         ],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -1666,7 +1670,7 @@ it('shows an all-trusted recovered review without duplicate promotion controls a
   ).not.toBeInTheDocument();
   expect(
     request.mock.calls.some(([path]) =>
-      String(path).startsWith('v1/financial-profile/from-processing/'),
+      path.startsWith('v1/financial-profile/from-processing/'),
     ),
   ).toBe(false);
 });
@@ -1693,7 +1697,7 @@ it('keeps recovered review non-selectable when trusted Financial state is unavai
             createdAt: '2026-10-16T08:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/financial-profile')
       return Promise.reject(new AccessApiError(503, 'FINANCIAL_PROFILE_OWNER_UNAVAILABLE'));
     if (path === 'v1/processing-activity')
@@ -1708,7 +1712,7 @@ it('keeps recovered review non-selectable when trusted Financial state is unavai
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/processing-result/job-processing-profile-unavailable')
       return Promise.resolve({
         jobId: 'job-processing-profile-unavailable',
@@ -1729,7 +1733,7 @@ it('keeps recovered review non-selectable when trusted Financial state is unavai
             documentVersionId,
           },
         ],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -1776,7 +1780,7 @@ it('does not reconcile a source fact from a different document version as alread
             createdAt: '2026-10-16T08:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/financial-profile')
       return Promise.resolve({
         financialProfileId: 'financial-profile-reference-customer',
@@ -1801,7 +1805,7 @@ it('does not reconcile a source fact from a different document version as alread
             },
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -1814,7 +1818,7 @@ it('does not reconcile a source fact from a different document version as alread
             updatedAt: '2026-10-16T09:00:00Z',
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/processing-result/job-processing-current-review')
       return Promise.resolve({
         jobId: 'job-processing-current-review',
@@ -1835,7 +1839,7 @@ it('does not reconcile a source fact from a different document version as alread
             documentVersionId,
           },
         ],
-      }) as never;
+      });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -1855,7 +1859,7 @@ it('does not reconcile a source fact from a different document version as alread
     within(drawer).getByRole('checkbox', {
       name: 'Add Employment income to financial information',
     }),
-  ).toBeVisible();
+  ).toBeEnabled();
 });
 
 it('requires explicit review of a Loan amount before updating authoritative Financial information', async () => {
@@ -1958,8 +1962,9 @@ it('requires explicit review of a Loan amount before updating authoritative Fina
     'financial-profile.profile.update',
   ]);
   const user = userEvent.setup();
+  await screen.findByText('loan-statement.txt');
   await user.click(
-    await screen.findByRole('button', { name: 'View document details for loan-statement.txt' }),
+    screen.getByRole('button', { name: 'View document details for loan-statement.txt' }),
   );
   const provenance = screen.getByRole('dialog', { name: 'Document details' });
   await user.click(within(provenance).getByRole('button', { name: 'Extract details' }));
@@ -1980,7 +1985,7 @@ it('requires explicit review of a Loan amount before updating authoritative Fina
   expect(add).toBeDisabled();
   expect(
     request.mock.calls.filter(([path]) =>
-      String(path).includes('v1/financial-profile/from-processing/'),
+      path.includes('v1/financial-profile/from-processing/'),
     ),
   ).toHaveLength(0);
 

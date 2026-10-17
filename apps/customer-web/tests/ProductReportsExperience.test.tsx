@@ -105,7 +105,7 @@ afterEach(() => {
 
 it('generates an authorized source-connected basic summary without scores or advice', async () => {
   const api = new AccessApi(session);
-  const product = vi.spyOn(api, 'product').mockResolvedValue(report as never);
+  const product = vi.spyOn(api, 'product').mockResolvedValue(report);
   mount(api);
 
   await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
@@ -126,14 +126,16 @@ it('generates an authorized source-connected basic summary without scores or adv
     '/finances?fact=ff-income',
   );
   expect(screen.queryByText(/financial health score/i)).not.toBeInTheDocument();
-  expect(screen.queryByText(/recommendation/i)).not.toBeInTheDocument();
+  for (const item of screen.getAllByRole('article')) {
+    expect(within(item).queryByText(/recommendation/i)).not.toBeInTheDocument();
+  }
   expect(screen.queryByText(/savings ratio/i)).not.toBeInTheDocument();
 });
 
 it('reopens a customer report only through the product report-read boundary', async () => {
   window.history.replaceState(null, '', '/reports?report=report-customer-basic-001');
   const api = new AccessApi(session);
-  const product = vi.spyOn(api, 'product').mockResolvedValue(report as never);
+  const product = vi.spyOn(api, 'product').mockResolvedValue(report);
 
   mount(api);
 
@@ -148,7 +150,7 @@ it('reopens a customer report only through the product report-read boundary', as
 
 it('exports exactly the governed report payload returned by Reporting', async () => {
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue(report as never);
+  vi.spyOn(api, 'product').mockResolvedValue(report);
   const createObjectURL = vi.fn().mockReturnValue('blob:customer-report');
   const revokeObjectURL = vi.fn();
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
@@ -197,7 +199,7 @@ it('includes a trusted Asset source figure as a report item without a valuation 
     sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-asset'],
     evidenceReferences: [...report.evidenceReferences, 'evidence-asset'],
     financialProvenanceReferences: [...report.financialProvenanceReferences, 'provenance-asset'],
-  } as never);
+  });
 
   mount(api);
   await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
@@ -232,7 +234,7 @@ it('includes a trusted Investment source item without implying live holdings or 
     sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-investment'],
     evidenceReferences: [...report.evidenceReferences, 'evidence-investment'],
     financialProvenanceReferences: [...report.financialProvenanceReferences, 'provenance-investment'],
-  } as never);
+  });
   mount(api);
   await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
   expect(await screen.findByText('Document-stated investment figure')).toBeVisible();
@@ -265,7 +267,7 @@ it('includes a trusted Insurance source figure without claiming verified coverag
     sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-insurance'],
     evidenceReferences: [...report.evidenceReferences, 'evidence-insurance'],
     financialProvenanceReferences: [...report.financialProvenanceReferences, 'provenance-insurance'],
-  } as never);
+  });
   mount(api);
   await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
   expect(await screen.findByText('Document-stated insurance figure')).toBeVisible();

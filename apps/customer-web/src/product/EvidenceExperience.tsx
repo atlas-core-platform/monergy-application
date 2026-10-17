@@ -614,7 +614,7 @@ export default function EvidenceExperience() {
           <h1>Keep your financial documents together.</h1>
           <p>
             Add documents to {product?.customerName ?? 'your workspace'}, review supported details,
-            and see which trusted Income or Expense items use each exact document version.
+            and see which trusted financial items use each exact document version.
           </p>
         </div>
         <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
@@ -1410,7 +1410,7 @@ export default function EvidenceExperience() {
                 </div>
               ) : (
                 <p className="product-document-links-note">
-                  No trusted Income, Expense, Loan, Asset, Investment or Insurance source information currently uses this document version.
+                  No trusted financial information currently uses this document version.
                 </p>
               )}
             </section>

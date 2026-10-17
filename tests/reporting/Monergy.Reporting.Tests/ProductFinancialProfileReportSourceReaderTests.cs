@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Http;
@@ -113,7 +114,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         return new(new TestHttpClientFactory(handler), accessor, configuration);
     }
 
-    private static IHttpContextAccessor Accessor()
+    private static HttpContextAccessor Accessor()
     {
         var http = new DefaultHttpContext();
         http.Features.Set(new TenantBoundaryProof(
@@ -166,7 +167,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         {
             var request = System.Text.Json.JsonSerializer.Deserialize<ContractRequest<GetFinancialProfile>>(
                 body, ContractJson.Options)!;
-            var at = DateTimeOffset.Parse("2026-10-16T09:00:00Z");
+            var at = DateTimeOffset.Parse("2026-10-16T09:00:00Z", CultureInfo.InvariantCulture);
             var facts = new[]
             {
                 new AuthoritativeFinancialFact(
@@ -228,7 +229,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                 "reviewed-document-facts/1.0.0",
                 "A100",
                 "document-intelligence",
-                DateTimeOffset.Parse("2026-10-16T08:00:00Z"),
+                DateTimeOffset.Parse("2026-10-16T08:00:00Z", CultureInfo.InvariantCulture),
                 "financial-correlation",
                 null));
         }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -79,7 +80,7 @@ public sealed class ProductSearchProjectionSourceTests
             item.Source.ProvenanceReferenceId == "provenance-investment");
         Assert.Contains(records, item => item.Source.SourceObjectId == "ff-insurance" && item.Source.ProvenanceReferenceId == "provenance-insurance" && item.SearchableText.Contains("not verified coverage", StringComparison.Ordinal));
         Assert.Contains(records, item => item.Source.SourceObjectId == "ff-tax" && item.Source.ProvenanceReferenceId == "provenance-tax" && item.SearchableText.Contains("not assessed liability", StringComparison.Ordinal));
-        Assert.DoesNotContain(records, item => item.Source.SourceObjectId == "ff-unsupported-tax");
+        Assert.DoesNotContain(records, item => item.Source.SourceObjectId == "ff-unsupported");
         Assert.DoesNotContain(records, item => item.ResultType == SearchResultType.Calculation);
     }
 
@@ -232,8 +233,8 @@ public sealed class ProductSearchProjectionSourceTests
                 "text/plain",
                 100,
                 new string('A', 64),
-                DateTimeOffset.Parse("2026-10-16T08:00:00Z"),
-                DateTimeOffset.Parse("2026-10-16T08:00:00Z"));
+                DateTimeOffset.Parse("2026-10-16T08:00:00Z", CultureInfo.InvariantCulture),
+                DateTimeOffset.Parse("2026-10-16T08:00:00Z", CultureInfo.InvariantCulture));
             return Success(request, new CustomerEvidenceLibrary("reference-customer", [item]));
         }
 
@@ -241,7 +242,7 @@ public sealed class ProductSearchProjectionSourceTests
         {
             var request = JsonSerializer.Deserialize<ContractRequest<GetFinancialProfile>>(
                 body, ContractJson.Options)!;
-            var at = DateTimeOffset.Parse("2026-10-16T09:00:00Z");
+            var at = DateTimeOffset.Parse("2026-10-16T09:00:00Z", CultureInfo.InvariantCulture);
             IReadOnlyList<AuthoritativeFinancialFact> facts =
             [
                 new(
@@ -273,8 +274,8 @@ public sealed class ProductSearchProjectionSourceTests
                     "TAX", "Tax source figure", 14000m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-tax"),
                 new(
-                    "ff-unsupported-tax", "financial-profile-reference-customer", "reference-customer",
-                    "TAX", "Unsupported tax fixture", 10m, "USD",
+                    "ff-unsupported", "financial-profile-reference-customer", "reference-customer",
+                    "UNSUPPORTED", "Unsupported source fixture", 10m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-tax"),
             ];
             return Success(request, new FinancialProfileDetails(
@@ -308,7 +309,7 @@ public sealed class ProductSearchProjectionSourceTests
                 "reviewed-document-facts/1.0.0",
                 "A100",
                 "document-intelligence",
-                DateTimeOffset.Parse("2026-10-16T08:00:00Z"),
+                DateTimeOffset.Parse("2026-10-16T08:00:00Z", CultureInfo.InvariantCulture),
                 "financial-correlation",
                 null));
         }
