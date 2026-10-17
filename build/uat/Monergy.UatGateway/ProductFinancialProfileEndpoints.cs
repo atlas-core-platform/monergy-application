@@ -45,7 +45,7 @@ public sealed record ProductFinancialFactDetailView(
 public static class ProductFinancialProfileEndpoints
 {
     private static readonly HashSet<string> SupportedFactTypes = new(StringComparer.Ordinal)
-    { "INCOME", "EXPENSE", "LOAN", "ASSET", "INVESTMENT", "INSURANCE" };
+    { "INCOME", "EXPENSE", "LOAN", "ASSET", "INVESTMENT", "INSURANCE", "TAX" };
 
     public static void AddProductFinancialProfile(this WebApplicationBuilder builder)
     {

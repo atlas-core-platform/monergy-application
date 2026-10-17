@@ -96,7 +96,7 @@ export interface ProductProcessingActivityView {
 
 export interface ProductRecoveredProcessingFact {
   sourceFactId: string;
-  factType: 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT' | 'INSURANCE';
+  factType: 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT' | 'INSURANCE' | 'TAX';
   label: string;
   candidateValue: number;
   currency: string;
@@ -300,7 +300,7 @@ export async function getRecoveredProcessingResult(
     result.facts.some(
       (fact) =>
         !fact ||
-        (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE' && fact.factType !== 'LOAN' && fact.factType !== 'ASSET' && fact.factType !== 'INVESTMENT' && fact.factType !== 'INSURANCE') ||
+        (fact.factType !== 'INCOME' && fact.factType !== 'EXPENSE' && fact.factType !== 'LOAN' && fact.factType !== 'ASSET' && fact.factType !== 'INVESTMENT' && fact.factType !== 'INSURANCE' && fact.factType !== 'TAX') ||
         fact.documentVersionId !== result.documentVersionId ||
         fact.confidence < 0 ||
         fact.confidence > 1,
