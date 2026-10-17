@@ -80,11 +80,17 @@ public sealed class StateAndSecurityTests
             "LOAN|Car loan amount stated on document|400000.00|INR|2026-10-16|line:1|0.96\n" +
             "ASSET|Document-stated property figure|900000.00|INR|2026-10-16|line:2|0.95\n" +
             "INVESTMENT|Investment amount stated in document|50000.00|INR|2026-10-16|line:3|0.94\n" +
-            "INSURANCE|Insurance amount recorded in document|120000.00|INR|2026-10-16|line:4|0.93");
+            "INSURANCE|Insurance amount recorded in document|120000.00|INR|2026-10-16|line:4|0.93\n" +
+            "TAX|Tax figure stated on document|14000.00|INR|2026-10-16|line:5|0.92");
         var facts = await new FixtureDocumentExtractor().ExtractAsync(
             source, "processing-loan-test", CancellationToken.None);
 
-        Assert.Equal(4, facts.Count);
+        Assert.Equal(5, facts.Count);
+        var tax = Assert.Single(facts, item => item.FactType == "TAX");
+        Assert.Equal(14000m, tax.CandidateValue);
+        Assert.Equal("document-version-loan-test", tax.DocumentVersionId);
+        Assert.Equal("evidence-loan-test", tax.EvidenceId);
+        // Tax source figure is not assessed tax, tax owed or refund authority.
         var investment = Assert.Single(facts, item => item.FactType == "INVESTMENT");
         var insurance = Assert.Single(facts, item => item.FactType == "INSURANCE");
         Assert.Equal("Insurance amount recorded in document", insurance.Label);
