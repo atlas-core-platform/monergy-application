@@ -209,3 +209,36 @@ it('includes a trusted Asset source figure as a report item without a valuation 
   expect(sources[2]).toHaveAttribute('href', '/finances?fact=ff-asset');
   expect(screen.queryByText(/verified net worth|approved collateral valuation/i)).not.toBeInTheDocument();
 });
+
+
+it('includes a trusted Investment source item without implying live holdings or NAV', async () => {
+  const api = new AccessApi(session);
+  const sourceItem = {
+    label: 'Document-stated investment figure',
+    value: 500,
+    unit: 'USD',
+    source: {
+      sourceType: 'FinancialFact',
+      sourceId: 'ff-investment',
+      authoritativeOwner: 'Financial Profile Service',
+      evidenceReferenceId: 'evidence-investment',
+      financialProvenanceReferenceId: 'provenance-investment',
+      calculationLineageReferenceId: null,
+    },
+  };
+  vi.spyOn(api, 'product').mockResolvedValue({
+    ...report,
+    items: [...report.items, sourceItem],
+    sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-investment'],
+    evidenceReferences: [...report.evidenceReferences, 'evidence-investment'],
+    financialProvenanceReferences: [...report.financialProvenanceReferences, 'provenance-investment'],
+  } as never);
+  mount(api);
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
+  expect(await screen.findByText('Document-stated investment figure')).toBeVisible();
+  expect(screen.getByText('$500.00')).toBeVisible();
+  expect(screen.getByText(/not live securities holdings, current NAV, market prices or portfolio returns/i)).toBeVisible();
+  const links = screen.getAllByRole('link', { name: 'View source & history' });
+  expect(links[2]).toHaveAttribute('href', '/finances?fact=ff-investment');
+  expect(screen.queryByText(/verified brokerage balance|investment performance score/i)).not.toBeInTheDocument();
+});

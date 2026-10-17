@@ -28,7 +28,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
 
         Assert.NotNull(snapshot);
         Assert.Equal("reference-customer", snapshot.CustomerId);
-        Assert.Equal(4, snapshot.Items.Length);
+        Assert.Equal(5, snapshot.Items.Length);
         Assert.Contains(snapshot.Items, item =>
             item.Label == "Employment income" &&
             item.Value == 125000m &&
@@ -49,7 +49,14 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             item.Source.EvidenceReferenceId == "evidence-asset" &&
             item.Source.FinancialProvenanceReferenceId == "provenance-asset" &&
             item.Source.CalculationLineageReferenceId is null);
-        Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-future");
+        Assert.Contains(snapshot.Items, item =>
+            item.Label == "Investment source figure" &&
+            item.Value == 500m &&
+            item.Source.SourceId == "ff-investment" &&
+            item.Source.EvidenceReferenceId == "evidence-investment" &&
+            item.Source.FinancialProvenanceReferenceId == "provenance-investment" &&
+            item.Source.CalculationLineageReferenceId is null);
+        Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-insurance");
         Assert.All(handler.Requests, request =>
         {
             Assert.Equal("T001", request.Tenant);
@@ -178,9 +185,13 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                     "ASSET", "Asset source figure", 900000m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-asset"),
                 new AuthoritativeFinancialFact(
-                    "ff-future", "financial-profile-reference-customer", "reference-customer",
-                    "INVESTMENT", "Future gated investment", 500m, "USD",
-                    new DateOnly(2026, 10, 1), 1, "provenance-future"),
+                    "ff-investment", "financial-profile-reference-customer", "reference-customer",
+                    "INVESTMENT", "Investment source figure", 500m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-investment"),
+                new AuthoritativeFinancialFact(
+                    "ff-insurance", "financial-profile-reference-customer", "reference-customer",
+                    "INSURANCE", "Future unsupported insurance", 100m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-insurance"),
             };
             return Success(request, new FinancialProfileDetails(
                 "financial-profile-reference-customer",
@@ -197,14 +208,15 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             var income = request.Payload.FinancialProvenanceId == "provenance-income";
             var loan = request.Payload.FinancialProvenanceId == "provenance-loan";
             var asset = request.Payload.FinancialProvenanceId == "provenance-asset";
+            var investment = request.Payload.FinancialProvenanceId == "provenance-investment";
             var customer = CrossCustomerProvenance ? "other-customer" : "reference-customer";
             return Success(request, new FinancialProvenance(
                 request.Payload.FinancialProvenanceId,
-                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : "ff-expense",
+                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : investment ? "ff-investment" : "ff-expense",
                 customer,
-                income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : "evidence-expense",
-                income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : "document-version-expense",
-                income ? "source-income" : loan ? "source-loan" : asset ? "source-asset" : "source-expense",
+                income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : investment ? "evidence-investment" : "evidence-expense",
+                income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : investment ? "document-version-investment" : "document-version-expense",
+                income ? "source-income" : loan ? "source-loan" : asset ? "source-asset" : investment ? "source-investment" : "source-expense",
                 "extractor/1",
                 "validator/1",
                 "reviewed-document-facts/1.0.0",

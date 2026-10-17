@@ -18,7 +18,7 @@ public sealed class ProductFinancialProfileReportSourceReader(
 {
     public const string FinancialProfileClient = "product-reporting-financial-profile";
     private static readonly HashSet<string> SupportedFactTypes = new(StringComparer.Ordinal)
-    { "INCOME", "EXPENSE", "LOAN", "ASSET" };
+    { "INCOME", "EXPENSE", "LOAN", "ASSET", "INVESTMENT" };
     private readonly Uri endpoint = TenantAccessIntegration.LoopbackRoot(
         TenantAccessIntegration.Required(configuration, "Monergy:ProductReporting:FinancialProfileUrl"));
 
