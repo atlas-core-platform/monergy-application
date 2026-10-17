@@ -76,9 +76,9 @@ export default function ProductSearchExperience() {
           <p className="workspace-eyebrow">SEARCH</p>
           <h1>Find information already in your Monergy workspace.</h1>
           <p>
-            Search your current Documents and trusted Income, Expense, Loan, Asset or Investment source facts. Results are
+            Search your current Documents and trusted Income, Expense, Loan, Asset, Investment or Insurance source facts. Results are
             rebuilt from the current authorized sources and link back to the exact document or
-            financial item. Loan source amounts are not verified outstanding balances, EMI or eligibility; Asset source figures are not certified valuations or net worth; Investment source figures are not live holdings, NAV or market values. This search uses lexical matching only.
+            financial item. Loan source amounts are not verified outstanding balances, EMI or eligibility; Asset source figures are not certified valuations or net worth; Investment source figures are not live holdings, NAV or market values; Insurance source figures are not verified policy coverage, claim benefits, premiums or cash value. This search uses lexical matching only.
           </p>
         </div>
         <Tag className="product-environment">

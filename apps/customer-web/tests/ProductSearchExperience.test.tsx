@@ -253,3 +253,36 @@ it('finds a reviewed Investment source amount with exact source history but no l
   expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute('href', '/finances?fact=ff-investment');
   expect(screen.queryByText(/portfolio return|NAV|verified current price/i)).not.toBeInTheDocument();
 });
+
+
+it('finds Insurance source figures without asserting verified policy coverage', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    query: 'insurance',
+    matchMode: 'Lexical',
+    items: [{
+      searchRecordId: 'search-financial-ff-insurance',
+      resultType: 'Financial',
+      title: 'Document-stated insurance figure',
+      summary: 'Insurance source figure (not verified coverage or claim benefit) 100 USD effective 2026-10-01',
+      authoritativeOwner: 'Financial Profile Service',
+      representationState: 'DERIVED_REBUILDABLE',
+      score: 1,
+      source: {
+        sourceObjectType: 'FinancialFact',
+        sourceObjectId: 'ff-insurance',
+        sourceReferenceId: 'financial-profile-reference-customer',
+        provenanceReferenceId: 'provenance-insurance',
+        calculationLineageReferenceId: null,
+      },
+    }],
+  } as never);
+  mount(api);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Search query'), 'insurance');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+  expect(await screen.findByText('1 result for “insurance”')).toBeVisible();
+  expect(screen.getByText(/not verified coverage or claim benefit/i)).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute('href', '/finances?fact=ff-insurance');
+  expect(screen.queryByText(/claim approved|policy benefit certified/i)).not.toBeInTheDocument();
+});

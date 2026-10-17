@@ -57,7 +57,7 @@ public sealed class ProductSearchProjectionSourceTests
             CancellationToken.None);
 
         var records = source.ReadForCustomer("reference-customer");
-        Assert.Equal(5, records.Length);
+        Assert.Equal(6, records.Length);
         Assert.Contains(records, item =>
             item.ResultType == SearchResultType.Financial &&
             item.Title == "Employment income" &&
@@ -77,7 +77,8 @@ public sealed class ProductSearchProjectionSourceTests
             item.SearchableText.Contains("not live market value", StringComparison.Ordinal) &&
             item.Source.SourceObjectId == "ff-investment" &&
             item.Source.ProvenanceReferenceId == "provenance-investment");
-        Assert.DoesNotContain(records, item => item.Source.SourceObjectId == "ff-insurance");
+        Assert.Contains(records, item => item.Source.SourceObjectId == "ff-insurance" && item.Source.ProvenanceReferenceId == "provenance-insurance" && item.SearchableText.Contains("not verified coverage", StringComparison.Ordinal));
+        Assert.DoesNotContain(records, item => item.Source.SourceObjectId == "ff-unsupported-tax");
         Assert.DoesNotContain(records, item => item.ResultType == SearchResultType.Calculation);
     }
 
@@ -108,9 +109,9 @@ public sealed class ProductSearchProjectionSourceTests
             CancellationToken.None);
 
         var records = documents.ReadForCustomer("reference-customer");
-        Assert.Equal(6, records.Length);
+        Assert.Equal(7, records.Length);
         Assert.Single(records, item => item.ResultType == SearchResultType.Document);
-        Assert.Equal(5, records.Count(item => item.ResultType == SearchResultType.Financial));
+        Assert.Equal(6, records.Count(item => item.ResultType == SearchResultType.Financial));
     }
 
     [Fact]
@@ -264,8 +265,12 @@ public sealed class ProductSearchProjectionSourceTests
                     new DateOnly(2026, 10, 1), 1, "provenance-investment"),
                 new(
                     "ff-insurance", "financial-profile-reference-customer", "reference-customer",
-                    "INSURANCE", "Future unsupported insurance", 100m, "USD",
+                    "INSURANCE", "Document-stated insurance figure", 100m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-insurance"),
+                new(
+                    "ff-unsupported-tax", "financial-profile-reference-customer", "reference-customer",
+                    "TAX", "Unsupported tax fixture", 10m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-tax"),
             ];
             return Success(request, new FinancialProfileDetails(
                 "financial-profile-reference-customer",
@@ -283,14 +288,15 @@ public sealed class ProductSearchProjectionSourceTests
             var loan = request.Payload.FinancialProvenanceId == "provenance-loan";
             var asset = request.Payload.FinancialProvenanceId == "provenance-asset";
             var investment = request.Payload.FinancialProvenanceId == "provenance-investment";
+            var insurance = request.Payload.FinancialProvenanceId == "provenance-insurance";
             var customer = CrossCustomerProvenance ? "other-customer" : "reference-customer";
             return Success(request, new FinancialProvenance(
                 request.Payload.FinancialProvenanceId,
-                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : investment ? "ff-investment" : "ff-expense", 
+                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : investment ? "ff-investment" : insurance ? "ff-insurance" : "ff-expense", 
                 customer,
-                income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : investment ? "evidence-investment" : "evidence-expense", 
-                income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : investment ? "document-version-investment" : "document-version-expense", 
-                income ? "source-income" : loan ? "source-loan" : asset ? "source-asset" : investment ? "source-investment" : "source-expense", 
+                income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : investment ? "evidence-investment" : insurance ? "evidence-insurance" : "evidence-expense", 
+                income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : investment ? "document-version-investment" : insurance ? "document-version-insurance" : "document-version-expense", 
+                income ? "source-income" : loan ? "source-loan" : asset ? "source-asset" : investment ? "source-investment" : insurance ? "source-insurance" : "source-expense", 
                 "extractor/1",
                 "validator/1",
                 "reviewed-document-facts/1.0.0",
