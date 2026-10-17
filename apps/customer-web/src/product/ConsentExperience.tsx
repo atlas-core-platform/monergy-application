@@ -92,8 +92,15 @@ export default function ConsentExperience() {
   const [revokeIntent, setRevokeIntent] = useState<RevokeIntent | null>(null);
   const [revokeConfirmed, setRevokeConfirmed] = useState(false);
   const [revokeBusy, setRevokeBusy] = useState(false);
-  const [revokeMessage, setRevokeMessage] = useState('');
-  const [revokeError, setRevokeError] = useState('');
+  const [revokeOutcome, setRevokeOutcome] = useState<{
+    api: AccessApi; scope: string; level: 'info' | 'warning'; text: string;
+  } | null>(null);
+  const currentContext = useRef({ api, scope });
+  currentContext.current = { api, scope };
+  const revokeMessage = revokeOutcome?.api === api && revokeOutcome.scope === scope &&
+    revokeOutcome.level === 'info' ? revokeOutcome.text : '';
+  const revokeError = revokeOutcome?.api === api && revokeOutcome.scope === scope &&
+    revokeOutcome.level === 'warning' ? revokeOutcome.text : '';
   // Scope the rendered data as well as the request: effects run after rendering.
   const current = state?.api === api && state.scope === scope ? state : null;
   const overview = current?.overview ?? null;
@@ -144,14 +151,14 @@ export default function ConsentExperience() {
     const controller = new AbortController();
     activeMutation.current = controller;
     setRevokeBusy(true);
-    setRevokeError('');
-    setRevokeMessage('');
+    setRevokeOutcome(null);
     const operationId = crypto.randomUUID().replaceAll('-', '');
     try {
       const receipt = await api.revokeCustomerConsent<ConsentRevocationReceipt>(
         customerId, grant.id, overview.version, operationId, controller.signal,
       );
-      if (controller.signal.aborted || activeMutation.current !== controller) return;
+      if (controller.signal.aborted || activeMutation.current !== controller ||
+          currentContext.current.api !== api || currentContext.current.scope !== scope) return;
       if (!receipt || receipt.id !== grant.id || receipt.customerId !== customerId ||
           receipt.actorId !== grant.actorId || receipt.operation !== 'Revoked' ||
           receipt.version !== overview.version + 1 || !receipt.evidenceReference) {
@@ -160,15 +167,16 @@ export default function ConsentExperience() {
       setRevokeIntent(null);
       setRevokeConfirmed(false);
       setState({ api, scope, overview: null, busy: true, error: '' });
-      setRevokeMessage('The Consent Service confirmed your revocation. Refreshing recorded permissions.');
+      setRevokeOutcome({ api, scope, level: 'info', text: 'The Consent Service confirmed your revocation. Refreshing recorded permissions.' });
       await refresh();
     } catch {
-      if (!controller.signal.aborted && activeMutation.current === controller) {
+      if (!controller.signal.aborted && activeMutation.current === controller &&
+          currentContext.current.api === api && currentContext.current.scope === scope) {
         // A lost response can follow a committed mutation. Never guess or
         // automatically submit a new revocation operation.
         setRevokeIntent(null);
         setRevokeConfirmed(false);
-        setRevokeError("The revocation outcome couldn't be confirmed. Refresh permissions before attempting anything else.");
+        setRevokeOutcome({ api, scope, level: 'warning', text: "The revocation outcome couldn't be confirmed. Refresh permissions before attempting anything else." });
         setState({ api, scope, overview: null, busy: false, error: '' });
       }
     } finally {
@@ -258,8 +266,7 @@ export default function ConsentExperience() {
                       <Button danger disabled={busy || revokeBusy} onClick={() => {
                         setRevokeIntent({ api: api!, scope, grantId: item.id, actorId: item.actorId });
                         setRevokeConfirmed(false);
-                        setRevokeError('');
-                        setRevokeMessage('');
+                        setRevokeOutcome(null);
                       }}>Stop sharing</Button>
                     )}
                     <details>
