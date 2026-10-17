@@ -303,7 +303,8 @@ public sealed class FixtureDocumentExtractor : IDocumentExtractor
         string.Equals(value, "EXPENSE", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "LOAN", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "ASSET", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "INVESTMENT", StringComparison.OrdinalIgnoreCase);
+        string.Equals(value, "INVESTMENT", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "INSURANCE", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class ReferenceExecutionPolicy : IExecutionPolicy

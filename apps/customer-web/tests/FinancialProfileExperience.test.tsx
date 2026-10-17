@@ -411,3 +411,37 @@ it('shows reviewed Investment source figures with exact source, not a market val
   expect(window.location.pathname + window.location.search).toBe('/finances?type=INVESTMENT');
   expect(screen.queryByText(/verified NAV|live market value|portfolio return/i)).not.toBeInTheDocument();
 });
+
+
+it('shows a reviewed Insurance source figure linked to exact Evidence history, not policy coverage', async () => {
+  window.history.replaceState(null, '', '/finances?type=INSURANCE');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 6,
+    updatedAt: '2026-10-17T09:00:00Z',
+    dataDurability: 'Temporary data',
+    facts: [{
+      financialFactId: 'ff-insurance-source',
+      factType: 'INSURANCE',
+      label: 'Insurance amount stated in source document',
+      value: 120000,
+      currency: 'INR',
+      effectiveDate: '2026-10-16',
+      revision: 1,
+      source: {
+        sourceName: 'insurance-source.txt',
+        documentVersion: 'document-version-insurance',
+        recordedAt: '2026-10-17T09:00:00Z',
+        technicalSourceFactId: 'source-fact-insurance',
+        technicalProvenanceId: 'provenance-insurance',
+      },
+    }],
+  });
+  mount(api);
+  expect(await screen.findByText('Insurance amount stated in source document')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Insurance source figures' })).toBeVisible();
+  expect(screen.getByText('Source: insurance-source.txt')).toBeVisible();
+  expect(screen.queryByText(/verified coverage|claim eligibility|cash value/i)).not.toBeInTheDocument();
+  expect(window.location.pathname + window.location.search).toBe('/finances?type=INSURANCE');
+});
