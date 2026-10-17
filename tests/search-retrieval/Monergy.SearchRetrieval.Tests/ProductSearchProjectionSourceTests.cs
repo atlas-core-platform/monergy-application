@@ -57,7 +57,7 @@ public sealed class ProductSearchProjectionSourceTests
             CancellationToken.None);
 
         var records = source.ReadForCustomer("reference-customer");
-        Assert.Equal(3, records.Length);
+        Assert.Equal(4, records.Length);
         Assert.Contains(records, item =>
             item.ResultType == SearchResultType.Financial &&
             item.Title == "Employment income" &&
@@ -71,6 +71,7 @@ public sealed class ProductSearchProjectionSourceTests
             item.SearchableText.Contains("not outstanding balance", StringComparison.Ordinal) &&
             item.Source.SourceObjectId == "ff-loan" &&
             item.Source.ProvenanceReferenceId == "provenance-loan");
+        Assert.Contains(records, item => item.Title == "Document-stated asset figure" && item.SearchableText.Contains("not verified valuation", StringComparison.Ordinal) && item.Source.SourceObjectId == "ff-asset" && item.Source.ProvenanceReferenceId == "provenance-asset");
         Assert.DoesNotContain(records, item => item.Source.SourceObjectId == "ff-investment");
         Assert.DoesNotContain(records, item => item.ResultType == SearchResultType.Calculation);
     }
@@ -103,9 +104,9 @@ public sealed class ProductSearchProjectionSourceTests
 
         var records = documents.ReadForCustomer("reference-customer");
         Assert.Equal(3, records.Length);
-        Assert.Equal(4, records.Length);
+        Assert.Equal(5, records.Length);
         Assert.Single(records, item => item.ResultType == SearchResultType.Document);
-        Assert.Equal(3, records.Count(item => item.ResultType == SearchResultType.Financial));
+        Assert.Equal(4, records.Count(item => item.ResultType == SearchResultType.Financial));
     }
 
     [Fact]
@@ -250,6 +251,10 @@ public sealed class ProductSearchProjectionSourceTests
                     "LOAN", "Loan source amount", 85000m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-loan"),
                 new(
+                    "ff-asset", "financial-profile-reference-customer", "reference-customer",
+                    "ASSET", "Document-stated asset figure", 900000m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-asset"),
+                new(
                     "ff-investment", "financial-profile-reference-customer", "reference-customer",
                     "INVESTMENT", "Future investment", 500m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-investment"),
@@ -268,14 +273,15 @@ public sealed class ProductSearchProjectionSourceTests
                 body, ContractJson.Options)!;
             var income = request.Payload.FinancialProvenanceId == "provenance-income";
             var loan = request.Payload.FinancialProvenanceId == "provenance-loan";
+            var asset = request.Payload.FinancialProvenanceId == "provenance-asset";
             var customer = CrossCustomerProvenance ? "other-customer" : "reference-customer";
             return Success(request, new FinancialProvenance(
                 request.Payload.FinancialProvenanceId,
-                income ? "ff-income" : loan ? "ff-loan" : "ff-expense", 
+                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : "ff-expense", 
                 customer,
-                income ? "evidence-income" : loan ? "evidence-loan" : "evidence-expense", 
-                income ? "document-version-income" : loan ? "document-version-loan" : "document-version-expense", 
-                income ? "source-income" : loan ? "source-loan" : "source-expense", 
+                income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : "evidence-expense", 
+                income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : "document-version-expense", 
+                income ? "source-income" : loan ? "source-loan" : asset ? "source-asset" : "source-expense", 
                 "extractor/1",
                 "validator/1",
                 "reviewed-document-facts/1.0.0",
