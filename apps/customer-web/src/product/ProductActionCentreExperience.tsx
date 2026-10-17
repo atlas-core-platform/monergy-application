@@ -85,12 +85,16 @@ export default function ProductActionCentreExperience() {
     const income = facts.filter((fact) => fact.factType === 'INCOME').length;
     const expenses = facts.filter((fact) => fact.factType === 'EXPENSE').length;
     const loan = facts.filter((fact) => fact.factType === 'LOAN').length;
-    const covered = Number(income > 0) + Number(expenses > 0) + Number(loan > 0);
+    const asset = facts.filter((fact) => fact.factType === 'ASSET').length;
+    const investment = facts.filter((fact) => fact.factType === 'INVESTMENT').length;
+    const covered = Number(income > 0) + Number(expenses > 0) + Number(loan > 0) + Number(asset > 0) + Number(investment > 0);
     return {
       trusted: facts.length,
       income,
       expenses,
       loan,
+      asset,
+      investment,
       covered,
     };
   }, [profile]);
@@ -164,7 +168,7 @@ export default function ProductActionCentreExperience() {
         id: 'review-documents',
         title: 'Your Documents do not contain any trusted financial information yet.',
         description:
-          'Review a supported document and add only the Income, Expense or Loan source details you have checked. Extracted information remains separate until you confirm it.',
+          'Review a supported document and add only the Income, Expense, Loan, Asset or Investment source details you have checked. Extracted information remains separate until you confirm it.',
         href: '/evidence',
         action: 'Review Documents',
       });
@@ -203,6 +207,24 @@ export default function ProductActionCentreExperience() {
           action: canReadDocuments ? 'Review Documents' : undefined,
         });
       }
+      if (state.asset === 0) {
+        items.push({
+          id: 'asset-source-missing',
+          title: 'No trusted Asset source figure is currently represented.',
+          description: 'No reviewed Asset source figure appears in your current Financial Passport. This does not mean you own no assets or establish a current market valuation.',
+          href: canReadDocuments ? '/evidence' : undefined,
+          action: canReadDocuments ? 'Review Documents' : undefined,
+        });
+      }
+      if (state.investment === 0) {
+        items.push({
+          id: 'investment-source-missing',
+          title: 'No trusted Investment source figure is currently represented.',
+          description: 'No reviewed Investment source figure appears in the current Financial Passport. This does not imply you have no investments, securities positions or portfolio value.',
+          href: canReadDocuments ? '/evidence' : undefined,
+          action: canReadDocuments ? 'Review Documents' : undefined,
+        });
+      }
     }
 
     return items;
@@ -219,6 +241,8 @@ export default function ProductActionCentreExperience() {
     state.expenses,
     state.income,
     state.loan,
+    state.asset,
+    state.investment,
     state.trusted,
   ]);
 
@@ -239,7 +263,7 @@ export default function ProductActionCentreExperience() {
           <h1>See what needs attention in the journeys Monergy supports today.</h1>
           <p>
             These attention items are derived only from your current Documents, trusted Income, Expense or
-            Loan source information, and durable document-processing status. They are not ranked
+            Loan, Asset or Investment source information, and durable document-processing status. They are not ranked
             recommendations, a financial-health score, or a persistent task list.
           </p>
         </div>
@@ -302,7 +326,7 @@ export default function ProductActionCentreExperience() {
               </span>
               <div>
                 <span>Supported coverage</span>
-                <strong>{canReadFinancial && profile !== null ? String(state.covered) + ' of 3' : '—'}</strong>
+                <strong>{canReadFinancial && profile !== null ? String(state.covered) + ' of 5' : '—'}</strong>
               </div>
             </div>
             <div className="product-panel product-summary-card">
@@ -374,8 +398,7 @@ export default function ProductActionCentreExperience() {
                   <strong>No attention items are visible in the currently loaded supported state.</strong>
                   <p>
                     This does not mean your overall finances are complete, and it is not a lifetime
-                    processing-history claim. It reflects the current Documents, supported Income,
-                    Expense and Loan source information, and recent processing activity returned by the bounded
+                    processing-history claim. It reflects the current Documents, supported Income, Expense, Loan, Asset and Investment source information, and recent processing activity returned by the bounded
                     product APIs.
                   </p>
                 </div>
