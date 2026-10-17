@@ -10,7 +10,8 @@ public sealed record ConsentEvaluation(string TenantId, string ActorId, string C
 public sealed record ConsentDecision(string TenantId, string ActorId, string CustomerId, string CapabilityId, string Purpose,
     bool Allowed, string Reason, long Version, DateTimeOffset EvaluatedAt, DateTimeOffset? ExpiresAt);
 public sealed record ConsentGrant(string Id, string CustomerId, string ActorId, string Purpose, string[] CapabilityIds,
-    DateTimeOffset ExpiresAt, DateTimeOffset? RevokedAt);
+    DateTimeOffset ExpiresAt, DateTimeOffset? RevokedAt, string? RecipientLabel = null);
+public sealed record ConsentOverview(long Version, IReadOnlyList<ConsentGrant> Items);
 
 public static class CustomerConsentPolicy
 {
