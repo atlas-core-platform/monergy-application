@@ -25,7 +25,7 @@ public sealed class PostgresCustomerConsent : IAsyncDisposable
         if (sources.Count == 0) throw new InvalidOperationException("Consent database bindings are required.");
     }
 
-    public async Task<object> ListAsync(string tenant, string customer, CancellationToken ct)
+    public async Task<ConsentOverview> ListAsync(string tenant, string customer, CancellationToken ct)
     {
         await using var connection = await OpenAsync(tenant, ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
@@ -38,7 +38,7 @@ public sealed class PostgresCustomerConsent : IAsyncDisposable
                 new ConsentGrant(row.Id, row.CustomerId, row.ActorId, row.Purpose, row.CapabilityIds,
                     Utc(row.ExpiresAt), row.RevokedAt is { } revoked ? Utc(revoked) : null)).ToArray();
         await transaction.CommitAsync(ct).ConfigureAwait(false);
-        return new { version, items };
+        return new ConsentOverview(version, items);
     }
 
     public async Task<ConsentReceipt> GrantAsync(string tenant, CustomerOwnerContext owner, string ownerActor,
