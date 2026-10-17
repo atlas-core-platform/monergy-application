@@ -1,6 +1,6 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Source baseline is application main `36d03b08c243cf9fa5c4f381f2837e4851ce9114` (T1-20 merged, runtime verification pending). T1-19 remains the preceding baseline; merging source did not close T1-20 verification.
+Status: ACTIVE · Source baseline is application main `5599e63ec57baca0322b80c1fb9e584beb729aa9` (T1-20 session-safety PR #68 merged, runtime verification pending). System Expert main `c32aacf6f4989ac4cb7126c783e33e0bf2947f66` (PR #20). Source merge does not retroactively certify full UAT.
 This file tracks bounded implementation units; the accepted 81-feature catalog and 151 requirement IDs remain authoritative for requirements identity, and the AR-003 persona and capability catalogs remain authoritative for planned journeys.
 One current implementation unit may be a subset of one canonical feature. Engineering completion never proves an entire business feature complete.
 
@@ -12,8 +12,9 @@ Each unit requires: owner-backed UI/API/data behavior; tenant/customer access, a
 
 | Priority | Unit | Requirement/feature | Source/owner boundary | Current state | Next dependency |
 | --- | --- | --- | --- | --- | --- |
-| P0 / active | T1-20 View current delegated customer consent; close request-lifecycle defect | MR §§6, 23, 39; MON-CON family; COV-005; M2-WS02-E03-F01 | Consent owner + current Customer & Identity session + customer UI | SOURCE_MERGED_RUNTIME_PENDING; request-lifecycle correction has 8 passing component tests and 32 passing owner-policy/materialization/tenant-boundary tests | Isolated owner-backed UAT and complete source-matched Expert verification remain open |
-| P0 | T1-21 Named recipient and explicit revoke journey | Same | Customer & Identity recipient names + Consent revision-controlled revoke + customer UI | NOT_STARTED | Named recipient resolution; revocation confirmation and concurrent revision evidence; OD-09 constraints |
+| P0 / carry-forward verification | T1-20 View delegated consent; request-lifecycle correction | MR §§6,23,39; COV-005; M2-WS02-E03-F01 | Consent owner + current Customer & Identity session + customer UI | SOURCE_MERGED_RUNTIME_PENDING (PR #68, Expert #20); prior 8 component and 32 backend focused tests passed | Isolated owner-backed UAT and full Expert source-matched model verification remain outstanding; do not present as released |
+| P0 / active implementation | T1-21 Explicitly stop one recorded delegated sharing grant | MR §§6,23,39; MON-CON; COV-005; M2-WS02-E03-F01 | Existing Consent DELETE route, revision/receipt, customer-scoped API and confirmation UI | CANDIDATE_SOURCE_NOT_TESTED; no new schema or permission | Exact recipient/grant reference recognition, one mutation per explicit approval, version conflict, fail-closed unknown response, current owner re-read, Expert sync |
+| P0 / next bounded dependency | Resolve recipients to trusted business names before further sharing permissions | MR §6, AR-003 customer sharing/identity | C&I identity + Consent owner + customer workspace | NOT_STARTED | Approved minimum identity-disclosure contract; no organization-wide directory exposure |
 | P0 | Expand Financial Passport beyond Income/Expense by one governed fact domain per unit | MR §§2,13,20,41; M2-WS04-E01/E02 | Financial Profile owner and customer UI | FOUNDATIONS_EXIST; customer journeys partial | Approved domain input/mutation semantics and evidence source; no fabricated net worth |
 | P0 | Document classification/OCR one supported file type at a time | MR §§10–12, 41; M2-WS03-E02 | Evidence → Document Intelligence → Financial Profile | STRUCTURED_TEXT_LOCAL_ONLY | Approved extraction/quality controls; production provider decision remains gated |
 | P1 | Connected customer sources, one authorized provider route at a time | MR §§7–8,23–25,41; WS06 E03 | Provider catalog → tenant config → customer authorization → Gateway | NO_LIVE_PROVIDER_ACCEPTANCE | OD-04/05/06/09, licensed route and keys |
@@ -58,3 +59,9 @@ The master requirements and the supplied two-video analysis were inspected durin
 ## Mandatory System Expert coupling
 
 T1-20 sync partner: `monergy-system-expert`. It must show application main through source-merged T1-20, preserve runtime-verification gaps, and keep T1-20 active until those gaps close. Existing accepted T1-01 to T1-06 source locks are historical, never overwritten as if newly extracted.
+
+## T1-21 bounded unit — owner-backed revocation
+
+The customer may stop one *unexpired, unrevoked* recorded consent grant after expanding an exact reference-specific confirmation. The current LOCAL Consent owner already implements an authenticated, customer-owned `DELETE /local/v1/consents/customers/{customerId}/grants/{grantId}` with `requestId` and `expectedVersion`; the browser must not simulate revocation or invent permissions. A completed owner receipt is identity/version-checked and the customer record is reread. When the outcome is uncertain, the UI suppresses the stale grant list and requires refresh without automatic second mutation. Recipient names are **not resolved** in this unit, so the user must explicitly recognize the technical reference before confirming; name resolution remains a separately gated next unit.
+
+Source: `apps/customer-web/src/access/accessApi.ts`, `src/product/ConsentExperience.tsx`, `tests/ConsentExperience.test.tsx`. Focused implementation-level tests have been authored but **not executed** in this GitHub-source-only environment; exact local React/TypeScript tests, Consent-backed Docker UAT, and Expert source-matched knowledge checks are required before full functional acceptance. No development GitHub Actions.
