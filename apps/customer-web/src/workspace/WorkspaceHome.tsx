@@ -295,7 +295,7 @@ export default function WorkspaceHome() {
                     ))}
                   </div>
                   <p className="workspace-passport-scope-note">
-                    Coverage is limited to Income, Expense, Loan, Asset, Investment and Insurance source facts. Asset and Investment figures are document-stated amounts, not independently verified values, market prices, portfolio performance or net-worth totals.
+                    Coverage is limited to Income, Expense, Loan, Asset, Investment and Insurance source facts. Asset, Investment and Insurance figures are document-stated amounts, not independently verified asset values, market prices, policy benefits, claim eligibility or net-worth totals.
                     It is not a financial health score or a statement that your finances are complete.
                   </p>
                   {snapshot.coveredCategories < snapshot.coverage.length &&
