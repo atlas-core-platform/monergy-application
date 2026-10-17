@@ -1857,3 +1857,151 @@ it('does not reconcile a source fact from a different document version as alread
     }),
   ).toBeVisible();
 });
+
+it('requires explicit review of a Loan amount before updating authoritative Financial information', async () => {
+  const api = new AccessApi(session);
+  const item = {
+    documentId: 'document-loan-003',
+    documentVersionId: 'document-version-loan-003',
+    evidenceId: 'evidence-loan-003',
+    version: 1,
+    sourceName: 'Customer upload',
+    originalFileName: 'loan-statement.txt',
+    contentType: 'text/plain',
+    contentLength: 96,
+    contentSha256: 'e'.repeat(64),
+    receivedAt: '2026-10-14T00:00:00Z',
+    createdAt: '2026-10-14T00:00:00Z',
+  };
+  const result = {
+    job: {
+      jobId: `job-processing-${'c'.repeat(32)}`,
+      jobName: 'document-processing',
+      ownerService: 'Document Intelligence Service',
+      payloadReference: item.documentVersionId,
+      customerId: 'reference-customer',
+      state: 'Completed',
+      attempt: 1,
+      failureCode: null,
+      retryable: false,
+      updatedAt: '2026-10-14T00:00:01Z',
+    },
+    processing: {
+      processingId: `processing-${'c'.repeat(32)}`,
+      documentVersionId: item.documentVersionId,
+      state: 'Completed',
+      failureCode: null,
+      retryable: false,
+      updatedAt: '2026-10-14T00:00:01Z',
+    },
+    facts: [
+      {
+        sourceFactId: 'source-fact-loan-001',
+        customerId: 'reference-customer',
+        factType: 'LOAN',
+        label: 'Car loan amount stated on document',
+        candidateValue: 400000,
+        currency: 'USD',
+        effectiveDate: '2026-10-01',
+        sourceLocation: 'line 1',
+        confidence: 0.98,
+        evidenceId: item.evidenceId,
+        documentVersionId: item.documentVersionId,
+        extractionVersion: 'fixture-extractor/1.0.0',
+        validationVersion: 'canonical-source-fact/1.0.0',
+      },
+    ],
+    dataDurability: 'Temporary data',
+    processingMode: 'Structured text reference processor',
+  };
+  const promotion = {
+    profile: {
+      financialProfileId: 'financial-profile-reference-customer',
+      revision: 1,
+      updatedAt: '2026-10-14T00:00:02Z',
+      facts: [
+        {
+          financialFactId: 'financial-fact-loan-001',
+          factType: 'LOAN',
+          label: 'Car loan amount stated on document',
+          value: 400000,
+          currency: 'USD',
+          effectiveDate: '2026-10-01',
+          revision: 1,
+          source: {
+            sourceName: 'loan-statement.txt',
+            documentVersion: item.documentVersionId,
+            recordedAt: '2026-10-14T00:00:02Z',
+            technicalSourceFactId: 'source-fact-loan-001',
+          },
+        },
+      ],
+      dataDurability: 'Temporary data',
+    },
+    confirmed: 1,
+  };
+  const request = vi.spyOn(api, 'product').mockImplementation((path, method) => {
+    if (path === 'v1/evidence' && method === 'GET')
+      return Promise.resolve({ items: [item], dataDurability: 'Temporary data' });
+    if (path.endsWith('/processing') && method === 'POST') return Promise.resolve(result);
+    if (path.includes('v1/financial-profile/from-processing/') && method === 'POST')
+      return Promise.resolve(promotion);
+    return Promise.reject(new Error(`Unexpected request: ${String(method)} ${path}`));
+  });
+  vi.spyOn(crypto, 'randomUUID')
+    .mockReturnValueOnce('cccccccc-cccc-cccc-cccc-cccccccccccc')
+    .mockReturnValueOnce('dddddddd-dddd-dddd-dddd-dddddddddddd');
+  mount(api, [
+    'evidence.document.upload',
+    'evidence.document.read',
+    'document-intelligence.document.process',
+    'financial-profile.profile.update',
+  ]);
+  const user = userEvent.setup();
+  await user.click(
+    await screen.findByRole('button', { name: 'View document details for loan-statement.txt' }),
+  );
+  const provenance = screen.getByRole('dialog', { name: 'Document details' });
+  await user.click(within(provenance).getByRole('button', { name: 'Extract details' }));
+  const review = await screen.findByRole('dialog', { name: 'Extract and review details' });
+  expect(review).toHaveTextContent('Review before adding anything to your financial information');
+  expect(review).toHaveTextContent('Your financial information is not changed by this step');
+  await user.click(within(review).getByRole('button', { name: 'Extract details' }));
+  expect(await screen.findByText('Car loan amount stated on document')).toBeVisible();
+  expect(review).toHaveTextContent('$400,000.00');
+  expect(review).toHaveTextContent('98% confidence');
+  expect(request).toHaveBeenCalledWith(
+    `v1/evidence/${item.documentVersionId}/processing`,
+    'POST',
+    { operationId: 'c'.repeat(32) },
+    expect.any(AbortSignal),
+  );
+  const add = within(review).getByRole('button', { name: 'Add selected information' });
+  expect(add).toBeDisabled();
+  expect(
+    request.mock.calls.filter(([path]) =>
+      String(path).includes('v1/financial-profile/from-processing/'),
+    ),
+  ).toHaveLength(0);
+
+  await user.click(
+    within(review).getByRole('checkbox', {
+      name: 'Add Car loan amount stated on document to financial information',
+    }),
+  );
+  expect(add).toBeEnabled();
+  await user.click(add);
+
+  expect(await screen.findByText('Your financial information was updated')).toBeVisible();
+  expect(review).toHaveTextContent('1 reviewed item confirmed');
+  expect(request).toHaveBeenCalledWith(
+    `v1/financial-profile/from-processing/${result.job.jobId}`,
+    'POST',
+    {
+      operationId: 'd'.repeat(32),
+      sourceFactIds: ['source-fact-loan-001'],
+    },
+    undefined,
+  );
+});
+
