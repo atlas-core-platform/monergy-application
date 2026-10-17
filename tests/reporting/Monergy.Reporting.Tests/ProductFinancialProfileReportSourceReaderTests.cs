@@ -28,7 +28,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
 
         Assert.NotNull(snapshot);
         Assert.Equal("reference-customer", snapshot.CustomerId);
-        Assert.Equal(2, snapshot.Items.Length);
+        Assert.Equal(3, snapshot.Items.Length);
         Assert.Contains(snapshot.Items, item =>
             item.Label == "Employment income" &&
             item.Value == 125000m &&
@@ -41,6 +41,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             item.Label == "Rent" &&
             item.Source.SourceId == "ff-expense" &&
             item.Source.EvidenceReferenceId == "evidence-expense");
+        Assert.Contains(snapshot.Items, item => item.Label == "Loan source amount" && item.Value == 85000m && item.Source.SourceId == "ff-loan" && item.Source.FinancialProvenanceReferenceId == "provenance-loan" && item.Source.CalculationLineageReferenceId is null);
         Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-future");
         Assert.All(handler.Requests, request =>
         {
@@ -162,6 +163,10 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                     "EXPENSE", "Rent", 2500m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-expense"),
                 new AuthoritativeFinancialFact(
+                    "ff-loan", "financial-profile-reference-customer", "reference-customer",
+                    "LOAN", "Loan source amount", 85000m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-loan"),
+                new AuthoritativeFinancialFact(
                     "ff-future", "financial-profile-reference-customer", "reference-customer",
                     "INVESTMENT", "Future gated investment", 500m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-future"),
@@ -179,14 +184,15 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             var request = System.Text.Json.JsonSerializer.Deserialize<ContractRequest<GetFinancialProvenance>>(
                 body, ContractJson.Options)!;
             var income = request.Payload.FinancialProvenanceId == "provenance-income";
+            var loan = request.Payload.FinancialProvenanceId == "provenance-loan";
             var customer = CrossCustomerProvenance ? "other-customer" : "reference-customer";
             return Success(request, new FinancialProvenance(
                 request.Payload.FinancialProvenanceId,
-                income ? "ff-income" : "ff-expense",
+                income ? "ff-income" : loan ? "ff-loan" : "ff-expense",
                 customer,
-                income ? "evidence-income" : "evidence-expense",
-                income ? "document-version-income" : "document-version-expense",
-                income ? "source-income" : "source-expense",
+                income ? "evidence-income" : loan ? "evidence-loan" : "evidence-expense",
+                income ? "document-version-income" : loan ? "document-version-loan" : "document-version-expense",
+                income ? "source-income" : loan ? "source-loan" : "source-expense",
                 "extractor/1",
                 "validator/1",
                 "reviewed-document-facts/1.0.0",
