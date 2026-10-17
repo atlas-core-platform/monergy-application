@@ -445,3 +445,37 @@ it('shows a reviewed Insurance source figure linked to exact Evidence history, n
   expect(screen.queryByText(/verified coverage|claim eligibility|cash value/i)).not.toBeInTheDocument();
   expect(window.location.pathname + window.location.search).toBe('/finances?type=INSURANCE');
 });
+
+
+it('shows a reviewed Tax source figure without claiming assessed tax or refund', async () => {
+  window.history.replaceState(null, '', '/finances?type=TAX');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 7,
+    updatedAt: '2026-10-17T07:00:00Z',
+    dataDurability: 'Temporary data',
+    facts: [{
+      financialFactId: 'ff-tax-source',
+      factType: 'TAX',
+      label: 'Tax figure from document',
+      value: 14000,
+      currency: 'INR',
+      effectiveDate: '2026-10-16',
+      revision: 1,
+      source: {
+        sourceName: 'tax-statement.txt',
+        documentVersion: 'document-version-tax',
+        recordedAt: '2026-10-17T07:00:00Z',
+        technicalSourceFactId: 'source-fact-tax',
+        technicalProvenanceId: 'provenance-tax',
+      },
+    }],
+  });
+  mount(api);
+  expect(await screen.findByText('Tax figure from document')).toBeVisible();
+  expect(screen.getByRole('heading', {name:'Tax source figures'})).toBeVisible();
+  expect(screen.getByText('Source: tax-statement.txt')).toBeVisible();
+  expect(window.location.pathname + window.location.search).toBe('/finances?type=TAX');
+  expect(screen.queryByText(/Assessed tax liability|Refund payable/i)).not.toBeInTheDocument();
+});
