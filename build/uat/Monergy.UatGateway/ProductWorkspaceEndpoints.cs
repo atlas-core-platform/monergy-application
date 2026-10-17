@@ -504,7 +504,7 @@ public static class ProductWorkspaceEndpoints
                 result.Result.Facts.Select(fact => fact.SourceFactId)
                     .Distinct(StringComparer.Ordinal).Count() != result.Result.Facts.Count ||
                 result.Result.Facts.Any(fact =>
-                    fact.FactType is not ("INCOME" or "EXPENSE" or "LOAN") ||
+                    fact.FactType is not ("INCOME" or "EXPENSE" or "LOAN" or "ASSET") ||
                     !TenantAccessClient.Identifier(fact.SourceFactId, 160) ||
                     string.IsNullOrWhiteSpace(fact.Label) || fact.Label.Length > 160 ||
                     string.IsNullOrWhiteSpace(fact.Currency) || fact.Currency.Length is < 3 or > 16 ||

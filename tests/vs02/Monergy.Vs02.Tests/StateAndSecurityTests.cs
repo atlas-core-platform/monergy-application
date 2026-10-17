@@ -78,11 +78,18 @@ public sealed class StateAndSecurityTests
             "text/plain");
         var source = new EvidenceContent(reference,
             "LOAN|Car loan amount stated on document|400000.00|INR|2026-10-16|line:1|0.96\n" +
-            "ASSET|Unsupported asset type in this bounded processor|900000.00|INR|2026-10-16|line:2|0.95");
+            "ASSET|Document-stated property figure|900000.00|INR|2026-10-16|line:2|0.95");
         var facts = await new FixtureDocumentExtractor().ExtractAsync(
             source, "processing-loan-test", CancellationToken.None);
 
-        var fact = Assert.Single(facts);
+        Assert.Equal(2, facts.Count);
+        var fact = Assert.Single(facts, item => item.FactType == "LOAN");
+        var asset = Assert.Single(facts, item => item.FactType == "ASSET");
+        Assert.Equal("Document-stated property figure", asset.Label);
+        Assert.Equal(900000m, asset.CandidateValue);
+        Assert.Equal("document-version-loan-test", asset.DocumentVersionId);
+        Assert.Equal("evidence-loan-test", asset.EvidenceId);
+        // Neither raw source type creates a verified liability or property valuation.
         Assert.Equal("LOAN", fact.FactType);
         Assert.Equal("Car loan amount stated on document", fact.Label);
         Assert.Equal(400000m, fact.CandidateValue);

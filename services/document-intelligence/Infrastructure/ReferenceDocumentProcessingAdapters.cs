@@ -301,7 +301,8 @@ public sealed class FixtureDocumentExtractor : IDocumentExtractor
     private static bool IsAllowedFactType(string value) =>
         string.Equals(value, "INCOME", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(value, "EXPENSE", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(value, "LOAN", StringComparison.OrdinalIgnoreCase);
+        string.Equals(value, "LOAN", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(value, "ASSET", StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed class ReferenceExecutionPolicy : IExecutionPolicy

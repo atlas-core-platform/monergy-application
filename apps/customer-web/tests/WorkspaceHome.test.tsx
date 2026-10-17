@@ -122,6 +122,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
   expect(screen.getByText('Income items')).toBeVisible();
   expect(screen.getByText('Expense items')).toBeVisible();
   expect(screen.getByText('Loan information items')).toBeVisible();
+  expect(screen.getByText(/Asset source figures/)).toBeVisible();
   expect(screen.getByRole('link', { name: /View Loan information financial information/ })).toHaveAttribute('href', '/finances?type=LOAN');
   expect(screen.getByText('Employment income')).toBeVisible();
   expect(screen.getByText('income-statement.txt')).toBeVisible();
@@ -130,7 +131,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
     '/finances?fact=ff-income',
   );
   expect(screen.getByText('2 source documents')).toBeVisible();
-  expect(screen.getByText(/2 of 3 currently supported categories represented/)).toBeVisible();
+  expect(screen.getByText(/2 of 4 currently supported categories represented/)).toBeVisible();
   expect(screen.getByText('Last trusted update 15 Oct 2026')).toBeVisible();
   const coverage = screen.getByLabelText('Financial Passport current coverage');
   expect(within(coverage).getByRole('link', { name: 'View Income financial information' })).toHaveAttribute(
@@ -148,7 +149,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
     '1 trusted item',
   );
   expect(
-    screen.getByText(/Coverage is limited to the Income, Expense and Loan fact information Monergy currently supports/),
+    screen.getByText(/Coverage is limited to Income, Expense, Loan and Asset source facts/),
   ).toBeVisible();
   expect(screen.queryByRole('heading', { name: /financial health score/i })).not.toBeInTheDocument();
   expect(screen.queryByText(/recommendation/i)).not.toBeInTheDocument();
