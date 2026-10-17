@@ -59,6 +59,20 @@ public sealed class PostgresTenantIdentities(PostgresTenantSessions connections)
         return new(trustedTenant, request.NormalizedEmail, actor, request.IdempotencyKey);
     }
 
+    // This read is used only behind the Customer & Identity workload-authenticated
+    // boundary. Consent exposes it solely for actor IDs already present in an
+    // owner-authorized customer's granted sharing records.
+    public async Task<string?> RecipientLabelAsync(string tenant, string actorId, CancellationToken cancellationToken)
+    {
+        TenantAccessProtocol.Identifier(tenant, 64);
+        TenantAccessProtocol.Identifier(actorId);
+        await using var connection = await connections.OpenAsync(tenant, cancellationToken).ConfigureAwait(false);
+        return await connection.QuerySingleOrDefaultAsync<string>(new CommandDefinition("""
+            SELECT normalized_email FROM customer_identity.tenant_principals
+            WHERE actor_id=@ActorId LIMIT 1;
+            """, new { ActorId = actorId }, cancellationToken: cancellationToken)).ConfigureAwait(false);
+    }
+
     private sealed class ReceiptRow
     {
         public string ImportId { get; set; } = "";

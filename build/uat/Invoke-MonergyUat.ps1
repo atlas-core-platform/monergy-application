@@ -93,7 +93,7 @@ if (-not (Test-Path $profileFile)) {
         foreach ($actorId in $localActors) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
     }
     $new = @{ instanceId=[Guid]::NewGuid().ToString('N'); postgresPassword=(Secret); databases=$databases; identities=$identities; tokens=@{}; port=$Port; onboarding=[bool]$EnableOnboarding }
-    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','jobAuditEvent','financialAuditEvent','customerContext','consent','evidenceIntake','evidenceProcessing','jobControl','documentControl')) { $new.tokens[$name] = Secret }
+    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','jobAuditEvent','financialAuditEvent','customerContext','consent','recipientLabel','evidenceIntake','evidenceProcessing','jobControl','documentControl')) { $new.tokens[$name] = Secret }
     Save-Json 'profile.json' $new
 }
 $state = Get-Content $profileFile -Raw | ConvertFrom-Json
@@ -103,7 +103,7 @@ if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
     $requiredTokens = @('financialAuditEvent')
     if ($onboarding) {
-        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent')
+        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel')
     }
     foreach ($name in $requiredTokens) {
         if ($null -eq $state.tokens.PSObject.Properties[$name]) {
@@ -150,6 +150,7 @@ if ($Action -in @('Prepare','Start')) {
                 $integration.CustomerRelationships='true'; $integration.CustomerContextToken=$state.tokens.customerContext
                 $integration.CustomerIdentityUrl='http://127.0.0.1:5101/'; $integration.CustomerIdentityToken=$state.tokens.context
                 $integration.MembershipToken=$state.tokens.membership; $integration.ConsentToken=$state.tokens.consent
+                $integration.RecipientLabelToken=$state.tokens.recipientLabel
             }
             if ($service -eq 'customer-identity') {
                 $integration.MembershipToken=$state.tokens.membership; $integration.CustomerIdentityToken=$state.tokens.context

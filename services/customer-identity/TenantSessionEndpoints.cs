@@ -50,6 +50,37 @@ public static class TenantSessionEndpoints
                 catch (TenantAccessException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }
                 catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
             });
+            // Optional bounded LOCAL owner integration: never reuse the general
+            // customer-context credential as an actor-label lookup credential.
+            if (app.Configuration["Monergy:AccessIntegration:RecipientLabelToken"] is
+                { Length: > 0 } recipientLabelToken)
+            {
+                TenantAccessIntegration.ValidateToken(recipientLabelToken);
+                if (recipientLabelToken == contextToken || recipientLabelToken == token ||
+                    recipientLabelToken == eventToken ||
+                    recipientLabelToken == app.Configuration["Monergy:AccessIntegration:IdentityProvisioningToken"])
+                    throw new InvalidOperationException("Recipient label lookup requires its own workload token.");
+                app.MapGet("/internal/v1/consent-recipient-label/{actorId}", async (
+                    string actorId, HttpContext http, PostgresTenantIdentities identities) =>
+                {
+                    if (!TenantAccessIntegration.TokenMatches(
+                        http.Request.Headers["X-Monergy-Owner-Token"].ToString(), recipientLabelToken))
+                        return (IResult)Results.StatusCode(403);
+                    try
+                    {
+                        var tenant = http.Request.Headers["X-Monergy-Tenant"].ToString();
+                        var label = await identities.RecipientLabelAsync(
+                            tenant, actorId, http.RequestAborted).ConfigureAwait(false);
+                        return label is null ? Results.NotFound() :
+                            Results.Ok(new { tenantId = tenant, actorId, recipientLabel = label });
+                    }
+                    catch (TenantAccessException failure)
+                    { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }
+                    catch (TenantBoundaryException failure)
+                    { return Results.Json(new { error = failure.Code }, statusCode: failure.Status); }
+                    catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
+                });
+            }
             app.MapGet("/internal/v1/customer-owner/{actorId}", async (string actorId, HttpContext http, PostgresCustomers customers) =>
             {
                 if (!TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Owner-Token"].ToString(), contextToken))

@@ -29,8 +29,31 @@ public static class CustomerConsentEndpoints
         app.MapGet("/local/v1/consents/customers/{customerId}", (string customerId, HttpContext http, PostgresCustomerConsent store, CustomerOwnerClient owners) =>
             InvokeAsync(async () =>
             {
-                var (session, _) = await RequireOwnerAsync(customerId, http, owners).ConfigureAwait(false);
-                return await store.ListAsync(session.TenantId, customerId, http.RequestAborted).ConfigureAwait(false);
+                var (session, owner) = await RequireOwnerAsync(customerId, http, owners).ConfigureAwait(false);
+                var recorded = await store.ListAsync(session.TenantId, customerId, http.RequestAborted).ConfigureAwait(false);
+                // Never query an unrestricted people directory. Only lookup
+                // recipients already in the exact owned customer's grants.
+                using var limit = new SemaphoreSlim(6);
+                var labels = await Task.WhenAll(recorded.Items.Select(async grant =>
+                {
+                    await limit.WaitAsync(http.RequestAborted).ConfigureAwait(false);
+                    try
+                    {
+                        try { return await owners.RecipientLabelAsync(session.TenantId, grant.ActorId,
+                            http.RequestAborted).ConfigureAwait(false); }
+                        catch (TenantBoundaryException) { return null; } // truthful unavailable label
+                    }
+                    finally { limit.Release(); }
+                })).ConfigureAwait(false);
+                // Recheck ownership after resolving labels so a changed owner
+                // cannot receive information after their relationship changed.
+                var (freshSession, freshOwner) = await RequireOwnerAsync(customerId, http, owners).ConfigureAwait(false);
+                if (freshSession.ActorId != session.ActorId || freshSession.SubjectVersion != session.SubjectVersion ||
+                    freshOwner.Version != owner.Version)
+                    throw new TenantBoundaryException("CUSTOMER_CONTEXT_CHANGED", 409);
+                var items = recorded.Items.Select((grant, index) =>
+                    grant with { RecipientLabel = labels[index] }).ToArray();
+                return new ConsentOverview(recorded.Version, items);
             }));
         app.MapPost("/local/v1/consents/customers/{customerId}/grants", (string customerId, ConsentGrantWrite request, HttpContext http, PostgresCustomerConsent store, CustomerOwnerClient owners) =>
             InvokeAsync(async () =>

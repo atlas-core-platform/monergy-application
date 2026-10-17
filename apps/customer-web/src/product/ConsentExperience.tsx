@@ -8,6 +8,7 @@ interface DelegatedConsent {
   id: string;
   customerId: string;
   actorId: string;
+  recipientLabel?: string | null;
   purpose: string;
   capabilityIds: string[];
   expiresAt: string;
@@ -30,6 +31,7 @@ interface RevokeIntent {
   scope: string;
   grantId: string;
   actorId: string;
+  recipientLabel?: string | null;
 }
 interface ConsentViewState {
   api: AccessApi;
@@ -56,6 +58,9 @@ function validOverview(value: unknown, customerId: string): value is ConsentOver
         typeof item.actorId === 'string' &&
         item.actorId.length > 0 &&
         item.purpose === 'customer-advice' &&
+        (item.recipientLabel === undefined || item.recipientLabel === null ||
+         (typeof item.recipientLabel === 'string' &&
+          item.recipientLabel.trim().length > 0 && item.recipientLabel.length <= 320)) &&
         Array.isArray(item.capabilityIds) &&
         item.capabilityIds.every((capability) => typeof capability === 'string') &&
         typeof item.expiresAt === 'string' &&
@@ -252,10 +257,11 @@ export default function ConsentExperience() {
                       </Tag>
                     </span>
                     <strong>Customer-advice permission</strong>
-                    <p>
-                      Recipient name is not available in this view. Permission is recorded for a
-                      specific recipient, not everyone in an organization.
-                    </p>
+                    {item.recipientLabel ? (
+                      <p>Recipient: <strong>{item.recipientLabel}</strong></p>
+                    ) : (
+                      <p>Recipient label not available. Permission is recorded for one exact recipient, not the organization.</p>
+                    )}
                     <p>
                       {item.capabilityIds.length} operations recorded in this grant; current access
                       is evaluated separately.
@@ -264,7 +270,7 @@ export default function ConsentExperience() {
                     {item.revokedAt && <p>Revoked: {formatted(item.revokedAt)}</p>}
                     {current === 'Unexpired record' && (
                       <Button danger disabled={busy || revokeBusy} onClick={() => {
-                        setRevokeIntent({ api: api!, scope, grantId: item.id, actorId: item.actorId });
+                        setRevokeIntent({ api: api!, scope, grantId: item.id, actorId: item.actorId, recipientLabel: item.recipientLabel });
                         setRevokeConfirmed(false);
                         setRevokeOutcome(null);
                       }}>Stop sharing</Button>
@@ -295,8 +301,12 @@ export default function ConsentExperience() {
         closable={!revokeBusy}
         maskClosable={!revokeBusy}
       >
-        <Alert showIcon type="warning" title="Recipient name not available"
-          description="Monergy only has a recipient reference for this recorded grant. Do not proceed unless you recognize the exact recipient and grant below." />
+        {selectedRevoke?.recipientLabel ? (
+          <p>Recipient: <strong>{selectedRevoke.recipientLabel}</strong></p>
+        ) : (
+          <Alert showIcon type="warning" title="Recipient label not available"
+            description="Monergy only has a recipient reference for this recorded grant. Do not proceed unless you recognize the exact recipient and grant below." />
+        )}
         <p>Recipient reference: <code>{selectedRevoke?.actorId}</code></p>
         <p>Grant reference: <code>{selectedRevoke?.grantId}</code></p>
         <p>Re-authorization requires a separate customer action.</p>
