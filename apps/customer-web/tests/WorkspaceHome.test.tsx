@@ -131,7 +131,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
     '/finances?fact=ff-income',
   );
   expect(screen.getByText('2 source documents')).toBeVisible();
-  expect(screen.getByText(/2 of 6 currently supported categories represented/)).toBeVisible();
+  expect(screen.getByText(/2 of 7 currently supported categories represented/)).toBeVisible();
   expect(screen.getByText('Last trusted update 15 Oct 2026')).toBeVisible();
   const coverage = screen.getByLabelText('Financial Passport current coverage');
   expect(within(coverage).getByRole('link', { name: 'View Income financial information' })).toHaveAttribute(
@@ -149,7 +149,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
     '1 trusted item',
   );
   expect(
-    screen.getByText(/Coverage is limited to Income, Expense, Loan, Asset, Investment and Insurance source facts/),
+    screen.getByText(/Coverage is limited to Income, Expense, Loan, Asset, Investment, Insurance and Tax source facts/),
   ).toBeVisible();
   expect(screen.queryByRole('heading', { name: /financial health score/i })).not.toBeInTheDocument();
   expect(screen.queryByText(/recommendation/i)).not.toBeInTheDocument();
