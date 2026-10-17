@@ -212,7 +212,7 @@ export default function ConsentExperience() {
             setState(null);
             void refresh();
           }}
-          disabled={!api || !customerId || busy}
+          disabled={!api || !customerId || busy || revokeBusy}
         >
           Refresh permissions
         </Button>
