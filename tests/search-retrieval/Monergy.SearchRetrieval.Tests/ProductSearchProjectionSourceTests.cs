@@ -57,7 +57,7 @@ public sealed class ProductSearchProjectionSourceTests
             CancellationToken.None);
 
         var records = source.ReadForCustomer("reference-customer");
-        Assert.Equal(4, records.Length);
+        Assert.Equal(3, records.Length);
         Assert.Contains(records, item =>
             item.ResultType == SearchResultType.Financial &&
             item.Title == "Employment income" &&
@@ -103,6 +103,7 @@ public sealed class ProductSearchProjectionSourceTests
 
         var records = documents.ReadForCustomer("reference-customer");
         Assert.Equal(3, records.Length);
+        Assert.Equal(4, records.Length);
         Assert.Single(records, item => item.ResultType == SearchResultType.Document);
         Assert.Equal(3, records.Count(item => item.ResultType == SearchResultType.Financial));
     }
