@@ -187,3 +187,36 @@ it('searches trusted Loan source facts with provenance without implying verified
   );
   expect(screen.queryByText(/eligible to borrow|monthly EMI/i)).not.toBeInTheDocument();
 });
+
+
+it('finds Asset source figures and links to exact trusted fact without verified valuation claims', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    query: 'asset',
+    matchMode: 'Lexical',
+    items: [{
+      searchRecordId: 'search-financial-ff-asset',
+      resultType: 'Financial',
+      title: 'Document-stated asset figure',
+      summary: 'Asset source figure (not verified valuation) 900000 USD effective 2026-10-01',
+      authoritativeOwner: 'Financial Profile Service',
+      representationState: 'DERIVED_REBUILDABLE',
+      score: 1,
+      source: {
+        sourceObjectType: 'FinancialFact',
+        sourceObjectId: 'ff-asset',
+        sourceReferenceId: 'financial-profile-reference-customer',
+        provenanceReferenceId: 'provenance-asset',
+        calculationLineageReferenceId: null,
+      },
+    }],
+  } as never);
+  mount(api);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Search query'), 'asset');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+  expect(await screen.findByText('1 result for “asset”')).toBeVisible();
+  expect(screen.getByText(/not verified valuation/i)).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute('href', '/finances?fact=ff-asset');
+  expect(screen.queryByText(/verified net worth|certified asset/i)).not.toBeInTheDocument();
+});
