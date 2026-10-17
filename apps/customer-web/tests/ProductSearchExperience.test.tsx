@@ -151,3 +151,39 @@ it('does not expose a search action before the Customer role receives Search acc
   expect(screen.getByLabelText('Search query')).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled();
 });
+
+
+it('searches trusted Loan source facts with provenance without implying verified outstanding balances', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    query: 'loan',
+    matchMode: 'Lexical',
+    items: [{
+      searchRecordId: 'search-financial-ff-loan',
+      resultType: 'Financial',
+      title: 'Loan source amount',
+      summary: 'Loan source amount (not outstanding balance) 85000 USD effective 2026-10-01',
+      authoritativeOwner: 'Financial Profile Service',
+      representationState: 'DERIVED_REBUILDABLE',
+      score: 1,
+      source: {
+        sourceObjectType: 'FinancialFact',
+        sourceObjectId: 'ff-loan',
+        sourceReferenceId: 'financial-profile-reference-customer',
+        provenanceReferenceId: 'provenance-loan',
+        calculationLineageReferenceId: null,
+      },
+    }],
+  } as never);
+  mount(api);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Search query'), 'loan');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+  expect(await screen.findByText('1 result for “loan”')).toBeVisible();
+  expect(screen.getByText(/not outstanding balance/i)).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute(
+    'href',
+    '/finances?fact=ff-loan',
+  );
+  expect(screen.queryByText(/eligible to borrow|monthly EMI/i)).not.toBeInTheDocument();
+});
