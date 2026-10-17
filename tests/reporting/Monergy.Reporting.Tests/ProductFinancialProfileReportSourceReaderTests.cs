@@ -29,7 +29,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
 
         Assert.NotNull(snapshot);
         Assert.Equal("reference-customer", snapshot.CustomerId);
-        Assert.Equal(6, snapshot.Items.Length);
+        Assert.Equal(7, snapshot.Items.Length);
         Assert.Contains(snapshot.Items, item =>
             item.Label == "Employment income" &&
             item.Value == 125000m &&
@@ -58,7 +58,8 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             item.Source.FinancialProvenanceReferenceId == "provenance-investment" &&
             item.Source.CalculationLineageReferenceId is null);
         Assert.Contains(snapshot.Items, item => item.Label == "Insurance source figure" && item.Source.SourceId == "ff-insurance" && item.Source.FinancialProvenanceReferenceId == "provenance-insurance" && item.Source.CalculationLineageReferenceId is null);
-        Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-unsupported-tax");
+        Assert.Contains(snapshot.Items, item => item.Label == "Tax source figure" && item.Value == 14000m && item.Source.SourceId == "ff-tax" && item.Source.EvidenceReferenceId == "evidence-tax" && item.Source.FinancialProvenanceReferenceId == "provenance-tax" && item.Source.CalculationLineageReferenceId is null);
+        Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-unsupported");
         Assert.All(handler.Requests, request =>
         {
             Assert.Equal("T001", request.Tenant);
@@ -97,6 +98,16 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             "report-correlation-1",
             null), CancellationToken.None));
 
+        Assert.Equal("report.source.provenance-boundary-invalid", failure.Error.Code);
+    }
+
+    [Fact]
+    public async Task TaxSourceWithMismatchedFactProvenanceFailsClosed()
+    {
+        var handler = new FinancialProfileHandler { MismatchedTaxProvenance = true };
+        var failure = await Assert.ThrowsAsync<ReportSourceException>(() => Reader(handler, Accessor())
+            .ReadAsync(new("reference-customer", Security(), "tax-request", "tax-correlation", null),
+                CancellationToken.None));
         Assert.Equal("report.source.provenance-boundary-invalid", failure.Error.Code);
     }
 
@@ -141,6 +152,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
     private sealed class FinancialProfileHandler : HttpMessageHandler
     {
         public bool CrossCustomerProvenance { get; set; }
+        public bool MismatchedTaxProvenance { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
@@ -195,9 +207,13 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                     "INSURANCE", "Insurance source figure", 100m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-insurance"),
                 new AuthoritativeFinancialFact(
-                    "ff-unsupported-tax", "financial-profile-reference-customer", "reference-customer",
-                    "TAX", "Unsupported tax source", 10m, "USD",
+                    "ff-tax", "financial-profile-reference-customer", "reference-customer",
+                    "TAX", "Tax source figure", 14000m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-tax"),
+                new AuthoritativeFinancialFact(
+                    "ff-unsupported", "financial-profile-reference-customer", "reference-customer",
+                    "UNSUPPORTED", "Unsupported source", 10m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-unsupported"),
             };
             return Success(request, new FinancialProfileDetails(
                 "financial-profile-reference-customer",
@@ -216,14 +232,15 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             var asset = request.Payload.FinancialProvenanceId == "provenance-asset";
             var investment = request.Payload.FinancialProvenanceId == "provenance-investment";
             var insurance = request.Payload.FinancialProvenanceId == "provenance-insurance";
+            var tax = request.Payload.FinancialProvenanceId == "provenance-tax";
             var customer = CrossCustomerProvenance ? "other-customer" : "reference-customer";
             return Success(request, new FinancialProvenance(
                 request.Payload.FinancialProvenanceId,
-                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : investment ? "ff-investment" : insurance ? "ff-insurance" : "ff-expense",
+                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : investment ? "ff-investment" : insurance ? "ff-insurance" : tax ? (MismatchedTaxProvenance ? "ff-wrong-tax" : "ff-tax") : "ff-expense",
                 customer,
-                income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : investment ? "evidence-investment" : insurance ? "evidence-insurance" : "evidence-expense",
-                income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : investment ? "document-version-investment" : insurance ? "document-version-insurance" : "document-version-expense",
-                income ? "source-income" : loan ? "source-loan" : asset ? "source-asset" : investment ? "source-investment" : insurance ? "source-insurance" : "source-expense",
+                income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : investment ? "evidence-investment" : insurance ? "evidence-insurance" : tax ? "evidence-tax" : "evidence-expense",
+                income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : investment ? "document-version-investment" : insurance ? "document-version-insurance" : tax ? "document-version-tax" : "document-version-expense",
+                income ? "source-income" : loan ? "source-loan" : asset ? "source-asset" : investment ? "source-investment" : insurance ? "source-insurance" : tax ? "source-tax" : "source-expense",
                 "extractor/1",
                 "validator/1",
                 "reviewed-document-facts/1.0.0",
