@@ -31,7 +31,7 @@ const journeys: {
   },
   {
     title: 'Review financial information',
-    description: 'See trusted Income, Expense, Loan, Asset, Investment and Insurance source information linked to its document.',
+    description: 'See trusted Income, Expense, Loan, Asset, Investment, Insurance and Tax source information linked to its document.',
     href: '/finances',
     icon: 'reports',
     capability: 'financial-profile.profile.read',
@@ -108,6 +108,7 @@ export default function WorkspaceHome() {
     const assets = facts.filter((fact) => fact.factType === 'ASSET').length;
     const investments = facts.filter((fact) => fact.factType === 'INVESTMENT').length;
     const insurance = facts.filter((fact) => fact.factType === 'INSURANCE').length;
+    const tax = facts.filter((fact) => fact.factType === 'TAX').length;
     const sources = new Set(facts.map((fact) => fact.source.documentVersion)).size;
     const ordered = [...facts].sort((left, right) =>
       right.source.recordedAt.localeCompare(left.source.recordedAt),
@@ -120,6 +121,7 @@ export default function WorkspaceHome() {
       { key: 'ASSET', label: 'Asset source figures', count: assets },
       { key: 'INVESTMENT', label: 'Investment source figures', count: investments },
       { key: 'INSURANCE', label: 'Insurance source figures', count: insurance },
+      { key: 'TAX', label: 'Tax source figures', count: tax },
     ];
     return {
       facts: facts.length,
@@ -129,6 +131,7 @@ export default function WorkspaceHome() {
       assets,
       investments,
       insurance,
+      tax,
       sources,
       latest,
       latestRecordedAt: ordered[0]?.source.recordedAt ?? null,
@@ -158,7 +161,7 @@ export default function WorkspaceHome() {
           <h2 id="workspace-hero-title">Start with what you already have.</h2>
           <p>
             Add a financial document. Monergy keeps the document and source details connected so
-            you can review extracted Income, Expense, Loan, Asset, Investment or Insurance source information before explicitly adding it to
+            you can review extracted Income, Expense, Loan, Asset, Investment, Insurance or Tax source information before explicitly adding it to
             your trusted financial information.
           </p>
           {capabilities.has('evidence.document.upload') ? (
@@ -295,7 +298,7 @@ export default function WorkspaceHome() {
                     ))}
                   </div>
                   <p className="workspace-passport-scope-note">
-                    Coverage is limited to Income, Expense, Loan, Asset, Investment and Insurance source facts. Asset, Investment and Insurance figures are document-stated amounts, not independently verified asset values, market prices, policy benefits, claim eligibility or net-worth totals.
+                    Coverage is limited to Income, Expense, Loan, Asset, Investment, Insurance and Tax source facts. Asset, Investment and Insurance figures are document-stated amounts, not independently verified asset values, market prices, policy benefits, claim eligibility or net-worth totals.
                     It is not a financial health score or a statement that your finances are complete.
                   </p>
                   {snapshot.coveredCategories < snapshot.coverage.length &&
@@ -323,7 +326,7 @@ export default function WorkspaceHome() {
                       >
                         <span>
                           <strong>{fact.label}</strong>
-                          <small>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'EXPENSE' ? 'Expense' : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INSURANCE' ? 'Insurance source figure' : fact.factType}</small>
+                          <small>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'EXPENSE' ? 'Expense' : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INSURANCE' ? 'Insurance source figure' : fact.factType === 'TAX' ? 'Tax source figure' : fact.factType}</small>
                         </span>
                         <span>
                           <small>Source</small>
@@ -339,7 +342,7 @@ export default function WorkspaceHome() {
                   <WorkspaceIcon name="reports" size={22} />
                   <div>
                     <strong>Your Financial Passport is ready for trusted information.</strong>
-                    <p>Review supported Income, Expense, Loan, Asset, Investment or Insurance source details from Documents and choose what to add.</p>
+                    <p>Review supported Income, Expense, Loan, Asset, Investment, Insurance or Tax source details from Documents and choose what to add.</p>
                   </div>
                   {capabilities.has('evidence.document.upload') && <a href="/evidence">Review documents</a>}
                 </div>
