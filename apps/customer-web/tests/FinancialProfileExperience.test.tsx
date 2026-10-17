@@ -309,3 +309,39 @@ it('opens a Passport deep link directly to the requested trusted fact', async ()
   expect(drawer).toHaveTextContent('Employment income');
   expect(drawer).toHaveTextContent('1 revision');
 });
+
+it('shows explicitly reviewed Loan facts with exact source provenance, not invented loan totals', async () => {
+  window.history.replaceState(null, '', '/finances?type=LOAN');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 3,
+    updatedAt: '2026-10-17T06:00:00Z',
+    dataDurability: 'Temporary data',
+    facts: [{
+      financialFactId: 'ff-loan-source',
+      factType: 'LOAN',
+      label: 'Car loan principal stated in document',
+      value: 400000,
+      currency: 'INR',
+      effectiveDate: '2026-10-16',
+      revision: 1,
+      source: {
+        sourceName: 'loan-statement.txt',
+        documentVersion: 'document-version-loan',
+        recordedAt: '2026-10-17T06:00:00Z',
+        technicalSourceFactId: 'source-fact-loan',
+        technicalProvenanceId: 'provenance-loan',
+      },
+    }],
+  });
+  mount(api);
+  expect(await screen.findByText('Car loan principal stated in document')).toBeVisible();
+  expect(screen.getByText('Loan information')).toBeVisible();
+  expect(screen.getByText('Source: loan-statement.txt')).toBeVisible();
+  expect(screen.queryByText(/Total loan outstanding/i)).not.toBeInTheDocument();
+  expect(window.location.pathname + window.location.search).toBe('/finances?type=LOAN');
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Expenses' }));
+  expect(await screen.findByRole('heading', { name: 'No trusted expense information yet.' })).toBeVisible();
+  expect(screen.queryByText('Car loan principal stated in document')).not.toBeInTheDocument();
+});
