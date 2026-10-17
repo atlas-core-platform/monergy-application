@@ -84,11 +84,13 @@ export default function ProductActionCentreExperience() {
     const facts = profile?.facts ?? [];
     const income = facts.filter((fact) => fact.factType === 'INCOME').length;
     const expenses = facts.filter((fact) => fact.factType === 'EXPENSE').length;
-    const covered = Number(income > 0) + Number(expenses > 0);
+    const loan = facts.filter((fact) => fact.factType === 'LOAN').length;
+    const covered = Number(income > 0) + Number(expenses > 0) + Number(loan > 0);
     return {
       trusted: facts.length,
       income,
       expenses,
+      loan,
       covered,
     };
   }, [profile]);
@@ -162,7 +164,7 @@ export default function ProductActionCentreExperience() {
         id: 'review-documents',
         title: 'Your Documents do not contain any trusted financial information yet.',
         description:
-          'Review a supported document and add only the Income or Expense details you have checked. Extracted information remains separate until you confirm it.',
+          'Review a supported document and add only the Income, Expense or Loan source details you have checked. Extracted information remains separate until you confirm it.',
         href: '/evidence',
         action: 'Review Documents',
       });
@@ -191,6 +193,16 @@ export default function ProductActionCentreExperience() {
           action: canReadDocuments ? 'Review Documents' : undefined,
         });
       }
+      if (state.loan === 0) {
+        items.push({
+          id: 'loan-source-missing',
+          title: 'No trusted Loan source information is currently represented.',
+          description:
+            'The current Financial Passport contains no reviewed Loan source fact. Review Documents if you have a supported source to add. This is not a statement that you have no outstanding loans or loan obligations.',
+          href: canReadDocuments ? '/evidence' : undefined,
+          action: canReadDocuments ? 'Review Documents' : undefined,
+        });
+      }
     }
 
     return items;
@@ -206,6 +218,7 @@ export default function ProductActionCentreExperience() {
     profile,
     state.expenses,
     state.income,
+    state.loan,
     state.trusted,
   ]);
 
@@ -225,8 +238,8 @@ export default function ProductActionCentreExperience() {
           <p className="workspace-eyebrow">ACTION CENTRE</p>
           <h1>See what needs attention in the journeys Monergy supports today.</h1>
           <p>
-            These attention items are derived only from your current Documents, trusted Income or
-            Expense information, and durable document-processing status. They are not ranked
+            These attention items are derived only from your current Documents, trusted Income, Expense or
+            Loan source information, and durable document-processing status. They are not ranked
             recommendations, a financial-health score, or a persistent task list.
           </p>
         </div>
@@ -289,7 +302,7 @@ export default function ProductActionCentreExperience() {
               </span>
               <div>
                 <span>Supported coverage</span>
-                <strong>{canReadFinancial && profile !== null ? String(state.covered) + ' of 2' : '—'}</strong>
+                <strong>{canReadFinancial && profile !== null ? String(state.covered) + ' of 3' : '—'}</strong>
               </div>
             </div>
             <div className="product-panel product-summary-card">
@@ -361,8 +374,8 @@ export default function ProductActionCentreExperience() {
                   <strong>No attention items are visible in the currently loaded supported state.</strong>
                   <p>
                     This does not mean your overall finances are complete, and it is not a lifetime
-                    processing-history claim. It reflects the current Documents, supported Income
-                    and Expense information, and recent processing activity returned by the bounded
+                    processing-history claim. It reflects the current Documents, supported Income,
+                    Expense and Loan source information, and recent processing activity returned by the bounded
                     product APIs.
                   </p>
                 </div>
