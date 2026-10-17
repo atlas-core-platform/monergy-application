@@ -337,7 +337,7 @@ it('shows explicitly reviewed Loan facts with exact source provenance, not inven
   });
   mount(api);
   expect(await screen.findByText('Car loan principal stated in document')).toBeVisible();
-  expect(screen.getByText('Loan information')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Loan information' })).toBeVisible();
   expect(screen.getByText('Source: loan-statement.txt')).toBeVisible();
   expect(screen.queryByText(/Total loan outstanding/i)).not.toBeInTheDocument();
   expect(window.location.pathname + window.location.search).toBe('/finances?type=LOAN');
