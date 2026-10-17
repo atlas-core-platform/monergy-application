@@ -101,7 +101,7 @@ export default function ProductReportsExperience() {
           <p>
             This summary contains the currently supported financial information already in your
             Financial Profile and keeps each item connected to its source. It is not a formal report
-            pack, financial-health score, recommendation, or advice. Included Loan source amounts do not establish verified outstanding balances, EMI, or eligibility. Asset source figures are document-reported values, not independently verified valuations or net-worth totals. Investment source figures are document-stated amounts, not live securities holdings, current NAV, market prices or portfolio returns. Insurance source figures are not verified policy benefits, claims, premiums or cash values.
+            pack, financial-health score, recommendation, or advice. Included Loan source amounts do not establish verified outstanding balances, EMI, or eligibility. Asset source figures are document-reported values, not independently verified valuations or net-worth totals. Investment source figures are document-stated amounts, not live securities holdings, current NAV, market prices or portfolio returns. Insurance source figures are not verified policy benefits, claims, premiums or cash values. Tax source figures are not assessed tax liabilities, refunds, filings or tax advice.
           </p>
         </div>
         <Tag className="product-environment">
