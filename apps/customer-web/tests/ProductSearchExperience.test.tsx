@@ -286,3 +286,35 @@ it('finds Insurance source figures without asserting verified policy coverage', 
   expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute('href', '/finances?fact=ff-insurance');
   expect(screen.queryByText(/claim approved|policy benefit certified/i)).not.toBeInTheDocument();
 });
+
+
+it('searches a trusted Tax source figure without claiming assessed tax or refund', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    query: 'tax',
+    matchMode: 'Lexical',
+    items: [{
+      searchRecordId: 'search-financial-ff-tax',
+      resultType: 'Financial',
+      title: 'Tax source figure',
+      summary: 'Tax source figure (not assessed liability or refund) 14000 USD effective 2026-10-01',
+      authoritativeOwner: 'Financial Profile Service',
+      representationState: 'DERIVED_REBUILDABLE',
+      score: 1,
+      source: {
+        sourceObjectType: 'FinancialFact',
+        sourceObjectId: 'ff-tax',
+        sourceReferenceId: 'financial-profile-reference-customer',
+        provenanceReferenceId: 'provenance-tax',
+        calculationLineageReferenceId: null,
+      },
+    }],
+  } as never);
+  mount(api);
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Search query'), 'tax');
+  await user.click(screen.getByRole('button', {name:'Search'}));
+  expect(await screen.findByText('1 result for “tax”')).toBeVisible();
+  expect(screen.getByText(/not assessed liability or refund/i)).toBeVisible();
+  expect(screen.getByRole('link', {name:'View source & history'})).toHaveAttribute('href','/finances?fact=ff-tax');
+});
