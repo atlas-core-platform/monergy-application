@@ -23,6 +23,7 @@ public sealed class CustomerOwnerClient : IDisposable
     private readonly Uri identity;
     private readonly Uri access;
     private readonly string contextToken;
+    private readonly string? recipientLabelToken;
     private readonly string sessionToken;
     private readonly string membershipToken;
     private readonly bool ownsClient;
@@ -44,9 +45,17 @@ public sealed class CustomerOwnerClient : IDisposable
         identity = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:CustomerIdentityUrl"));
         access = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:AccessManagementUrl"));
         contextToken = TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:CustomerContextToken");
+        recipientLabelToken = configuration["Monergy:AccessIntegration:RecipientLabelToken"];
         sessionToken = TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:CustomerIdentityToken");
         membershipToken = TenantAccessIntegration.Required(configuration, "Monergy:AccessIntegration:MembershipToken");
         foreach (var token in new[] { contextToken, sessionToken, membershipToken }) TenantAccessIntegration.ValidateToken(token);
+        if (!string.IsNullOrWhiteSpace(recipientLabelToken))
+        {
+            TenantAccessIntegration.ValidateToken(recipientLabelToken);
+            if (recipientLabelToken == contextToken || recipientLabelToken == sessionToken ||
+                recipientLabelToken == membershipToken)
+                throw new InvalidOperationException("Recipient label lookup requires a distinct workload token.");
+        }
         if (new[] { contextToken, sessionToken, membershipToken }.Distinct(StringComparer.Ordinal).Count() != 3)
             throw new InvalidOperationException("Owner ports require separate workload credentials.");
     }
@@ -93,11 +102,12 @@ public sealed class CustomerOwnerClient : IDisposable
     public async Task<string?> RecipientLabelAsync(string tenant, string actor, CancellationToken ct)
     {
         if (!TenantAccessClient.Identifier(actor, 128)) throw new TenantBoundaryException("INVALID_ACTOR", 400);
+        if (string.IsNullOrWhiteSpace(recipientLabelToken)) return null;
         try
         {
             var result = await SendAsync<CustomerOwnerRecipientLabel>(identity,
                 "internal/v1/consent-recipient-label/" + Uri.EscapeDataString(actor),
-                tenant, contextToken, null, ct).ConfigureAwait(false);
+                tenant, recipientLabelToken, null, ct).ConfigureAwait(false);
             if (result.TenantId != tenant || result.ActorId != actor ||
                 string.IsNullOrWhiteSpace(result.RecipientLabel) || result.RecipientLabel.Length > 320)
                 throw new TenantBoundaryException("RECIPIENT_LABEL_INVALID", 503);
