@@ -242,3 +242,36 @@ it('includes a trusted Investment source item without implying live holdings or 
   expect(links[2]).toHaveAttribute('href', '/finances?fact=ff-investment');
   expect(screen.queryByText(/verified brokerage balance|investment performance score/i)).not.toBeInTheDocument();
 });
+
+
+it('includes a trusted Insurance source figure without claiming verified coverage or benefit', async () => {
+  const api = new AccessApi(session);
+  const sourceItem = {
+    label: 'Document-stated insurance figure',
+    value: 100,
+    unit: 'USD',
+    source: {
+      sourceType: 'FinancialFact',
+      sourceId: 'ff-insurance',
+      authoritativeOwner: 'Financial Profile Service',
+      evidenceReferenceId: 'evidence-insurance',
+      financialProvenanceReferenceId: 'provenance-insurance',
+      calculationLineageReferenceId: null,
+    },
+  };
+  vi.spyOn(api, 'product').mockResolvedValue({
+    ...report,
+    items: [...report.items, sourceItem],
+    sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-insurance'],
+    evidenceReferences: [...report.evidenceReferences, 'evidence-insurance'],
+    financialProvenanceReferences: [...report.financialProvenanceReferences, 'provenance-insurance'],
+  } as never);
+  mount(api);
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
+  expect(await screen.findByText('Document-stated insurance figure')).toBeVisible();
+  expect(screen.getByText('$100.00')).toBeVisible();
+  expect(screen.getByText(/Insurance source figures are not verified policy benefits, claims, premiums or cash values/i)).toBeVisible();
+  const links = screen.getAllByRole('link', { name: 'View source & history' });
+  expect(links[2]).toHaveAttribute('href', '/finances?fact=ff-insurance');
+  expect(screen.queryByText(/approved claim|certified policy sum insured/i)).not.toBeInTheDocument();
+});

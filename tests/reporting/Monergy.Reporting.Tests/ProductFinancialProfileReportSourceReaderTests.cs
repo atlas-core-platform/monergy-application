@@ -28,7 +28,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
 
         Assert.NotNull(snapshot);
         Assert.Equal("reference-customer", snapshot.CustomerId);
-        Assert.Equal(5, snapshot.Items.Length);
+        Assert.Equal(6, snapshot.Items.Length);
         Assert.Contains(snapshot.Items, item =>
             item.Label == "Employment income" &&
             item.Value == 125000m &&
@@ -56,7 +56,8 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             item.Source.EvidenceReferenceId == "evidence-investment" &&
             item.Source.FinancialProvenanceReferenceId == "provenance-investment" &&
             item.Source.CalculationLineageReferenceId is null);
-        Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-insurance");
+        Assert.Contains(snapshot.Items, item => item.Label == "Insurance source figure" && item.Source.SourceId == "ff-insurance" && item.Source.FinancialProvenanceReferenceId == "provenance-insurance" && item.Source.CalculationLineageReferenceId is null);
+        Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-unsupported-tax");
         Assert.All(handler.Requests, request =>
         {
             Assert.Equal("T001", request.Tenant);
@@ -190,8 +191,12 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                     new DateOnly(2026, 10, 1), 1, "provenance-investment"),
                 new AuthoritativeFinancialFact(
                     "ff-insurance", "financial-profile-reference-customer", "reference-customer",
-                    "INSURANCE", "Future unsupported insurance", 100m, "USD",
+                    "INSURANCE", "Insurance source figure", 100m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-insurance"),
+                new AuthoritativeFinancialFact(
+                    "ff-unsupported-tax", "financial-profile-reference-customer", "reference-customer",
+                    "TAX", "Unsupported tax source", 10m, "USD",
+                    new DateOnly(2026, 10, 1), 1, "provenance-tax"),
             };
             return Success(request, new FinancialProfileDetails(
                 "financial-profile-reference-customer",
@@ -209,14 +214,15 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             var loan = request.Payload.FinancialProvenanceId == "provenance-loan";
             var asset = request.Payload.FinancialProvenanceId == "provenance-asset";
             var investment = request.Payload.FinancialProvenanceId == "provenance-investment";
+            var insurance = request.Payload.FinancialProvenanceId == "provenance-insurance";
             var customer = CrossCustomerProvenance ? "other-customer" : "reference-customer";
             return Success(request, new FinancialProvenance(
                 request.Payload.FinancialProvenanceId,
-                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : investment ? "ff-investment" : "ff-expense",
+                income ? "ff-income" : loan ? "ff-loan" : asset ? "ff-asset" : investment ? "ff-investment" : insurance ? "ff-insurance" : "ff-expense",
                 customer,
-                income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : investment ? "evidence-investment" : "evidence-expense",
-                income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : investment ? "document-version-investment" : "document-version-expense",
-                income ? "source-income" : loan ? "source-loan" : asset ? "source-asset" : investment ? "source-investment" : "source-expense",
+                income ? "evidence-income" : loan ? "evidence-loan" : asset ? "evidence-asset" : investment ? "evidence-investment" : insurance ? "evidence-insurance" : "evidence-expense",
+                income ? "document-version-income" : loan ? "document-version-loan" : asset ? "document-version-asset" : investment ? "document-version-investment" : insurance ? "document-version-insurance" : "document-version-expense",
+                income ? "source-income" : loan ? "source-loan" : asset ? "source-asset" : investment ? "source-investment" : insurance ? "source-insurance" : "source-expense",
                 "extractor/1",
                 "validator/1",
                 "reviewed-document-facts/1.0.0",
