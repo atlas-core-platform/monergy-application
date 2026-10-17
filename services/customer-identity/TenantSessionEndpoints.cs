@@ -50,6 +50,26 @@ public static class TenantSessionEndpoints
                 catch (TenantAccessException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }
                 catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
             });
+            app.MapGet("/internal/v1/consent-recipient-label/{actorId}", async (
+                string actorId, HttpContext http, PostgresTenantIdentities identities) =>
+            {
+                if (!TenantAccessIntegration.TokenMatches(
+                    http.Request.Headers["X-Monergy-Owner-Token"].ToString(), contextToken))
+                    return (IResult)Results.StatusCode(403);
+                try
+                {
+                    var tenant = http.Request.Headers["X-Monergy-Tenant"].ToString();
+                    var label = await identities.RecipientLabelAsync(
+                        tenant, actorId, http.RequestAborted).ConfigureAwait(false);
+                    return label is null ? Results.NotFound() :
+                        Results.Ok(new { tenantId = tenant, actorId, recipientLabel = label });
+                }
+                catch (TenantAccessException failure)
+                { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }
+                catch (TenantBoundaryException failure)
+                { return Results.Json(new { error = failure.Code }, statusCode: failure.Status); }
+                catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
+            });
             app.MapGet("/internal/v1/customer-owner/{actorId}", async (string actorId, HttpContext http, PostgresCustomers customers) =>
             {
                 if (!TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Owner-Token"].ToString(), contextToken))
