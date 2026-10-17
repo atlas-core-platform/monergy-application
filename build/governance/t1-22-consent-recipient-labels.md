@@ -11,7 +11,7 @@ A Customer reviewing recorded delegated sharing permission sees the recipient's 
 1. Product customer session visits `/consent` and requests its existing Consent-owned list.
 2. Consent validates current session and customer ownership before fetching the customer's at-most-100 granted records. These are the **only** actor IDs eligible for label lookup.
 3. Consent invokes a bounded concurrent (max six) internal C&I label operation for each eligible actor ID.
-4. C&I checks the separately configured `CustomerContextToken` workload credential and the trusted tenant binding, and reads its own `tenant_principals.normalized_email` from that tenant's isolated C&I database.
+4. C&I checks an **optional dedicated `RecipientLabelToken`** (distinct from `CustomerContextToken`, session and provisioning credentials) and the trusted tenant binding, and reads its own `tenant_principals.normalized_email` from that tenant's isolated C&I database.
 5. Consent rechecks current Customer & Identity session, customer ownership and owner version after resolving labels. Changed identity/owner version aborts disclosure.
 6. Consent attaches optional `recipientLabel` to an existing grant projection. The Customer view renders that label; absent labels remain explicitly unavailable.
 
