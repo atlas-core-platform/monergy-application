@@ -246,6 +246,35 @@ export class AccessApi {
       },
     );
   }
+  // Consent Service verifies owner, tenant and current session on every mutation.
+  // The revision is the freshly loaded Consent owner's optimistic-concurrency token.
+  revokeCustomerConsent<T>(
+    customerId: string,
+    grantId: string,
+    expectedVersion: number,
+    requestId: string,
+    signal?: AbortSignal,
+  ): Promise<T> {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(customerId) ||
+        !/^[A-Za-z0-9_-]{1,128}$/.test(grantId) ||
+        !Number.isSafeInteger(expectedVersion) || expectedVersion < 1 ||
+        !/^[a-f0-9]{32}$/.test(requestId))
+      return Promise.reject(new AccessApiError(400, 'INVALID_CONSENT_REVOCATION'));
+    return this.guarded<T>(
+      '/consent-api/local/v1/consents/customers/' +
+        encodeURIComponent(customerId) + '/grants/' + encodeURIComponent(grantId),
+      {
+        method: 'DELETE',
+        signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Monergy-Tenant': this.session.tenantId,
+          'X-Monergy-Session': this.session.authenticationContextId,
+        },
+        body: JSON.stringify({ requestId, expectedVersion }),
+      },
+    );
+  }
   resourceDirectory(resourceType: string, signal?: AbortSignal): Promise<ResourceDirectory> {
     if (!/^[a-z][a-z0-9-]{0,63}$/.test(resourceType))
       return Promise.reject(new AccessApiError(400, 'INVALID_RESOURCE_TYPE'));
