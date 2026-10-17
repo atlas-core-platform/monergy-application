@@ -75,3 +75,9 @@ frontend/login flows, Production provider compatibility, token issuance,
 deployment, acceptance, or architecture/System Expert updates. D11, D12 and the
 D13 source-identity evidence remain unchanged; D13 behavior remains regression
 covered.
+
+## Customer email-code access (T1-43)
+
+Optional Development LOCAL/CI customer email entry uses the existing imported identity, exact customer ownership and current Access Management membership. `GET /local/v1/customer-email-access` reports availability; `POST .../request` returns an opaque generic challenge; `POST .../confirm` consumes a delivered, expiring single-use code and issues the existing tenant session. It cannot create customers or roles and is not public self-registration or production MFA.
+
+See [the implementation and configuration receipt](../../build/governance/t1-43-customer-email-access.md). The PostgreSQL challenge/outbox and C&I audit migration is additive; SMTP is authenticated STARTTLS and disabled by default. Test adapters/captured codes are never registered by the application.

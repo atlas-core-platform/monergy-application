@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AccessApi, AccessApiError, establishSession } from './accessApi';
 import type { TenantSession } from './accessApi';
+import { confirmCustomerEmailCode } from './customerEmailApi';
 import { Context, productContextMemory, sessionMemory } from './workspaceSession';
 import type {
   ProductWorkspaceContext,
@@ -167,8 +168,8 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     },
     [leave],
   );
-  const connect = useCallback(
-    async (tenant: string, key: string) => {
+  const connectUsing = useCallback(
+    async (tenant: string, issue: (signal: AbortSignal) => Promise<TenantSession>, email = false) => {
       const id = stop();
       const controller = new AbortController();
       request.current = controller;
@@ -176,7 +177,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
       setState({ ...empty, status: 'connecting' });
       let issued: TenantSession | null = null;
       try {
-        issued = await establishSession(tenant, key, controller.signal);
+        issued = await issue(controller.signal);
         if (!validSession(issued, tenant))
           throw new AccessApiError(503, 'SESSION_RESPONSE_INVALID');
         if (id !== epoch.current || !mounted.current) return;
@@ -194,7 +195,11 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
                 ? 'Organization Administrator access is required.'
                 : 'A customer workspace and product role are required.'
               : failure instanceof AccessApiError && failure.status === 401
-                ? 'Unable to connect. Check your organization and local access key, then try again.'
+                ? email
+                  ? 'The verification code is invalid, expired or already used. Request a new code if needed.'
+                  : 'Unable to connect. Check your organization and local access key, then try again.'
+                : failure instanceof AccessApiError && failure.status === 429
+                  ? 'Too many attempts. Wait a minute before trying again.'
                 : 'Workspace verification could not be completed. Check the connection and try again.',
         });
       } finally {
@@ -209,6 +214,10 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     },
     [stop, publish, area],
   );
+  const connect = useCallback((tenant: string, key: string) =>
+    connectUsing(tenant, (signal) => establishSession(tenant, key, signal)), [connectUsing]);
+  const connectEmail = useCallback((tenant: string, challengeId: string, code: string) =>
+    connectUsing(tenant, (signal) => confirmCustomerEmailCode(tenant, challengeId, code, signal), true), [connectUsing]);
   const retry = useCallback(async () => {
     const current = candidate.current;
     if (!current || !validSession(current, current.tenantId)) {
@@ -300,7 +309,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     };
   }, [state.session, leave, retry]);
   return (
-    <Context.Provider value={{ ...state, connect, retry, signOut, cancel }}>
+    <Context.Provider value={{ ...state, connect, connectEmail, retry, signOut, cancel }}>
       {children}
     </Context.Provider>
   );

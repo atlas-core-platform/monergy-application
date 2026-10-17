@@ -54,19 +54,31 @@ public sealed class TenantSessionAuthority(ITenantSessionRepository repository, 
     public async Task<TenantSessionContext> EstablishAsync(string tenantId, string authenticationReference, CancellationToken cancellationToken)
     {
         var actorId = authenticator.Authenticate(tenantId, authenticationReference);
+        return await EstablishVerifiedAsync(tenantId, actorId, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal async Task<TenantSessionContext> EstablishVerifiedAsync(string tenantId, string actorId, CancellationToken cancellationToken)
+    {
+        TenantAccessProtocol.Identifier(tenantId, 64);
+        TenantAccessProtocol.Identifier(actorId);
         var state = await membership.ReadAsync(tenantId, actorId, cancellationToken).ConfigureAwait(false);
         if (!state.Active) throw new TenantAccessException("MEMBERSHIP_INACTIVE", 401);
         var sessionId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
         var session = await repository.CreateAsync(tenantId, actorId, sessionId, state.SubjectVersion, cancellationToken).ConfigureAwait(false);
         // Membership is re-read after the owner commit. Cross-service transactions
         // are not implied; every later validation and protected decision is fresh.
-        var confirmed = await membership.ReadAsync(tenantId, actorId, cancellationToken).ConfigureAwait(false);
-        if (!confirmed.Active || confirmed.SubjectVersion != session.SubjectVersion)
+        try
         {
-            await repository.RevokeAsync(tenantId, sessionId, cancellationToken).ConfigureAwait(false);
-            throw new TenantAccessException("MEMBERSHIP_CHANGED", 409);
+            var confirmed = await membership.ReadAsync(tenantId, actorId, cancellationToken).ConfigureAwait(false);
+            if (!confirmed.Active || confirmed.SubjectVersion != session.SubjectVersion)
+                throw new TenantAccessException("MEMBERSHIP_CHANGED", 409);
+            return session;
         }
-        return session;
+        catch
+        {
+            await repository.RevokeAsync(tenantId, sessionId, CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
     }
 
     public async Task<bool> EndAsync(TenantSessionLookup lookup, CancellationToken cancellationToken)

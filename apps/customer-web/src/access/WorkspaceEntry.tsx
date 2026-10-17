@@ -1,7 +1,9 @@
 import { Alert, Button, Form, Input, Tag } from 'antd';
 import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { useWorkspaceSession } from './workspaceSession';
+import { CustomerEmailEntry } from './CustomerEmailEntry';
 import './access.css';
 
 export function WorkspaceEntry({
@@ -11,8 +13,22 @@ export function WorkspaceEntry({
   children: ReactNode;
   area?: 'administration' | 'product';
 }) {
-  const { status, session, message, connect, retry, cancel } = useWorkspaceSession();
+  const { status, session, message, connect, connectEmail, retry, cancel } = useWorkspaceSession();
   const [form] = Form.useForm<{ tenantId: string; key: string }>();
+  const [emailAvailable, setEmailAvailable] = useState(false);
+  const [emailEntry, setEmailEntry] = useState(false);
+  useEffect(() => {
+    if (area !== 'product' || !connectEmail) return;
+    const controller = new AbortController();
+    void fetch('/identity-api/local/v1/customer-email-access', {
+      cache: 'no-store', redirect: 'error', signal: controller.signal,
+    }).then(async (response) => {
+      const value: unknown = response.ok ? await response.json() : null;
+      if (!controller.signal.aborted && value && typeof value === 'object' && 'enabled' in value)
+        setEmailAvailable(value.enabled === true);
+    }).catch(() => undefined);
+    return () => { controller.abort(); };
+  }, [area, connectEmail]);
   if (status === 'authorized' && session) return children;
   const busy = status === 'connecting' || status === 'verifying';
   return (
@@ -55,7 +71,7 @@ export function WorkspaceEntry({
             <WorkspaceIcon name="shield" size={20} />
           </span>
           <h2 id="access-connect-title">Connect to your workspace</h2>
-          <p>Enter the organization and local key provided by your administrator.</p>
+          {!emailEntry && <p>Enter the organization and local key provided by your administrator.</p>}
           {message && (
             <Alert
               showIcon
@@ -83,6 +99,8 @@ export function WorkspaceEntry({
                 Use another connection
               </Button>
             </>
+          ) : emailEntry && connectEmail ? (
+            <CustomerEmailEntry busy={busy} onVerify={connectEmail} onCancel={() => { cancel(); setEmailEntry(false); }} />
           ) : (
             <Form
               form={form}
@@ -146,10 +164,11 @@ export function WorkspaceEntry({
               )}
             </Form>
           )}
-          <p className="access-connect-footnote">
+          {!emailEntry && emailAvailable && status !== 'disconnected' && <Button block type="link" disabled={busy} onClick={() => { cancel(); setEmailEntry(true); }}>Use an email code</Button>}
+          {!emailEntry && <p className="access-connect-footnote">
             Your key is cleared after use. Test-environment keys do not configure production
             sign-in.
-          </p>
+          </p>}
         </section>
       </main>
       <footer className="access-public-footer">

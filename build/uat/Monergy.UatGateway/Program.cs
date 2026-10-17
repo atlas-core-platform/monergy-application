@@ -125,6 +125,9 @@ static string? Route(string path, string method)
     if ((path is "/identity-api/local/v1/tenant-sessions" or "/identity-api/local/v1/tenant-sessions/revoke") && method == "POST" ||
         path == "/identity-api/local/v1/administration/sessions" && method == "GET")
         return "http://127.0.0.1:5101" + path[13..];
+    if (path == "/identity-api/local/v1/customer-email-access" && method == "GET" ||
+        path is "/identity-api/local/v1/customer-email-access/request" or "/identity-api/local/v1/customer-email-access/confirm" && method == "POST")
+        return "http://127.0.0.1:5101" + path[13..];
     if (path == "/audit-api/local/v1/administration/access-events" && method == "GET")
         return "http://127.0.0.1:5102" + path[10..];
     if (path.StartsWith("/consent-api/local/v1/consents/customers/", StringComparison.Ordinal) && method is "GET" or "POST" or "DELETE")

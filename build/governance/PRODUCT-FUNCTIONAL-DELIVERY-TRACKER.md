@@ -1,6 +1,6 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest functional increment: T1-42 financial information CSV intake/extraction; 54 VS-02 tests and 34 Documents component tests passed, gateway build/TypeScript/test lint passed. Current merged source identity and full Expert compilation are recorded in the paired Expert receipt. Live owner-backed PostgreSQL UAT remains open.
+Status: ACTIVE · Latest functional increment: T1-43 customer email-code entry for an existing imported/owned customer. Expiring one-time challenge, encrypted delivery queue, authenticated STARTTLS adapter and current owner/membership checks are implemented. Exact native/UI checks and source identity are in the T1-43 receipt and paired System Expert record. Real SMTP delivery and PostgreSQL-backed UAT remain open; full public registration, SMS, terms/profile/settings and production identity are not declared complete.
 This file tracks bounded implementation units; the accepted 81-feature catalog and 151 requirement IDs remain authoritative for requirements identity, and the AR-003 persona and capability catalogs remain authoritative for planned journeys.
 One current implementation unit may be a subset of one canonical feature. Engineering completion never proves an entire business feature complete.
 
@@ -8,7 +8,24 @@ One current implementation unit may be a subset of one canonical feature. Engine
 
 Each unit requires: owner-backed UI/API/data behavior; tenant/customer access, applicable Consent and fail-closed unavailable states; focused local tests and required security verification; explicit source/evidence identity; System Expert knowledge synchronization and consistency verification; updated traceability; CTO acceptance. No development-phase GitHub Actions. No acceptance or main merge based solely on source inspection.
 
-## Queue (review continuously against dependency evidence)
+## Current execution queue — complete Phase 1 journeys
+
+This section supersedes the historical priority/verification labels below. Latest unit receipts establish focused native evidence; they do not erase unexecuted integrated UAT or close compound requirements.
+
+| Priority | Outcome / current implementation | Next dependency or meaningful unit |
+| --- | --- | --- |
+| P0 / current T1-43 | Email-code access for an existing imported customer with exact active ownership; no browser code retrieval or role creation | Finish paired Expert source synchronization and exact verification receipt. Actual SMTP credentials/delivery and owner PostgreSQL UAT remain deployment/runtime dependencies |
+| P0 / next identity unit | Complete registration/activation, profile and published terms/privacy acceptance | Reuse approved identity/tenant decisions and existing member-import authority; implement owner-backed customer activation and agreement records without inventing legal text, KYC, roles or ownership. MON-ID-001–005/012 remain partial/open |
+| P0 | File security scanning, classification and OCR | Text/CSV extraction exists; add the approved fail-closed scanner gate and one actual document-type OCR/review path. MON-SEC-008 and MON-DOC-003–006 remain open |
+| P0 | Google Drive / OneDrive customer storage journey | Implement actual authorized provider import/status/refresh/disconnect, preserving exact folder/file/document identities; reference gateway is insufficient |
+| P0 | Full Loan account and financial truth | Seven source categories exist. Complete lender/type/sanction/outstanding/rate/EMI/tenure/dates and required asset/liability records; a typed source amount does not complete MON-FIN-006 |
+| P0 | Deterministic net worth | Assets minus Liabilities is already specified. Complete authoritative dated/currency/valuation inputs and customer calculation/provenance; scoring approval is a distinct gate |
+| P0 | Basic authorized financial Q&A | Seven-category lexical Search/basic Reports exist; complete grounded Q&A, source citations and insufficient-data behavior under the approved model/privacy boundary |
+| P0 | Phase 1 business administration / notifications | Complete customer/document/processing/audit operating journeys and the explicitly baselined notification subset; RBAC setup alone is insufficient |
+| Carry-forward verification | Source-matched System Expert through latest paired receipt; focused native suites for T1-20..42 supersede old authored-only/stale-compile statements | Live PostgreSQL integrated UAT remains NOT RUN. Do not repeat already passed full checks without a new defect/source change or mark native test adapters as database UAT |
+| Later source phases / approved direction | AA/bank/CIC, scoring, formal packs, advanced AI, professional and marketplace workflows | Preserve specific provider/methodology/assignment/case ownership gates and source phases; accepted role foundations are not complete professional workspaces |
+
+## Historical queue context — superseded by current queue and exact receipts
 
 | Priority | Unit | Requirement/feature | Source/owner boundary | Current state | Next dependency |
 | --- | --- | --- | --- | --- | --- |
