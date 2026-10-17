@@ -20,7 +20,7 @@ public sealed record ReferenceEvidenceReadResult(
 public static class EvidenceReferenceIntakeEndpoints
 {
     private static readonly HashSet<string> SupportedContentTypes = new(StringComparer.OrdinalIgnoreCase)
-    { "application/pdf", "image/png", "image/jpeg", "text/plain" };
+    { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv" };
 
     public static IEndpointRouteBuilder MapEvidenceReferenceIntake(
         this IEndpointRouteBuilder endpoints,
@@ -81,7 +81,8 @@ public static class EvidenceReferenceIntakeEndpoints
             var version = await repository.GetVersionAsync(input.DocumentVersionId, cancellationToken).ConfigureAwait(false);
             if (version is null || !string.Equals(version.CustomerId, input.CustomerId, StringComparison.Ordinal))
                 return Results.NotFound(new { error = "EVIDENCE_PROCESSING_SOURCE_NOT_FOUND" });
-            if (!string.Equals(version.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(version.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(version.ContentType, "text/csv", StringComparison.OrdinalIgnoreCase))
                 return Results.Json(new { error = "EVIDENCE_PROCESSING_CONTENT_UNSUPPORTED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
             var value = await content.ReadAsync(version.ContentReference, cancellationToken).ConfigureAwait(false);
             if (value is null)
@@ -113,7 +114,8 @@ public static class EvidenceReferenceIntakeEndpoints
             ReadOnlySpan<byte> signature = [0xFF, 0xD8, 0xFF];
             return content.AsSpan().StartsWith(signature);
         }
-        if (!contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase) || content.Contains((byte)0))
+        if (!(contentType.Equals("text/plain", StringComparison.OrdinalIgnoreCase) ||
+              contentType.Equals("text/csv", StringComparison.OrdinalIgnoreCase)) || content.Contains((byte)0))
             return false;
         try
         {

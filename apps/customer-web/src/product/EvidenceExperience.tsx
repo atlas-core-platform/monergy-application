@@ -7,6 +7,8 @@ import { useWorkspaceSession } from '../access/workspaceSession';
 import {
   addProcessingFactsToFinancialProfile,
   evidenceTypes,
+  evidenceContentType,
+  financialCsvTemplate,
   getDocumentProcessing,
   getEvidenceSource,
   getEvidenceVersionHistory,
@@ -43,6 +45,7 @@ const typeName = (value: string) =>
     'image/png': 'PNG image',
     'image/jpeg': 'JPEG image',
     'text/plain': 'Plain text',
+    'text/csv': 'Financial information CSV',
   })[value] ?? value;
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat(undefined, {
@@ -383,8 +386,8 @@ export default function EvidenceExperience() {
 
   const issue = useMemo(() => {
     if (!candidate) return '';
-    if (!evidenceTypes.includes(candidate.type))
-      return 'Choose a PDF, PNG, JPEG or plain-text file.';
+    if (!evidenceTypes.includes(evidenceContentType(candidate)))
+      return 'Choose a PDF, PNG, JPEG, plain-text or CSV file.';
     if (candidate.size < 1 || candidate.size > maximumEvidenceBytes)
       return 'Choose a non-empty file no larger than 1 MB.';
     if (
@@ -555,7 +558,7 @@ export default function EvidenceExperience() {
         failure instanceof AccessApiError && failure.status === 403
           ? 'You no longer have access to extract details from this document.'
           : failure instanceof AccessApiError && failure.status === 422
-            ? 'Extracting details is currently available only for structured text files.'
+            ? 'Extracting details is available for structured text and financial information CSV files.'
             : "We couldn't extract details from this document. Your financial information has not changed.",
       );
     } finally {
@@ -628,7 +631,7 @@ export default function EvidenceExperience() {
             </span>
             <div>
               <h2 id="upload-heading">Add document</h2>
-              <p>PDF, PNG, JPEG or text · up to 1 MB</p>
+              <p>PDF, PNG, JPEG, text or CSV · up to 1 MB</p>
             </div>
           </div>
           {!canUpload && (
@@ -640,7 +643,7 @@ export default function EvidenceExperience() {
             />
           )}
           <Dragger
-            accept={evidenceTypes.join(',')}
+            accept={[...evidenceTypes, '.csv'].join(',')}
             multiple={false}
             showUploadList={false}
             beforeUpload={select}
@@ -653,6 +656,17 @@ export default function EvidenceExperience() {
             <p className="ant-upload-text">Drop a document here</p>
             <p className="ant-upload-hint">or choose a file to review before uploading</p>
           </Dragger>
+          <p>
+            For CSV, use the{' '}
+            <a
+              download="monergy-financial-information.csv"
+              href={'data:text/csv;charset=utf-8,' + encodeURIComponent(financialCsvTemplate)}
+            >
+              financial information template
+            </a>. Replace its example row with your own information.
+            {' '}Use Category, Description, Amount, Currency, Date and Source; up to 100 rows.
+            Values are copied as supplied and require your review. Use a unique description within each category.
+          </p>
           <div className="product-trust-row">
             <span>
               <WorkspaceIcon name="shield" size={16} /> Linked to your customer account
@@ -1072,7 +1086,9 @@ export default function EvidenceExperience() {
                                 currency: fact.currency,
                               }).format(fact.candidateValue)}
                             </strong>
-                            <span>{Math.round(fact.confidence * 100)}% confidence</span>
+                            <span>{'extractionVersion' in fact && fact.extractionVersion === 'financial-csv/1.0.0'
+                              ? 'Copied from CSV'
+                              : String(Math.round(fact.confidence * 100)) + '% confidence'}</span>
                           </div>
                         </article>
                       );
@@ -1439,14 +1455,14 @@ export default function EvidenceExperience() {
               <div>
                 <strong>Extract details from this document</strong>
                 <p>
-                  {selectedEvidence.contentType === 'text/plain'
-                    ? 'Find supported income and expense information and review where it came from.'
-                    : 'Extracting details is currently available only for structured text files.'}
+                  {['text/plain', 'text/csv'].includes(selectedEvidence.contentType)
+                    ? 'Review supported financial source figures before adding them to Financial information.'
+                    : 'Extracting details is available for structured text and financial information CSV files.'}
                 </p>
               </div>
               <Button
                 type="primary"
-                disabled={!canProcess || selectedEvidence.contentType !== 'text/plain'}
+                disabled={!canProcess || !['text/plain', 'text/csv'].includes(selectedEvidence.contentType)}
                 onClick={() => {
                   setProcessingEvidence(selectedEvidence);
                   setSelectedEvidence(null);
@@ -1490,7 +1506,7 @@ export default function EvidenceExperience() {
               <Button
                 type="primary"
                 loading={processingBusy}
-                disabled={!canProcess || processingEvidence?.contentType !== 'text/plain'}
+                disabled={!canProcess || !['text/plain', 'text/csv'].includes(processingEvidence?.contentType ?? '')}
                 onClick={() => void processDocument()}
               >
                 Extract details
@@ -1580,7 +1596,7 @@ export default function EvidenceExperience() {
                 type="error"
                 title="We couldn't extract details from this document"
                 description={
-                  'Check that this is a supported structured-text document containing income or expense information, then try again.'
+                  'Check that the document matches the structured-text format or financial information CSV template, then try again.'
                 }
               />
             )}
@@ -1631,7 +1647,9 @@ export default function EvidenceExperience() {
                             currency: fact.currency,
                           }).format(fact.candidateValue)}
                         </strong>
-                        <span>{Math.round(fact.confidence * 100)}% confidence</span>
+                        <span>{'extractionVersion' in fact && fact.extractionVersion === 'financial-csv/1.0.0'
+                              ? 'Copied from CSV'
+                              : String(Math.round(fact.confidence * 100)) + '% confidence'}</span>
                       </div>
                     </article>
                   ))}
@@ -1699,7 +1717,7 @@ export default function EvidenceExperience() {
             </span>
             <h3>{candidate.name}</h3>
             <p>
-              {typeName(candidate.type || 'Unknown type')} · {formatBytes(candidate.size)}
+              {typeName(evidenceContentType(candidate) || 'Unknown type')} · {formatBytes(candidate.size)}
             </p>
             {issue && <Alert showIcon type="error" title={issue} />}
             {error && <Alert showIcon type="error" title={error} />}

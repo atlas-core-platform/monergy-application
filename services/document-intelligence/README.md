@@ -45,6 +45,10 @@ or Financial Profile mutation. The customer product response further narrows
 the result to accepted Income/Expense candidate fields and omits customer,
 Evidence, implementation-version and failure/retry internals.
 
+## T1-42 financial information CSV
+
+The LOCAL/UAT processor additionally accepts UTF-8 `text/csv` using the customer-downloadable template: Category, Description, Amount, Currency, Date, Source. It copies explicit values into the existing seven candidate categories. Header order/case, quoted fields, embedded newlines and UTF-8 BOM are supported. An invalid row rejects the entire file; 1–100 records and existing size, source hash and owner checks apply. CSV candidates require explicit customer review and do not update Financial Profile automatically. This does not provide arbitrary bank-statement mapping, Excel parsing, OCR, inferred document classification or production-provider acceptance.
+
 ## Targeted verification
 
 Run from the repository root:

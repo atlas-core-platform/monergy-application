@@ -55,13 +55,13 @@ public sealed class HttpEvidenceContentReader : IEvidenceContentReader, IDisposa
             using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.NotFound) return null;
             if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
-                throw new EvidenceContentUnsupportedException("The LOCAL processor supports structured text evidence only.");
+                throw new EvidenceContentUnsupportedException("The LOCAL processor supports structured text and template CSV evidence only.");
             if (!response.IsSuccessStatusCode)
                 throw new EvidenceDependencyException("The Evidence owner did not supply the requested version.");
             var source = await response.Content.ReadFromJsonAsync<EvidenceProcessingSource>(Json, cancellationToken)
                 .ConfigureAwait(false) ?? throw new EvidenceDependencyException("The Evidence owner returned an invalid response.");
             if (source.DocumentVersionId != documentVersionId || source.CustomerId != customerId ||
-                source.ContentType != "text/plain" || source.ContentSha256.Length != 64 ||
+                (source.ContentType != "text/plain" && source.ContentType != "text/csv") || source.ContentSha256.Length != 64 ||
                 !string.Equals(source.ContentSha256,
                     Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(source.Content))),
                     StringComparison.OrdinalIgnoreCase))

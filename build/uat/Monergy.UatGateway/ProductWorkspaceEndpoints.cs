@@ -109,7 +109,7 @@ public static class ProductWorkspaceEndpoints
         "reporting.report.read",
     ];
     private static readonly HashSet<string> SupportedContentTypes = new(StringComparer.OrdinalIgnoreCase)
-    { "application/pdf", "image/png", "image/jpeg", "text/plain" };
+    { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv" };
 
     public static void AddProductWorkspace(this WebApplicationBuilder builder)
     {
@@ -409,7 +409,8 @@ public static class ProductWorkspaceEndpoints
                 session.TenantId, session.AuthenticationContextId, listRequest, http.RequestAborted).ConfigureAwait(false);
             var source = library.Items.SingleOrDefault(item => item.DocumentVersionId == documentVersionId)
                 ?? throw new TenantBoundaryException("EVIDENCE_VERSION_NOT_FOUND", 404);
-            if (!string.Equals(source.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(source.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(source.ContentType, "text/csv", StringComparison.OrdinalIgnoreCase))
                 throw new TenantBoundaryException("PROCESSING_CONTENT_TYPE_UNSUPPORTED", 422);
             var now = DateTimeOffset.UtcNow;
             var jobId = "job-processing-" + submission.OperationId;
@@ -780,7 +781,7 @@ public sealed class ProductDocumentProcessingClient : IDisposable
 public sealed class ProductEvidenceClient : IDisposable
 {
     private static readonly HashSet<string> LibraryContentTypes = new(StringComparer.OrdinalIgnoreCase)
-    { "application/pdf", "image/png", "image/jpeg", "text/plain" };
+    { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv" };
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true };
     private readonly HttpClient client = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })

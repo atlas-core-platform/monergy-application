@@ -70,7 +70,7 @@ public sealed class EvidenceApplication(
 {
     private static readonly Regex Sha256Pattern = new("^[A-Fa-f0-9]{64}$", RegexOptions.CultureInvariant);
     private static readonly HashSet<string> SupportedContentTypes =
-        new(StringComparer.OrdinalIgnoreCase) { "application/pdf", "image/png", "image/jpeg", "text/plain" };
+        new(StringComparer.OrdinalIgnoreCase) { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv" };
 
     public async Task<ContractResult<DocumentVersionCreatedResult>> CreateDocumentVersionAsync(
         ContractRequest<CreateDocumentVersion> request,
