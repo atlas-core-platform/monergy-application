@@ -556,8 +556,9 @@ it('shows a truthful no-link state only after Financial Profile has loaded succe
 
   mount(api, ['evidence.document.read', 'financial-profile.profile.read']);
   const user = userEvent.setup();
+  await screen.findByText('unlinked.pdf');
   await user.click(
-    await screen.findByRole('button', { name: 'View document details for unlinked.pdf' }),
+    screen.getByRole('button', { name: 'View document details for unlinked.pdf' }),
   );
 
   const drawer = await screen.findByRole('dialog', { name: 'Document details' });
@@ -596,8 +597,9 @@ it('never turns an unavailable Financial Profile into a false zero-linked state'
 
   mount(api, ['evidence.document.read', 'financial-profile.profile.read']);
   const user = userEvent.setup();
+  await screen.findByText('unknown-links.pdf');
   await user.click(
-    await screen.findByRole('button', { name: 'View document details for unknown-links.pdf' }),
+    screen.getByRole('button', { name: 'View document details for unknown-links.pdf' }),
   );
 
   const drawer = await screen.findByRole('dialog', { name: 'Document details' });
@@ -631,8 +633,9 @@ it('keeps linked Financial information hidden when it is outside the current acc
 
   mount(api, ['evidence.document.read']);
   const user = userEvent.setup();
+  await screen.findByText('document-only.pdf');
   await user.click(
-    await screen.findByRole('button', { name: 'View document details for document-only.pdf' }),
+    screen.getByRole('button', { name: 'View document details for document-only.pdf' }),
   );
 
   const drawer = await screen.findByRole('dialog', { name: 'Document details' });
@@ -835,8 +838,9 @@ it('loads authorized Document version history lazily and opens an exact historic
 
   mount(api, ['evidence.document.read']);
   const user = userEvent.setup();
+  await screen.findByText('income-updated.txt');
   await user.click(
-    await screen.findByRole('button', { name: 'View document details for income-updated.txt' }),
+    screen.getByRole('button', { name: 'View document details for income-updated.txt' }),
   );
 
   const drawer = await screen.findByRole('dialog', { name: 'Document details' });
@@ -2010,3 +2014,62 @@ it('requires explicit review of a Loan amount before updating authoritative Fina
   );
 });
 
+
+it.each(['text/csv', 'application/vnd.ms-excel', ''])('uploads CSV with browser media type %s using the exact CSV payload', async (mediaType) => {
+  const api = new AccessApi(session);
+  const csv = 'Category,Description,Amount,Currency,Date,Source\r\nINCOME,Salary,125000,INR,2026-10-01,Salary statement\r\n';
+  const submit = vi.spyOn(api, 'product').mockImplementation((_, method) =>
+    Promise.resolve(method === 'POST' ? {
+      operationId: 'a'.repeat(32), documentId: 'csv-document', documentVersionId: 'csv-version',
+      evidenceId: 'csv-evidence', version: 1, originalFileName: 'financial.csv', contentType: 'text/csv',
+      contentLength: csv.length, contentSha256: 'b'.repeat(64), acceptedAt: '2026-10-17T00:00:00Z',
+      dataDurability: 'Temporary data',
+    } : { items: [], dataDurability: 'Temporary data' }),
+  );
+  vi.spyOn(crypto, 'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+  mount(api);
+  const template = screen.getByRole('link', { name: 'financial information template' });
+  expect(template).toHaveAttribute('download', 'monergy-financial-information.csv');
+  expect(decodeURIComponent(template.getAttribute('href') ?? '')).toContain('Category,Description,Amount,Currency,Date,Source');
+  const user = userEvent.setup();
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!input) throw new Error('Document upload input is missing.');
+  await user.upload(input, new File([csv], 'financial.csv', { type: mediaType }));
+  expect(screen.getByRole('dialog', { name: 'Review document upload' })).toHaveTextContent('Financial information CSV');
+  await user.click(screen.getByRole('button', { name: 'Upload document' }));
+  await waitFor(() => {
+    expect(submit.mock.calls.some((call) => call[1] === 'POST')).toBe(true);
+  });
+  const write = submit.mock.calls.find((call) => call[1] === 'POST');
+  expect(write?.[0]).toBe('v1/evidence');
+  expect(write?.[2]).toMatchObject({ contentType: 'text/csv', originalFileName: 'financial.csv', contentBase64: btoa(csv) });
+  expect(await screen.findByText('Your document was uploaded.')).toBeVisible();
+  // The upload drawer closes asynchronously; let it release its modal state before the next mount.
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog', { name: 'Review document upload' })).not.toBeInTheDocument();
+  });
+});
+
+it.each([true, false])('enables CSV extraction only with current processing access: %s', async (allowed) => {
+  const api = new AccessApi(session);
+  const request = vi.spyOn(api, 'product').mockResolvedValue({ items: [{
+    documentId: 'csv-document', documentVersionId: 'csv-version', evidenceId: 'csv-evidence', version: 1,
+    sourceName: 'Customer upload', originalFileName: 'financial.csv', contentType: 'text/csv', contentLength: 80,
+    contentSha256: 'b'.repeat(64), receivedAt: '2026-10-17T00:00:00Z', createdAt: '2026-10-17T00:00:00Z',
+  }], dataDurability: 'Temporary data' });
+  mount(api, allowed ? ['evidence.document.read', 'document-intelligence.document.process'] : ['evidence.document.read']);
+  const user = userEvent.setup();
+  await screen.findByText('financial.csv');
+  await user.click(screen.getByRole('button', { name: 'View document details for financial.csv' }));
+  const details = screen.getByRole('dialog', { name: 'Document details' });
+  const extract = within(details).getByRole('button', { name: 'Extract details' });
+  if (allowed) {
+    expect(extract).toBeEnabled();
+    await user.click(extract);
+    const review = screen.getByRole('dialog', { name: 'Extract and review details' });
+    expect(within(review).getByRole('button', { name: 'Extract details' })).toBeEnabled();
+  } else {
+    expect(extract).toBeDisabled();
+  }
+  expect(request.mock.calls.some((call) => call[1] === 'POST')).toBe(false);
+});

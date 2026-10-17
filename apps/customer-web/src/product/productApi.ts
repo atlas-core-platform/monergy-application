@@ -179,7 +179,13 @@ export interface ProductFinancialFactDetail {
   history: ProductFinancialFact[];
 }
 
-export const evidenceTypes = ['application/pdf', 'image/png', 'image/jpeg', 'text/plain'];
+export const evidenceTypes = ['application/pdf', 'image/png', 'image/jpeg', 'text/plain', 'text/csv'];
+export const financialCsvTemplate = 'Category,Description,Amount,Currency,Date,Source\r\nINCOME,Monthly salary,125000.00,INR,2026-10-01,Salary statement\r\n';
+export function evidenceContentType(file: Pick<File, 'name' | 'type'>): string {
+  return /\.csv$/i.test(file.name) && ['', 'text/csv', 'application/vnd.ms-excel'].includes(file.type)
+    ? 'text/csv'
+    : file.type;
+}
 export const maximumEvidenceBytes = 1_048_576;
 
 export function listEvidence(
@@ -257,7 +263,7 @@ export async function submitEvidence(
     {
       operationId,
       originalFileName: file.name,
-      contentType: file.type,
+      contentType: evidenceContentType(file),
       contentBase64,
     },
     signal,
