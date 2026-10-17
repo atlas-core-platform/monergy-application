@@ -345,3 +345,36 @@ it('shows explicitly reviewed Loan facts with exact source provenance, not inven
   expect(await screen.findByRole('heading', { name: 'No trusted expense information yet.' })).toBeVisible();
   expect(screen.queryByText('Car loan principal stated in document')).not.toBeInTheDocument();
 });
+
+it('shows reviewed Asset source figures with exact source, not a verified valuation', async () => {
+  window.history.replaceState(null, '', '/finances?type=ASSET');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 4,
+    updatedAt: '2026-10-17T06:30:00Z',
+    dataDurability: 'Temporary data',
+    facts: [{
+      financialFactId: 'ff-asset-source',
+      factType: 'ASSET',
+      label: 'Property value stated in document',
+      value: 900000,
+      currency: 'INR',
+      effectiveDate: '2026-10-16',
+      revision: 1,
+      source: {
+        sourceName: 'property-source.txt',
+        documentVersion: 'document-version-asset',
+        recordedAt: '2026-10-17T06:30:00Z',
+        technicalSourceFactId: 'source-fact-asset',
+        technicalProvenanceId: 'provenance-asset',
+      },
+    }],
+  });
+  mount(api);
+  expect(await screen.findByText('Property value stated in document')).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Asset source figures' })).toBeVisible();
+  expect(screen.getByText('Source: property-source.txt')).toBeVisible();
+  expect(screen.queryByText(/Total net worth|Verified valuation/i)).not.toBeInTheDocument();
+  expect(window.location.pathname + window.location.search).toBe('/finances?type=ASSET');
+});
