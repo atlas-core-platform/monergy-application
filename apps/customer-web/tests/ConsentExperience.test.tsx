@@ -354,3 +354,60 @@ it('rejects mismatched mutation receipts and does not claim a completed revocati
   expect(await screen.findByText('Revocation needs verification')).toBeVisible();
   expect(screen.queryByText('Unexpired record')).not.toBeInTheDocument();
 });
+
+it('displays the owner-resolved recipient label on a recorded grant and confirms the same recipient', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'customerConsent').mockResolvedValue({
+    version: 3,
+    items: [{
+      id: 'consent-to-advisor', customerId: 'customer-001',
+      actorId: 'ci-1234', recipientLabel: 'advisor@example.com',
+      purpose: 'customer-advice',
+      capabilityIds: ['financial-profile.profile.read'],
+      expiresAt: '2099-01-01T00:00:00Z', revokedAt: null,
+    }],
+  });
+  mount(api);
+  const user = userEvent.setup();
+  expect(await screen.findByText('advisor@example.com')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Stop sharing' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Confirm stopping a sharing permission' });
+  expect(within(dialog).getByText('advisor@example.com')).toBeVisible();
+  expect(within(dialog).getByText(/ci-1234/)).toBeVisible();
+  expect(within(dialog).getByText(/consent-to-advisor/)).toBeVisible();
+  expect(within(dialog).queryByText('Recipient label not available')).not.toBeInTheDocument();
+});
+
+it('does not fabricate recipient identity when the C&I owner cannot resolve it', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'customerConsent').mockResolvedValue({
+    version: 1,
+    items: [{
+      id: 'grant-no-recipient-label', customerId: 'customer-001',
+      actorId: 'unknown-actor', recipientLabel: null,
+      purpose: 'customer-advice',
+      capabilityIds: ['financial-profile.profile.read'],
+      expiresAt: '2099-01-01T00:00:00Z', revokedAt: null,
+    }],
+  });
+  mount(api);
+  expect(await screen.findByText(/Recipient label not available. Permission is recorded/)).toBeVisible();
+  expect(screen.queryByText('advisor@example.com')).not.toBeInTheDocument();
+});
+
+it('rejects malformed recipient labels instead of presenting untrusted identity data', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'customerConsent').mockResolvedValue({
+    version: 1,
+    items: [{
+      id: 'grant-malformed-label', customerId: 'customer-001',
+      actorId: 'ci-001', recipientLabel: '',
+      purpose: 'customer-advice',
+      capabilityIds: ['financial-profile.profile.read'],
+      expiresAt: '2099-01-01T00:00:00Z', revokedAt: null,
+    }],
+  });
+  mount(api);
+  expect(await screen.findByText('Sharing permissions unavailable')).toBeVisible();
+  expect(screen.queryByText('Unexpired record')).not.toBeInTheDocument();
+});
