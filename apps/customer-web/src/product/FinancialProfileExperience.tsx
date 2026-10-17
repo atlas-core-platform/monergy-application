@@ -28,13 +28,13 @@ const formatMoney = (fact: ProductFinancialFact) =>
   }).format(fact.value);
 
 const factTypeName = (value: string) =>
-  ({ INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information', ASSET: 'Asset source figure', INVESTMENT: 'Investment source figure' })[value] ?? value;
+  ({ INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information', ASSET: 'Asset source figure', INVESTMENT: 'Investment source figure', INSURANCE: 'Insurance source figure' })[value] ?? value;
 
-type FinancialCategory = 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT';
+type FinancialCategory = 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT' | 'INSURANCE';
 
 const categoryFromLocation = (): FinancialCategory | '' => {
   const value = new URLSearchParams(window.location.search).get('type')?.toUpperCase();
-  return value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' || value === 'ASSET' || value === 'INVESTMENT' ? value : '';
+  return value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' || value === 'ASSET' || value === 'INVESTMENT' || value === 'INSURANCE' ? value : '';
 };
 
 const initialFactId = () => new URLSearchParams(window.location.search).get('fact') ?? '';
@@ -132,6 +132,7 @@ export default function FinancialProfileExperience() {
       { key: 'LOAN' as const, title: 'Loan information', facts: facts.filter((fact) => fact.factType === 'LOAN') },
       { key: 'ASSET' as const, title: 'Asset source figures', facts: facts.filter((fact) => fact.factType === 'ASSET') },
       { key: 'INVESTMENT' as const, title: 'Investment source figures', facts: facts.filter((fact) => fact.factType === 'INVESTMENT') },
+      { key: 'INSURANCE' as const, title: 'Insurance source figures', facts: facts.filter((fact) => fact.factType === 'INSURANCE') },
     ].filter(
       (group) => (!activeCategory || group.key === activeCategory) && group.facts.length > 0,
     );
@@ -268,6 +269,12 @@ export default function FinancialProfileExperience() {
             >
               Investment source figures
             </Button>
+            <Button
+              type={activeCategory === 'INSURANCE' ? 'primary' : 'default'}
+              onClick={() => selectCategory('INSURANCE')}
+            >
+              Insurance source figures
+            </Button>
           </nav>
 
           {groups.map((group) => (
@@ -341,10 +348,10 @@ export default function FinancialProfileExperience() {
                 <WorkspaceIcon name="reports" size={28} />
               </span>
               <p className="workspace-eyebrow">{activeCategory}</p>
-              <h2>No trusted {activeCategory === 'INCOME' ? 'income' : activeCategory === 'LOAN' ? 'loan' : activeCategory === 'ASSET' ? 'asset' : activeCategory === 'INVESTMENT' ? 'investment' : 'expense'} information yet.</h2>
+              <h2>No trusted {activeCategory === 'INCOME' ? 'income' : activeCategory === 'LOAN' ? 'loan' : activeCategory === 'ASSET' ? 'asset' : activeCategory === 'INVESTMENT' ? 'investment' : activeCategory === 'INSURANCE' ? 'insurance' : 'expense'} information yet.</h2>
               <p>
                 This category has no reviewed financial information yet. Review supported documents
-                and add only the Income, Expense, Loan, Asset or Investment source details you have checked.
+                and add only the Income, Expense, Loan, Asset, Investment or Insurance source details you have checked.
               </p>
               <div className="product-category-empty-actions">
                 <Button type="primary" href="/evidence">
