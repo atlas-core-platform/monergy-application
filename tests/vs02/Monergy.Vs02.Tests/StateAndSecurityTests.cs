@@ -77,7 +77,7 @@ public sealed class StateAndSecurityTests
             Vs02TestContext.ContentSha256,
             "text/plain");
         var source = new EvidenceContent(reference,
-            "LOAN|Car loan amount stated on document|400000.00|INR|2026-10-16|line:1|0.96\\n" +
+            "LOAN|Car loan amount stated on document|400000.00|INR|2026-10-16|line:1|0.96\n" +
             "ASSET|Unsupported asset type in this bounded processor|900000.00|INR|2026-10-16|line:2|0.95");
         var facts = await new FixtureDocumentExtractor().ExtractAsync(
             source, "processing-loan-test", CancellationToken.None);
