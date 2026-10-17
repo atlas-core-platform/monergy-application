@@ -113,6 +113,8 @@ const insurance = {
   source: { ...loan.source, sourceName: 'insurance.txt', technicalSourceFactId: 'source-insurance' },
 };
 
+const tax = { ...loan, financialFactId: 'ff-tax', factType: 'TAX', label: 'Tax source figure' };
+
 const investment = {
   ...loan,
   financialFactId: 'ff-investment',
@@ -143,6 +145,21 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it('shows only a bounded Documents follow-up when the Tax source category is missing', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    if (path === 'v1/evidence') return Promise.resolve({ items: [{ documentVersionId: 'document-001' }], dataDurability: 'Temporary data' });
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
+    if (path === 'v1/processing-activity') return Promise.resolve({ items: [], dataDurability: 'Temporary data' });
+    throw new Error('unexpected endpoint');
+  });
+  mount(api);
+  expect(await screen.findByText('No trusted Tax source figure is currently represented.')).toBeVisible();
+  expect(screen.getByText('6 of 7')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Review Documents' })).toHaveAttribute('href', '/evidence');
+  expect(screen.getByText(/does not establish tax owed, a refund, filing status or a filing deadline/i)).toBeVisible();
+});
+
 it('shows a bounded add-document attention item when the customer has no Documents', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
@@ -158,7 +175,7 @@ it('shows a bounded add-document attention item when the customer has no Documen
 
   expect(await screen.findByText('No financial documents have been added yet.')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Add document' })).toHaveAttribute('href', '/evidence');
-  expect(screen.getByText('0 of 6')).toBeVisible();
+  expect(screen.getByText('0 of 7')).toBeVisible();
   expect(screen.queryByText(/recommendation engine/i)).not.toBeInTheDocument();
 });
 
@@ -209,10 +226,10 @@ it('shows only the missing supported category after trusted information exists',
   expect(screen.getByText('No trusted Asset source figure is currently represented.')).toBeVisible();
   expect(screen.getByText('No trusted Investment source figure is currently represented.')).toBeVisible();
   expect(screen.getByText('No trusted Insurance source figure is currently represented.')).toBeVisible();
-  expect(screen.getByText('1 of 6')).toBeVisible();
+  expect(screen.getByText('1 of 7')).toBeVisible();
 });
 
-it('shows a truthful clear state when all five currently supported source categories are represented', async () => {
+it('shows a truthful clear state when all seven currently supported source categories are represented', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
     if (path === 'v1/evidence')
@@ -223,7 +240,7 @@ it('shows a truthful clear state when all five currently supported source catego
           { documentVersionId: 'document-version-002' },
         ],
       });
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance, tax]));
     if (path === 'v1/processing-activity')
       return Promise.resolve({ dataDurability: 'Temporary data', items: [] });
     throw new Error('unexpected endpoint');
@@ -238,14 +255,14 @@ it('shows a truthful clear state when all five currently supported source catego
     screen.getByText(/This does not mean your overall finances are complete/),
   ).toBeVisible();
   expect(screen.getByText(/not a lifetime processing-history claim/)).toBeVisible();
-  expect(screen.getByText('6 of 6')).toBeVisible();
+  expect(screen.getByText('7 of 7')).toBeVisible();
   expect(screen.getByText('Recent processing attention').parentElement).toHaveTextContent('0');
 });
 
 it('does not present a clear state when only one bounded input is authorized', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockImplementation((path) => {
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance, tax]));
     if (path === 'v1/processing-activity')
       return Promise.resolve({ dataDurability: 'Temporary data', items: [] });
     throw new Error('unexpected endpoint');
@@ -303,7 +320,7 @@ it('aggregates durable processing attention without turning jobs into tasks', as
           { documentVersionId: 'document-version-002' },
         ],
       });
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance, tax]));
     if (path === 'v1/processing-activity')
       return Promise.resolve({
         dataDurability: 'Temporary data',
@@ -380,7 +397,7 @@ it('never turns unavailable processing activity into an all-clear Action Centre'
           { documentVersionId: 'document-version-002' },
         ],
       });
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance, tax]));
     if (path === 'v1/processing-activity') return Promise.reject(new Error('job owner unavailable'));
     throw new Error('unexpected endpoint');
   });
@@ -408,7 +425,7 @@ it('does not infer processing all-clear when job read is outside the current acc
           { documentVersionId: 'document-version-002' },
         ],
       });
-    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance]));
+    if (path === 'v1/financial-profile') return Promise.resolve(profile([income, expense, loan, asset, investment, insurance, tax]));
     throw new Error('unexpected endpoint');
   });
 

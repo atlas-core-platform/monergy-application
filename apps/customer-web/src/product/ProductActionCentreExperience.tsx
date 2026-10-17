@@ -88,7 +88,8 @@ export default function ProductActionCentreExperience() {
     const asset = facts.filter((fact) => fact.factType === 'ASSET').length;
     const investment = facts.filter((fact) => fact.factType === 'INVESTMENT').length;
     const insurance = facts.filter((fact) => fact.factType === 'INSURANCE').length;
-    const covered = Number(income > 0) + Number(expenses > 0) + Number(loan > 0) + Number(asset > 0) + Number(investment > 0) + Number(insurance > 0);
+    const tax = facts.filter((fact) => fact.factType === 'TAX').length;
+    const covered = Number(income > 0) + Number(expenses > 0) + Number(loan > 0) + Number(asset > 0) + Number(investment > 0) + Number(insurance > 0) + Number(tax > 0);
     return {
       trusted: facts.length,
       income,
@@ -97,6 +98,7 @@ export default function ProductActionCentreExperience() {
       asset,
       investment,
       insurance,
+      tax,
       covered,
     };
   }, [profile]);
@@ -170,7 +172,7 @@ export default function ProductActionCentreExperience() {
         id: 'review-documents',
         title: 'Your Documents do not contain any trusted financial information yet.',
         description:
-          'Review a supported document and add only the Income, Expense, Loan, Asset, Investment or Insurance source details you have checked. Extracted information remains separate until you confirm it.',
+          'Review a supported document and add only the Income, Expense, Loan, Asset, Investment, Insurance or Tax source details you have checked. Extracted information remains separate until you confirm it.',
         href: '/evidence',
         action: 'Review Documents',
       });
@@ -236,6 +238,15 @@ export default function ProductActionCentreExperience() {
           action: canReadDocuments ? 'Review Documents' : undefined,
         });
       }
+      if (state.tax === 0) {
+        items.push({
+          id: 'tax-source-missing',
+          title: 'No trusted Tax source figure is currently represented.',
+          description: 'No reviewed Tax source figure appears in your current Financial Passport. This does not establish tax owed, a refund, filing status or a filing deadline.',
+          href: canReadDocuments ? '/evidence' : undefined,
+          action: canReadDocuments ? 'Review Documents' : undefined,
+        });
+      }
     }
 
     return items;
@@ -255,6 +266,7 @@ export default function ProductActionCentreExperience() {
     state.asset,
     state.investment,
     state.insurance,
+    state.tax,
     state.trusted,
   ]);
 
@@ -275,7 +287,7 @@ export default function ProductActionCentreExperience() {
           <h1>See what needs attention in the journeys Monergy supports today.</h1>
           <p>
             These attention items are derived only from your current Documents, trusted Income, Expense or
-            Loan, Asset, Investment or Insurance source information, and durable document-processing status. They are not ranked
+            Loan, Asset, Investment, Insurance or Tax source information, and durable document-processing status. They are not ranked
             recommendations, a financial-health score, or a persistent task list.
           </p>
         </div>
@@ -338,7 +350,7 @@ export default function ProductActionCentreExperience() {
               </span>
               <div>
                 <span>Supported coverage</span>
-                <strong>{canReadFinancial && profile !== null ? String(state.covered) + ' of 6' : '—'}</strong>
+                <strong>{canReadFinancial && profile !== null ? String(state.covered) + ' of 7' : '—'}</strong>
               </div>
             </div>
             <div className="product-panel product-summary-card">
@@ -410,7 +422,7 @@ export default function ProductActionCentreExperience() {
                   <strong>No attention items are visible in the currently loaded supported state.</strong>
                   <p>
                     This does not mean your overall finances are complete, and it is not a lifetime
-                    processing-history claim. It reflects the current Documents, supported Income, Expense, Loan, Asset, Investment and Insurance source information, and recent processing activity returned by the bounded
+                    processing-history claim. It reflects the current Documents, supported Income, Expense, Loan, Asset, Investment, Insurance and Tax source information, and recent processing activity returned by the bounded
                     product APIs.
                   </p>
                 </div>
