@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-61",
-  "applicationBase": "14f0ac8cc98e5ef167133fbf8d0354c02d6a3243",
+  "asOf": "T1-62",
+  "applicationBase": "f8afba4bcda3c82e7459b2f4a8141a110612474e",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 3,
+    "libraryVersion": 4,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook reconciled through T1-60 in version3; bounded T1-61 property sale deed OCR applied to Classification/OCR/Extraction/Assets, preserving partial status."
+    "reviewThrough": "Workbook version4 reconciled through T1-61; bounded T1-62 property registration document OCR advances Classification/OCR/Extraction/Assets while preserving Partial status."
   },
   "counts": {
     "originalDeliverables": 29,
@@ -14,8 +14,8 @@
     "partial": 17,
     "pendingBusinessJourneys": 12,
     "remainingOriginalDeliverables": 29,
-    "numberedUnitsAfterPairedMerge": 61,
-    "mergedImplementationUnitsAfterPairedMerge": 60,
+    "numberedUnitsAfterPairedMerge": 62,
+    "mergedImplementationUnitsAfterPairedMerge": 61,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -97,33 +97,33 @@
       "area": "Documents",
       "name": "Classification",
       "state": "Partial",
-      "existing": "Strict salary-slip, loan-statement, insurance-policy, investment-statement and T1-60 loan-sanction-letter recognition across PNG, upright JPEG and single-page scanned PDF rejects multiple known titles. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified.",
+      "existing": "Strict salary-slip, loan-statement, insurance-policy, investment-statement and T1-60 loan-sanction-letter recognition across PNG, upright JPEG and single-page scanned PDF rejects multiple known titles. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified. T1-62 adds supported property registration document OCR for one explicitly stated purchase value dated by Registration Date, with original provenance and explicit review. Registration date is not purchase date; ownership, authenticity and current valuation remain unverified.",
       "remaining": "Cover the remaining \u00a711 document classes and layouts, persist classification/unknown-review state, and expose the administration workflow.",
-      "units": "T1-49\u201352; T1-58; T1-59; T1-60; T1-61",
+      "units": "T1-49\u201352; T1-58; T1-59; T1-60; T1-61; T1-62",
       "requirements": "MON-DOC-004/005",
-      "receipt": "build/governance/t1-61-property-sale-deed-ocr.md"
+      "receipt": "build/governance/t1-62-property-registration-ocr.md"
     },
     {
       "id": "P1-08",
       "area": "Documents",
       "name": "OCR",
       "state": "Partial",
-      "existing": "Real pinned OCR reads supported printed English salary slips, loan statements, insurance policies, investment statements and T1-60 loan sanction letters in PNG/JPEG and single-page scanned PDF. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified.",
+      "existing": "Real pinned OCR reads supported printed English salary slips, loan statements, insurance policies, investment statements and T1-60 loan sanction letters in PNG/JPEG and single-page scanned PDF. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified. T1-62 adds supported property registration document OCR for one explicitly stated purchase value dated by Registration Date, with original provenance and explicit review. Registration date is not purchase date; ownership, authenticity and current valuation remain unverified.",
       "remaining": "Expand the approved document/layout/page matrix and durable processing path. Prove browser-to-live-scanner-to-OCR integration.",
-      "units": "T1-49\u201352; T1-58; T1-59; T1-60; T1-61",
+      "units": "T1-49\u201352; T1-58; T1-59; T1-60; T1-61; T1-62",
       "requirements": "MON-DOC-006/013",
-      "receipt": "build/governance/t1-61-property-sale-deed-ocr.md"
+      "receipt": "build/governance/t1-62-property-registration-ocr.md"
     },
     {
       "id": "P1-09",
       "area": "Documents",
       "name": "Extraction",
       "state": "Partial",
-      "existing": "Structured text/CSV supports seven source categories; supported OCR produces dated net-pay or loan-balance candidates for explicit review. T1-57 adds the same seven categories from a bounded financial XLSX template with original-byte provenance and explicit adoption. T1-58 insurance OCR adds distinctly labelled dated sum-assured and premium candidates; frequency, active cover and asset value are not inferred. T1-59 investment OCR adds distinct dated purchase-value/current-value candidates; no live price, gain/return or verified position/valuation is inferred. T1-60 sanction OCR adds distinct sanctioned-amount/EMI candidates dated by Sanction Date; no outstanding balance, disbursement or current-debt inference. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified.",
+      "existing": "Structured text/CSV supports seven source categories; supported OCR produces dated net-pay or loan-balance candidates for explicit review. T1-57 adds the same seven categories from a bounded financial XLSX template with original-byte provenance and explicit adoption. T1-58 insurance OCR adds distinctly labelled dated sum-assured and premium candidates; frequency, active cover and asset value are not inferred. T1-59 investment OCR adds distinct dated purchase-value/current-value candidates; no live price, gain/return or verified position/valuation is inferred. T1-60 sanction OCR adds distinct sanctioned-amount/EMI candidates dated by Sanction Date; no outstanding balance, disbursement or current-debt inference. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified. T1-62 adds supported property registration document OCR for one explicitly stated purchase value dated by Registration Date, with original provenance and explicit review. Registration date is not purchase date; ownership, authenticity and current valuation remain unverified.",
       "remaining": "Extract complete required domain records and remaining document classes. Preserve validation, original provenance and explicit adoption across durable owner services. Arbitrary Excel/bank layouts, formulas, numeric date serials and legacy/macro workbooks are unsupported.",
-      "units": "T1-05, T1-23\u201342, T1-49\u201352; T1-57; T1-58; T1-59; T1-60; T1-61",
+      "units": "T1-05, T1-23\u201342, T1-49\u201352; T1-57; T1-58; T1-59; T1-60; T1-61; T1-62",
       "requirements": "MON-DOC-003/007; MON-FIN-001/003/004/006",
-      "receipt": "build/governance/t1-61-property-sale-deed-ocr.md"
+      "receipt": "build/governance/t1-62-property-registration-ocr.md"
     },
     {
       "id": "P1-10",
@@ -185,11 +185,11 @@
       "area": "Financial Data",
       "name": "Assets",
       "state": "Partial",
-      "existing": "ASSET source figures have customer review, Passport/source drill-down, Search, basic Reports and coverage. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified.",
+      "existing": "ASSET source figures have customer review, Passport/source drill-down, Search, basic Reports and coverage. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified. T1-62 adds supported property registration document OCR for one explicitly stated purchase value dated by Registration Date, with original provenance and explicit review. Registration date is not purchase date; ownership, authenticity and current valuation remain unverified.",
       "remaining": "Create authoritative asset records with ownership, type, dated value/valuation and liability relationships required for a meaningful asset position.",
-      "units": "T1-27\u201329, T1-33, T1-42; T1-61",
+      "units": "T1-27\u201329, T1-33, T1-42; T1-61; T1-62",
       "requirements": "MON-FIN-001/011/014; MON-DAS-001",
-      "receipt": "build/governance/t1-61-property-sale-deed-ocr.md"
+      "receipt": "build/governance/t1-62-property-registration-ocr.md"
     },
     {
       "id": "P1-16",

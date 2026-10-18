@@ -159,6 +159,9 @@ public sealed class SalarySlipOcrTests
     [InlineData("loan-sanction.png", "image/png")]
     [InlineData("loan-sanction.jpg", "image/jpeg")]
     [InlineData("loan-sanction-scan.pdf", "application/pdf")]
+    [InlineData("property-registration.png", "image/png")]
+    [InlineData("property-registration.jpg", "image/jpeg")]
+    [InlineData("property-registration-scan.pdf", "application/pdf")]
     [InlineData("property-sale-deed.png", "image/png")]
     [InlineData("property-sale-deed.jpg", "image/jpeg")]
     [InlineData("property-sale-deed-scan.pdf", "application/pdf")]
@@ -210,7 +213,8 @@ public sealed class SalarySlipOcrTests
             "process-png", "process-png", security));
         Assert.Equal(ProcessingState.Completed, result.Data?.State);
         var record = (await processingRepository.GetAsync("processing-png", default))!;
-        var property = fileName.StartsWith("property-sale-deed", StringComparison.Ordinal);
+        var registration = fileName.StartsWith("property-registration", StringComparison.Ordinal);
+        var property = registration || fileName.StartsWith("property-sale-deed", StringComparison.Ordinal);
         var sanction = fileName.StartsWith("loan-sanction", StringComparison.Ordinal);
         var investment = fileName.StartsWith("investment-", StringComparison.Ordinal);
         var insurance = fileName.StartsWith("insurance-", StringComparison.Ordinal);
@@ -255,7 +259,7 @@ public sealed class SalarySlipOcrTests
                 var provenance = await financial.GetFinancialProvenanceAsync(Vs02TestContext.Request(Vs02ContractNames.GetFinancialProvenance,
                     new GetFinancialProvenance(item.FinancialProvenanceId, "customer-001"), "insurance-source"));
                 Assert.Equal("document-version-001", provenance.Data?.DocumentVersionId);
-                Assert.StartsWith(property ? "property-sale-deed-" : sanction ? "loan-sanction-" : investment ? "investment-statement-" : "insurance-policy-", provenance.Data!.ExtractionVersion, StringComparison.Ordinal);
+                Assert.StartsWith(registration ? "property-registration-" : property ? "property-sale-deed-" : sanction ? "loan-sanction-" : investment ? "investment-statement-" : "insurance-policy-", provenance.Data!.ExtractionVersion, StringComparison.Ordinal);
             }
         }
         // This path publishes candidates only. The existing Financial Profile review/adoption API remains the sole writer.

@@ -7,7 +7,10 @@ public static class PropertySourceFactBoundary
         customerType == "ASSET" && extractionVersion is
             "property-sale-deed-png-ocr/1.0.0" or
             "property-sale-deed-jpeg-ocr/1.0.0" or
-            "property-sale-deed-pdf-ocr/1.0.0"
+            "property-sale-deed-pdf-ocr/1.0.0" or
+            "property-registration-png-ocr/1.0.0" or
+            "property-registration-jpeg-ocr/1.0.0" or
+            "property-registration-pdf-ocr/1.0.0"
             ? "PROPERTY"
             : customerType;
 

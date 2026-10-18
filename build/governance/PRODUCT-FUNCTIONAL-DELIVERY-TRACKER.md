@@ -1,8 +1,16 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest bounded increment: T1-61 property sale deed OCR. Classification/OCR/Extraction/Assets remain Partial. Complete property records, broader documents and live integration remain open.
+Status: ACTIVE · Latest bounded increment: T1-62 property registration document OCR. Classification/OCR/Extraction/Assets remain Partial. Full property records and integrated UAT remain open.
 
-## Current T1-61 update — property sale deed OCR
+## Current T1-62 update — property registration document OCR
+
+The planned Registration Document class (Master sections11–13/41) now includes printed-English property registration documents in supported PNG, upright JPEG and unlocked single-page scanned PDF. One early PROPERTY REGISTRATION DOCUMENT title, one Registration Date/Date of Registration, one explicit Purchase Value and matching supported currency yield one dated ASSET source candidate. Registration date is not purchase date. Deed date, market/estimated value and filenames are not substitutes. Ambiguous, incomplete, conflicting, mixed-title and low-confidence input yields no facts.
+
+Original scan/hash/customer/tenant controls and explicit customer selection/confirmation remain. Exact registration OCR versions use the existing canonical PROPERTY boundary. Current and recovered Documents preserve registration source meaning; recovered views remain read-only. Receipt: [t1-62-property-registration-ocr.md](t1-62-property-registration-ocr.md). No ownership/authenticity/current-value or full property-record claim is made.
+
+After paired merge:62 numbered units =61 implementations +1 governance closure. Original29 deliverables remain0 complete,17 partial and12 pending journeys. Workbook version4 was reconciled through T1-61 before this increment; the next workbook version carries T1-62. Original151 IDs/81 features and126 Phase1-applicable memberships remain unchanged. Live ClamAV/physical PostgreSQL/durable processing/Compose/full browser UAT remain NOT RUN.
+
+## Previous T1-61 update — property sale deed OCR
 
 The planned Property Sale Deed class (Master sections11–13/41) supports printed-English PNG, upright JPEG and unlocked single-page scanned PDF. Exactly one early title, one Deed Date/Sale Deed Date, one Purchase Value and an explicit matching supported currency yield a single dated ASSET source candidate. Mixed titles, missing/duplicate/invalid/conflicting or low-confidence required fields yield no facts. Filename, registration date and estimated/market value are not substitutes.
 
@@ -54,6 +62,7 @@ This section supersedes the historical priority/verification labels below. Lates
 | P0 / implemented T1-59 | Investment Statement OCR in PNG/upright JPEG/single-page PDF; purchase/current values retain distinct dated meanings and independent customer selection | Receipt t1-59-investment-statement-ocr.md records pinned native and owner HTTP proof. Securities/quantity/pricing/tax lots, full records, broader classes/layouts, persistent classification and live integrated UAT remain open |
 | P0 / implemented T1-60 | Loan Sanction Letter OCR in PNG/upright JPEG/single-page PDF; sanctioned amount and EMI preserve dated source meaning and independent review | Receipt t1-60-loan-sanction-ocr.md records pinned native/owner HTTP proof and coexistence with prior outstanding balances. Full loan records, disbursement/current debt, verification, broader classes/layouts and live integrated UAT remain open |
 | P0 / implemented T1-61 | Property sale deed OCR in supported PNG/JPEG/single-page PDF; dated purchase value with explicit review/adoption | Exact evidence is in t1-61-property-sale-deed-ocr.md. Complete property records, ownership/valuation verification, wider document coverage and integrated UAT remain open |
+| P0 / implemented T1-62 | Property registration document OCR; explicit stated purchase value and registration date with independent review/adoption | Receipt t1-62-property-registration-ocr.md. Registration date is not purchase date; full records, ownership/valuation verification and integrated UAT remain open |
 | P0 | Google Drive / OneDrive customer storage journey | Implement actual authorized provider import/status/refresh/disconnect, preserving exact folder/file/document identities; reference gateway is insufficient |
 | P0 | Full Loan account and financial truth | Seven source categories exist. Complete lender/type/sanction/outstanding/rate/EMI/tenure/dates and required asset/liability records; a typed source amount does not complete MON-FIN-006 |
 | P0 | Deterministic net worth | Assets minus Liabilities is already specified. Complete authoritative dated/currency/valuation inputs and customer calculation/provenance; scoring approval is a distinct gate |
