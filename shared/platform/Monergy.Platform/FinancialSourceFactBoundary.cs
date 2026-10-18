@@ -1,10 +1,12 @@
 namespace Monergy.Platform;
 
 // Customer source categories are presentation labels; owner contracts retain canonical object types.
-public static class AssetSourceFactBoundary
+public static class FinancialSourceFactBoundary
 {
     public static string ForOwner(string customerType, string? extractionVersion)
     {
+        if (customerType == "INSURANCE") return "INSURANCE_POLICY";
+        if (customerType == "TAX") return "TAX_RECORD";
         if (customerType != "ASSET") return customerType;
         return extractionVersion switch
         {
@@ -22,5 +24,11 @@ public static class AssetSourceFactBoundary
     }
 
     public static string ForCustomer(string ownerType) =>
-        ownerType is "PROPERTY" or "VEHICLE" ? "ASSET" : ownerType;
+        ownerType switch
+        {
+            "PROPERTY" or "VEHICLE" => "ASSET",
+            "INSURANCE_POLICY" => "INSURANCE",
+            "TAX_RECORD" => "TAX",
+            _ => ownerType,
+        };
 }

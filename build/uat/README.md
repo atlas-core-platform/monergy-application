@@ -128,3 +128,7 @@ Supported printed-English property registration PNG/JPEG/single-page PDF yields 
 ## T1-63 vehicle purchase invoice OCR
 
 Supported printed-English vehicle purchase invoice PNG/JPEG/single-page PDF yields one explicitly stated purchase figure dated by invoice, with review before adoption. The canonical owner type is VEHICLE; source views retain ASSET presentation. See [bounded receipt](../governance/t1-63-vehicle-purchase-ocr.md). Full vehicle records, current valuation/ownership verification and integrated physical UAT remain open.
+
+## T1-64 financial source-category compatibility
+
+Insurance/Tax review now maps to canonical owner types and back for Passport/history/Search/basic Reports. The shared boundary preserves property/vehicle behavior; untyped generic ASSET adoption remains unsupported. See [bounded receipt](../governance/t1-64-financial-source-category-boundary.md). Physical/integrated UAT remains open.

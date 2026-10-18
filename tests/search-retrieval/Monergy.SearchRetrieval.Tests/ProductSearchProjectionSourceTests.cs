@@ -44,12 +44,15 @@ public sealed class ProductSearchProjectionSourceTests
     }
 
     [Theory]
-    [InlineData("ASSET")]
-    [InlineData("PROPERTY")]
-    [InlineData("VEHICLE")]
-    public async Task BuildsOnlySupportedFinancialFactsWithExactProvenance(string assetType)
+    [InlineData("ASSET", false)]
+    [InlineData("PROPERTY", false)]
+    [InlineData("VEHICLE", false)]
+    [InlineData("ASSET", true)]
+    [InlineData("PROPERTY", true)]
+    [InlineData("VEHICLE", true)]
+    public async Task BuildsOnlySupportedFinancialFactsWithExactProvenance(string assetType, bool canonicalCategories)
     {
-        var handler = new OwnerHandler { AssetType = assetType };
+        var handler = new OwnerHandler { AssetType = assetType, CanonicalCategories = canonicalCategories };
         var source = Source(handler, Accessor(SearchContractNames.SearchFinancialData));
 
         await source.PrepareCustomerAsync(
@@ -198,6 +201,7 @@ public sealed class ProductSearchProjectionSourceTests
     private sealed class OwnerHandler : HttpMessageHandler
     {
         public string AssetType { get; set; } = "ASSET";
+        public bool CanonicalCategories { get; set; }
         public bool CrossCustomerProvenance { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
 
@@ -271,11 +275,11 @@ public sealed class ProductSearchProjectionSourceTests
                     new DateOnly(2026, 10, 1), 1, "provenance-investment"),
                 new(
                     "ff-insurance", "financial-profile-reference-customer", "reference-customer",
-                    "INSURANCE", "Document-stated insurance figure", 100m, "USD",
+                    CanonicalCategories ? FinancialObjectTypes.InsurancePolicy : "INSURANCE", "Document-stated insurance figure", 100m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-insurance"),
                 new(
                     "ff-tax", "financial-profile-reference-customer", "reference-customer",
-                    "TAX", "Tax source figure", 14000m, "USD",
+                    CanonicalCategories ? FinancialObjectTypes.TaxRecord : "TAX", "Tax source figure", 14000m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-tax"),
                 new(
                     "ff-unsupported", "financial-profile-reference-customer", "reference-customer",

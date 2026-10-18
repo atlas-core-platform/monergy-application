@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-63",
-  "applicationBase": "fcd8aa6ea47dc23a5430a92258020b150b1d8844",
+  "asOf": "T1-64",
+  "applicationBase": "cf6f3219f1b3b09d0e049fe6b80c9d336be99bea",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 5,
+    "libraryVersion": 6,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook version5 reconciled through T1-62; bounded T1-63 vehicle purchase invoice OCR advances Classification/OCR/Extraction/Assets without completing full vehicle records or changing source phases."
+    "reviewThrough": "Workbook version6 reconciled through T1-63; T1-64 repairs Insurance/Tax canonical owner-category adoption and source readback. No source-phase or complete domain-record advancement."
   },
   "counts": {
     "originalDeliverables": 29,
@@ -14,8 +14,8 @@
     "partial": 17,
     "pendingBusinessJourneys": 12,
     "remainingOriginalDeliverables": 29,
-    "numberedUnitsAfterPairedMerge": 63,
-    "mergedImplementationUnitsAfterPairedMerge": 62,
+    "numberedUnitsAfterPairedMerge": 64,
+    "mergedImplementationUnitsAfterPairedMerge": 63,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -119,11 +119,11 @@
       "area": "Documents",
       "name": "Extraction",
       "state": "Partial",
-      "existing": "Structured text/CSV supports seven source categories; supported OCR produces dated net-pay or loan-balance candidates for explicit review. T1-57 adds the same seven categories from a bounded financial XLSX template with original-byte provenance and explicit adoption. T1-58 insurance OCR adds distinctly labelled dated sum-assured and premium candidates; frequency, active cover and asset value are not inferred. T1-59 investment OCR adds distinct dated purchase-value/current-value candidates; no live price, gain/return or verified position/valuation is inferred. T1-60 sanction OCR adds distinct sanctioned-amount/EMI candidates dated by Sanction Date; no outstanding balance, disbursement or current-debt inference. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified. T1-62 adds supported property registration document OCR for one explicitly stated purchase value dated by Registration Date, with original provenance and explicit review. Registration date is not purchase date; ownership, authenticity and current valuation remain unverified. T1-63 adds vehicle purchase invoice OCR for an explicitly stated purchase value/currency/invoice date, with independent customer review and canonical VEHICLE adoption. Invoice date is not substituted by registration date; ownership/authenticity/current value and full vehicle records remain unverified/open.",
-      "remaining": "Extract complete required domain records and remaining document classes. Preserve validation, original provenance and explicit adoption across durable owner services. Arbitrary Excel/bank layouts, formulas, numeric date serials and legacy/macro workbooks are unsupported.",
-      "units": "T1-05, T1-23\u201342, T1-49\u201352; T1-57; T1-58; T1-59; T1-60; T1-61; T1-62; T1-63",
+      "existing": "Structured text/CSV supports seven source categories; supported OCR produces dated net-pay or loan-balance candidates for explicit review. T1-57 adds the same seven categories from a bounded financial XLSX template with original-byte provenance and explicit adoption. T1-58 insurance OCR adds distinctly labelled dated sum-assured and premium candidates; frequency, active cover and asset value are not inferred. T1-59 investment OCR adds distinct dated purchase-value/current-value candidates; no live price, gain/return or verified position/valuation is inferred. T1-60 sanction OCR adds distinct sanctioned-amount/EMI candidates dated by Sanction Date; no outstanding balance, disbursement or current-debt inference. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified. T1-62 adds supported property registration document OCR for one explicitly stated purchase value dated by Registration Date, with original provenance and explicit review. Registration date is not purchase date; ownership, authenticity and current valuation remain unverified. T1-63 adds vehicle purchase invoice OCR for an explicitly stated purchase value/currency/invoice date, with independent customer review and canonical VEHICLE adoption. Invoice date is not substituted by registration date; ownership/authenticity/current value and full vehicle records remain unverified/open. T1-64 repairs Insurance/Tax source compatibility: explicit adoption uses canonical INSURANCE_POLICY/TAX_RECORD, and Passport/history/Search/basic Reports translate to the existing source categories while preserving provenance and legacy responses.",
+      "remaining": "Extract complete required domain records and remaining document classes. Preserve validation, original provenance and explicit adoption across durable owner services. Arbitrary Excel/bank layouts, formulas, numeric date serials and legacy/macro workbooks are unsupported. Generic ASSET text/CSV/XLSX figures lack a canonical subtype and cannot yet be adopted. They must not be silently reclassified as property/vehicle.",
+      "units": "T1-05, T1-23\u201342, T1-49\u201352; T1-57; T1-58; T1-59; T1-60; T1-61; T1-62; T1-63; T1-64",
       "requirements": "MON-DOC-003/007; MON-FIN-001/003/004/006",
-      "receipt": "build/governance/t1-63-vehicle-purchase-ocr.md"
+      "receipt": "build/governance/t1-64-financial-source-category-boundary.md"
     },
     {
       "id": "P1-10",
@@ -186,7 +186,7 @@
       "name": "Assets",
       "state": "Partial",
       "existing": "ASSET source figures have customer review, Passport/source drill-down, Search, basic Reports and coverage. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified. T1-62 adds supported property registration document OCR for one explicitly stated purchase value dated by Registration Date, with original provenance and explicit review. Registration date is not purchase date; ownership, authenticity and current valuation remain unverified. T1-63 adds vehicle purchase invoice OCR for an explicitly stated purchase value/currency/invoice date, with independent customer review and canonical VEHICLE adoption. Invoice date is not substituted by registration date; ownership/authenticity/current value and full vehicle records remain unverified/open.",
-      "remaining": "Create authoritative asset records with ownership, type, dated value/valuation and liability relationships required for a meaningful asset position.",
+      "remaining": "Create authoritative asset records with ownership, type, dated value/valuation and liability relationships required for a meaningful asset position. Generic ASSET text/CSV/XLSX figures lack a canonical subtype and cannot yet be adopted. They must not be silently reclassified as property/vehicle.",
       "units": "T1-27\u201329, T1-33, T1-42; T1-61; T1-62; T1-63",
       "requirements": "MON-FIN-001/011/014; MON-DAS-001",
       "receipt": "build/governance/t1-63-vehicle-purchase-ocr.md"
@@ -273,11 +273,11 @@
       "area": "AI",
       "name": "Financial document search",
       "state": "Partial",
-      "existing": "Authorized lexical customer Search covers documents and seven reviewed source categories with original source links.",
+      "existing": "Authorized lexical customer Search covers documents and seven reviewed source categories with original source links. T1-64 repairs Insurance/Tax source compatibility: explicit adoption uses canonical INSURANCE_POLICY/TAX_RECORD, and Passport/history/Search/basic Reports translate to the existing source categories while preserving provenance and legacy responses.",
       "remaining": "Complete the \u00a715 natural-language query journey and relevant retrieval across the required indexed document classes.",
-      "units": "T1-11, T1-24/28/31/35/39",
+      "units": "T1-11, T1-24/28/31/35/39; T1-64",
       "requirements": "MON-SRH-001/002; MON-AI-009",
-      "receipt": "build/governance/t1-39-tax-source-search.md"
+      "receipt": "build/governance/t1-64-financial-source-category-boundary.md"
     },
     {
       "id": "P1-24",
@@ -295,11 +295,11 @@
       "area": "AI",
       "name": "Financial summary",
       "state": "Partial",
-      "existing": "Customer basic Reports and JSON export summarize reviewed source figures from seven categories.",
+      "existing": "Customer basic Reports and JSON export summarize reviewed source figures from seven categories. T1-64 repairs Insurance/Tax source compatibility: explicit adoption uses canonical INSURANCE_POLICY/TAX_RECORD, and Passport/history/Search/basic Reports translate to the existing source categories while preserving provenance and legacy responses.",
       "remaining": "Complete the basic AI financial-summary experience grounded in authoritative comparable records, with explanation, citations and no unsupported totals.",
-      "units": "T1-10, T1-25/29/32/36/40",
+      "units": "T1-10, T1-25/29/32/36/40; T1-64",
       "requirements": "MON-AI-003/009; MON-REP-004",
-      "receipt": "build/governance/t1-40-tax-source-reporting.md"
+      "receipt": "build/governance/t1-64-financial-source-category-boundary.md"
     },
     {
       "id": "P1-26",

@@ -183,7 +183,7 @@ public sealed class ProductSearchProjectionSource(
 
         var builder = ImmutableArray.CreateBuilder<DerivedSearchRecord>();
         foreach (var fact in profile.Facts
-            .Select(fact => fact with { FactType = AssetSourceFactBoundary.ForCustomer(fact.FactType) })
+            .Select(fact => fact with { FactType = FinancialSourceFactBoundary.ForCustomer(fact.FactType) })
                      .Where(fact => SupportedFactTypes.Contains(fact.FactType))
                      .OrderBy(fact => fact.FactType, StringComparer.Ordinal)
                      .ThenBy(fact => fact.Label, StringComparer.Ordinal))

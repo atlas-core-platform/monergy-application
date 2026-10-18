@@ -142,7 +142,7 @@ public sealed class PropertySaleDeedOcrTests
     [InlineData("VEHICLE", "property-sale-deed-png-ocr/1.0.0")]
     public void OwnerMappingDoesNotReclassifyOtherSourcesOrObjectTypes(string type, string version)
     {
-        Assert.Equal(type, Monergy.Platform.AssetSourceFactBoundary.ForOwner(type, version));
+        Assert.Equal(type, Monergy.Platform.FinancialSourceFactBoundary.ForOwner(type, version));
     }
     private static string Tsv(string text,int lowLine=0)=>"level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"+
         string.Join('\n',text.Split('|').SelectMany((line,index)=>line.Split(' ').Select((word,number)=>string.Create(CultureInfo.InvariantCulture,$"5\t1\t1\t1\t{index+1}\t{number+1}\t10\t10\t100\t40\t{(index+1==lowLine?89:99)}\t{word}"))));

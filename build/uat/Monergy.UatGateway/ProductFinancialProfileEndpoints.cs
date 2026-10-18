@@ -200,7 +200,7 @@ public static class ProductFinancialProfileEndpoints
                         ProfileId(customer.CustomerId),
                         customer.CustomerId,
                         reviewed.Result.ProcessingId,
-                        selected.Select(fact => fact with { FactType = AssetSourceFactBoundary.ForOwner(fact.FactType, fact.ExtractionVersion) }).ToArray(),
+                        selected.Select(fact => fact with { FactType = FinancialSourceFactBoundary.ForOwner(fact.FactType, fact.ExtractionVersion) }).ToArray(),
                         "reviewed-document-facts/1.0.0",
                         now));
 
@@ -280,7 +280,7 @@ public static class ProductFinancialProfileEndpoints
 
             facts.Add(new ProductFinancialFactView(
                 fact.FinancialFactId,
-                AssetSourceFactBoundary.ForCustomer(fact.FactType),
+                FinancialSourceFactBoundary.ForCustomer(fact.FactType),
                 fact.Label,
                 fact.Value,
                 fact.Currency,
@@ -370,7 +370,7 @@ public static class ProductFinancialProfileEndpoints
 
         return new ProductFinancialFactView(
             factResult.Data.FinancialFactId,
-            AssetSourceFactBoundary.ForCustomer(factResult.Data.FactType),
+            FinancialSourceFactBoundary.ForCustomer(factResult.Data.FactType),
             factResult.Data.Label,
             factResult.Data.Value,
             factResult.Data.Currency,
@@ -457,7 +457,7 @@ public static class ProductFinancialProfileEndpoints
 
         return new ProductFinancialFactView(
             factResult.Data.FinancialFactId,
-            AssetSourceFactBoundary.ForCustomer(factResult.Data.FactType),
+            FinancialSourceFactBoundary.ForCustomer(factResult.Data.FactType),
             factResult.Data.Label,
             factResult.Data.Value,
             factResult.Data.Currency,
