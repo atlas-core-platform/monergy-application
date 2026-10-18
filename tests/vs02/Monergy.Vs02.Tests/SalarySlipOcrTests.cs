@@ -30,6 +30,8 @@ public sealed class SalarySlipOcrTests
     {
         ["Monergy:DocumentProcessing:OcrExecutable"] = Environment.GetEnvironmentVariable("MONERGY_TEST_TESSERACT") ?? "/usr/bin/tesseract",
         ["Monergy:DocumentProcessing:OcrDataDirectory"] = Environment.GetEnvironmentVariable("MONERGY_TEST_TESSDATA") ?? "/usr/share/tesseract-ocr/5/tessdata",
+        ["Monergy:DocumentProcessing:PdfInfoExecutable"] = Environment.GetEnvironmentVariable("MONERGY_TEST_PDFINFO") ?? "/usr/bin/pdfinfo",
+        ["Monergy:DocumentProcessing:PdfRenderExecutable"] = Environment.GetEnvironmentVariable("MONERGY_TEST_PDFTOPPM") ?? "/usr/bin/pdftoppm",
     };
 
     [Theory, Trait("Category", "NativeOcr")]
@@ -140,8 +142,10 @@ public sealed class SalarySlipOcrTests
         Assert.IsType<DomainEvent<DocumentProcessingFailedPayload>>(Assert.Single(repository.DrainOutbox()));
     }
 
-    [Fact, Trait("Category", "NativeOcr")]
-    public async Task OwnerHttpBoundaryDeliversExactPngToRealOcrAndCustomerBoundProcessing()
+    [Theory, Trait("Category", "NativeOcr")]
+    [InlineData("salary-slip.png", "image/png")]
+    [InlineData("salary-slip-scan.pdf", "application/pdf")]
+    public async Task OwnerHttpBoundaryDeliversExactBinaryToRealOcrAndCustomerBoundProcessing(string fileName, string contentType)
     {
         var builder = WebApplication.CreateSlimBuilder(); builder.WebHost.UseUrls("http://127.0.0.1:0");
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -157,14 +161,14 @@ public sealed class SalarySlipOcrTests
         await using var host = builder.Build(); host.MapEvidenceReferenceIntake(builder.Configuration); await host.StartAsync();
         using var client = new HttpClient { BaseAddress = new Uri(host.Urls.Single()) };
         client.DefaultRequestHeaders.Add("X-Monergy-Product-Token", new string('a', 64));
-        var bytes = Fixture();
+        var bytes = Fixture(fileName);
         using var staged = await client.PostAsJsonAsync("/internal/local/v1/evidence/content", new ReferenceEvidenceContentRequest(
-            new string('c', 32), Convert.ToBase64String(bytes), "image/png"));
+            new string('c', 32), Convert.ToBase64String(bytes), contentType));
         Assert.Equal(HttpStatusCode.OK, staged.StatusCode);
         var descriptor = (await staged.Content.ReadFromJsonAsync<EvidenceContentDescriptor>())!;
         var evidence = new EvidenceApplication(repository, store, new CapturingTelemetry(), TimeProvider.System);
         var created = await evidence.CreateDocumentVersionAsync(Vs02TestContext.Request(Vs02ContractNames.CreateDocumentVersion,
-            Vs02TestContext.CreateVersionPayload() with { OriginalFileName = "salary-slip.png", DeclaredContentType = "image/png",
+            Vs02TestContext.CreateVersionPayload() with { OriginalFileName = fileName, DeclaredContentType = contentType,
                 ContentReference = descriptor.Reference, ContentSha256 = descriptor.Sha256 }, "create-png", "create-png"));
         Assert.Equal(ContractOutcome.Success, created.Outcome);
         var config = new ConfigurationManager { ["Monergy:DocumentProcessing:EvidenceUrl"] = client.BaseAddress.AbsoluteUri,
@@ -180,9 +184,10 @@ public sealed class SalarySlipOcrTests
         await Assert.ThrowsAsync<EvidenceDependencyException>(() => reader.ReadAsync("document-version-001", "customer-001",
             security with { Workload = new WorkloadContext("job-management", "job-management:T002") }, "wrong-tenant", default));
         using var engine = new TesseractImageTextRecognizer(NativeConfiguration());
+        using var pdfRenderer = new PopplerPdfPageRenderer(NativeConfiguration());
         var processingRepository = new InMemoryDocumentProcessingRepository();
         var processing = new DocumentProcessingApplication(processingRepository, reader,
-            new StructuredDocumentExtractor(new SalarySlipPngExtractor(engine)), new ReferenceExecutionPolicy(), new CapturingTelemetry(), TimeProvider.System);
+            new StructuredDocumentExtractor(new SalarySlipPngExtractor(engine), new SalarySlipPdfExtractor(pdfRenderer, engine)), new ReferenceExecutionPolicy(), new CapturingTelemetry(), TimeProvider.System);
         var result = await processing.ProcessDocumentAsync(Vs02TestContext.Request(Vs02ContractNames.ProcessDocument,
             new ProcessDocument("processing-png", "document-version-001", "evidence-001", "customer-001", DateTimeOffset.UtcNow),
             "process-png", "process-png", security));

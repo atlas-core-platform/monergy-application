@@ -35,8 +35,15 @@ public sealed class SalarySlipPngExtractor(IImageTextRecognizer recognizer) : ID
             !string.Equals(content.Reference.ContentSha256, Convert.ToHexStringLower(SHA256.HashData(bytes)), StringComparison.OrdinalIgnoreCase))
             throw Incomplete();
         ValidatePng(bytes);
-        var lines = ParseTsv(await recognizer.RecognizeAsync(bytes, cancellationToken).ConfigureAwait(false));
+        var tsv = await recognizer.RecognizeAsync(bytes, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
+        return CreateCandidates(content, processingId, tsv, ExtractionVersion);
+    }
+
+    internal static IReadOnlyList<ValidatedSourceFact> CreateCandidates(
+        EvidenceContent content, string processingId, string tsv, string extractionVersion)
+    {
+        var lines = ParseTsv(tsv);
         var titles = lines.Take(10).Where(line => Title.IsMatch(line.Text)).ToArray();
         if (titles.Length != 1) throw new DocumentRecognitionException(DocumentRecognitionFailure.Unclassified);
         var date = One(lines, DateLabel);
@@ -60,7 +67,7 @@ public sealed class SalarySlipPngExtractor(IImageTextRecognizer recognizer) : ID
             $"{content.Reference.DocumentVersionId}|{processingId}|salary-slip:net-pay")));
         return [new ValidatedSourceFact("sf-" + identity[..24], content.Reference.CustomerId, "INCOME", "Net pay",
             amount, currency, payDate, $"Salary slip OCR: page 1, line {net.Number}", selected.Min(line => line.Confidence) / 100m,
-            content.Reference.EvidenceId, content.Reference.DocumentVersionId, ExtractionVersion, FixtureDocumentExtractor.ValidationVersion)];
+            content.Reference.EvidenceId, content.Reference.DocumentVersionId, extractionVersion, FixtureDocumentExtractor.ValidationVersion)];
     }
 
     public static void ValidatePng(byte[] bytes)
