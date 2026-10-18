@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Monergy.Contracts;
 using Monergy.Platform;
 using Monergy.Services.CustomerIdentity;
+using Monergy.Services.CustomerIdentity.Application;
 
 const string serviceName = "Customer & Identity Service";
 
@@ -26,6 +27,7 @@ if (tenantIntegration)
     {
         builder.Services.AddSelfCustomerProfiles();
         builder.Services.AddCustomerAccountAgreements(builder.Configuration);
+        builder.Services.AddSingleton<CustomerWorkspaceSetupApplication>();
     }
 }
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);

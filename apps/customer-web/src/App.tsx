@@ -17,6 +17,7 @@ const TenantSetupGate = lazy(() =>
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const ProductSearchExperience = lazy(() => import('./product/ProductSearchExperience'));
 const ConsentExperience = lazy(() => import('./product/ConsentExperience'));
+const CustomerWorkspaceSetupExperience = lazy(() => import('./product/CustomerWorkspaceSetupExperience'));
 const CustomerAccountAgreementsExperience = lazy(() => import('./product/CustomerAccountAgreementsExperience'));
 const CustomerProfileExperience = lazy(() => import('./product/CustomerProfileExperience'));
 const SelfSessionsExperience = lazy(() => import('./product/SelfSessionsExperience'));
@@ -271,6 +272,7 @@ function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
   );
 }
 function WorkspaceApplication() {
+  const { authorization, session } = useWorkspaceSession();
   const [path, setPath] = useState(window.location.pathname);
   useEffect(() => {
     const pop = () => {
@@ -341,7 +343,11 @@ function WorkspaceApplication() {
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';
   }, []);
-  const shell = (
+  const setup = authorization?.area === 'product' ? authorization.context.setup : undefined;
+  const needsSetup = !inAdministration && setup?.required && !setup.ready;
+  const shell = needsSetup ? (
+    <Suspense fallback={<main aria-busy="true" className="access-loading">Loading account setup…</main>}><CustomerWorkspaceSetupExperience key={JSON.stringify([session?.tenantId, session?.actorId, session?.authenticationContextId, session?.subjectVersion, setup.customerId])} /></Suspense>
+  ) : (
     <SessionShell
       appearance="midnight"
       destinations={navigation}

@@ -9,7 +9,10 @@ public sealed record CustomerWorkspaceContext(
     string? SecondaryLabel,
     string OwnerActorId,
     long Version,
-    bool Active);
+    bool Active)
+{
+    public bool WorkspaceReady { get; init; } = true;
+}
 
 public interface ITenantCustomerResourceDirectory
 {

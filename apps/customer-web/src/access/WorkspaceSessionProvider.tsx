@@ -62,6 +62,15 @@ async function verify(
       !context.customerName.trim() ||
       !Array.isArray(context.capabilities) ||
       context.capabilities.some((capability) => !identifier(capability, 160)) ||
+      context.setup !== undefined && (
+        context.setup.tenantId !== current.tenantId || context.setup.actorId !== current.actorId || context.setup.customerId !== context.customerId ||
+        ['required', 'emailVerified', 'profileReviewed', 'agreementsPublished', 'agreementsAccepted', 'ready'].some(key => typeof context.setup?.[key as keyof typeof context.setup] !== 'boolean') ||
+        context.setup.ready !== (!context.setup.required || context.setup.emailVerified && context.setup.profileReviewed && context.setup.agreementsPublished && context.setup.agreementsAccepted) ||
+        context.setup.agreementsAccepted && !context.setup.agreementsPublished ||
+        context.setup.agreementsPublished && (typeof context.setup.revision !== 'string' || !/^[0-9a-f]{64}$/.test(context.setup.revision)) ||
+        !context.setup.agreementsPublished && context.setup.revision !== null ||
+        !context.setup.ready && context.capabilities.length !== 0
+      ) ||
       context.productionAccepted ||
       context.dataDurability !== 'Temporary data'
     )

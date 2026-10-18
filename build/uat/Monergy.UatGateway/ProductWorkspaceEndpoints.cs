@@ -14,7 +14,8 @@ public sealed record ProductWorkspaceContext(
     IReadOnlyList<string> Capabilities,
     string Environment,
     string DataDurability,
-    bool ProductionAccepted);
+    bool ProductionAccepted,
+    CustomerWorkspaceSetupStatus? Setup = null);
 
 public sealed record ProductEvidenceSubmission(
     string OperationId,
@@ -132,10 +133,12 @@ public static class ProductWorkspaceEndpoints
             TenantAccessClient access) =>
         {
             var session = await owners.SessionAsync(http).ConfigureAwait(false);
-            var customer = await owners.OwnedCustomerAsync(session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
+            var customer = await owners.OwnedCustomerForSetupAsync(session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
                 ?? throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
+            var setup = await owners.WorkspaceSetupAsync(session.TenantId, session.ActorId, customer.CustomerId, http.RequestAborted).ConfigureAwait(false);
+            if (setup.Ready != customer.WorkspaceReady) throw new TenantBoundaryException("CUSTOMER_SETUP_CHANGED", 503);
             var capabilities = new List<string>();
-            foreach (var capability in ProductCapabilities)
+            foreach (var capability in setup.Ready ? ProductCapabilities : [])
             {
                 var decision = await access.EvaluateCustomerAsync(http, capability, customer.CustomerId).ConfigureAwait(false);
                 if (decision.Outcome == "Allow") capabilities.Add(capability);
@@ -149,7 +152,7 @@ public static class ProductWorkspaceEndpoints
                 capabilities,
                 "Test environment",
                 "Temporary data",
-                false));
+                false, setup));
         });
         app.MapGet("/product-api/v1/evidence", async (
             HttpContext http,

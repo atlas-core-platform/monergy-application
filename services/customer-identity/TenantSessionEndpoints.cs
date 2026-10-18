@@ -83,7 +83,8 @@ public static class TenantSessionEndpoints
                     catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
                 });
             }
-            app.MapGet("/internal/v1/customer-owner/{actorId}", async (string actorId, HttpContext http, PostgresCustomers customers) =>
+            app.MapCustomerWorkspaceSetup(contextToken);
+            app.MapGet("/internal/v1/customer-owner/{actorId}", async (string actorId, HttpContext http, PostgresCustomers customers, CustomerWorkspaceSetupApplication setup) =>
             {
                 if (!TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Owner-Token"].ToString(), contextToken))
                     return (IResult)Results.StatusCode(403);
@@ -91,7 +92,10 @@ public static class TenantSessionEndpoints
                 {
                     var customer = await customers.ReadOwnedAsync(
                         http.Request.Headers["X-Monergy-Tenant"].ToString(), actorId, http.RequestAborted).ConfigureAwait(false);
-                    return customer is null ? Results.NotFound() : Results.Ok(customer);
+                    if (customer is null) return Results.NotFound();
+                    var state = await setup.ReadForActorAsync(customer.TenantId, customer.OwnerActorId, http.RequestAborted).ConfigureAwait(false);
+                    if (state.CustomerId != customer.CustomerId) throw new TenantBoundaryException("CUSTOMER_SETUP_BINDING_INVALID", 503);
+                    return Results.Ok(customer with { WorkspaceReady = state.Ready });
                 }
                 catch (TenantBoundaryException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.Status); }
                 catch (TenantAccessException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }

@@ -102,6 +102,8 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     var target = Route(path, http.Request.Method);
     if (target is not null)
     {
+        if (path.StartsWith("/contracts/", StringComparison.Ordinal) && app.Configuration.GetValue<bool>("Monergy:Product:Enabled"))
+            await CustomerSetupAdmission.RequireAsync(http, http.RequestServices.GetRequiredService<CustomerOwnerClient>()).ConfigureAwait(false);
         await ProxyAsync(http, client, new Uri(target + http.Request.QueryString)).ConfigureAwait(false);
         return;
     }
@@ -127,6 +129,8 @@ static string? Route(string path, string method)
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/customer-email-access" && method == "GET" ||
         path is "/identity-api/local/v1/customer-email-access/request" or "/identity-api/local/v1/customer-email-access/confirm" && method == "POST")
+        return "http://127.0.0.1:5101" + path[13..];
+    if (path == "/identity-api/local/v1/me/workspace-setup" && method == "GET")
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/me/account-agreements" && method is "GET" or "POST")
         return "http://127.0.0.1:5101" + path[13..];

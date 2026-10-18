@@ -37,7 +37,7 @@ async function valid(value: unknown, tenant: string, actor: string, customer: st
     Date.parse(v.acceptance.acceptedAt) >= Date.parse(p.publishedAt);
 }
 export default function CustomerAccountAgreementsExperience() {
-  const { api, session, authorization } = useWorkspaceSession();
+  const { api, session, authorization, refreshContext } = useWorkspaceSession();
   const customer = authorization?.area === 'product' ? authorization.context.customerId : '';
   const tenant = session?.tenantId ?? ''; const actor = session?.actorId ?? '';
   const scope = JSON.stringify([tenant, actor, customer, session?.authenticationContextId, session?.subjectVersion]);
@@ -75,6 +75,8 @@ export default function CustomerAccountAgreementsExperience() {
       if (!await valid(data, tenant, actor, customer) || data.acceptance?.operationId !== operationId ||
         data.acceptance.revision !== revision || data.acceptance.acceptedAt !== receipt.acceptedAt)
         throw new AccessApiError(503, 'AGREEMENTS_READBACK_INVALID');
+      if (!same()) return;
+      await refreshContext?.();
       if (!same()) return;
       setView({ ...current, data, checked: [], saving: false, uncertain: false, error: '', notice: 'Your agreement choices have been recorded.' });
     } catch (failure) {
