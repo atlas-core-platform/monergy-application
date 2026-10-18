@@ -140,3 +140,5 @@ Current and recovered review require an explicit Property/Vehicle choice for sel
 ## T1-66 customer-reviewed loan records
 
 Financial information > Loan information supports explicit creation/readback of source-linked loan terms, including lender/type, sanction/outstanding/as-of, rate/EMI/tenure and start/end dates. Financial Profile migration0003 adds append-only records and scoped operation receipts. Run normal owner bootstrap migrations before using the physical adapter. Current Self read/evidence/update authority is required. Unknown or conflicting requests fail closed; uncertain saves replay the same request. [Receipt](../governance/t1-66-reviewed-loan-records.md). Editing/lifecycle, central Audit Service integration, physical migration/UAT and full financial truth remain open. No aggregate debt or lender verification is implied.
+
+T1-66 owner routes also require the existing operator customer-to-tenant binding before PDP checks; tenant-colliding customer IDs cannot cross the source boundary.

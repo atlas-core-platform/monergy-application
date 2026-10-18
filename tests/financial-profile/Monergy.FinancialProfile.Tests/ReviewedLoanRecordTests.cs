@@ -160,6 +160,22 @@ public sealed class ReviewedLoanRecordTests
         Assert.Equal(stored,await confirmed.Content.ReadFromJsonAsync<ReviewedLoanRecord>(ContractJson.Options));
         Assert.Single((await h.Records.ListAsync("T001",Customer,default)).Items);
     }
+    [Fact]
+    public async Task OwnerBindingRejectsForeignTenantEvenWhenPdpAllowsACollidingCustomerId()
+    {
+        await using var h = await Harness.Create();
+        using(var original = h.Client())
+            Assert.Equal(HttpStatusCode.OK,(await original.PostAsJsonAsync("/product-api/v1/loan-records",Input(h.Source.FinancialFactId),ContractJson.Options)).StatusCode);
+        var saved = Assert.Single((await h.Records.ListAsync("T001",Customer,default)).Items);
+        h.Authority.AllowForeignTenant = true;
+        using var foreign = h.OwnerClient("T002");
+        var path = "/local/v1/customers/"+Customer+"/loan-records";
+        Assert.Equal(HttpStatusCode.Forbidden,(await foreign.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,(await foreign.GetAsync(path+"/"+saved.LoanRecordId)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,(await foreign.PostAsJsonAsync(path,Input(h.Source.FinancialFactId),ContractJson.Options)).StatusCode);
+        Assert.Empty((await h.Records.ListAsync("T002",Customer,default)).Items);
+        Assert.Single((await h.Records.ListAsync("T001",Customer,default)).Items);
+    }
     private static async Task<(InMemoryFinancialProfileRepository Financial, AuthoritativeFinancialFact Source)> Seed(string type = "LOAN", string customer = Customer)
     {
         var repository = new InMemoryFinancialProfileRepository(); var app = new FinancialProfileApplication(repository, new CapturingTelemetry(), TimeProvider.System);
@@ -174,6 +190,7 @@ public sealed class ReviewedLoanRecordTests
     {
         public string Failure { get; set; } = "";
         public int DenyAfterEvaluations { get; set; }
+        public bool AllowForeignTenant { get; set; }
         private int evaluations;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
@@ -182,7 +199,7 @@ public sealed class ReviewedLoanRecordTests
             {
                 var input = await request.Content!.ReadFromJsonAsync<CustomerAccessRequest>(cancellationToken:ct);
                 var tenant = request.Headers.GetValues("X-Monergy-Tenant").Single();
-                var denied = DenyAfterEvaluations > 0 && ++evaluations > DenyAfterEvaluations || Failure == "deny" || tenant != "T001" || input!.CustomerId != Customer ||
+                var denied = DenyAfterEvaluations > 0 && ++evaluations > DenyAfterEvaluations || Failure == "deny" || !AllowForeignTenant && tenant != "T001" || input!.CustomerId != Customer ||
                     Failure == "update" && input.CapabilityId.EndsWith("update", StringComparison.Ordinal) ||
                     Failure == "evidence" && input.CapabilityId == "evidence.document.read" || Failure == "read" && input.CapabilityId == "financial-profile.profile.read";
                 return Response(new CustomerAccessDecision("decision-001", denied ? "Deny" : "Allow", tenant, "actor-001", input!.CustomerId,
@@ -207,6 +224,7 @@ public sealed class ReviewedLoanRecordTests
                 ["Monergy:AccessIntegration:CustomerContextToken"]=new('a',32), ["Monergy:AccessIntegration:CustomerIdentityToken"]=new('b',32), ["Monergy:AccessIntegration:MembershipToken"]=new('c',32) };
             var ob = WebApplication.CreateSlimBuilder(); ob.WebHost.UseUrls("http://127.0.0.1:0"); ob.Configuration.AddInMemoryCollection(values);
             ob.Services.AddSingleton(new TenantAccessClient(ob.Configuration, new HttpClient(authority,false)));
+            ob.Services.AddSingleton(new TenantBoundaryOptions { Service="financial-profile", CapabilityPrefix="financial-profile.", CustomerTenants=new Dictionary<string,string> { [Customer]="T001" }, ProbeUrl="http://127.0.0.1:5199/" });
             ob.Services.AddSingleton(new LoanRecordsApplication(financial,records,TimeProvider.System)); var owner=ob.Build(); owner.MapLoanRecords(); await owner.StartAsync();
             values["Monergy:Product:FinancialProfileUrl"]=owner.Urls.Single()+"/";
             var gb=WebApplication.CreateSlimBuilder(); gb.WebHost.UseUrls("http://127.0.0.1:0"); gb.Configuration.AddInMemoryCollection(values);
@@ -215,7 +233,7 @@ public sealed class ReviewedLoanRecordTests
             var gateway=gb.Build(); gateway.MapProductLoanRecords(); await gateway.StartAsync(); return new(owner,gateway,authority,records,source);
         }
         public HttpClient Client(string? tenant="T001") => ClientFor(gateway,tenant);
-        public HttpClient OwnerClient() => ClientFor(owner,"T001");
+        public HttpClient OwnerClient(string tenant="T001") => ClientFor(owner,tenant);
         private static HttpClient ClientFor(WebApplication app,string? tenant)
         {
             var client=new HttpClient { BaseAddress=new Uri(app.Urls.Single()) };
