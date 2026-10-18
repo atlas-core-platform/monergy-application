@@ -9,6 +9,7 @@ import {
   evidenceTypes,
   evidenceContentType,
   financialCsvTemplate,
+  financialXlsxType,
   getDocumentProcessing,
   getEvidenceSource,
   getEvidenceVersionHistory,
@@ -56,7 +57,7 @@ function processingFailureMessage(code: string | null): string {
     case 'processing.ocr.unavailable':
       return 'Image text extraction is temporarily unavailable. Try again when the service is available.';
     default:
-      return 'Check that the document matches a supported salary slip, loan statement, structured-text format or financial information CSV template, then try again.';
+      return 'Check that the document matches a supported salary slip, loan statement, structured-text format or financial information CSV or Excel template, then try again.';
   }
 }
 
@@ -67,7 +68,12 @@ const typeName = (value: string) =>
     'image/jpeg': 'JPEG image',
     'text/plain': 'Plain text',
     'text/csv': 'Financial information CSV',
+    [financialXlsxType]: 'Financial information Excel',
   })[value] ?? value;
+const extractionLabel = (fact: { confidence: number; extractionVersion?: string }) =>
+  fact.extractionVersion === 'financial-csv/1.0.0' ? 'Copied from CSV' :
+    fact.extractionVersion === 'financial-xlsx/1.0.0' ? 'Copied from Excel' :
+      String(Math.round(fact.confidence * 100)) + '% confidence';
 const formatDate = (value: string) =>
   new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
@@ -642,7 +648,7 @@ export default function EvidenceExperience() {
             </span>
             <div>
               <h2 id="upload-heading">Add document</h2>
-              <p>PDF, PNG, JPEG, text or CSV · up to 1 MB</p>
+              <p>PDF, PNG, JPEG, text, CSV or Excel · up to 1 MB</p>
             </div>
           </div>
           {!canUpload && (
@@ -654,7 +660,7 @@ export default function EvidenceExperience() {
             />
           )}
           <Dragger
-            accept={[...evidenceTypes, '.csv'].join(',')}
+            accept={[...evidenceTypes, '.csv', '.xlsx'].join(',')}
             multiple={false}
             showUploadList={false}
             beforeUpload={select}
@@ -678,6 +684,8 @@ export default function EvidenceExperience() {
             {' '}Use Category, Description, Amount, Currency, Date and Source; up to 100 rows.
             Values are copied as supplied and require your review. Use a unique description within each category.
           </p>
+          <p>For Excel, download the <a href="/templates/monergy-financial-information.xlsx" download="monergy-financial-information.xlsx">Excel financial information template</a>.
+            Use one visible sheet and up to 100 rows. Keep dates as YYYY-MM-DD text and amounts as plain decimal values. Formulas, links and unsupported workbook layouts cannot be extracted.</p>
           <div className="product-trust-row">
             <span>
               <WorkspaceIcon name="shield" size={16} /> Linked to your customer account
@@ -1104,9 +1112,7 @@ export default function EvidenceExperience() {
                                 currency: fact.currency,
                               }).format(fact.candidateValue)}
                             </strong>
-                            <span>{'extractionVersion' in fact && fact.extractionVersion === 'financial-csv/1.0.0'
-                              ? 'Copied from CSV'
-                              : String(Math.round(fact.confidence * 100)) + '% confidence'}</span>
+                            <span>{extractionLabel(fact)}</span>
                           </div>
                         </article>
                       );
@@ -1473,7 +1479,7 @@ export default function EvidenceExperience() {
               <div>
                 <strong>Extract details from this document</strong>
                 <p>
-                  {['text/plain', 'text/csv', 'image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)
+                  {['text/plain', 'text/csv', financialXlsxType, 'image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)
                     ? ['image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)
                       ? 'For printed English salary slips or loan statements in PNG, upright JPEG or single-page PDF format with labelled net pay, currency and pay date, or outstanding balance, currency and statement date. Review the extracted amount against your document.'
                       : 'Review supported financial source figures before adding them to Financial information.'
@@ -1482,7 +1488,7 @@ export default function EvidenceExperience() {
               </div>
               <Button
                 type="primary"
-                disabled={!canProcess || !['text/plain', 'text/csv', 'image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)}
+                disabled={!canProcess || !['text/plain', 'text/csv', financialXlsxType, 'image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)}
                 onClick={() => {
                   setProcessingEvidence(selectedEvidence);
                   setSelectedEvidence(null);
@@ -1526,7 +1532,7 @@ export default function EvidenceExperience() {
               <Button
                 type="primary"
                 loading={processingBusy}
-                disabled={!canProcess || !['text/plain', 'text/csv', 'image/png', 'image/jpeg', 'application/pdf'].includes(processingEvidence?.contentType ?? '')}
+                disabled={!canProcess || !['text/plain', 'text/csv', financialXlsxType, 'image/png', 'image/jpeg', 'application/pdf'].includes(processingEvidence?.contentType ?? '')}
                 onClick={() => void processDocument()}
               >
                 Extract details
@@ -1674,9 +1680,7 @@ export default function EvidenceExperience() {
                             currency: fact.currency,
                           }).format(fact.candidateValue)}
                         </strong>
-                        <span>{'extractionVersion' in fact && fact.extractionVersion === 'financial-csv/1.0.0'
-                              ? 'Copied from CSV'
-                              : String(Math.round(fact.confidence * 100)) + '% confidence'}</span>
+                        <span>{extractionLabel(fact)}</span>
                       </div>
                     </article>
                   ))}

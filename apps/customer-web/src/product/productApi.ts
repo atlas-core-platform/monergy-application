@@ -180,9 +180,11 @@ export interface ProductFinancialFactDetail {
   history: ProductFinancialFact[];
 }
 
-export const evidenceTypes = ['application/pdf', 'image/png', 'image/jpeg', 'text/plain', 'text/csv'];
+export const financialXlsxType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+export const evidenceTypes = ['application/pdf', 'image/png', 'image/jpeg', 'text/plain', 'text/csv', financialXlsxType];
 export const financialCsvTemplate = 'Category,Description,Amount,Currency,Date,Source\r\nINCOME,Monthly salary,125000.00,INR,2026-10-01,Salary statement\r\n';
 export function evidenceContentType(file: Pick<File, 'name' | 'type'>): string {
+  if (/\.xlsx$/i.test(file.name) && ['', financialXlsxType, 'application/zip', 'application/octet-stream'].includes(file.type)) return financialXlsxType;
   return /\.csv$/i.test(file.name) && ['', 'text/csv', 'application/vnd.ms-excel'].includes(file.type)
     ? 'text/csv'
     : file.type;

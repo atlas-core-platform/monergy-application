@@ -111,7 +111,7 @@ public static class ProductWorkspaceEndpoints
         "reporting.report.read",
     ];
     private static readonly HashSet<string> SupportedContentTypes = new(StringComparer.OrdinalIgnoreCase)
-    { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv" };
+    { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
 
     public static void AddProductWorkspace(this WebApplicationBuilder builder)
     {
@@ -415,6 +415,7 @@ public static class ProductWorkspaceEndpoints
                 ?? throw new TenantBoundaryException("EVIDENCE_VERSION_NOT_FOUND", 404);
             if (!string.Equals(source.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(source.ContentType, "text/csv", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(source.ContentType, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(source.ContentType, "image/png", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(source.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(source.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
@@ -789,7 +790,7 @@ public sealed class ProductDocumentProcessingClient : IDisposable
 public sealed class ProductEvidenceClient : IDisposable
 {
     private static readonly HashSet<string> LibraryContentTypes = new(StringComparer.OrdinalIgnoreCase)
-    { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv" };
+    { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true };
     private readonly HttpClient client = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })

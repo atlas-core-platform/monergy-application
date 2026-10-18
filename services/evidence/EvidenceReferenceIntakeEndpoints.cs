@@ -21,7 +21,7 @@ public sealed record ReferenceEvidenceReadResult(
 public static class EvidenceReferenceIntakeEndpoints
 {
     private static readonly HashSet<string> SupportedContentTypes = new(StringComparer.OrdinalIgnoreCase)
-    { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv" };
+    { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
 
     public static IEndpointRouteBuilder MapEvidenceReferenceIntake(
         this IEndpointRouteBuilder endpoints,
@@ -94,6 +94,7 @@ public static class EvidenceReferenceIntakeEndpoints
                 return Results.NotFound(new { error = "EVIDENCE_PROCESSING_SOURCE_NOT_FOUND" });
             if (!string.Equals(version.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(version.ContentType, "text/csv", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(version.ContentType, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(version.ContentType, "image/png", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(version.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(version.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
@@ -102,7 +103,8 @@ public static class EvidenceReferenceIntakeEndpoints
             var value = await content.ReadBytesAsync(version.ContentReference, cancellationToken).ConfigureAwait(false);
             if (value is null)
                 return Results.Json(new { error = "EVIDENCE_PROCESSING_CONTENT_UNAVAILABLE" }, statusCode: StatusCodes.Status503ServiceUnavailable);
-            var binary = version.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase) ||
+            var binary = version.ContentType.Equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", StringComparison.OrdinalIgnoreCase) ||
+                version.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase) ||
                 version.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) ||
                 version.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase);
             return Results.Ok(new ReferenceEvidenceReadResult(
@@ -121,6 +123,8 @@ public static class EvidenceReferenceIntakeEndpoints
 
     private static bool ContentMatchesType(byte[] content, string contentType)
     {
+        if (contentType.Equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", StringComparison.OrdinalIgnoreCase))
+            return content.Length >= 22 && content.AsSpan().StartsWith(new byte[] { 0x50, 0x4B, 0x03, 0x04 });
         if (contentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
             return content.AsSpan().StartsWith("%PDF-"u8);
         if (contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase))

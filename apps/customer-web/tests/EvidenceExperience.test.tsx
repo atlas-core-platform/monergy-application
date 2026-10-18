@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { URL as FileUrl } from 'node:url';
+import { financialXlsxType } from '../src/product/productApi';
 import { FoundationProvider } from '@monergy/ui-foundation';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -210,7 +213,7 @@ it('keeps the library hidden without evidence read authority', () => {
   expect(request).not.toHaveBeenCalled();
 });
 
-it.each(['text/plain', 'image/png', 'application/pdf', 'image/jpeg'])('requires explicit source-fact selection before updating Financial information from %s', async (contentType) => {
+it.each(['text/plain', 'image/png', 'application/pdf', 'image/jpeg', financialXlsxType])('requires explicit source-fact selection before updating Financial information from %s', async (contentType) => {
   const api = new AccessApi(session);
   const item = {
     documentId: 'document-003',
@@ -259,7 +262,7 @@ it.each(['text/plain', 'image/png', 'application/pdf', 'image/jpeg'])('requires 
         confidence: 0.98,
         evidenceId: item.evidenceId,
         documentVersionId: item.documentVersionId,
-        extractionVersion: contentType === 'image/jpeg' ? 'salary-slip-jpeg-ocr/1.0.0' : contentType === 'application/pdf' ? 'salary-slip-pdf-ocr/1.0.0' : contentType === 'image/png' ? 'salary-slip-png-ocr/1.0.0' : 'fixture-extractor/1.0.0',
+        extractionVersion: contentType === financialXlsxType ? 'financial-xlsx/1.0.0' : contentType === 'image/jpeg' ? 'salary-slip-jpeg-ocr/1.0.0' : contentType === 'application/pdf' ? 'salary-slip-pdf-ocr/1.0.0' : contentType === 'image/png' ? 'salary-slip-png-ocr/1.0.0' : 'fixture-extractor/1.0.0',
         validationVersion: 'canonical-source-fact/1.0.0',
       },
     ],
@@ -321,9 +324,9 @@ it.each(['text/plain', 'image/png', 'application/pdf', 'image/jpeg'])('requires 
   expect(review).toHaveTextContent('Your financial information is not changed by this step');
   await user.click(within(review).getByRole('button', { name: 'Extract details' }));
   expect(await screen.findByText('Employment income')).toBeVisible();
-  if (contentType !== 'text/plain') expect(review).toHaveTextContent('Recognized as a salary slip');
+  if (contentType !== 'text/plain' && contentType !== financialXlsxType) expect(review).toHaveTextContent('Recognized as a salary slip');
   expect(review).toHaveTextContent('$125,000.00');
-  expect(review).toHaveTextContent('98% confidence');
+  expect(review).toHaveTextContent(contentType === financialXlsxType ? 'Copied from Excel' : '98% confidence');
   expect(request).toHaveBeenCalledWith(
     `v1/evidence/${item.documentVersionId}/processing`,
     'POST',
@@ -2135,4 +2138,66 @@ it.each([
   expect(await within(review).findByText((text) => text.startsWith(message))).toBeVisible();
   expect(within(review).queryByRole('checkbox')).not.toBeInTheDocument();
   expect(request.mock.calls.filter(([path]) => path.includes('financial-profile/from-processing'))).toHaveLength(0);
+});
+
+it.each([financialXlsxType, 'application/zip', 'application/octet-stream', ''])('uploads XLSX with browser media type %s using the original workbook bytes', async (mediaType) => {
+  const api = new AccessApi(session);
+  // Fixed repository fixture; no user-controlled path. FileUrl also avoids Vite asset-URL rewriting.
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
+  const bytes = Uint8Array.from(readFileSync(new FileUrl('../public/templates/monergy-financial-information.xlsx', import.meta.url)));
+  const submit = vi.spyOn(api, 'product').mockImplementation((_, method) =>
+    Promise.resolve(method === 'POST' ? {
+      operationId: 'a'.repeat(32), documentId: 'xlsx-document', documentVersionId: 'xlsx-version',
+      evidenceId: 'xlsx-evidence', version: 1, originalFileName: 'financial.xlsx', contentType: financialXlsxType,
+      contentLength: bytes.length, contentSha256: 'b'.repeat(64), acceptedAt: '2026-10-17T00:00:00Z',
+      dataDurability: 'Temporary data',
+    } : { items: [], dataDurability: 'Temporary data' }),
+  );
+  vi.spyOn(crypto, 'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+  mount(api);
+  const template = screen.getByRole('link', { name: 'Excel financial information template' });
+  expect(template).toHaveAttribute('download', 'monergy-financial-information.xlsx');
+  expect(template).toHaveAttribute('href', '/templates/monergy-financial-information.xlsx');
+  const user = userEvent.setup();
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]');
+  if (!input) throw new Error('Document upload input is missing.');
+  await user.upload(input, new File([bytes], 'financial.xlsx', { type: mediaType }));
+  expect(screen.getByRole('dialog', { name: 'Review document upload' })).toHaveTextContent('Financial information Excel');
+  await user.click(screen.getByRole('button', { name: 'Upload document' }));
+  await waitFor(() => {
+    expect(submit.mock.calls.some((call) => call[1] === 'POST')).toBe(true);
+  });
+  const write = submit.mock.calls.find((call) => call[1] === 'POST');
+  expect(write?.[0]).toBe('v1/evidence');
+  expect(write?.[2]).toMatchObject({ contentType: financialXlsxType, originalFileName: 'financial.xlsx', contentBase64: btoa(String.fromCharCode(...bytes)) });
+  expect(await screen.findByText('Your document was uploaded.')).toBeVisible();
+  // The upload drawer closes asynchronously; let it release its modal state before the next mount.
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog', { name: 'Review document upload' })).not.toBeInTheDocument();
+  });
+});
+
+
+it.each([true, false])('enables XLSX extraction only with current processing access: %s', async (allowed) => {
+  const api = new AccessApi(session);
+  const request = vi.spyOn(api, 'product').mockResolvedValue({ items: [{
+    documentId: 'xlsx-document', documentVersionId: 'xlsx-version', evidenceId: 'xlsx-evidence', version: 1,
+    sourceName: 'Customer upload', originalFileName: 'financial.xlsx', contentType: financialXlsxType, contentLength: 80,
+    contentSha256: 'b'.repeat(64), receivedAt: '2026-10-17T00:00:00Z', createdAt: '2026-10-17T00:00:00Z',
+  }], dataDurability: 'Temporary data' });
+  mount(api, allowed ? ['evidence.document.read', 'document-intelligence.document.process'] : ['evidence.document.read']);
+  const user = userEvent.setup();
+  await screen.findByText('financial.xlsx');
+  await user.click(screen.getByRole('button', { name: 'View document details for financial.xlsx' }));
+  const details = screen.getByRole('dialog', { name: 'Document details' });
+  const extract = within(details).getByRole('button', { name: 'Extract details' });
+  if (allowed) {
+    expect(extract).toBeEnabled();
+    await user.click(extract);
+    const review = screen.getByRole('dialog', { name: 'Extract and review details' });
+    expect(within(review).getByRole('button', { name: 'Extract details' })).toBeEnabled();
+  } else {
+    expect(extract).toBeDisabled();
+  }
+  expect(request.mock.calls.some((call) => call[1] === 'POST')).toBe(false);
 });
