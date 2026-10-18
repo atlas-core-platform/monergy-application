@@ -27,6 +27,7 @@ if (tenantIntegration)
     {
         builder.Services.AddSelfCustomerProfiles();
         builder.Services.AddCustomerAccountAgreements(builder.Configuration);
+        builder.Services.AddCustomerPan(builder.Configuration);
         builder.Services.AddSingleton<CustomerWorkspaceSetupApplication>();
     }
 }
@@ -54,6 +55,7 @@ if (tenantIntegration)
     {
         app.MapSelfCustomerProfile();
         app.MapCustomerAccountAgreements();
+        app.MapCustomerPan();
     }
 }
 

@@ -39,6 +39,7 @@ $am06Migrations = @(& (Join-Path $RepositoryRoot 'build/am06/Get-MigrationOverla
 $onboardingMigrations = @(& (Join-Path $RepositoryRoot 'build/onboarding/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
 $emailAccessMigrations = @(& (Join-Path $RepositoryRoot 'build/t143/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
 $profileMigrations = @(& (Join-Path $RepositoryRoot 'build/t144/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
+$panMigrations = @(& (Join-Path $RepositoryRoot 'build/t156/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
 $birthDateMigrations = @(& (Join-Path $RepositoryRoot 'build/t155/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
 $agreementMigrations = @(& (Join-Path $RepositoryRoot 'build/t153/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
 $selfSessionMigrations = @(& (Join-Path $RepositoryRoot 'build/t145/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
@@ -79,3 +80,5 @@ foreach ($path in $selfSessionMigrations) { $path }
 foreach ($path in $agreementMigrations) { $path }
 
 foreach ($path in $birthDateMigrations) { $path }
+
+foreach ($path in $panMigrations) { $path }

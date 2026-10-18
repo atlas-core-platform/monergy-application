@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
 import type { AccessApi } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
+import CustomerPanExperience from './CustomerPanExperience';
 import './product.css';
 
 interface CustomerProfile {
@@ -123,5 +124,6 @@ export default function CustomerProfileExperience() {
         </Space>
       </Form>
     </Card>}
+    {current?.profile && <CustomerPanExperience key={scope} />}
   </section>;
 }
