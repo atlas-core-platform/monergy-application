@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-66",
+  "applicationBase": "bdb420bfa5587b69fb018702e62c0da2533e7757",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "migrations": [
+    "services/financial-profile/migrations/0003_reviewed_loan_records.sql"
+  ]
+}

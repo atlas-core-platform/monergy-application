@@ -136,3 +136,7 @@ Insurance/Tax review now maps to canonical owner types and back for Passport/his
 ## T1-65 reviewed generic asset types
 
 Current and recovered review require an explicit Property/Vehicle choice for selected generic text/CSV/bounded XLSX asset figures. The Gateway validates choices against selected owned sources. Financial Profile retains the canonical source type across operation IDs/history; current and historical customer views display it. See [bounded receipt](../governance/t1-65-reviewed-asset-source-types.md). Other asset kinds, full asset records, ownership/current value verification and physical/integrated UAT remain open.
+
+## T1-66 customer-reviewed loan records
+
+Financial information > Loan information supports explicit creation/readback of source-linked loan terms, including lender/type, sanction/outstanding/as-of, rate/EMI/tenure and start/end dates. Financial Profile migration0003 adds append-only records and scoped operation receipts. Run normal owner bootstrap migrations before using the physical adapter. Current Self read/evidence/update authority is required. Unknown or conflicting requests fail closed; uncertain saves replay the same request. [Receipt](../governance/t1-66-reviewed-loan-records.md). Editing/lifecycle, central Audit Service integration, physical migration/UAT and full financial truth remain open. No aggregate debt or lender verification is implied.

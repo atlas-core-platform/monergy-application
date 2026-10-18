@@ -435,3 +435,16 @@ export function searchProductInformation(
     signal,
   );
 }
+
+export interface ProductLoanDraft {
+  name: string; lender: string; loanType: string; sanctionAmount: number; outstanding: number;
+  interestRatePercent: number; emi: number; tenureMonths: number; startDate: string; endDate: string;
+  balanceAsOfDate: string; sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductLoanRecord {
+  loanRecordId: string; operationId: string; customerId: string; loan: ProductLoanDraft; currency: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+}
+export interface ProductLoanRecordList { items: ProductLoanRecord[]; hasMore: boolean; dataDurability: string }
+export const getLoanRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductLoanRecordList>('v1/loan-records', 'GET', undefined, signal);
+export const createLoanRecord = (api: AccessApi, input: { operationId: string; loan: ProductLoanDraft }, signal?: AbortSignal) => api.product<ProductLoanRecord>('v1/loan-records', 'POST', input, signal);

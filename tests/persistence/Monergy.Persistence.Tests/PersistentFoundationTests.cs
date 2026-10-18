@@ -322,7 +322,7 @@ public sealed class PersistentFoundationTests
                 revisedRequest, new(now.AddMinutes(1), revisedRequest.CorrelationId, revisedRequest.RequestId), default);
             Assert.Equal(2, revised.Profile.Revision);
             Assert.Equal(2, revised.Facts[0].Revision);
-            Assert.Equal(125m, (await reconstructed.GetFactAsync(revised.Facts[0].FinancialFactId, default))!.Value);
+            Assert.Equal(125m, (await reconstructed.GetFactAsync(revised.Facts[0].FinancialFactId, null, default))!.Value);
 
             // Historical source types remain immutable even after a later revision uses a new source.
             var retypedRequest = request with
@@ -446,6 +446,40 @@ public sealed class PersistentFoundationTests
             "UPDATE audit.evidence SET event_name='forbidden' WHERE source_event_id=@Id;", new { Id = source.EventId }));
         await Assert.ThrowsAnyAsync<PostgresException>(() => runtime.ExecuteAsync(
             "DELETE FROM audit.evidence WHERE source_event_id=@Id;", new { Id = source.EventId }));
+    }
+
+    [Fact]
+    [Trait("Category", "Physical")]
+    public async Task ReviewedLoanRecordIsAtomicReplaySafeScopedAndAppendOnlyAfterReconstruction()
+    {
+        var configuration=Configuration("FinancialProfile"); var suffix=Guid.NewGuid().ToString("N"); var customer="customer-loan-"+suffix;
+        var now=DateTimeOffset.UtcNow;
+        var security=new TrustedSecurityContext(new("actor-loan","CUSTOMER",now,"authn-loan"),new("financial-profile","workload-loan"),new("D09_TEST",null,"authorization-loan",customer));
+        var request=new ContractRequest<NormalizeSourceFacts>(Vs02ContractNames.NormalizeSourceFacts,ContractGuard.CurrentVersion,
+            "request-"+suffix,"correlation-"+suffix,null,security,"source-"+suffix,
+            new("profile-"+suffix,customer,"processing-"+suffix,[new("source-"+suffix,customer,"LOAN","Loan source",100000m,"USD",new(2026,1,1),"line 1",1m,"evidence-"+suffix,"document-"+suffix,"extract/1","validate/1")],"normalize/1",now));
+        await using var financial=new PostgresFinancialProfileRepository(configuration);
+        var normalized=await financial.NormalizeAsync(FinancialNormalizationIdentity.From(request),request,new(now,request.CorrelationId,request.RequestId),default);
+        var source=Assert.Single(normalized.Facts);
+        var input=new CreateLoanRecord(suffix,new("Home loan","Example lender","HOME",500000m,400000m,8.25m,10000m,60,new(2026,1,1),new(2030,12,31),new(2026,10,1),source.FinancialFactId,1));
+        ReviewedLoanRecord saved;
+        await using(var records=new PostgresLoanRecords(configuration))
+        {
+            var app=new LoanRecordsApplication(financial,records,TimeProvider.System);
+            saved=await app.CreateAsync("T001",customer,"actor-loan",input,default);
+            Assert.Equal(saved,await app.CreateAsync("T001",customer,"actor-loan",input,default));
+            Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>app.CreateAsync("T001",customer,"actor-loan",input with {Loan=input.Loan with {Outstanding=390000}},default))).Status);
+        }
+        await using(var reconstructed=new PostgresLoanRecords(configuration))
+        {
+            Assert.Equal(saved,await reconstructed.ReadAsync("T001",customer,saved.LoanRecordId,default));
+            Assert.Null(await reconstructed.ReadAsync("T002",customer,saved.LoanRecordId,default));
+            Assert.Single((await reconstructed.ListAsync("T001",customer,default)).Items);
+        }
+        await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
+        var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.loan_records SET payload=payload WHERE loan_record_id=@Id;",new {Id=saved.LoanRecordId}));
+        Assert.Equal("42501",denied.SqlState);
+        Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.loan_records WHERE tenant_id='T001' AND customer_id=@Customer;",new {Customer=customer}));
     }
 
     private static readonly string[] Services = ["evidence", "financial-profile", "financial-rules", "reporting", "audit"];
