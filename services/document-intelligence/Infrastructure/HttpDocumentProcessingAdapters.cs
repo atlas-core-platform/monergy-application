@@ -62,17 +62,17 @@ public sealed class HttpEvidenceContentReader : IEvidenceContentReader, IDisposa
             var source = await response.Content.ReadFromJsonAsync<EvidenceProcessingSource>(Json, cancellationToken)
                 .ConfigureAwait(false) ?? throw new EvidenceDependencyException("The Evidence owner returned an invalid response.");
             byte[] bytes;
-            var png = source.ContentType == "image/png";
+            var binary = source.ContentType is "image/png" or "application/pdf";
             try
             {
-                if (png && (source.Content.Length != 0 || source.ContentBase64 is null || source.ContentBase64.Length > 1_398_104) ||
-                    !png && source.ContentBase64 is not null)
+                if (binary && (source.Content.Length != 0 || source.ContentBase64 is null || source.ContentBase64.Length > 1_398_104) ||
+                    !binary && source.ContentBase64 is not null)
                     throw new EvidenceDependencyException("The Evidence owner returned conflicting source content.");
-                bytes = png ? Convert.FromBase64String(source.ContentBase64!) : Encoding.UTF8.GetBytes(source.Content);
+                bytes = binary ? Convert.FromBase64String(source.ContentBase64!) : Encoding.UTF8.GetBytes(source.Content);
             }
             catch (FormatException) { throw new EvidenceDependencyException("The Evidence owner returned invalid source bytes."); }
             if (source.DocumentVersionId != documentVersionId || source.CustomerId != customerId ||
-                (source.ContentType != "text/plain" && source.ContentType != "text/csv" && !png) ||
+                (source.ContentType != "text/plain" && source.ContentType != "text/csv" && !binary) ||
                 bytes.Length is < 1 or > 1_048_576 || source.ContentSha256.Length != 64 ||
                 !string.Equals(source.ContentSha256,
                     Convert.ToHexStringLower(SHA256.HashData(bytes)),
@@ -85,7 +85,7 @@ public sealed class HttpEvidenceContentReader : IEvidenceContentReader, IDisposa
                 source.CustomerId,
                 source.ContentReference,
                 source.ContentSha256,
-                source.ContentType), source.Content, png ? bytes : null);
+                source.ContentType), source.Content, binary ? bytes : null);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         { throw new EvidenceDependencyException("The Evidence owner timed out."); }

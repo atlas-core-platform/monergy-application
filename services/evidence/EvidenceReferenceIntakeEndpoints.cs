@@ -94,12 +94,15 @@ public static class EvidenceReferenceIntakeEndpoints
                 return Results.NotFound(new { error = "EVIDENCE_PROCESSING_SOURCE_NOT_FOUND" });
             if (!string.Equals(version.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(version.ContentType, "text/csv", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(version.ContentType, "image/png", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(version.ContentType, "image/png", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(version.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase))
                 return Results.Json(new { error = "EVIDENCE_PROCESSING_CONTENT_UNSUPPORTED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
             request.HttpContext.Response.Headers.CacheControl = "no-store";
             var value = await content.ReadBytesAsync(version.ContentReference, cancellationToken).ConfigureAwait(false);
             if (value is null)
                 return Results.Json(new { error = "EVIDENCE_PROCESSING_CONTENT_UNAVAILABLE" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+            var binary = version.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase) ||
+                version.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
             return Results.Ok(new ReferenceEvidenceReadResult(
                 version.EvidenceId,
                 version.DocumentId,
@@ -108,8 +111,8 @@ public static class EvidenceReferenceIntakeEndpoints
                 version.ContentReference,
                 version.ContentSha256,
                 version.ContentType,
-                version.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase) ? "" : System.Text.Encoding.UTF8.GetString(value),
-                version.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase) ? Convert.ToBase64String(value) : null));
+                binary ? "" : System.Text.Encoding.UTF8.GetString(value),
+                binary ? Convert.ToBase64String(value) : null));
         });
         return endpoints;
     }
