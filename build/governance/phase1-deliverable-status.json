@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-65",
-  "applicationBase": "7be146a63e049a87685e1227d1ccd3e71f3e9ca1",
+  "asOf": "T1-66",
+  "applicationBase": "bdb420bfa5587b69fb018702e62c0da2533e7757",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 7,
+    "libraryVersion": 8,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook version7 reconciled through T1-64; T1-65 enables explicit Property/Vehicle classification of generic text/CSV/XLSX asset source figures. Full asset records, other asset kinds and source phases remain open/unchanged."
+    "reviewThrough": "Workbook version8 reconciled through T1-65. T1-66 implements customer-reviewed source-linked loan record create/read using Master section13 fields. Editing/lifecycle, central audit integration and full financial truth remain open; original source phases unchanged."
   },
   "counts": {
     "originalDeliverables": 29,
@@ -14,8 +14,8 @@
     "partial": 17,
     "pendingBusinessJourneys": 12,
     "remainingOriginalDeliverables": 29,
-    "numberedUnitsAfterPairedMerge": 65,
-    "mergedImplementationUnitsAfterPairedMerge": 64,
+    "numberedUnitsAfterPairedMerge": 66,
+    "mergedImplementationUnitsAfterPairedMerge": 65,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -207,11 +207,11 @@
       "area": "Financial Data",
       "name": "Loans",
       "state": "Partial",
-      "existing": "Reviewed LOAN source figures flow to Passport/Search/Reports; loan-statement OCR preserves dated outstanding or principal-outstanding meaning. T1-60 adds reviewed sanctioned-amount and EMI source terms from supported sanction letters without replacing an existing outstanding balance or completing loan records.",
-      "remaining": "Complete lender, loan type, sanction, outstanding, rate, EMI, tenure and start/end dates with full owner-backed records.",
-      "units": "T1-23\u201326, T1-42, T1-52; T1-60",
+      "existing": "Reviewed LOAN source figures flow to Passport/Search/Reports; loan-statement OCR preserves dated outstanding or principal-outstanding meaning. T1-60 adds reviewed sanctioned-amount and EMI source terms from supported sanction letters without replacing an existing outstanding balance or completing loan records. T1-66 adds customer-reviewed loan record create/read with lender/type, sanction/outstanding, annual rate/EMI/tenure, start/end and balance-as-of dates, owner-derived currency and exact reviewed source revision. Immutable actor/operation/source/timestamp creation receipts support safe retry.",
+      "remaining": "Complete record editing/closing/lifecycle, multi-source reconciliation and broader loan-term coverage. Prove physical PostgreSQL migration/restart/concurrency/grants and central audit delivery/integrated UAT. Customer-entered loan terms do not verify lender balances, current debt or a complete liability position.",
+      "units": "T1-23\u201326, T1-42, T1-52; T1-60; T1-66",
       "requirements": "MON-FIN-006",
-      "receipt": "build/governance/t1-60-loan-sanction-ocr.md"
+      "receipt": "build/governance/t1-66-reviewed-loan-records.md"
     },
     {
       "id": "P1-18",

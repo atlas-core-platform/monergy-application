@@ -1,8 +1,16 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest bounded increment: T1-65 reviewed generic asset source types. Customers explicitly classify text/CSV/XLSX source figures as Property or Vehicle before adoption. Original deliverables remain Partial/Pending; full financial models and integrated UAT remain open.
+Status: ACTIVE · Latest bounded increment: T1-66 customer-reviewed loan records. Exact source-linked create/read covers the Master section13 terms. Original deliverables remain Partial/Pending; editing/lifecycle, centralized audit and integrated UAT remain open.
 
-## Current T1-65 update — reviewed generic asset source types
+## Current T1-66 update — customer-reviewed loan records
+
+Financial information > Loan information now creates/reads a customer-reviewed loan record with meaningful name, lender/type, sanction amount, outstanding/as-of date, annual rate, EMI, tenure and start/end dates. Exact previously reviewed LOAN source/revision and owner currency are retained; no term is inferred from a source figure. Financial Profile owns append-only creation with tenant/customer/actor operation identity, conflict-safe replay and source provenance. Current session/owned-customer/setup and read/evidence/update authority are rechecked; uncertain UI submissions retry the same request. Receipt: [t1-66-reviewed-loan-records.md](t1-66-reviewed-loan-records.md).
+
+788 backend,135 UI and67 Expert checks pass after paired merge. Physical PostgreSQL regression is authored/compiled, not run. The owner creation journal is not central Audit Service closure. Editing/closing/lifecycle, multi-source reconciliation, broader terms, full asset/liability truth and live integrated UAT remain open. No lender balance or aggregate debt is inferred.
+
+After paired merge:66 numbered units =65 implementations +1 governance closure. Original29 deliverables remain0 complete,17 partial and12 pending; Loans stays Partial. Workbook version8 reviewed through T1-65 before this increment. Original151 IDs/81 features/126 applicable memberships and source phases remain unchanged.
+
+## Previous T1-65 update — reviewed generic asset source types
 
 Generic ASSET text/CSV/bounded XLSX figures now require an explicit Property/Vehicle choice before current or recovered-result adoption. The shared boundary validates selected choices, preserves original source meanings/provenance and cannot override existing OCR-derived types. Canonical owner classification is visible on Financial information current and exact historical readback. Reusing one source with a different type is rejected atomically even under a new operation ID; PostgreSQL uses its existing transaction/profile lock. Receipt: [t1-65-reviewed-asset-source-types.md](t1-65-reviewed-asset-source-types.md).
 
@@ -92,6 +100,7 @@ This section supersedes the historical priority/verification labels below. Lates
 | P0 / implemented T1-63 | Vehicle purchase invoice OCR; explicitly stated purchase figure and invoice date with independent review/adoption | Receipt t1-63-vehicle-purchase-ocr.md. Canonical VEHICLE owner storage and ASSET source presentation; full records/current valuation/ownership and integrated UAT remain open |
 | P0 / implemented T1-64 | Insurance/Tax review/adoption, canonical owner types and customer source views | Receipt t1-64-financial-source-category-boundary.md. Owner HTTP/replay/provenance and canonical/legacy projection checks; generic untyped ASSET adoption, full records and integrated UAT remain open |
 | P0 / implemented T1-65 | Explicit generic asset Property/Vehicle review and canonical type readback | Receipt t1-65-reviewed-asset-source-types.md. Text/CSV/XLSX choices and historical source type immutability; other asset kinds, full records and live integrated UAT remain open |
+| P0 / implemented T1-66 | Customer-reviewed source-linked loan record create/read with Master section13 terms | Receipt t1-66-reviewed-loan-records.md. Exact source revision, scoped immutable operation receipts and owner readback; editing/lifecycle, centralized audit and physical/integrated UAT remain open |
 | P0 | Google Drive / OneDrive customer storage journey | Implement actual authorized provider import/status/refresh/disconnect, preserving exact folder/file/document identities; reference gateway is insufficient |
 | P0 | Full Loan account and financial truth | Seven source categories exist. Complete lender/type/sanction/outstanding/rate/EMI/tenure/dates and required asset/liability records; a typed source amount does not complete MON-FIN-006 |
 | P0 | Deterministic net worth | Assets minus Liabilities is already specified. Complete authoritative dated/currency/valuation inputs and customer calculation/provenance; scoring approval is a distinct gate |

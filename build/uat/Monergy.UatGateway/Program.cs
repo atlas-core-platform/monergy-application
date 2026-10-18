@@ -15,6 +15,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.AddTenantSetup();
 builder.AddProductWorkspace();
 builder.AddProductFinancialProfile();
+builder.AddProductLoanRecords();
 builder.AddProductReporting();
 builder.AddProductSearch();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
@@ -40,6 +41,7 @@ app.UseRouting();
 app.MapTenantSetup();
 app.MapProductWorkspace();
 app.MapProductFinancialProfile();
+app.MapProductLoanRecords();
 app.MapProductReporting();
 app.MapProductSearch();
 app.MapGet("/health/live", () => Results.Ok(new { profile = "local-uat", productionAccepted = false }));
