@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-55",
-  "applicationBase": "755bc8f7bc5eccddbb0b7b816af0a69c0fd09a09",
+  "asOf": "T1-56",
+  "applicationBase": "bc7af14721411aa395b284f58f340ad18bd4fd92",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
     "libraryVersion": 2,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "T1-52; bounded T1-53/54 identity setup and T1-55 date-of-birth profile deltas applied"
+    "reviewThrough": "T1-52; bounded T1-53/54 identity setup, T1-55 DOB and T1-56 protected self-declared PAN deltas applied"
   },
   "counts": {
     "originalDeliverables": 29,
@@ -14,8 +14,8 @@
     "partial": 17,
     "pendingBusinessJourneys": 12,
     "remainingOriginalDeliverables": 29,
-    "numberedUnitsAfterPairedMerge": 55,
-    "mergedImplementationUnitsAfterPairedMerge": 54,
+    "numberedUnitsAfterPairedMerge": 56,
+    "mergedImplementationUnitsAfterPairedMerge": 55,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -53,11 +53,11 @@
       "area": "Customer",
       "name": "Profile",
       "state": "Partial",
-      "existing": "My Profile reads the registered email and edits display name and an optional unverified contact number, with versioned owner writes. T1-55 adds optional self-declared date of birth, exact calendar-date validation and owner receipt/readback.",
-      "remaining": "Complete the remaining customer profile and KYC fields required by \u00a713, including PAN and authoritative KYC status under approved privacy rules. Prove PostgreSQL persistence/replay/concurrency and integrated UAT.",
-      "units": "T1-44, T1-55",
+      "existing": "My Profile reads the registered email and edits display name and an optional unverified contact number, with versioned owner writes. T1-55 adds optional self-declared date of birth, exact calendar-date validation and owner receipt/readback. T1-56 adds optional self-declared PAN with authenticated encryption, masked owner readback, explicit replacement/removal and C&I audit metadata.",
+      "remaining": "Complete authoritative KYC status and remaining profile/Settings requirements under approved privacy rules. Self-declared PAN is not identity/KYC verification. Prove physical PostgreSQL persistence/replay/concurrency/grants and integrated UAT; production key custody/transport remain separate.",
+      "units": "T1-44, T1-55, T1-56",
       "requirements": "MON-ID-005/012; MON-FIN-002",
-      "receipt": "build/governance/t1-55-customer-date-of-birth.md"
+      "receipt": "build/governance/t1-56-protected-customer-pan.md"
     },
     {
       "id": "P1-04",

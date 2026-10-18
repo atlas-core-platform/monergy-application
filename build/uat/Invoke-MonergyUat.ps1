@@ -9,7 +9,8 @@ param(
     [switch]$EnableOnboarding,
     [switch]$EnableEmailAccess,
     [string]$AccountAgreementFile,
-    [switch]$RequireCustomerSetup
+    [switch]$RequireCustomerSetup,
+    [switch]$EnableCustomerPan
 )
 $ErrorActionPreference = 'Stop'
 if ($RequireCustomerSetup -and (-not $EnableEmailAccess -or -not $EnableOnboarding)) { throw 'Required customer setup needs -EnableOnboarding and -EnableEmailAccess.' }
@@ -104,6 +105,7 @@ if (-not (Test-Path $profileFile)) {
 }
 $state = Get-Content $profileFile -Raw | ConvertFrom-Json
 $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
+if ($EnableCustomerPan -and -not $onboarding) { throw 'Customer PAN requires an onboarding profile.' }
 if ($EnableEmailAccess -and -not $onboarding) { throw 'Customer email access requires an onboarding profile with verified customer ownership.' }
 if ($EnableEmailAccess -and $Action -in @('Prepare','Start')) {
     foreach ($name in @('MONERGY_EMAIL_SMTP_HOST','MONERGY_EMAIL_SMTP_USER','MONERGY_EMAIL_SMTP_PASSWORD','MONERGY_EMAIL_FROM')) {
@@ -115,6 +117,7 @@ if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
     $requiredTokens = @('financialAuditEvent')
     if ($EnableEmailAccess) { $requiredTokens += 'emailAccess' }
+    if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
         $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel')
     }
@@ -176,6 +179,11 @@ if ($Action -in @('Prepare','Start')) {
                     @{ TenantId='T002'; ResourceId='C002'; DisplayName='Sample Customer Two'; SecondaryLabel='Additional UAT customer' }
                 )
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.CustomerIdentityDatabases[$db.tenant] = Connection $db 'runtime' }
+                $config.Monergy.CustomerPan = @{ Enabled=[bool]$EnableCustomerPan }
+                if ($EnableCustomerPan) {
+                    $config.Monergy.CustomerPan.CurrentKeyId = 'local-v1'
+                    $config.Monergy.CustomerPan.Keys = @{ 'local-v1'=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.panProtection)) }
+                }
                 $config.Monergy.CustomerWorkspaceSetup = @{ Required=[bool]$RequireCustomerSetup }
                 if (-not [string]::IsNullOrWhiteSpace($AccountAgreementFile)) {
                     $publicationFile = Get-Item -LiteralPath $AccountAgreementFile -ErrorAction Stop

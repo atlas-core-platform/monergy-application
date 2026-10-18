@@ -134,6 +134,8 @@ static string? Route(string path, string method)
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/me/account-agreements" && method is "GET" or "POST")
         return "http://127.0.0.1:5101" + path[13..];
+    if (path == "/identity-api/local/v1/me/pan" && method is "GET" or "PUT")
+        return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/me/customer-profile" && method is "GET" or "PUT")
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/me/sessions" && method == "GET" ||
