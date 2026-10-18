@@ -4,7 +4,8 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
-    <None Update="Fixtures/*.png;Fixtures/*.jpg;Fixtures/*.pdf" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../../apps/customer-web/public/templates/monergy-financial-information.xlsx" Link="Fixtures/financial-information.xlsx" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Fixtures/*.png;Fixtures/*.jpg;Fixtures/*.pdf;Fixtures/*.xlsx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

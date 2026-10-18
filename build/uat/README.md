@@ -2,7 +2,7 @@
 
 This profile runs the shared administration workspace and 13 service boundaries on your computer. Access Management, Customer & Identity and Audit use separate PostgreSQL databases for each tenant. Policies, imported identities, sessions, delivery receipts and canonical access audit persist across Stop/Start.
 
-Business reference adapters remain illustrative. AI remains a scaffold. Consent, Evidence, Job Management and Document Intelligence provide the guarded LOCAL/UAT customer-processing journey; Search and Reporting enforce current AM decisions before their reference business operations. The processor accepts structured text and the financial information CSV template, candidate facts require explicit customer review before updating Financial Profile, and runtime business data remains non-production. Reporting reference data is volatile. This profile is not Production acceptance or a replacement for the separately verified D11 persisted-reporting profile.
+Business reference adapters remain illustrative. AI remains a scaffold. Consent, Evidence, Job Management and Document Intelligence provide the guarded LOCAL/UAT customer-processing journey; Search and Reporting enforce current AM decisions before their reference business operations. The processor accepts structured text and the financial information CSV and bounded XLSX templates, candidate facts require explicit customer review before updating Financial Profile, and runtime business data remains non-production. Reporting reference data is volatile. This profile is not Production acceptance or a replacement for the separately verified D11 persisted-reporting profile.
 
 ## Start on Windows
 
@@ -110,3 +110,5 @@ Production remains blocked until real IdP/MFA/invitation delivery, workload iden
 ## Upload malware checks
 
 Onboarding starts the pinned ClamAV security sidecar. Evidence upload readiness requires current engine/signature metadata; rejected or unavailable checks cannot accept an upload. See [Document security setup and live acceptance](Document-Security.md) for resource needs, retained definitions and the authored live-engine test. Docker/engine acceptance has not run in the implementation workspace.
+
+T1-57 XLSX template instructions and limits: [Financial-Information-XLSX.md](Financial-Information-XLSX.md). Existing original-byte malware gating and explicit review/adoption apply.
