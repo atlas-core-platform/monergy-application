@@ -62,7 +62,7 @@ public sealed class HttpEvidenceContentReader : IEvidenceContentReader, IDisposa
             var source = await response.Content.ReadFromJsonAsync<EvidenceProcessingSource>(Json, cancellationToken)
                 .ConfigureAwait(false) ?? throw new EvidenceDependencyException("The Evidence owner returned an invalid response.");
             byte[] bytes;
-            var binary = source.ContentType is "image/png" or "application/pdf";
+            var binary = source.ContentType is "image/png" or "image/jpeg" or "application/pdf";
             try
             {
                 if (binary && (source.Content.Length != 0 || source.ContentBase64 is null || source.ContentBase64.Length > 1_398_104) ||

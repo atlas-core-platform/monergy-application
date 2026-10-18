@@ -95,14 +95,16 @@ public static class EvidenceReferenceIntakeEndpoints
             if (!string.Equals(version.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(version.ContentType, "text/csv", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(version.ContentType, "image/png", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(version.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(version.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(version.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
                 return Results.Json(new { error = "EVIDENCE_PROCESSING_CONTENT_UNSUPPORTED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
             request.HttpContext.Response.Headers.CacheControl = "no-store";
             var value = await content.ReadBytesAsync(version.ContentReference, cancellationToken).ConfigureAwait(false);
             if (value is null)
                 return Results.Json(new { error = "EVIDENCE_PROCESSING_CONTENT_UNAVAILABLE" }, statusCode: StatusCodes.Status503ServiceUnavailable);
             var binary = version.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase) ||
-                version.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
+                version.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) ||
+                version.ContentType.Equals("image/jpeg", StringComparison.OrdinalIgnoreCase);
             return Results.Ok(new ReferenceEvidenceReadResult(
                 version.EvidenceId,
                 version.DocumentId,

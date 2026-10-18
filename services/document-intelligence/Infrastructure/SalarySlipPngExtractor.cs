@@ -10,7 +10,7 @@ namespace Monergy.Services.DocumentIntelligence.Infrastructure;
 
 public interface IImageTextRecognizer
 {
-    Task<string> RecognizeAsync(byte[] png, CancellationToken cancellationToken);
+    Task<string> RecognizeAsync(byte[] image, CancellationToken cancellationToken);
 }
 
 // Deliberately bounded first scanned-document path. OCR text is transient, never a financial fact by itself.

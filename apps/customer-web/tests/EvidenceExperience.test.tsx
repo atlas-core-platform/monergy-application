@@ -210,7 +210,7 @@ it('keeps the library hidden without evidence read authority', () => {
   expect(request).not.toHaveBeenCalled();
 });
 
-it.each(['text/plain', 'image/png', 'application/pdf'])('requires explicit source-fact selection before updating Financial information from %s', async (contentType) => {
+it.each(['text/plain', 'image/png', 'application/pdf', 'image/jpeg'])('requires explicit source-fact selection before updating Financial information from %s', async (contentType) => {
   const api = new AccessApi(session);
   const item = {
     documentId: 'document-003',
@@ -259,7 +259,7 @@ it.each(['text/plain', 'image/png', 'application/pdf'])('requires explicit sourc
         confidence: 0.98,
         evidenceId: item.evidenceId,
         documentVersionId: item.documentVersionId,
-        extractionVersion: contentType === 'application/pdf' ? 'salary-slip-pdf-ocr/1.0.0' : contentType === 'image/png' ? 'salary-slip-png-ocr/1.0.0' : 'fixture-extractor/1.0.0',
+        extractionVersion: contentType === 'image/jpeg' ? 'salary-slip-jpeg-ocr/1.0.0' : contentType === 'application/pdf' ? 'salary-slip-pdf-ocr/1.0.0' : contentType === 'image/png' ? 'salary-slip-png-ocr/1.0.0' : 'fixture-extractor/1.0.0',
         validationVersion: 'canonical-source-fact/1.0.0',
       },
     ],
@@ -952,16 +952,17 @@ it('fails closed when Document history response identity does not match the sele
 });
 
 
-it.each([undefined, 'salary-slip-pdf-ocr/1.0.0'])('reopens a completed result with extraction version %s read-only from durable activity', async (extractionVersion) => {
+it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0'])('reopens a completed result with extraction version %s read-only from durable activity', async (extractionVersion) => {
   const api = new AccessApi(session);
+  const jpeg = extractionVersion === 'salary-slip-jpeg-ocr/1.0.0';
   const document = {
     documentId: 'document-result',
     documentVersionId: 'document-version-result',
     evidenceId: 'evidence-result',
     version: 1,
     sourceName: 'Customer upload',
-    originalFileName: extractionVersion ? 'recovered-salary-slip.pdf' : 'recovered-result.txt',
-    contentType: extractionVersion ? 'application/pdf' : 'text/plain',
+    originalFileName: jpeg ? 'recovered-salary-slip.jpg' : extractionVersion ? 'recovered-salary-slip.pdf' : 'recovered-result.txt',
+    contentType: jpeg ? 'image/jpeg' : extractionVersion ? 'application/pdf' : 'text/plain',
     contentLength: 64,
     contentSha256: '7'.repeat(64),
     receivedAt: '2026-10-16T08:00:00Z',
@@ -2101,11 +2102,13 @@ it.each([
   ['processing.salary-slip.incomplete', 'We need one clear net pay amount'],
   ['processing.ocr.unavailable', 'Image text extraction is temporarily unavailable.'],
   ['processing.pdf.unsupported', 'Use a readable, unlocked, single-page salary-slip PDF'],
+  ['processing.jpeg.unsupported', 'Use a clear, upright JPEG image.'],
 ])('explains document extraction failure %s without offering financial adoption', async (code, message) => {
   const api = new AccessApi(session);
   const pdf = code === 'processing.pdf.unsupported';
+  const jpeg = code === 'processing.jpeg.unsupported';
   const item = { documentId: 'png-document', documentVersionId: 'png-version', evidenceId: 'png-evidence', version: 1,
-    sourceName: 'Customer upload', originalFileName: pdf ? 'salary-slip.pdf' : 'salary-slip.png', contentType: pdf ? 'application/pdf' : 'image/png', contentLength: 100,
+    sourceName: 'Customer upload', originalFileName: jpeg ? 'salary-slip.jpg' : pdf ? 'salary-slip.pdf' : 'salary-slip.png', contentType: jpeg ? 'image/jpeg' : pdf ? 'application/pdf' : 'image/png', contentLength: 100,
     contentSha256: 'b'.repeat(64), receivedAt: '2026-10-18T00:00:00Z', createdAt: '2026-10-18T00:00:00Z' };
   const request = vi.spyOn(api, 'product').mockImplementation((path, method) => {
     if (method === 'POST') return Promise.resolve({ job: { jobId: 'job-processing-png', state: 'Failed', failureCode: code },
