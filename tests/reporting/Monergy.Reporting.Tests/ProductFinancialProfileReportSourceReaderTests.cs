@@ -13,10 +13,12 @@ namespace Monergy.Reporting.Tests;
 
 public sealed class ProductFinancialProfileReportSourceReaderTests
 {
-    [Fact]
-    public async Task ReadsOnlyCurrentSupportedFinancialFactsWithExactProvenance()
+    [Theory]
+    [InlineData("ASSET")]
+    [InlineData("PROPERTY")]
+    public async Task ReadsOnlyCurrentSupportedFinancialFactsWithExactProvenance(string assetType)
     {
-        var handler = new FinancialProfileHandler();
+        var handler = new FinancialProfileHandler { AssetType = assetType };
         var accessor = Accessor();
         var reader = Reader(handler, accessor);
 
@@ -151,6 +153,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
 
     private sealed class FinancialProfileHandler : HttpMessageHandler
     {
+        public string AssetType { get; set; } = "ASSET";
         public bool CrossCustomerProvenance { get; set; }
         public bool MismatchedTaxProvenance { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
@@ -175,7 +178,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             };
         }
 
-        private static HttpResponseMessage Profile(string body)
+        private HttpResponseMessage Profile(string body)
         {
             var request = System.Text.Json.JsonSerializer.Deserialize<ContractRequest<GetFinancialProfile>>(
                 body, ContractJson.Options)!;
@@ -196,7 +199,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                     new DateOnly(2026, 10, 1), 1, "provenance-loan"),
                 new AuthoritativeFinancialFact(
                     "ff-asset", "financial-profile-reference-customer", "reference-customer",
-                    "ASSET", "Asset source figure", 900000m, "USD",
+                    AssetType, "Asset source figure", 900000m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-asset"),
                 new AuthoritativeFinancialFact(
                     "ff-investment", "financial-profile-reference-customer", "reference-customer",

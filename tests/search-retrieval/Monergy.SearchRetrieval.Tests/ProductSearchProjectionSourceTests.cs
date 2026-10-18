@@ -43,10 +43,12 @@ public sealed class ProductSearchProjectionSourceTests
         });
     }
 
-    [Fact]
-    public async Task BuildsOnlySupportedFinancialFactsWithExactProvenance()
+    [Theory]
+    [InlineData("ASSET")]
+    [InlineData("PROPERTY")]
+    public async Task BuildsOnlySupportedFinancialFactsWithExactProvenance(string assetType)
     {
-        var handler = new OwnerHandler();
+        var handler = new OwnerHandler { AssetType = assetType };
         var source = Source(handler, Accessor(SearchContractNames.SearchFinancialData));
 
         await source.PrepareCustomerAsync(
@@ -194,6 +196,7 @@ public sealed class ProductSearchProjectionSourceTests
 
     private sealed class OwnerHandler : HttpMessageHandler
     {
+        public string AssetType { get; set; } = "ASSET";
         public bool CrossCustomerProvenance { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
 
@@ -238,7 +241,7 @@ public sealed class ProductSearchProjectionSourceTests
             return Success(request, new CustomerEvidenceLibrary("reference-customer", [item]));
         }
 
-        private static HttpResponseMessage Profile(string body)
+        private HttpResponseMessage Profile(string body)
         {
             var request = JsonSerializer.Deserialize<ContractRequest<GetFinancialProfile>>(
                 body, ContractJson.Options)!;
@@ -259,7 +262,7 @@ public sealed class ProductSearchProjectionSourceTests
                     new DateOnly(2026, 10, 1), 1, "provenance-loan"),
                 new(
                     "ff-asset", "financial-profile-reference-customer", "reference-customer",
-                    "ASSET", "Document-stated asset figure", 900000m, "USD",
+                    AssetType, "Document-stated asset figure", 900000m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-asset"),
                 new(
                     "ff-investment", "financial-profile-reference-customer", "reference-customer",

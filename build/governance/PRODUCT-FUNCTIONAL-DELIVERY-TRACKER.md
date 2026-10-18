@@ -1,8 +1,16 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest bounded increment:T1-60 loan sanction letter OCR. Classification/OCR/Extraction and Loans remain Partial; complete loan records, broader documents and live integration remain incomplete. Exact merged source and System Expert synchronization are in the paired T1-60 receipt.
+Status: ACTIVE · Latest bounded increment: T1-61 property sale deed OCR. Classification/OCR/Extraction/Assets remain Partial. Complete property records, broader documents and live integration remain open.
 
-## Current T1-60 update — loan sanction letter OCR
+## Current T1-61 update — property sale deed OCR
+
+The planned Property Sale Deed class (Master sections11–13/41) supports printed-English PNG, upright JPEG and unlocked single-page scanned PDF. Exactly one early title, one Deed Date/Sale Deed Date, one Purchase Value and an explicit matching supported currency yield a single dated ASSET source candidate. Mixed titles, missing/duplicate/invalid/conflicting or low-confidence required fields yield no facts. Filename, registration date and estimated/market value are not substitutes.
+
+Original-byte malware/hash/customer/tenant and native process controls remain. Current and recovered Documents explain the source meaning. Only explicit customer selection and confirmation adopt the figure; recovered views remain read-only. No ownership, authenticity, current valuation, net worth or complete property-record claim is made. Verification and paired source identities are recorded in [t1-61-property-sale-deed-ocr.md](t1-61-property-sale-deed-ocr.md). Live ClamAV/physical PostgreSQL/Compose/full browser UAT remain unrun.
+
+After paired merge:61 numbered units =60 implementations +1 governance closure. Original29 deliverables remain0 complete,17 partial and12 pending journeys. Workbook version3 was reconciled through T1-60 before this increment; the next workbook version carries T1-61. Original151 IDs/81 features and126 Phase1-applicable memberships remain unchanged.
+
+## Previous T1-60 update — loan sanction letter OCR
 
 Supported PNG, upright JPEG and single-page scanned PDF letters now yield two distinct LOAN source candidates: sanctioned amount and EMI, with explicit matching currency and Sanction Date. Exactly one early sanction title and complete high-confidence labelled fields are required. Mixed/duplicate titles, missing/duplicate/invalid/conflicting fields and unsupported native inputs produce no facts. No verified offer, disbursement, current debt, repayment status, amortization or authenticity is inferred.
 
@@ -45,6 +53,7 @@ This section supersedes the historical priority/verification labels below. Lates
 | P0 / implemented T1-58 | Insurance Policy OCR in PNG/upright JPEG/single-page PDF; dated sum assured and premium retain separate meanings and explicit selection/adoption | Receipt t1-58-insurance-policy-ocr.md records pinned native and owner HTTP proof. Complete policy records, verification, broader layouts/classes, persistent classification and live integrated UAT remain open |
 | P0 / implemented T1-59 | Investment Statement OCR in PNG/upright JPEG/single-page PDF; purchase/current values retain distinct dated meanings and independent customer selection | Receipt t1-59-investment-statement-ocr.md records pinned native and owner HTTP proof. Securities/quantity/pricing/tax lots, full records, broader classes/layouts, persistent classification and live integrated UAT remain open |
 | P0 / implemented T1-60 | Loan Sanction Letter OCR in PNG/upright JPEG/single-page PDF; sanctioned amount and EMI preserve dated source meaning and independent review | Receipt t1-60-loan-sanction-ocr.md records pinned native/owner HTTP proof and coexistence with prior outstanding balances. Full loan records, disbursement/current debt, verification, broader classes/layouts and live integrated UAT remain open |
+| P0 / implemented T1-61 | Property sale deed OCR in supported PNG/JPEG/single-page PDF; dated purchase value with explicit review/adoption | Exact evidence is in t1-61-property-sale-deed-ocr.md. Complete property records, ownership/valuation verification, wider document coverage and integrated UAT remain open |
 | P0 | Google Drive / OneDrive customer storage journey | Implement actual authorized provider import/status/refresh/disconnect, preserving exact folder/file/document identities; reference gateway is insufficient |
 | P0 | Full Loan account and financial truth | Seven source categories exist. Complete lender/type/sanction/outstanding/rate/EMI/tenure/dates and required asset/liability records; a typed source amount does not complete MON-FIN-006 |
 | P0 | Deterministic net worth | Assets minus Liabilities is already specified. Complete authoritative dated/currency/valuation inputs and customer calculation/provenance; scoring approval is a distinct gate |
