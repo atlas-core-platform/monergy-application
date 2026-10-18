@@ -99,7 +99,7 @@ public sealed class FinancialSourceCategoryTests
         using var response = await client.PostAsJsonAsync("/contracts/"+cid+"/v1",request,ContractJson.Options);
         return (await response.Content.ReadFromJsonAsync<ContractResult<TData>>(ContractJson.Options))!;
     }
-    private static EvidenceContent Source(string format,string category)
+    internal static EvidenceContent Source(string format,string category)
     {
         var text = format=="csv" ? "Category,Description,Amount,Currency,Date,Source\n"+category+",Stated source figure,125000.00,INR,2026-10-01,page:1" : category+"|Stated source figure|125000.00|INR|2026-10-01|page:1|0.98";
         var bytes = Encoding.UTF8.GetBytes(text); var mime = format=="csv"?"text/csv":"text/plain";

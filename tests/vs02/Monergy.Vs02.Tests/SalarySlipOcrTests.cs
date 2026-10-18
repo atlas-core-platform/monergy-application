@@ -253,8 +253,9 @@ public sealed class SalarySlipOcrTests
         {
             var financial = new Monergy.Services.FinancialProfile.Application.FinancialProfileApplication(
                 new Monergy.Services.FinancialProfile.Infrastructure.InMemoryFinancialProfileRepository(), new CapturingTelemetry(), TimeProvider.System);
+            var reviewedTypes = Monergy.Platform.FinancialSourceFactBoundary.ReviewedTypes(record.Facts.Select(f => (f.SourceFactId, f.FactType, (string?)f.ExtractionVersion)).ToArray(), null);
             var adopted = await financial.NormalizeSourceFactsAsync(Vs02TestContext.Request(Vs02ContractNames.NormalizeSourceFacts,
-                new NormalizeSourceFacts("profile-insurance", "customer-001", "processing-png", record.Facts.Select(f => f with { FactType = Monergy.Platform.FinancialSourceFactBoundary.ForOwner(f.FactType, f.ExtractionVersion) }).ToArray(),
+                new NormalizeSourceFacts("profile-insurance", "customer-001", "processing-png", record.Facts.Select(f => f with { FactType = reviewedTypes[f.SourceFactId] }).ToArray(),
                     "provider-neutral-normalization/1.0.0", DateTimeOffset.UtcNow), "review-insurance", "review-insurance"));
             Assert.Equal(ContractOutcome.Success, adopted.Outcome); Assert.Equal(vehicle || property ? 1 : 2, adopted.Data?.Facts.Count);
             Assert.All(adopted.Data!.Facts, item => Assert.Equal(vehicle ? FinancialObjectTypes.Vehicle : property ? FinancialObjectTypes.Property : sanction ? FinancialObjectTypes.Loan : investment ? FinancialObjectTypes.Investment : FinancialObjectTypes.InsurancePolicy, item.FactType));

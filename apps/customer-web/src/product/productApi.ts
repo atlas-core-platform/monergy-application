@@ -151,9 +151,15 @@ export interface ProductFinancialSource {
   technicalProvenanceId: string;
 }
 
+export interface ProductAssetTypeSelection {
+  sourceFactId: string;
+  assetType: 'PROPERTY' | 'VEHICLE';
+}
+
 export interface ProductFinancialFact {
   financialFactId: string;
   factType: string;
+  assetType?: 'PROPERTY' | 'VEHICLE';
   label: string;
   value: number;
   currency: string;
@@ -363,11 +369,12 @@ export function addProcessingFactsToFinancialProfile(
   operationId: string,
   sourceFactIds: string[],
   signal?: AbortSignal,
+  assetTypes?: ProductAssetTypeSelection[],
 ): Promise<ProductFinancialPromotionResult> {
   return api.product<ProductFinancialPromotionResult>(
     `v1/financial-profile/from-processing/${encodeURIComponent(jobId)}`,
     'POST',
-    { operationId, sourceFactIds },
+    { operationId, sourceFactIds, ...(assetTypes?.length ? { assetTypes } : {}) },
     signal,
   );
 }

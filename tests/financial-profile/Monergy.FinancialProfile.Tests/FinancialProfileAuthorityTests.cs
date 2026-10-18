@@ -9,6 +9,7 @@ namespace Monergy.FinancialProfile.Tests;
 
 public sealed class FinancialProfileAuthorityTests
 {
+    private static readonly string[] CompetingAssetTypes = ["PROPERTY", "VEHICLE"];
     [Fact]
     public async Task AllGovernedObjectTypesBecomeOneAuthorizedProviderNeutralProfile()
     {
@@ -251,6 +252,54 @@ public sealed class FinancialProfileAuthorityTests
             "document-version-d04",
             "extraction/1.0.0",
             "validation/1.0.0");
+
+    [Fact]
+    public async Task HistoricalSourceTypeConflictRejectsTheWholeBatchBeforeAnyWrite()
+    {
+        var repository = new InMemoryFinancialProfileRepository();
+        var app = new FinancialProfileApplication(repository, new CapturingTelemetry(), TimeProvider.System);
+        await app.NormalizeSourceFactsAsync(NormalizeRequest([Fact("PROPERTY", "source-old", "Asset figure", 100m)], "first", "first"));
+        await app.NormalizeSourceFactsAsync(NormalizeRequest([Fact("PROPERTY", "source-new", "Asset figure", 110m)], "second", "second"));
+        repository.DrainOutbox();
+        var rejected = await app.NormalizeSourceFactsAsync(NormalizeRequest([
+            Fact("INCOME", "source-income", "Income", 50m),
+            Fact("VEHICLE", "source-old", "Asset figure", 100m)], "changed-type", "new-operation"));
+        Assert.Equal(ContractErrorCategory.Conflict, rejected.Error?.Category);
+        var profile = await repository.GetProfileAsync("financial-profile-001", default);
+        Assert.Equal(2, profile!.Revision);
+        var fact = Assert.Single(profile.Facts);
+        Assert.Equal("PROPERTY", fact.FactType);
+        Assert.Equal(2, repository.ReadFactHistory(fact.FinancialFactId).Count);
+        Assert.Empty(repository.DrainOutbox());
+    }
+
+    [Fact]
+    public async Task CompetingAssetTypesPersistExactlyOneClassification()
+    {
+        var repository = new InMemoryFinancialProfileRepository();
+        var app = new FinancialProfileApplication(repository, new CapturingTelemetry(), TimeProvider.System);
+        var results = await Task.WhenAll(CompetingAssetTypes.Select(type => Task.Run(() =>
+            app.NormalizeSourceFactsAsync(NormalizeRequest([Fact(type, "one-source", "Asset figure", 100m)], type, type)))));
+        Assert.Single(results, result => result.Outcome == ContractOutcome.Success);
+        Assert.Single(results, result => result.Error?.Category == ContractErrorCategory.Conflict);
+        var profile = await repository.GetProfileAsync("financial-profile-001", default);
+        Assert.Equal(1, profile!.Revision);
+        Assert.Single(profile.Facts);
+        Assert.Equal(2, repository.DrainOutbox().Count);
+    }
+
+    [Fact]
+    public async Task OneBatchCannotAssignTwoTypesToTheSameSource()
+    {
+        var repository = new InMemoryFinancialProfileRepository();
+        var app = new FinancialProfileApplication(repository, new CapturingTelemetry(), TimeProvider.System);
+        var result = await app.NormalizeSourceFactsAsync(NormalizeRequest([
+            Fact("PROPERTY", "one-source", "Property figure", 100m),
+            Fact("VEHICLE", "one-source", "Vehicle figure", 100m)], "duplicate-source", "duplicate-source"));
+        Assert.Equal(ContractErrorCategory.ValidationError, result.Error?.Category);
+        Assert.Null(await repository.GetProfileAsync("financial-profile-001", default));
+        Assert.Empty(repository.DrainOutbox());
+    }
 
     private static ContractRequest<NormalizeSourceFacts> NormalizeRequest(
         IReadOnlyList<ValidatedSourceFact> facts,
