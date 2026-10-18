@@ -18,5 +18,7 @@ public static class CustomerSharingEndpoints
         });
         group.MapGet("/sharing-options", (string customerId, HttpContext http, CustomerSharingApplication owner) => owner.OptionsAsync(customerId, http));
         group.MapPost("/sharing", (string customerId, CustomerSharingChange change, HttpContext http, CustomerSharingApplication owner) => owner.GrantAsync(customerId, change, http));
+        group.MapGet("/grants/{grantId}/sharing-options", (string customerId, string grantId, HttpContext http, CustomerSharingReplacementApplication owner) => owner.OptionsAsync(customerId, grantId, http));
+        group.MapPost("/grants/{grantId}/replacement", (string customerId, string grantId, CustomerSharingReplacement change, HttpContext http, CustomerSharingReplacementApplication owner) => owner.ReplaceAsync(customerId, grantId, change, http));
     }
 }

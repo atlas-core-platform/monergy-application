@@ -22,9 +22,11 @@ if (customerConsent)
     });
     builder.Services.AddSingleton<PostgresCustomerConsent>();
     builder.Services.AddSingleton<ICustomerSharingStore>(provider => provider.GetRequiredService<PostgresCustomerConsent>());
+    builder.Services.AddSingleton<ICustomerSharingReplacementStore>(provider => provider.GetRequiredService<PostgresCustomerConsent>());
     builder.Services.AddSingleton<CustomerOwnerClient>();
     builder.Services.AddSingleton(TimeProvider.System);
     builder.Services.AddSingleton<CustomerSharingApplication>();
+    builder.Services.AddSingleton<CustomerSharingReplacementApplication>();
 }
 
 var app = builder.Build();

@@ -282,6 +282,16 @@ export class AccessApi {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   }
+  replaceCustomerSharing<T>(customerId: string, grantId: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(customerId) || !/^[A-Za-z0-9_-]{1,128}$/.test(grantId))
+      return Promise.reject(new AccessApiError(400, 'INVALID_CONSENT'));
+    return this.guarded<T>('/consent-api/local/v1/consents/customers/' + encodeURIComponent(customerId) +
+      '/grants/' + encodeURIComponent(grantId) + (body === undefined ? '/sharing-options' : '/replacement'), {
+      method: body === undefined ? 'GET' : 'POST', signal,
+      headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  }
   // Consent Service verifies owner, tenant and current session on every mutation.
   // The revision is the freshly loaded Consent owner's optimistic-concurrency token.
   revokeCustomerConsent<T>(
