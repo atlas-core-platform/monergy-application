@@ -18,5 +18,7 @@
     "runtime": "mcr.microsoft.com/dotnet/runtime:10.0.13-noble-chiseled@sha256:75e4232c875a07e46e447ca0a56a61f7cd72d9fb361639018a19e9fc605c6827",
     "clamav": "clamav/clamav:1.4.6-debian@sha256:1d4083fccfcd485cdaeee593db7655c923afdb8ed528e828d03e1c8b1e351bec"
   },
-  "clamav": "1.4.6"
+  "clamav": "1.4.6",
+  "tesseract": "5.3.4",
+  "tesseractEnglishDataSha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
 }

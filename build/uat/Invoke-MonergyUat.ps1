@@ -199,6 +199,7 @@ if ($Action -in @('Prepare','Start')) {
                 $config.Monergy.DocumentProcessing=@{
                     EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceProcessing
                     ControlToken=$state.tokens.documentControl
+                    OcrExecutable='/opt/monergy-ocr/tesseract'; OcrDataDirectory='/opt/monergy-ocr/tessdata'; OcrLibraryDirectory='/opt/monergy-ocr/lib'
                 }
             } elseif ($onboarding -and $service -eq 'financial-profile') {
                 $config.Monergy.AuditDelivery=@{

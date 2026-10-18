@@ -7,7 +7,7 @@ using Monergy.Services.DocumentIntelligence.Application;
 
 namespace Monergy.Services.DocumentIntelligence.Infrastructure;
 
-public sealed class StructuredDocumentExtractor : IDocumentExtractor
+public sealed class StructuredDocumentExtractor(SalarySlipPngExtractor? salarySlip = null) : IDocumentExtractor
 {
     private readonly FixtureDocumentExtractor text = new();
     private readonly CsvFinancialDocumentExtractor csv = new();
@@ -18,6 +18,8 @@ public sealed class StructuredDocumentExtractor : IDocumentExtractor
         {
             "text/plain" => text.ExtractAsync(content, processingId, cancellationToken),
             "text/csv" => csv.ExtractAsync(content, processingId, cancellationToken),
+            "image/png" => salarySlip is null ? throw new OcrEngineUnavailableException() :
+                salarySlip.ExtractAsync(content, processingId, cancellationToken),
             _ => throw new DocumentExtractionException("The document format is unsupported."),
         };
 }

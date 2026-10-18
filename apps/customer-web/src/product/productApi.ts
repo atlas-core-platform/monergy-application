@@ -95,6 +95,7 @@ export interface ProductProcessingActivityView {
 }
 
 export interface ProductRecoveredProcessingFact {
+  extractionVersion?: string;
   sourceFactId: string;
   factType: 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT' | 'INSURANCE' | 'TAX';
   label: string;
@@ -138,7 +139,7 @@ export interface ProductProcessingView {
   } | null;
   facts: ProductSourceFact[];
   dataDurability: 'Runtime only';
-  processingMode: 'Structured text reference processor';
+  processingMode: 'Document extraction' | 'Structured text reference processor';
 }
 
 
@@ -152,7 +153,7 @@ export interface ProductFinancialSource {
 
 export interface ProductFinancialFact {
   financialFactId: string;
-  factType: 'INCOME' | 'EXPENSE' | string;
+  factType: string;
   label: string;
   value: number;
   currency: string;
@@ -206,6 +207,8 @@ export async function getEvidenceVersionHistory(
     undefined,
     signal,
   );
+  // Owner responses need runtime validation even when a TypeScript transport type is declared.
+  /* eslint-disable @typescript-eslint/no-unnecessary-condition, @typescript-eslint/prefer-optional-chain */
   if (
     !history ||
     history.documentId !== documentId ||
@@ -222,6 +225,7 @@ export async function getEvidenceVersionHistory(
     )
   )
     throw new Error('Document version history response is invalid.');
+  /* eslint-enable @typescript-eslint/no-unnecessary-condition, @typescript-eslint/prefer-optional-chain */
   return history;
 }
 
@@ -295,6 +299,8 @@ export async function getRecoveredProcessingResult(
     undefined,
     signal,
   );
+  // Owner responses need runtime validation even when a TypeScript transport type is declared.
+  /* eslint-disable @typescript-eslint/no-unnecessary-condition, @typescript-eslint/prefer-optional-chain */
   if (
     !result ||
     result.jobId !== jobId ||
@@ -313,6 +319,7 @@ export async function getRecoveredProcessingResult(
     )
   )
     throw new Error('Recovered processing result response is invalid.');
+  /* eslint-enable @typescript-eslint/no-unnecessary-condition, @typescript-eslint/prefer-optional-chain */
   return result;
 }
 

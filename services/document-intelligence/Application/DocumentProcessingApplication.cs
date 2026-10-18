@@ -5,13 +5,18 @@ using Monergy.Platform;
 
 namespace Monergy.Services.DocumentIntelligence.Application;
 
-public sealed record EvidenceContent(EvidenceReference Reference, string Content);
+public sealed record EvidenceContent(EvidenceReference Reference, string Content, byte[]? BinaryContent = null);
 
 public sealed class EvidenceDependencyException(string message) : Exception(message);
 
 public sealed class EvidenceContentUnsupportedException(string message) : Exception(message);
 
 public sealed class DocumentExtractionException(string message) : Exception(message);
+
+public enum DocumentRecognitionFailure { Unclassified, Incomplete, LowConfidence }
+public sealed class DocumentRecognitionException(DocumentRecognitionFailure reason) : Exception("The image could not produce reviewable salary details.")
+{ public DocumentRecognitionFailure Reason { get; } = reason; }
+public sealed class OcrEngineUnavailableException() : Exception("The LOCAL OCR engine is unavailable.");
 
 public sealed class ProcessingConflictException(string message) : Exception(message);
 
@@ -471,6 +476,22 @@ public sealed class DocumentProcessingApplication(
         try
         {
             facts = await extractor.ExtractAsync(evidence!, started.ProcessingId, cancellationToken);
+        }
+        catch (OcrEngineUnavailableException)
+        {
+            return await FailAsync(request, started, "processing.ocr.unavailable",
+                ContractErrorCategory.DependencyFailure, true, cancellationToken);
+        }
+        catch (DocumentRecognitionException failure)
+        {
+            var code = failure.Reason switch
+            {
+                DocumentRecognitionFailure.Unclassified => "processing.document.unclassified",
+                DocumentRecognitionFailure.LowConfidence => "processing.ocr.low-confidence",
+                _ => "processing.salary-slip.incomplete",
+            };
+            return await FailAsync(request, started, code,
+                ContractErrorCategory.ProcessingFailed, false, cancellationToken);
         }
         catch (DocumentExtractionException)
         {
