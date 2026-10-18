@@ -1,5 +1,10 @@
 import { createContext, useContext } from 'react';
 import type { AccessApi, TenantSession } from './accessApi';
+export interface CustomerWorkspaceSetup {
+  tenantId: string; actorId: string; customerId: string; required: boolean;
+  emailVerified: boolean; profileReviewed: boolean; agreementsPublished: boolean;
+  agreementsAccepted: boolean; ready: boolean; revision: string | null;
+}
 export interface ProductWorkspaceContext {
   tenantId: string;
   actorId: string;
@@ -10,6 +15,7 @@ export interface ProductWorkspaceContext {
   environment: string;
   dataDurability: string;
   productionAccepted: boolean;
+  setup?: CustomerWorkspaceSetup;
 }
 export type WorkspaceAuthorization =
   | { area: 'administration'; authority: 'TenantAdmin'; policyVersion: number }

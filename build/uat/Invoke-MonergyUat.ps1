@@ -8,9 +8,11 @@ param(
     [switch]$ConfirmReset,
     [switch]$EnableOnboarding,
     [switch]$EnableEmailAccess,
-    [string]$AccountAgreementFile
+    [string]$AccountAgreementFile,
+    [switch]$RequireCustomerSetup
 )
 $ErrorActionPreference = 'Stop'
+if ($RequireCustomerSetup -and (-not $EnableEmailAccess -or -not $EnableOnboarding)) { throw 'Required customer setup needs -EnableOnboarding and -EnableEmailAccess.' }
 if ($EnableOnboarding -and $Profile -eq 'default') { throw 'Use a new named profile for onboarding, for example -Profile onboarding -EnableOnboarding. The retained default profile is not upgraded.' }
 Set-StrictMode -Version Latest
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
@@ -174,6 +176,7 @@ if ($Action -in @('Prepare','Start')) {
                     @{ TenantId='T002'; ResourceId='C002'; DisplayName='Sample Customer Two'; SecondaryLabel='Additional UAT customer' }
                 )
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.CustomerIdentityDatabases[$db.tenant] = Connection $db 'runtime' }
+                $config.Monergy.CustomerWorkspaceSetup = @{ Required=[bool]$RequireCustomerSetup }
                 if (-not [string]::IsNullOrWhiteSpace($AccountAgreementFile)) {
                     $publicationFile = Get-Item -LiteralPath $AccountAgreementFile -ErrorAction Stop
                     if ($publicationFile.PSIsContainer -or $publicationFile.Length -gt 1048576) { throw 'Invalid account-agreement publication file.' }

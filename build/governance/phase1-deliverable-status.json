@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-53",
-  "applicationBase": "499a68ff91d6fd2488465c2b87edd6fbb08cb3f8",
+  "asOf": "T1-54",
+  "applicationBase": "4b3c681aa7889086bb6a8155f9bfe710a051e85f",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
     "libraryVersion": 2,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "T1-52; bounded T1-53 agreement delta applied"
+    "reviewThrough": "T1-52; bounded T1-53 agreements and T1-54 guided existing-customer setup deltas applied"
   },
   "counts": {
     "originalDeliverables": 29,
@@ -14,8 +14,8 @@
     "partial": 17,
     "pendingBusinessJourneys": 12,
     "remainingOriginalDeliverables": 29,
-    "numberedUnitsAfterPairedMerge": 53,
-    "mergedImplementationUnitsAfterPairedMerge": 52,
+    "numberedUnitsAfterPairedMerge": 54,
+    "mergedImplementationUnitsAfterPairedMerge": 53,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -31,11 +31,11 @@
       "area": "Customer",
       "name": "Registration",
       "state": "Pending",
-      "existing": "Organization onboarding and imported-customer ownership exist. T1-43 verifies existing customers only. T1-53 adds published, versioned account-agreement review/capture for existing owned customers.",
-      "remaining": "Complete customer registration/activation and create the owned customer identity. Integrate the T1-53 agreement prerequisite into the future registration journey; approved legal content must be supplied.",
-      "units": "T1-03, T1-43, T1-53",
+      "existing": "Organization onboarding and imported-customer ownership exist. T1-43 verifies existing customers only. T1-53 adds published, versioned account-agreement review/capture for existing owned customers. T1-54 adds opt-in guided setup and server financial-workspace admission derived from verified email, reviewed profile and current agreement acceptance.",
+      "remaining": "Complete public customer registration/activation and create the owned customer identity. Prove integrated email/database setup and supply approved legal content; T1-54 covers existing customer setup at the LOCAL product ingress only.",
+      "units": "T1-03, T1-43, T1-53, T1-54",
       "requirements": "MON-ID-001\u2013004",
-      "receipt": "build/governance/t1-43-customer-email-access.md"
+      "receipt": "build/governance/t1-54-guided-customer-setup.md"
     },
     {
       "id": "P1-02",

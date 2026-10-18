@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 
@@ -8,7 +9,12 @@ namespace Monergy.Platform;
 
 public sealed record CustomerOwnerContext(string TenantId, string CustomerId, string? OwnerActorId, long Version, bool Active);
 public sealed record CustomerOwnerWorkspace(string TenantId, string CustomerId, string DisplayName,
-    string? SecondaryLabel, string OwnerActorId, long Version, bool Active);
+    string? SecondaryLabel, string OwnerActorId, long Version, bool Active)
+{
+    [JsonRequired] public bool WorkspaceReady { get; init; } = true;
+}
+public sealed record CustomerWorkspaceSetupStatus(string TenantId, string ActorId, string CustomerId, bool Required,
+    bool EmailVerified, bool ProfileReviewed, bool AgreementsPublished, bool AgreementsAccepted, bool Ready, string? Revision);
 public sealed record CustomerOwnerSession(string TenantId, string ActorId, string AuthenticationContextId, long SubjectVersion, DateTimeOffset ExpiresAt);
 public sealed record CustomerOwnerMembership(string TenantId, string ActorId, bool Active, long SubjectVersion, long PolicyVersion);
 public sealed record CustomerOwnerRecipientLabel(string TenantId, string ActorId, string RecipientLabel);
@@ -72,6 +78,15 @@ public sealed class CustomerOwnerClient : IDisposable
 
     public async Task<CustomerOwnerWorkspace?> OwnedCustomerAsync(string tenant, string actor, CancellationToken ct)
     {
+        var value = await OwnedCustomerForSetupAsync(tenant, actor, ct).ConfigureAwait(false);
+        if (value is { WorkspaceReady: false }) throw new TenantBoundaryException("CUSTOMER_SETUP_REQUIRED", 403);
+        return value;
+    }
+
+    // Setup admission may read identity only; normal financial routes use the
+    // ready-enforcing method above and never receive a bypass parameter.
+    public async Task<CustomerOwnerWorkspace?> OwnedCustomerForSetupAsync(string tenant, string actor, CancellationToken ct)
+    {
         if (!TenantAccessClient.Identifier(actor, 128)) throw new TenantBoundaryException("INVALID_ACTOR", 400);
         try
         {
@@ -86,6 +101,21 @@ public sealed class CustomerOwnerClient : IDisposable
         {
             return null;
         }
+    }
+
+    public async Task<CustomerWorkspaceSetupStatus> WorkspaceSetupAsync(string tenant, string actor, string customer, CancellationToken ct)
+    {
+        if (!TenantAccessClient.Identifier(actor, 128) || !TenantAccessClient.Identifier(customer, 128))
+            throw new TenantBoundaryException("INVALID_CUSTOMER_SETUP", 400);
+        var status = await SendAsync<CustomerWorkspaceSetupStatus>(identity, "internal/v1/customer-workspace-setup/" + Uri.EscapeDataString(actor),
+            tenant, contextToken, null, ct).ConfigureAwait(false);
+        var complete = status.EmailVerified && status.ProfileReviewed && status.AgreementsPublished && status.AgreementsAccepted;
+        if (status.TenantId != tenant || status.ActorId != actor || status.CustomerId != customer ||
+            status.Ready != (!status.Required || complete) || status.AgreementsAccepted && !status.AgreementsPublished ||
+            status.AgreementsPublished && (status.Revision is null || status.Revision.Length != 64 || status.Revision.Any(c => !char.IsAsciiHexDigitLower(c))) ||
+            !status.AgreementsPublished && status.Revision is not null)
+            throw new TenantBoundaryException("CUSTOMER_SETUP_RESPONSE_INVALID", 503);
+        return status;
     }
 
     public async Task<CustomerOwnerSession> SessionAsync(HttpContext http)
