@@ -413,7 +413,8 @@ public static class ProductWorkspaceEndpoints
             if (!string.Equals(source.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(source.ContentType, "text/csv", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(source.ContentType, "image/png", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(source.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(source.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(source.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
                 throw new TenantBoundaryException("PROCESSING_CONTENT_TYPE_UNSUPPORTED", 422);
             var now = DateTimeOffset.UtcNow;
             var jobId = "job-processing-" + submission.OperationId;

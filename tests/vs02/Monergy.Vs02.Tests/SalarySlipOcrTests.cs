@@ -145,6 +145,7 @@ public sealed class SalarySlipOcrTests
     [Theory, Trait("Category", "NativeOcr")]
     [InlineData("salary-slip.png", "image/png")]
     [InlineData("salary-slip-scan.pdf", "application/pdf")]
+    [InlineData("salary-slip.jpg", "image/jpeg")]
     public async Task OwnerHttpBoundaryDeliversExactBinaryToRealOcrAndCustomerBoundProcessing(string fileName, string contentType)
     {
         var builder = WebApplication.CreateSlimBuilder(); builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -187,7 +188,7 @@ public sealed class SalarySlipOcrTests
         using var pdfRenderer = new PopplerPdfPageRenderer(NativeConfiguration());
         var processingRepository = new InMemoryDocumentProcessingRepository();
         var processing = new DocumentProcessingApplication(processingRepository, reader,
-            new StructuredDocumentExtractor(new SalarySlipPngExtractor(engine), new SalarySlipPdfExtractor(pdfRenderer, engine)), new ReferenceExecutionPolicy(), new CapturingTelemetry(), TimeProvider.System);
+            new StructuredDocumentExtractor(new SalarySlipPngExtractor(engine), new SalarySlipPdfExtractor(pdfRenderer, engine), new SalarySlipJpegExtractor(engine)), new ReferenceExecutionPolicy(), new CapturingTelemetry(), TimeProvider.System);
         var result = await processing.ProcessDocumentAsync(Vs02TestContext.Request(Vs02ContractNames.ProcessDocument,
             new ProcessDocument("processing-png", "document-version-001", "evidence-001", "customer-001", DateTimeOffset.UtcNow),
             "process-png", "process-png", security));

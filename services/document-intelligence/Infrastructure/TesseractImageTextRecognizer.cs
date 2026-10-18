@@ -11,9 +11,11 @@ public sealed class TesseractImageTextRecognizer(IConfiguration configuration) :
     public const string EnglishDataSha256 = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2";
     private readonly SemaphoreSlim admission = new(1, 1);
 
-    public async Task<string> RecognizeAsync(byte[] png, CancellationToken cancellationToken)
+    public async Task<string> RecognizeAsync(byte[] image, CancellationToken cancellationToken)
     {
-        SalarySlipPngExtractor.ValidatePng(png);
+        var jpeg = image.AsSpan().StartsWith(new byte[] { 0xff, 0xd8 });
+        if (jpeg) SalarySlipJpegExtractor.ValidateJpeg(image);
+        else SalarySlipPngExtractor.ValidatePng(image);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(10));
         string? directory = null;
@@ -36,7 +38,7 @@ public sealed class TesseractImageTextRecognizer(IConfiguration configuration) :
             directory = Path.Combine(Path.GetTempPath(), "monergy-ocr-" + Guid.NewGuid().ToString("N"));
             if (OperatingSystem.IsWindows()) Directory.CreateDirectory(directory);
             else Directory.CreateDirectory(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-            var input = Path.Combine(directory, "source.png");
+            var input = Path.Combine(directory, jpeg ? "source.jpg" : "source.png");
             var options = new FileStreamOptions
             {
                 Mode = FileMode.CreateNew, Access = FileAccess.Write, Share = FileShare.None,
@@ -44,10 +46,11 @@ public sealed class TesseractImageTextRecognizer(IConfiguration configuration) :
             };
             if (!OperatingSystem.IsWindows()) options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
             await using (var file = new FileStream(input, options))
-                await file.WriteAsync(png, deadline.Token).ConfigureAwait(false);
+                await file.WriteAsync(image, deadline.Token).ConfigureAwait(false);
             var result = await NativeDocumentProcess.RunAsync(executable, [input, "stdout", "--tessdata-dir", data, "-l", "eng", "--psm", "6", "-c", "tessedit_create_tsv=1"],
                 libraries, 1_048_576, deadline.Token).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
+            if (jpeg && (result.ExitCode != 0 || result.Error.Length != 0)) throw SalarySlipJpegExtractor.Unsupported();
             if (result.ExitCode != 0) throw new DocumentRecognitionException(DocumentRecognitionFailure.Incomplete);
             return result.Text;
         }

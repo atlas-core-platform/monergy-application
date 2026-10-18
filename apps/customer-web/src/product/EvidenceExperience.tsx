@@ -42,11 +42,13 @@ const formatBytes = (value: number) =>
 function processingFailureMessage(code: string | null): string {
   switch (code) {
     case 'processing.document.unclassified':
-      return "We couldn't recognize a supported salary slip. Check that this is a clear, printed English salary slip in PNG or single-page PDF format.";
+      return "We couldn't recognize a supported salary slip. Check that this is a clear, printed English salary slip in PNG, upright JPEG or single-page PDF format.";
     case 'processing.ocr.low-confidence':
       return 'Some salary-slip details were unclear. Upload a clearer image and try again.';
     case 'processing.salary-slip.incomplete':
       return 'We need one clear net pay amount, an explicit supported currency and an unambiguous pay date. Check these labels in your salary slip.';
+    case 'processing.jpeg.unsupported':
+      return 'Use a clear, upright JPEG image. If the image is rotated or damaged, rotate it upright and save a new JPEG before trying again.';
     case 'processing.pdf.unsupported':
       return 'Use a readable, unlocked, single-page salary-slip PDF without forms or scripts. Multi-page and protected PDFs are not supported yet.';
     case 'processing.ocr.unavailable':
@@ -566,7 +568,7 @@ export default function EvidenceExperience() {
         failure instanceof AccessApiError && failure.status === 403
           ? 'You no longer have access to extract details from this document.'
           : failure instanceof AccessApiError && failure.status === 422
-            ? 'Extracting details supports structured text, financial information CSV and printed English salary slips in PNG or single-page PDF format.'
+            ? 'Extracting details supports structured text, financial information CSV and printed English salary slips in PNG, upright JPEG or single-page PDF format.'
             : "We couldn't extract details from this document. Your financial information has not changed.",
       );
     } finally {
@@ -1028,7 +1030,7 @@ export default function EvidenceExperience() {
                     Extracted items <strong>{recoveredResult.facts.length}</strong>
                   </span>
                 </div>
-                {recoveredResult.facts.some((fact) => ['salary-slip-png-ocr/1.0.0', 'salary-slip-pdf-ocr/1.0.0'].includes(fact.extractionVersion ?? '')) && (
+                {recoveredResult.facts.some((fact) => ['salary-slip-png-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', 'salary-slip-pdf-ocr/1.0.0'].includes(fact.extractionVersion ?? '')) && (
                   <Alert showIcon type="info" title="Recognized as a salary slip"
                     description="Net pay was read from your document. Check the amount, currency and pay date against your document before adding it. Recognition does not verify the document's authenticity." />
                 )}
@@ -1465,16 +1467,16 @@ export default function EvidenceExperience() {
               <div>
                 <strong>Extract details from this document</strong>
                 <p>
-                  {['text/plain', 'text/csv', 'image/png', 'application/pdf'].includes(selectedEvidence.contentType)
-                    ? ['image/png', 'application/pdf'].includes(selectedEvidence.contentType)
-                      ? 'For printed English salary slips in PNG or single-page PDF format with labelled net pay, currency and pay date. Review the extracted amount against your document.'
+                  {['text/plain', 'text/csv', 'image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)
+                    ? ['image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)
+                      ? 'For printed English salary slips in PNG, upright JPEG or single-page PDF format with labelled net pay, currency and pay date. Review the extracted amount against your document.'
                       : 'Review supported financial source figures before adding them to Financial information.'
-                    : 'Extracting details supports structured text, financial information CSV and printed English salary slips in PNG or single-page PDF format.'}
+                    : 'Extracting details supports structured text, financial information CSV and printed English salary slips in PNG, upright JPEG or single-page PDF format.'}
                 </p>
               </div>
               <Button
                 type="primary"
-                disabled={!canProcess || !['text/plain', 'text/csv', 'image/png', 'application/pdf'].includes(selectedEvidence.contentType)}
+                disabled={!canProcess || !['text/plain', 'text/csv', 'image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)}
                 onClick={() => {
                   setProcessingEvidence(selectedEvidence);
                   setSelectedEvidence(null);
@@ -1518,7 +1520,7 @@ export default function EvidenceExperience() {
               <Button
                 type="primary"
                 loading={processingBusy}
-                disabled={!canProcess || !['text/plain', 'text/csv', 'image/png', 'application/pdf'].includes(processingEvidence?.contentType ?? '')}
+                disabled={!canProcess || !['text/plain', 'text/csv', 'image/png', 'image/jpeg', 'application/pdf'].includes(processingEvidence?.contentType ?? '')}
                 onClick={() => void processDocument()}
               >
                 Extract details
@@ -1612,7 +1614,7 @@ export default function EvidenceExperience() {
                 }
               />
             )}
-            {processing?.facts.some((fact) => ['salary-slip-png-ocr/1.0.0', 'salary-slip-pdf-ocr/1.0.0'].includes(fact.extractionVersion)) && (
+            {processing?.facts.some((fact) => ['salary-slip-png-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', 'salary-slip-pdf-ocr/1.0.0'].includes(fact.extractionVersion)) && (
               <Alert showIcon type="info" title="Recognized as a salary slip"
                 description="Net pay was read from your document. Check the amount, currency and pay date against your document before adding it. Recognition does not verify the document's authenticity." />
             )}
