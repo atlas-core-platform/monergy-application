@@ -10,7 +10,7 @@ import CustomerProfileExperience from '../src/product/CustomerProfileExperience'
 
 const session = { tenantId: 'T001', actorId: 'A100', authenticationContextId: 'current-session', subjectVersion: 3, expiresAt: '2027-01-01T00:00:00Z' };
 const context = { tenantId: 'T001', actorId: 'A100', customerId: 'C001', customerName: 'Customer', capabilities: [], environment: 'Test environment', dataDurability: 'Temporary data', productionAccepted: false };
-const profile = () => ({ tenantId: 'T001', actorId: 'A100', customerId: 'C001', displayName: 'Customer', email: 'owner@example.test', mobile: null as string | null, version: 2, updatedAt: null, emailVerifiedAt: null });
+const profile = () => ({ tenantId: 'T001', actorId: 'A100', customerId: 'C001', displayName: 'Customer', email: 'owner@example.test', mobile: null as string | null, version: 2, updatedAt: null, emailVerifiedAt: null, dateOfBirth: null as string | null });
 function state(api: AccessApi): WorkspaceSessionState {
   return { status: 'authorized', session, api, authorization: { area: 'product', context }, message: '', recovery: null,
     connect: vi.fn().mockResolvedValue(undefined), retry: vi.fn().mockResolvedValue(undefined), signOut: vi.fn().mockResolvedValue(undefined), cancel: vi.fn(), refreshContext: vi.fn().mockResolvedValue(undefined) };
@@ -46,7 +46,7 @@ it('saves only editable fields with an operation and version, reloads owner stat
   fireEvent.change(screen.getByLabelText('Mobile number'), { target: { value: '+919876543210' } }); save();
   expect(await screen.findByText('Your profile has been saved.')).toBeVisible();
   const put = call.mock.calls.find(([method]) => method === 'PUT');
-  expect(put?.[1]).toEqual({ operationId: expect.stringMatching(/^[0-9a-f]{32}$/), expectedVersion: 2, displayName: 'Updated Customer', mobile: '+919876543210' });
+  expect(put?.[1]).toEqual({ operationId: expect.stringMatching(/^[0-9a-f]{32}$/), expectedVersion: 2, displayName: 'Updated Customer', mobile: '+919876543210', dateOfBirth: null });
   expect(call.mock.calls.map(([method]) => method)).toEqual(['GET', 'PUT', 'GET']);
   expect(value.refreshContext).toHaveBeenCalledOnce(); expect(screen.getByLabelText('Your name')).toHaveValue('Updated Customer');
 });
@@ -124,4 +124,54 @@ it('keeps anonymous direct profile entry behind the workspace gate', () => {
   window.history.replaceState({}, '', '/profile');
   render(<FoundationProvider appearance="midnight"><WorkspaceSessionProvider area="product"><WorkspaceEntry area="product"><CustomerProfileExperience /></WorkspaceEntry></WorkspaceSessionProvider></FoundationProvider>);
   expect(screen.getByLabelText('Local access key')).toBeVisible(); expect(screen.queryByRole('heading', { name: 'My Profile' })).not.toBeInTheDocument();
+});
+
+it('saves a date-only birth date and confirms the exact date through fresh owner readback', async () => {
+  const api = new AccessApi(session); let saved = false;
+  const call = vi.spyOn(api, 'selfCustomerProfile').mockImplementation((method, body) => {
+    if (method === 'PUT') { saved = true; return Promise.resolve({ operationId: (body as { operationId: string }).operationId, version: 3 }); }
+    return Promise.resolve(saved ? { ...profile(), dateOfBirth: '2000-02-29', version: 3 } : profile());
+  });
+  mount(state(api)); fireEvent.change(await screen.findByLabelText('Date of birth'), { target: { value: '2000-02-29' } }); save();
+  expect(await screen.findByText('Your profile has been saved.')).toBeVisible();
+  expect(call.mock.calls.find(([m]) => m === 'PUT')?.[1]).toMatchObject({ dateOfBirth: '2000-02-29', expectedVersion: 2 });
+  expect(screen.getByLabelText('Date of birth')).toHaveValue('2000-02-29');
+  expect(screen.getByText(/self-declared profile detail/)).toBeVisible();
+});
+it('explicitly clears an existing birth date and confirms null rather than inventing a default', async () => {
+  const api = new AccessApi(session); let saved = false;
+  const call = vi.spyOn(api, 'selfCustomerProfile').mockImplementation((method, body) => {
+    if (method === 'PUT') { saved = true; return Promise.resolve({ operationId: (body as { operationId: string }).operationId, version: 3 }); }
+    return Promise.resolve({ ...profile(), dateOfBirth: saved ? null : '1992-04-09', version: saved ? 3 : 2 });
+  });
+  mount(state(api)); expect(await screen.findByLabelText('Date of birth')).toHaveValue('1992-04-09');
+  fireEvent.change(screen.getByLabelText('Date of birth'), { target: { value: '' } }); save();
+  expect(await screen.findByText('Your profile has been saved.')).toBeVisible();
+  expect(call.mock.calls.find(([m]) => m === 'PUT')?.[1]).toMatchObject({ dateOfBirth: null });
+  expect(screen.getByLabelText('Date of birth')).toHaveValue('');
+});
+it('rejects a future birth date before requesting a save and allows explicit discard', async () => {
+  const api = new AccessApi(session); const call = vi.spyOn(api, 'selfCustomerProfile').mockResolvedValue(profile());
+  mount(state(api)); fireEvent.change(await screen.findByLabelText('Date of birth'), { target: { value: '2099-01-01' } }); save();
+  expect(await screen.findByText(/Enter a valid date of birth/)).toBeVisible(); expect(call).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByRole('button', { name: 'Discard changes' })); expect(screen.getByLabelText('Date of birth')).toHaveValue('');
+  expect(screen.getByRole('button', { name: 'Save profile' })).toBeDisabled();
+});
+it.each(['2001-02-29', '2099-01-01', '1992-04-09T00:00:00Z', undefined])('rejects malformed or missing date-of-birth readback %s', async birthDate => {
+  const api = new AccessApi(session); vi.spyOn(api, 'selfCustomerProfile').mockResolvedValue({ ...profile(), dateOfBirth: birthDate });
+  mount(state(api)); expect(await screen.findByText(/Your profile could not be verified/)).toBeVisible();
+  expect(screen.queryByLabelText('Date of birth')).not.toBeInTheDocument();
+});
+it('does not claim a saved birth date when the receipt version reloads a different date', async () => {
+  const api = new AccessApi(session); const value = state(api);
+  let saved = false;
+  const call = vi.spyOn(api, 'selfCustomerProfile').mockImplementation((method, body) => {
+    if (method === 'PUT') { saved = true; return Promise.resolve({ operationId: (body as { operationId: string }).operationId, version: 3 }); }
+    return Promise.resolve({ ...profile(), version: saved ? 3 : 2 });
+  });
+  mount(value); fireEvent.change(await screen.findByLabelText('Date of birth'), { target: { value: '2000-02-29' } }); save();
+  expect(await screen.findByText(/save result is not confirmed/)).toBeVisible(); expect(value.refreshContext).not.toHaveBeenCalled();
+  expect(call.mock.calls.map(([method]) => method)).toEqual(['GET', 'PUT', 'GET']);
+  expect(screen.queryByText('Your profile has been saved.')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Save profile' })).toBeDisabled();
 });
