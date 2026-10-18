@@ -952,17 +952,19 @@ it('fails closed when Document history response identity does not match the sele
 });
 
 
-it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0'])('reopens a completed result with extraction version %s read-only from durable activity', async (extractionVersion) => {
+it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', 'loan-statement-png-ocr/1.0.0', 'loan-statement-jpeg-ocr/1.0.0', 'loan-statement-pdf-ocr/1.0.0'])('reopens a completed result with extraction version %s read-only from durable activity', async (extractionVersion) => {
   const api = new AccessApi(session);
-  const jpeg = extractionVersion === 'salary-slip-jpeg-ocr/1.0.0';
+  const jpeg = extractionVersion?.includes('-jpeg-');
+  const png = extractionVersion?.includes('-png-');
+  const loan = extractionVersion?.startsWith('loan-statement-');
   const document = {
     documentId: 'document-result',
     documentVersionId: 'document-version-result',
     evidenceId: 'evidence-result',
     version: 1,
     sourceName: 'Customer upload',
-    originalFileName: jpeg ? 'recovered-salary-slip.jpg' : extractionVersion ? 'recovered-salary-slip.pdf' : 'recovered-result.txt',
-    contentType: jpeg ? 'image/jpeg' : extractionVersion ? 'application/pdf' : 'text/plain',
+    originalFileName: jpeg ? 'recovered-document.jpg' : png ? 'recovered-document.png' : extractionVersion ? 'recovered-document.pdf' : 'recovered-result.txt',
+    contentType: jpeg ? 'image/jpeg' : png ? 'image/png' : extractionVersion ? 'application/pdf' : 'text/plain',
     contentLength: 64,
     contentSha256: '7'.repeat(64),
     receivedAt: '2026-10-16T08:00:00Z',
@@ -995,8 +997,8 @@ it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0'])(
           {
             extractionVersion,
             sourceFactId: 'source-fact-income',
-            factType: 'INCOME',
-            label: 'Employment income',
+            factType: loan ? 'LOAN' : 'INCOME',
+            label: loan ? 'Outstanding loan balance stated on document' : 'Employment income',
             candidateValue: 125000,
             currency: 'USD',
             effectiveDate: '2026-10-01',
@@ -1015,7 +1017,7 @@ it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0'])(
             confidence: 0.96,
             documentVersionId: document.documentVersionId,
           },
-        ].filter((fact) => !extractionVersion || fact.factType === 'INCOME'),
+        ].filter((fact) => !extractionVersion || fact.factType === (loan ? 'LOAN' : 'INCOME')),
       });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
@@ -1027,8 +1029,9 @@ it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0'])(
 
   const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
   expect(drawer).toHaveTextContent(document.originalFileName);
-  if (extractionVersion) expect(drawer).toHaveTextContent('Recognized as a salary slip');
-  expect(drawer).toHaveTextContent('Employment income');
+  if (extractionVersion) expect(drawer).toHaveTextContent(loan ? 'Recognized as a loan statement' : 'Recognized as a salary slip');
+  expect(drawer).toHaveTextContent(loan ? 'Outstanding loan balance stated on document' : 'Employment income');
+  if (loan) expect(drawer).toHaveTextContent('It does not establish your current debt');
   expect(drawer).toHaveTextContent('$125,000.00');
   expect(drawer).toHaveTextContent('98% confidence');
   if (!extractionVersion) expect(drawer).toHaveTextContent('Housing');
@@ -1870,7 +1873,9 @@ it('does not reconcile a source fact from a different document version as alread
   ).toBeEnabled();
 });
 
-it('requires explicit review of a Loan amount before updating authoritative Financial information', async () => {
+it.each(['text/plain', 'image/png', 'image/jpeg', 'application/pdf'])('requires explicit review of a Loan amount from %s before updating authoritative Financial information', async (contentType) => {
+  const suffix = contentType === 'image/png' ? 'png' : contentType === 'image/jpeg' ? 'jpg' : contentType === 'application/pdf' ? 'pdf' : 'txt';
+  const label = contentType === 'text/plain' ? 'Car loan amount stated on document' : 'Outstanding loan balance stated on document';
   const api = new AccessApi(session);
   const item = {
     documentId: 'document-loan-003',
@@ -1878,8 +1883,8 @@ it('requires explicit review of a Loan amount before updating authoritative Fina
     evidenceId: 'evidence-loan-003',
     version: 1,
     sourceName: 'Customer upload',
-    originalFileName: 'loan-statement.txt',
-    contentType: 'text/plain',
+    originalFileName: `loan-statement.${suffix}`,
+    contentType,
     contentLength: 96,
     contentSha256: 'e'.repeat(64),
     receivedAt: '2026-10-14T00:00:00Z',
@@ -1911,7 +1916,7 @@ it('requires explicit review of a Loan amount before updating authoritative Fina
         sourceFactId: 'source-fact-loan-001',
         customerId: 'reference-customer',
         factType: 'LOAN',
-        label: 'Car loan amount stated on document',
+        label: label,
         candidateValue: 400000,
         currency: 'USD',
         effectiveDate: '2026-10-01',
@@ -1919,7 +1924,7 @@ it('requires explicit review of a Loan amount before updating authoritative Fina
         confidence: 0.98,
         evidenceId: item.evidenceId,
         documentVersionId: item.documentVersionId,
-        extractionVersion: 'fixture-extractor/1.0.0',
+        extractionVersion: contentType === 'text/plain' ? 'fixture-extractor/1.0.0' : `loan-statement-${suffix === 'jpg' ? 'jpeg' : suffix}-ocr/1.0.0`,
         validationVersion: 'canonical-source-fact/1.0.0',
       },
     ],
@@ -1935,13 +1940,13 @@ it('requires explicit review of a Loan amount before updating authoritative Fina
         {
           financialFactId: 'financial-fact-loan-001',
           factType: 'LOAN',
-          label: 'Car loan amount stated on document',
+          label: label,
           value: 400000,
           currency: 'USD',
           effectiveDate: '2026-10-01',
           revision: 1,
           source: {
-            sourceName: 'loan-statement.txt',
+            sourceName: item.originalFileName,
             documentVersion: item.documentVersionId,
             recordedAt: '2026-10-14T00:00:02Z',
             technicalSourceFactId: 'source-fact-loan-001',
@@ -1970,9 +1975,9 @@ it('requires explicit review of a Loan amount before updating authoritative Fina
     'financial-profile.profile.update',
   ]);
   const user = userEvent.setup();
-  await screen.findByText('loan-statement.txt');
+  await screen.findByText(item.originalFileName);
   await user.click(
-    screen.getByRole('button', { name: 'View document details for loan-statement.txt' }),
+    screen.getByRole('button', { name: `View document details for ${item.originalFileName}` }),
   );
   const provenance = screen.getByRole('dialog', { name: 'Document details' });
   await user.click(within(provenance).getByRole('button', { name: 'Extract details' }));
@@ -1980,8 +1985,13 @@ it('requires explicit review of a Loan amount before updating authoritative Fina
   expect(review).toHaveTextContent('Review before adding anything to your financial information');
   expect(review).toHaveTextContent('Your financial information is not changed by this step');
   await user.click(within(review).getByRole('button', { name: 'Extract details' }));
-  expect(await screen.findByText('Car loan amount stated on document')).toBeVisible();
+  expect(await screen.findByText(label)).toBeVisible();
   expect(review).toHaveTextContent('$400,000.00');
+  if (contentType !== 'text/plain') {
+    expect(review).toHaveTextContent('Recognized as a loan statement');
+    expect(review).toHaveTextContent("It does not establish your current debt");
+    expect(review).not.toHaveTextContent('Recognized as a salary slip');
+  }
   expect(review).toHaveTextContent('98% confidence');
   expect(request).toHaveBeenCalledWith(
     `v1/evidence/${item.documentVersionId}/processing`,
@@ -1999,7 +2009,7 @@ it('requires explicit review of a Loan amount before updating authoritative Fina
 
   await user.click(
     within(review).getByRole('checkbox', {
-      name: 'Add Car loan amount stated on document to financial information',
+      name: `Add ${label} to financial information`,
     }),
   );
   expect(add).toBeEnabled();
@@ -2097,11 +2107,12 @@ it.each([
 });
 
 it.each([
-  ['processing.document.unclassified', "We couldn't recognize a supported salary slip."],
-  ['processing.ocr.low-confidence', 'Some salary-slip details were unclear.'],
+  ['processing.document.unclassified', "We couldn't recognize a supported document."],
+  ['processing.ocr.low-confidence', 'Some document details were unclear.'],
+  ['processing.loan-statement.incomplete', 'We need one clear outstanding balance'],
   ['processing.salary-slip.incomplete', 'We need one clear net pay amount'],
   ['processing.ocr.unavailable', 'Image text extraction is temporarily unavailable.'],
-  ['processing.pdf.unsupported', 'Use a readable, unlocked, single-page salary-slip PDF'],
+  ['processing.pdf.unsupported', 'Use a readable, unlocked, single-page salary-slip or loan-statement PDF'],
   ['processing.jpeg.unsupported', 'Use a clear, upright JPEG image.'],
 ])('explains document extraction failure %s without offering financial adoption', async (code, message) => {
   const api = new AccessApi(session);

@@ -13,8 +13,8 @@ public sealed class EvidenceContentUnsupportedException(string message) : Except
 
 public sealed class DocumentExtractionException(string message) : Exception(message);
 
-public enum DocumentRecognitionFailure { Unclassified, Incomplete, LowConfidence, UnsupportedPdf, UnsupportedJpeg }
-public sealed class DocumentRecognitionException(DocumentRecognitionFailure reason) : Exception("The document could not produce reviewable salary details.")
+public enum DocumentRecognitionFailure { Unclassified, Incomplete, IncompleteLoan, LowConfidence, UnsupportedPdf, UnsupportedJpeg }
+public sealed class DocumentRecognitionException(DocumentRecognitionFailure reason) : Exception("The document could not produce reviewable document details.")
 { public DocumentRecognitionFailure Reason { get; } = reason; }
 public sealed class OcrEngineUnavailableException() : Exception("The LOCAL OCR engine is unavailable.");
 
@@ -490,6 +490,7 @@ public sealed class DocumentProcessingApplication(
                 DocumentRecognitionFailure.UnsupportedJpeg => "processing.jpeg.unsupported",
                 DocumentRecognitionFailure.UnsupportedPdf => "processing.pdf.unsupported",
                 DocumentRecognitionFailure.LowConfidence => "processing.ocr.low-confidence",
+                DocumentRecognitionFailure.IncompleteLoan => "processing.loan-statement.incomplete",
                 _ => "processing.salary-slip.incomplete",
             };
             return await FailAsync(request, started, code,

@@ -1,4 +1,4 @@
-# LOCAL salary-slip image and scanned-PDF OCR
+# LOCAL salary-slip and loan-statement image / scanned-PDF OCR
 
 T1-49 (PNG), T1-50 (single-page scanned PDF) and T1-51 (upright JPEG) implement bounded slices of the planned Salary Slip classification and OCR requirement (master sections11/12; AR-003 COV-013/014, MON-DOC-004/005/006 partial). It uses the existing Evidence → Document Intelligence → customer review → Financial Profile journey. It adds no business role, business service, provider approval, migration or cross-service SQL.
 
@@ -48,4 +48,16 @@ Supported encodings are 8-bit baseline/progressive JPEG with one grayscale or th
 
 Docker is NOT RUN in this workspace. Build the LOCAL image, start the onboarding profile (including the T1-48 scanner), upload the benign PNG, JPEG and scanned-PDF salary-slip fixtures, extract/review it, confirm no profile mutation before selection, adopt the selected value, reopen the completed result, and verify exact customer/version provenance. Repeat unclassified/ambiguous/low-confidence and OCR-unavailable outcomes. The live ClamAV benign/EICAR check, full PowerShell/Compose startup and pinned Node24.21 verification also remain open. Native packaging proof does not establish operation inside the final chiseled container. No PostgreSQL or production acceptance is claimed.
 
-Other document types, multi-page/interactive/encrypted PDFs, broader JPEG encoding/photo quality, handwriting, other languages, arbitrary salary layouts, persistent classification/OCR storage, a review queue and production operations remain planned work. The original151 requirements /81 canonical features denominator is unchanged.
+Broader document types/layouts, multi-page/interactive/encrypted PDFs, broader JPEG encoding/photo quality, handwriting, other languages, arbitrary salary layouts, persistent classification/OCR storage, a review queue and production operations remain planned work. The original151 requirements /81 canonical features denominator is unchanged.
+
+## T1-52 Loan Statement slice
+
+The same format adapters and exact original-byte/hash validation now classify one `LOAN STATEMENT` or `LOAN ACCOUNT STATEMENT` title in the first ten OCR lines. A duplicate known title anywhere on the page, including mixed loan/salary titles, fails classification. The historical SalarySlip adapter class names and dependency wiring remain stable; the shared FinancialDocumentOcrClassifier owns classification, bounded TSV parsing and strict field validation.
+
+Require exactly one labelled `Statement Date`, `As of Date` or `Balance As of`; exactly one `Outstanding Balance`, `Outstanding Loan Balance` or `Principal Outstanding`; and an explicit supported currency inline or on a single Currency line. Use the same unambiguous date formats, nonnegative decimal/western grouping and >=90 minimum word confidence. Duplicate/conflicting/missing/unclear fields produce zero candidates. Currency codes on both sides of an amount are explicitly refused for both salary and loan paths.
+
+Only one LOAN candidate is emitted: `Outstanding loan balance stated on document`, or `Principal outstanding stated on document` when that is the actual field label. Date, currency, source location/confidence and exact original Evidence/customer/document version are retained. Format versions are `loan-statement-png-ocr/1.0.0`, `loan-statement-jpeg-ocr/1.0.0`, `loan-statement-pdf-ocr/1.0.0`. Sanctioned amounts, EMIs or transaction rows are not inferred into balances. This dated source figure is not independently current debt, a full loan account or a liability/net-worth total.
+
+Both current and recovered reviews identify the loan statement and explain source-date meaning. The customer must explicitly select/adopt through the existing Financial Profile owner. `processing.loan-statement.incomplete` gives a safe failure outcome; shared low-confidence/unclassified and format/unavailable failures remain bounded. No new capability, native dependency, provider, schema or production approval is introduced.
+
+Native checks include `LoanStatementOcrTests` and the existing Evidence HTTP source/processing test across all three loan formats. Fixtures `loan-statement.png`, `.jpg`, `loan-statement-scan.pdf` are synthetic with an explicit different sanctioned amount; PDF is image-only. The PDF fixture was rendered and visually inspected. Add these fixtures to the live acceptance steps above, including explicit selection, reopen/recovery, wrong-customer denial and zero-fact failure. That final browser/ClamAV/Docker/PostgreSQL acceptance remains NOT RUN.
