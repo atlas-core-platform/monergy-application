@@ -77,6 +77,7 @@ public sealed class ProductFinancialProfileReportSourceReader(
         }
 
         var supported = profile.Facts
+            .Select(fact => fact with { FactType = PropertySourceFactBoundary.ForCustomer(fact.FactType) })
             .Where(fact => SupportedFactTypes.Contains(fact.FactType))
             .OrderBy(fact => fact.FactType, StringComparer.Ordinal)
             .ThenBy(fact => fact.Label, StringComparer.Ordinal)

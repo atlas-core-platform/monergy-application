@@ -10,6 +10,7 @@ namespace Monergy.Services.DocumentIntelligence.Infrastructure;
 // Classification and field validation share the exact bounded native TSV parser across all three format adapters.
 internal static class FinancialDocumentOcrClassifier
 {
+    private static readonly Regex PropertyTitle = Pattern(@"^PROPERTY\s+SALE\s+DEED$");
     private static readonly Regex SalaryTitle = Pattern(@"^(SALARY\s+SLIP|PAY\s*SLIP)$");
     private static readonly Regex SanctionTitle = Pattern(@"^LOAN\s+SANCTION\s+LETTER$");
     private static readonly Regex InvestmentTitle = Pattern(@"^INVESTMENT\s+STATEMENT$");
@@ -30,10 +31,12 @@ internal static class FinancialDocumentOcrClassifier
         EvidenceContent content, string processingId, string tsv, string salaryExtractionVersion)
     {
         var lines = ParseTsv(tsv);
-        // A second known title anywhere in the page is ambiguous, including mixed salary/loan statement/sanction/insurance/investment pages.
-        var titles = lines.Where(line => SalaryTitle.IsMatch(line.Text) || LoanTitle.IsMatch(line.Text) || InsuranceTitle.IsMatch(line.Text) || InvestmentTitle.IsMatch(line.Text) || SanctionTitle.IsMatch(line.Text)).ToArray();
+        // A second known title anywhere in the page is ambiguous, including mixed salary/loan statement/sanction/insurance/investment/property pages.
+        var titles = lines.Where(line => PropertyTitle.IsMatch(line.Text) || SalaryTitle.IsMatch(line.Text) || LoanTitle.IsMatch(line.Text) || InsuranceTitle.IsMatch(line.Text) || InvestmentTitle.IsMatch(line.Text) || SanctionTitle.IsMatch(line.Text)).ToArray();
         if (titles.Length != 1 || titles[0].Number > 10)
             throw new DocumentRecognitionException(DocumentRecognitionFailure.Unclassified);
+        if (PropertyTitle.IsMatch(titles[0].Text))
+            return PropertySaleDeedOcrExtractor.CreateCandidates(content, processingId, lines, titles[0], salaryExtractionVersion);
         if (SanctionTitle.IsMatch(titles[0].Text))
             return LoanSanctionOcrExtractor.CreateCandidates(content, processingId, lines, titles[0], salaryExtractionVersion);
         if (InvestmentTitle.IsMatch(titles[0].Text))
