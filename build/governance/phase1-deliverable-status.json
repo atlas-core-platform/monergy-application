@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-57",
-  "applicationBase": "8500f123a8150cbc4dd9b3b3902c219577100057",
+  "asOf": "T1-58",
+  "applicationBase": "e2fbf5793746057d9e72f132fdf5405913da1b2d",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
     "libraryVersion": 2,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "T1-52; bounded T1-53/54 identity setup, T1-55 DOB and T1-56 protected self-declared PAN deltas applied; bounded T1-57 financial XLSX template delta applied"
+    "reviewThrough": "T1-52; bounded T1-53/54 identity setup, T1-55 DOB and T1-56 protected self-declared PAN deltas applied; bounded T1-57 financial XLSX template delta applied; bounded T1-58 insurance policy OCR delta applied"
   },
   "counts": {
     "originalDeliverables": 29,
@@ -14,8 +14,8 @@
     "partial": 17,
     "pendingBusinessJourneys": 12,
     "remainingOriginalDeliverables": 29,
-    "numberedUnitsAfterPairedMerge": 57,
-    "mergedImplementationUnitsAfterPairedMerge": 56,
+    "numberedUnitsAfterPairedMerge": 58,
+    "mergedImplementationUnitsAfterPairedMerge": 57,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -97,33 +97,33 @@
       "area": "Documents",
       "name": "Classification",
       "state": "Partial",
-      "existing": "Strict salary-slip and loan-statement recognition across PNG, upright JPEG and single-page scanned PDF rejects ambiguous titles.",
+      "existing": "Strict salary-slip, loan-statement and T1-58 insurance-policy recognition across PNG, upright JPEG and single-page scanned PDF rejects multiple known titles.",
       "remaining": "Cover the remaining \u00a711 document classes and layouts, persist classification/unknown-review state, and expose the administration workflow.",
-      "units": "T1-49\u201352",
+      "units": "T1-49\u201352; T1-58",
       "requirements": "MON-DOC-004/005",
-      "receipt": "build/governance/t1-52-loan-statement-ocr.md"
+      "receipt": "build/governance/t1-58-insurance-policy-ocr.md"
     },
     {
       "id": "P1-08",
       "area": "Documents",
       "name": "OCR",
       "state": "Partial",
-      "existing": "Real pinned OCR reads supported printed English salary slips and loan statements in PNG/JPEG and single-page scanned PDF.",
+      "existing": "Real pinned OCR reads supported printed English salary slips, loan statements and T1-58 insurance policies in PNG/JPEG and single-page scanned PDF.",
       "remaining": "Expand the approved document/layout/page matrix and durable processing path. Prove browser-to-live-scanner-to-OCR integration.",
-      "units": "T1-49\u201352",
+      "units": "T1-49\u201352; T1-58",
       "requirements": "MON-DOC-006/013",
-      "receipt": "build/governance/t1-52-loan-statement-ocr.md"
+      "receipt": "build/governance/t1-58-insurance-policy-ocr.md"
     },
     {
       "id": "P1-09",
       "area": "Documents",
       "name": "Extraction",
       "state": "Partial",
-      "existing": "Structured text/CSV supports seven source categories; supported OCR produces dated net-pay or loan-balance candidates for explicit review. T1-57 adds the same seven categories from a bounded financial XLSX template with original-byte provenance and explicit adoption.",
+      "existing": "Structured text/CSV supports seven source categories; supported OCR produces dated net-pay or loan-balance candidates for explicit review. T1-57 adds the same seven categories from a bounded financial XLSX template with original-byte provenance and explicit adoption. T1-58 insurance OCR adds distinctly labelled dated sum-assured and premium candidates; frequency, active cover and asset value are not inferred.",
       "remaining": "Extract complete required domain records and remaining document classes. Preserve validation, original provenance and explicit adoption across durable owner services. Arbitrary Excel/bank layouts, formulas, numeric date serials and legacy/macro workbooks are unsupported.",
-      "units": "T1-05, T1-23\u201342, T1-49\u201352; T1-57",
+      "units": "T1-05, T1-23\u201342, T1-49\u201352; T1-57; T1-58",
       "requirements": "MON-DOC-003/007; MON-FIN-001/003/004/006",
-      "receipt": "build/governance/t1-57-financial-xlsx-intake.md"
+      "receipt": "build/governance/t1-58-insurance-policy-ocr.md"
     },
     {
       "id": "P1-10",

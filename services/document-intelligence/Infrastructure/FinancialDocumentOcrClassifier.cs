@@ -11,6 +11,7 @@ namespace Monergy.Services.DocumentIntelligence.Infrastructure;
 internal static class FinancialDocumentOcrClassifier
 {
     private static readonly Regex SalaryTitle = Pattern(@"^(SALARY\s+SLIP|PAY\s*SLIP)$");
+    private static readonly Regex InsuranceTitle = Pattern(@"^(?:LIFE\s+)?INSURANCE\s+POLICY$");
     private static readonly Regex LoanTitle = Pattern(@"^LOAN(?:\s+ACCOUNT)?\s+STATEMENT$");
     private static readonly Regex PayDate = Pattern(@"^(Pay\s+Date|Payment\s+Date)\s*:");
     private static readonly Regex StatementDate = Pattern(@"^(Statement\s+Date|As\s+of\s+Date|Balance\s+As\s+of)\s*:");
@@ -27,10 +28,12 @@ internal static class FinancialDocumentOcrClassifier
         EvidenceContent content, string processingId, string tsv, string salaryExtractionVersion)
     {
         var lines = ParseTsv(tsv);
-        // A second known title anywhere in the page is ambiguous, including mixed salary/loan pages.
-        var titles = lines.Where(line => SalaryTitle.IsMatch(line.Text) || LoanTitle.IsMatch(line.Text)).ToArray();
+        // A second known title anywhere in the page is ambiguous, including mixed salary/loan/insurance pages.
+        var titles = lines.Where(line => SalaryTitle.IsMatch(line.Text) || LoanTitle.IsMatch(line.Text) || InsuranceTitle.IsMatch(line.Text)).ToArray();
         if (titles.Length != 1 || titles[0].Number > 10)
             throw new DocumentRecognitionException(DocumentRecognitionFailure.Unclassified);
+        if (InsuranceTitle.IsMatch(titles[0].Text))
+            return InsurancePolicyOcrExtractor.CreateCandidates(content, processingId, lines, titles[0], salaryExtractionVersion);
         var loan = LoanTitle.IsMatch(titles[0].Text);
         var failure = loan ? DocumentRecognitionFailure.IncompleteLoan : DocumentRecognitionFailure.Incomplete;
         var date = One(lines, loan ? StatementDate : PayDate, failure);
@@ -42,14 +45,7 @@ internal static class FinancialDocumentOcrClassifier
             throw new DocumentRecognitionException(DocumentRecognitionFailure.LowConfidence);
         if (!DateOnly.TryParseExact(AfterLabel(date.Text), ["yyyy-MM-dd", "d MMM yyyy", "dd MMM yyyy", "d MMMM yyyy", "dd MMMM yyyy"],
             CultureInfo.InvariantCulture, DateTimeStyles.None, out var effectiveDate)) throw new DocumentRecognitionException(failure);
-        var match = Money.Match(AfterLabel(value.Text));
-        if (!match.Success || match.Groups["amount"].Value.Length > 20 || (match.Groups["currencyBefore"].Success && match.Groups["currencyAfter"].Success) ||
-            !decimal.TryParse(match.Groups["amount"].Value.Replace(",", "", StringComparison.Ordinal), NumberStyles.AllowDecimalPoint,
-                CultureInfo.InvariantCulture, out var amount) || amount < 0) throw new DocumentRecognitionException(failure);
-        var inlineCurrency = (match.Groups["currencyBefore"].Success ? match.Groups["currencyBefore"].Value : match.Groups["currencyAfter"].Value).ToUpperInvariant();
-        var currency = currencyLines.Length == 1 ? AfterLabel(currencyLines[0].Text).ToUpperInvariant() : inlineCurrency;
-        if (!Currencies.Contains(currency) || inlineCurrency.Length > 0 && inlineCurrency != currency)
-            throw new DocumentRecognitionException(failure);
+        var (amount, currency) = ReadMoney(AfterLabel(value.Text), currencyLines.Length == 1 ? AfterLabel(currencyLines[0].Text) : null, failure);
         var identity = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(
             $"{content.Reference.DocumentVersionId}|{processingId}|{(loan ? "loan-statement:outstanding" : "salary-slip:net-pay")}")));
         var extractionVersion = loan ? salaryExtractionVersion switch
@@ -65,13 +61,26 @@ internal static class FinancialDocumentOcrClassifier
             content.Reference.EvidenceId, content.Reference.DocumentVersionId, extractionVersion, FixtureDocumentExtractor.ValidationVersion)];
     }
 
-    private sealed record OcrLine(int Number, string Text, decimal Confidence);
-    private static OcrLine One(IReadOnlyList<OcrLine> lines, Regex label, DocumentRecognitionFailure failure)
+    internal static (decimal Amount, string Currency) ReadMoney(string text, string? suppliedCurrency, DocumentRecognitionFailure failure)
+    {
+        var match = Money.Match(text);
+        if (!match.Success || match.Groups["amount"].Value.Length > 20 || (match.Groups["currencyBefore"].Success && match.Groups["currencyAfter"].Success) ||
+            !decimal.TryParse(match.Groups["amount"].Value.Replace(",", "", StringComparison.Ordinal), NumberStyles.AllowDecimalPoint,
+                CultureInfo.InvariantCulture, out var amount) || amount < 0) throw new DocumentRecognitionException(failure);
+        var inlineCurrency = (match.Groups["currencyBefore"].Success ? match.Groups["currencyBefore"].Value : match.Groups["currencyAfter"].Value).ToUpperInvariant();
+        var currency = suppliedCurrency?.ToUpperInvariant() ?? inlineCurrency;
+        if (!Currencies.Contains(currency) || inlineCurrency.Length > 0 && inlineCurrency != currency)
+            throw new DocumentRecognitionException(failure);
+        return (amount, currency);
+    }
+
+    internal sealed record OcrLine(int Number, string Text, decimal Confidence);
+    internal static OcrLine One(IReadOnlyList<OcrLine> lines, Regex label, DocumentRecognitionFailure failure)
     {
         var selected = lines.Where(line => label.IsMatch(line.Text)).ToArray();
         return selected.Length == 1 ? selected[0] : throw new DocumentRecognitionException(failure);
     }
-    private static string AfterLabel(string value) => value[(value.IndexOf(':') + 1)..].Trim();
+    internal static string AfterLabel(string value) => value[(value.IndexOf(':') + 1)..].Trim();
     private static DocumentRecognitionException Incomplete() => new(DocumentRecognitionFailure.Incomplete);
 
     private static OcrLine[] ParseTsv(string tsv)
