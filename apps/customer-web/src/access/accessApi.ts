@@ -231,6 +231,17 @@ export class AccessApi {
   }
   // Consent is a separate owner: its LOCAL endpoint enforces the authenticated
   // customer/owner relationship. The browser may not supply actor or tenant scope.
+  selfCustomerProfile<T>(method: 'GET' | 'PUT' = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/identity-api/local/v1/me/customer-profile', {
+      method, signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Monergy-Tenant': this.session.tenantId,
+        'X-Monergy-Session': this.session.authenticationContextId,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  }
   customerConsent<T>(customerId: string, signal?: AbortSignal): Promise<T> {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(customerId))
       return Promise.reject(new AccessApiError(400, 'INVALID_CUSTOMER_ID'));

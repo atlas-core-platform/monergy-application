@@ -21,6 +21,8 @@ if (tenantIntegration)
     builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 65_536);
     builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectRequiredConstructorParameters = true);
     builder.Services.AddTenantSessionAuthority(builder.Configuration);
+    if (builder.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
+        builder.Services.AddSelfCustomerProfiles();
 }
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);
 var customerEmailAccess = tenantIntegration && builder.Services.AddCustomerEmailAccess(builder.Configuration);
@@ -41,6 +43,8 @@ if (tenantIntegration)
 {
     app.MapTenantSessionAuthority();
     app.MapCustomerEmailAccess(customerEmailAccess);
+    if (app.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
+        app.MapSelfCustomerProfile();
 }
 
 await app.RunAsync();

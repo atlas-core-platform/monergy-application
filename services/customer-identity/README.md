@@ -81,3 +81,7 @@ covered.
 Optional Development LOCAL/CI customer email entry uses the existing imported identity, exact customer ownership and current Access Management membership. `GET /local/v1/customer-email-access` reports availability; `POST .../request` returns an opaque generic challenge; `POST .../confirm` consumes a delivered, expiring single-use code and issues the existing tenant session. It cannot create customers or roles and is not public self-registration or production MFA.
 
 See [the implementation and configuration receipt](../../build/governance/t1-43-customer-email-access.md). The PostgreSQL challenge/outbox and C&I audit migration is additive; SMTP is authenticated STARTTLS and disabled by default. Test adapters/captured codes are never registered by the application.
+
+## Customer-owned profile (T1-44)
+
+When LOCAL/CI customer relationships are enabled, GET/PUT `/local/v1/me/customer-profile` exposes the current customer's own name and optional unverified contact number. Registered email is read-only. Current session/AM membership and exact active C&I ownership are mandatory; tenant/actor/customer cannot be selected in the change body. Profile versions and append-only mutation receipts are independent of ownership versions. See [the scope and native evidence receipt](../../build/governance/t1-44-customer-profile.md). Real PostgreSQL UAT remains open.

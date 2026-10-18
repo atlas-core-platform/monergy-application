@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-44",
+  "applicationBase": "fdd31a8a9ee9707d4b920fdce8161fe29fb646c0",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "migrations": [
+    {
+      "path": "services/customer-identity/migrations/0005_self_customer_profile.sql",
+      "sha256": "59221a319148815d856ab7493548b66591fe94dccd8178efe113b5288ae83266"
+    }
+  ]
+}
