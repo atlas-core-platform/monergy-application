@@ -17,6 +17,7 @@ const TenantSetupGate = lazy(() =>
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const ProductSearchExperience = lazy(() => import('./product/ProductSearchExperience'));
 const ConsentExperience = lazy(() => import('./product/ConsentExperience'));
+const CustomerAccountAgreementsExperience = lazy(() => import('./product/CustomerAccountAgreementsExperience'));
 const CustomerProfileExperience = lazy(() => import('./product/CustomerProfileExperience'));
 const SelfSessionsExperience = lazy(() => import('./product/SelfSessionsExperience'));
 const ProductReportsExperience = lazy(() => import('./product/ProductReportsExperience'));
@@ -184,6 +185,9 @@ function RouteContent() {
     );
   }
 
+  if (window.location.pathname === '/settings/agreements') {
+    return <Suspense fallback={<main className="access-loading" aria-busy="true">Loading account agreements…</main>}><CustomerAccountAgreementsExperience /></Suspense>;
+  }
   if (window.location.pathname === '/profile') {
     return <Suspense fallback={<main className="access-loading" aria-busy="true">Loading your profile…</main>}><CustomerProfileExperience /></Suspense>;
   }
@@ -298,6 +302,7 @@ function WorkspaceApplication() {
             '/search',
             '/consent',
             '/profile',
+            '/settings/agreements',
             '/vs02',
             '/foundation',
             '/operations',
@@ -331,7 +336,7 @@ function WorkspaceApplication() {
       ? `${current?.label ?? 'Overview'} · Organization Settings · Monergy`
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
-  const productProtected = ['/', '/actions', '/evidence', '/finances', '/search', '/reports', '/consent', '/profile', '/settings/sessions'].includes(path);
+  const productProtected = ['/', '/actions', '/evidence', '/finances', '/search', '/reports', '/consent', '/profile', '/settings/sessions', '/settings/agreements'].includes(path);
   const gated = inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';

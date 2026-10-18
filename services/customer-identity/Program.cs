@@ -23,7 +23,10 @@ if (tenantIntegration)
     builder.Services.AddTenantSessionAuthority(builder.Configuration);
     builder.Services.AddSelfSessions();
     if (builder.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
+    {
         builder.Services.AddSelfCustomerProfiles();
+        builder.Services.AddCustomerAccountAgreements(builder.Configuration);
+    }
 }
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);
 var customerEmailAccess = tenantIntegration && builder.Services.AddCustomerEmailAccess(builder.Configuration);
@@ -46,7 +49,10 @@ if (tenantIntegration)
     app.MapSelfSessions();
     app.MapCustomerEmailAccess(customerEmailAccess);
     if (app.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
+    {
         app.MapSelfCustomerProfile();
+        app.MapCustomerAccountAgreements();
+    }
 }
 
 await app.RunAsync();
