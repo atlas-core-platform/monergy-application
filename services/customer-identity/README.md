@@ -85,3 +85,7 @@ See [the implementation and configuration receipt](../../build/governance/t1-43-
 ## Customer-owned profile (T1-44)
 
 When LOCAL/CI customer relationships are enabled, GET/PUT `/local/v1/me/customer-profile` exposes the current customer's own name and optional unverified contact number. Registered email is read-only. Current session/AM membership and exact active C&I ownership are mandatory; tenant/actor/customer cannot be selected in the change body. Profile versions and append-only mutation receipts are independent of ownership versions. See [the scope and native evidence receipt](../../build/governance/t1-44-customer-profile.md). Real PostgreSQL UAT remains open.
+
+## Own session activity and revocation (T1-45)
+
+Development LOCAL/CI GET `/local/v1/me/sessions` lists at most 100 sessions belonging to the current trusted actor, with owner-scoped cursor pagination. POST `/local/v1/me/sessions/revoke` explicitly ends a selected other session and atomically records its operation receipt. Current session/membership checks, strict JSON and origin enforcement apply; current-session termination uses the existing Sign out flow. No bearer credential, verified device/location claim or administrator grant is introduced. See [scope and native evidence](../../build/governance/t1-45-self-sessions.md); actual PostgreSQL owner UAT remains open.

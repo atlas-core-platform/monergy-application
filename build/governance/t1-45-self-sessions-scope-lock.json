@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-45",
+  "applicationBase": "81be698cd49ce27bbbcb553d0c38a54a89477246",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "migrations": [
+    {
+      "path": "services/customer-identity/migrations/0006_self_session_receipts.sql",
+      "sha256": "af2b3340eafd8fa24482f2f3ac648094bba0912b60a8bf14eed671649a141f02"
+    }
+  ]
+}
