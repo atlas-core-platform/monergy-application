@@ -18,6 +18,7 @@ const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const ProductSearchExperience = lazy(() => import('./product/ProductSearchExperience'));
 const ConsentExperience = lazy(() => import('./product/ConsentExperience'));
 const CustomerProfileExperience = lazy(() => import('./product/CustomerProfileExperience'));
+const SelfSessionsExperience = lazy(() => import('./product/SelfSessionsExperience'));
 const ProductReportsExperience = lazy(() => import('./product/ProductReportsExperience'));
 const EvidenceExperience = lazy(() => import('./product/EvidenceExperience'));
 const FinancialProfileExperience = lazy(() => import('./product/FinancialProfileExperience'));
@@ -112,6 +113,8 @@ function ToolchainFoundation() {
 }
 
 function RouteContent() {
+  if (window.location.pathname === '/settings/sessions')
+    return <Suspense fallback={<main aria-busy="true">Loading sessions…</main>}><SelfSessionsExperience /></Suspense>;
   if (window.location.pathname === '/') return <WorkspaceHome />;
   if (window.location.pathname === '/evidence')
     return (
@@ -328,7 +331,7 @@ function WorkspaceApplication() {
       ? `${current?.label ?? 'Overview'} · Organization Settings · Monergy`
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
-  const productProtected = ['/', '/actions', '/evidence', '/finances', '/search', '/reports', '/consent', '/profile'].includes(path);
+  const productProtected = ['/', '/actions', '/evidence', '/finances', '/search', '/reports', '/consent', '/profile', '/settings/sessions'].includes(path);
   const gated = inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';

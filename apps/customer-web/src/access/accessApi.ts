@@ -242,6 +242,21 @@ export class AccessApi {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   }
+  selfSessions<T>(after?: string, signal?: AbortSignal): Promise<T> {
+    if (after !== undefined && !/^[0-9a-f]{64}$/.test(after))
+      return Promise.reject(new AccessApiError(400, 'SESSION_CURSOR_INVALID'));
+    return this.guarded<T>('/identity-api/local/v1/me/sessions' + (after ? '?after=' + after : ''), {
+      method: 'GET', signal,
+      headers: { 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
+    });
+  }
+  revokeSelfSession<T>(operationId: string, sessionReference: string, signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/identity-api/local/v1/me/sessions/revoke', {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
+      body: JSON.stringify({ operationId, sessionReference }),
+    });
+  }
   customerConsent<T>(customerId: string, signal?: AbortSignal): Promise<T> {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(customerId))
       return Promise.reject(new AccessApiError(400, 'INVALID_CUSTOMER_ID'));

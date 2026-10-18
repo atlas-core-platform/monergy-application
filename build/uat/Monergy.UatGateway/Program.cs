@@ -111,7 +111,7 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     if (path is not ("/" or "/actions" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
         "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
         "/access/activity" or "/access/sessions" or "/operations" or
-        "/search" or "/reports" or "/finances" or "/consent" or "/profile" or "/vs02" or "/foundation"))
+        "/search" or "/reports" or "/finances" or "/consent" or "/profile" or "/settings/sessions" or "/vs02" or "/foundation"))
     { http.Response.StatusCode = 404; return; }
     http.Response.ContentType = "text/html; charset=utf-8";
     await http.Response.SendFileAsync(Path.Combine(environment.WebRootPath, "index.html"), http.RequestAborted).ConfigureAwait(false);
@@ -129,6 +129,9 @@ static string? Route(string path, string method)
         path is "/identity-api/local/v1/customer-email-access/request" or "/identity-api/local/v1/customer-email-access/confirm" && method == "POST")
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/me/customer-profile" && method is "GET" or "PUT")
+        return "http://127.0.0.1:5101" + path[13..];
+    if (path == "/identity-api/local/v1/me/sessions" && method == "GET" ||
+        path == "/identity-api/local/v1/me/sessions/revoke" && method == "POST")
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/audit-api/local/v1/administration/access-events" && method == "GET")
         return "http://127.0.0.1:5102" + path[10..];

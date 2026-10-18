@@ -39,6 +39,7 @@ $am06Migrations = @(& (Join-Path $RepositoryRoot 'build/am06/Get-MigrationOverla
 $onboardingMigrations = @(& (Join-Path $RepositoryRoot 'build/onboarding/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
 $emailAccessMigrations = @(& (Join-Path $RepositoryRoot 'build/t143/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
 $profileMigrations = @(& (Join-Path $RepositoryRoot 'build/t144/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
+$selfSessionMigrations = @(& (Join-Path $RepositoryRoot 'build/t145/Get-MigrationOverlay.ps1') -RepositoryRoot $RepositoryRoot -SelfTest:$SelfTest)
 if ($SelfTest) {
     $mutations = @(
         @{ field='revision'; value='OTHER' },
@@ -70,3 +71,5 @@ foreach ($path in $am06Migrations) { $path }
 foreach ($path in $onboardingMigrations) { $path }
 foreach ($path in $emailAccessMigrations) { $path }
 foreach ($path in $profileMigrations) { $path }
+
+foreach ($path in $selfSessionMigrations) { $path }
