@@ -7,7 +7,7 @@ using Npgsql;
 
 namespace Monergy.Services.Consent;
 
-public sealed class PostgresCustomerConsent : IAsyncDisposable, ICustomerSharingStore
+public sealed class PostgresCustomerConsent : IAsyncDisposable, ICustomerSharingStore, ICustomerSharingReplacementStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly Dictionary<string, NpgsqlDataSource> sources = new(StringComparer.Ordinal);
@@ -99,6 +99,77 @@ public sealed class PostgresCustomerConsent : IAsyncDisposable, ICustomerSharing
             ?? throw new TenantBoundaryException("CONSENT_NOT_CURRENT", 409);
         return await CommitAsync(connection, transaction, request.RequestId, hash, ownerActor, owner.CustomerId,
             actor, grantId, "Revoked", version + 1, ct).ConfigureAwait(false);
+    }
+
+    public async Task<ConsentOverview> ReadReplacementAsync(string tenant, string customer, string grant, CancellationToken ct)
+    {
+        await using var connection = await OpenAsync(tenant, ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        var version = await RevisionAsync(connection, transaction, false, ct).ConfigureAwait(false);
+        var row = await connection.QuerySingleOrDefaultAsync<GrantRow>(Command("""
+            SELECT grant_id AS Id,customer_id AS CustomerId,actor_id AS ActorId,purpose AS Purpose,
+                capability_ids AS CapabilityIds,expires_at AS ExpiresAt,revoked_at AS RevokedAt
+            FROM consent.grants WHERE customer_id=@Customer AND grant_id=@Grant;
+            """, new { Customer = customer, Grant = grant }, transaction, ct)).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return new(version, row is null ? [] : [new(row.Id, row.CustomerId, row.ActorId, row.Purpose, row.CapabilityIds,
+            Utc(row.ExpiresAt), row.RevokedAt is { } revoked ? Utc(revoked) : null)]);
+    }
+
+    public async Task<ConsentReplacementReceipt> ReplaceAsync(string tenant, CustomerOwnerContext owner, string ownerActor,
+        ConsentReplacementWrite request, CancellationToken ct)
+    {
+        var selection = CustomerSharingReplacementPolicy.Validate(new(request.RequestId, request.ExpectedVersion, request.CapabilityIds, request.ExpiresAt), null);
+        request = request with { CapabilityIds = selection.CapabilityIds, ExpiresAt = selection.ExpiresAt };
+        RequireOwner(tenant, owner, ownerActor, request.CustomerId);
+        if (!TenantAccessClient.Identifier(request.GrantId, 128) || !TenantAccessClient.Identifier(request.ActorId, 128))
+            throw new TenantBoundaryException("INVALID_CONSENT", 400);
+        if (request.ActorId == ownerActor) throw new TenantBoundaryException("SELF_CONSENT_NOT_REQUIRED", 409);
+        var hash = Hash(new { operation = "Replaced", ownerActor, ownerVersion = owner.Version, request });
+        await using var connection = await OpenAsync(tenant, ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        var version = await RevisionAsync(connection, transaction, true, ct).ConfigureAwait(false);
+        var replay = await connection.QuerySingleOrDefaultAsync<ReplayRow>(Command(
+            "SELECT content_hash AS Hash,receipt::text AS Receipt FROM consent.receipts WHERE request_id=@Id;",
+            new { Id = request.RequestId }, transaction, ct)).ConfigureAwait(false);
+        if (replay is not null)
+        {
+            if (replay.Hash != hash) throw new TenantBoundaryException("CONSENT_IDEMPOTENCY_CONFLICT", 409);
+            return JsonSerializer.Deserialize<ConsentReplacementReceipt>(replay.Receipt, Json) ?? throw new TenantBoundaryException("CONSENT_RECEIPT_INVALID", 503);
+        }
+        _ = CustomerSharingReplacementPolicy.Validate(selection, DateTimeOffset.UtcNow);
+        if (version != request.ExpectedVersion) throw new TenantBoundaryException("CONSENT_VERSION_CONFLICT", 409);
+        // The state row serializes grant/revoke/replace. Expired-but-unrevoked
+        // records can be renewed; owner changes and revoked records cannot.
+        var changed = await connection.ExecuteAsync(Command("""
+            UPDATE consent.grants SET revoked_at=clock_timestamp()
+            WHERE grant_id=@GrantId AND customer_id=@CustomerId AND actor_id=@ActorId AND purpose='customer-advice'
+                AND owner_actor_id=@OwnerActor AND owner_version=@OwnerVersion AND revoked_at IS NULL;
+            """, new { request.GrantId, request.CustomerId, request.ActorId, OwnerActor = ownerActor, OwnerVersion = owner.Version }, transaction, ct)).ConfigureAwait(false);
+        if (changed != 1) throw new TenantBoundaryException("CONSENT_NOT_CURRENT", 409);
+        var id = Guid.NewGuid().ToString("N");
+        await connection.ExecuteAsync(Command("""
+            INSERT INTO consent.grants(grant_id,customer_id,actor_id,purpose,capability_ids,owner_actor_id,owner_version,expires_at)
+            VALUES(@Id,@CustomerId,@ActorId,'customer-advice',@Capabilities,@OwnerActor,@OwnerVersion,@ExpiresAt);
+            """, new { Id = id, request.CustomerId, request.ActorId, Capabilities = request.CapabilityIds, OwnerActor = ownerActor, OwnerVersion = owner.Version, request.ExpiresAt }, transaction, ct)).ConfigureAwait(false);
+        var revoked = new ConsentReceipt(request.GrantId, request.CustomerId, request.ActorId, "Revoked", version + 1, "consent-" + Guid.NewGuid().ToString("N"));
+        var granted = new ConsentReceipt(id, request.CustomerId, request.ActorId, "Granted", version + 2, "consent-" + Guid.NewGuid().ToString("N"));
+        var result = new ConsentReplacementReceipt(request.RequestId, revoked, granted);
+        // Two existing evidence kinds preserve the complete history. Both events,
+        // one replay receipt and the final revision commit in the same transaction.
+        foreach (var evidence in new[] { revoked, granted })
+            await connection.ExecuteAsync(Command("""
+                INSERT INTO consent.audit(evidence_id,actor_id,customer_id,grant_id,operation,version)
+                    VALUES(@Evidence,@OwnerActor,@Customer,@Id,@Operation,@Version);
+                INSERT INTO consent.outbox(event_id,payload) VALUES(@Evidence,CAST(@Receipt AS jsonb));
+                """, new { Evidence = evidence.EvidenceReference, OwnerActor = ownerActor, Customer = request.CustomerId, evidence.Id, evidence.Operation, evidence.Version,
+                    Receipt = JsonSerializer.Serialize(evidence, Json) }, transaction, ct)).ConfigureAwait(false);
+        await connection.ExecuteAsync(Command("""
+            UPDATE consent.state SET version=@Version WHERE singleton;
+            INSERT INTO consent.receipts(request_id,content_hash,receipt) VALUES(@RequestId,@Hash,CAST(@Receipt AS jsonb));
+            """, new { Version = version + 2, request.RequestId, Hash = hash, Receipt = JsonSerializer.Serialize(result, Json) }, transaction, ct)).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return result;
     }
 
     public async Task<ConsentDecision> EvaluateAsync(string trustedTenant, CustomerOwnerContext owner, ConsentEvaluation request, CancellationToken ct)

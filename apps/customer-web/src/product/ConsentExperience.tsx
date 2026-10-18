@@ -48,7 +48,7 @@ export default function ConsentExperience() {
   const [revokeConfirmed, setRevokeConfirmed] = useState(false);
   const [revokeActivity, setRevokeActivity] = useState<{ api: AccessApi; scope: string } | null>(null);
   const revokeBusy = revokeActivity?.api === api && revokeActivity.scope === scope;
-  const [grantIntent, setGrantIntent] = useState<{ api: AccessApi; scope: string } | null>(null);
+  const [grantIntent, setGrantIntent] = useState<{ api: AccessApi; scope: string; grant?: DelegatedConsent } | null>(null);
   const [grantOutcome, setGrantOutcome] = useState<{ api: AccessApi; scope: string; warning: boolean; text: string } | null>(null);
   const [revokeOutcome, setRevokeOutcome] = useState<{
     api: AccessApi; scope: string; level: 'info' | 'warning'; text: string;
@@ -226,6 +226,9 @@ export default function ConsentExperience() {
                     </p>
                     <p>Expires: {formatted(item.expiresAt)}</p>
                     {item.revokedAt && <p>Revoked: {formatted(item.revokedAt)}</p>}
+                    {item.revokedAt === null && <Button disabled={busy || revokeBusy || sharing || !!selectedRevoke} onClick={() => {
+                      if (api) { setGrantOutcome(null); setRevokeOutcome(null); setGrantIntent({ api, scope, grant: item }); }
+                    }}>{current === 'Expired' ? 'Renew sharing' : 'Change sharing'}</Button>}
                     {current === 'Unexpired record' && (
                       <Button danger disabled={busy || revokeBusy || sharing} onClick={() => {
                         if (!api) return;
@@ -275,7 +278,7 @@ export default function ConsentExperience() {
           I recognize this recipient reference and confirm that I want to stop sharing.
         </Checkbox>
       </Modal>
-      {sharing && <CustomerSharingDialog api={api} tenant={session?.tenantId ?? ''} actor={session?.actorId ?? ''} customer={customerId}
+      {sharing && <CustomerSharingDialog replacement={grantIntent.grant} api={api} tenant={session?.tenantId ?? ''} actor={session?.actorId ?? ''} customer={customerId}
         onClose={() => { setGrantIntent(null); }}
         onVerified={(result, email) => {
           setGrantIntent(null); setState({ api, scope, overview: result, busy: false, error: '' });
@@ -287,7 +290,7 @@ export default function ConsentExperience() {
         }} />}
       <p>
         Sharing permissions are purpose-bound. You can record a new permission for an existing
-        organization recipient or stop a recorded permission. Changing or renewing an existing grant remains a separate workflow.
+        organization recipient, change its scope or expiry, renew an expired permission, or stop sharing. Changes and renewals replace the selected record after your explicit confirmation.
       </p>
     </main>
   );

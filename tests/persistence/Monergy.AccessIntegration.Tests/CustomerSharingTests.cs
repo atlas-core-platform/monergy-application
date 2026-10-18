@@ -141,7 +141,7 @@ public sealed class CustomerSharingTests
     public async Task ActualSharingHttpBoundaryRequiresOwnerStrictJsonAndSameOrigin()
     {
         using var f = new Fixture(); var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
-        builder.WebHost.UseUrls("http://127.0.0.1:0"); builder.Services.AddSingleton(f.Owner); StrictJson(builder.Services);
+        builder.WebHost.UseUrls("http://127.0.0.1:0"); builder.Services.AddSingleton(f.Owner); builder.Services.AddSingleton(f.Replacement); StrictJson(builder.Services);
         await using var app = builder.Build(); app.MapCustomerSharing(); await app.StartAsync();
         using var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
         using var anonymous = await client.GetAsync("/local/v1/consents/customers/C001/sharing-options"); Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
@@ -169,26 +169,39 @@ public sealed class CustomerSharingTests
         await app.StopAsync();
     }
     private static void StrictJson(IServiceCollection services) => services.ConfigureHttpJsonOptions(o => { o.SerializerOptions.UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow; o.SerializerOptions.RespectRequiredConstructorParameters = true; o.SerializerOptions.RespectNullableAnnotations = true; });
-    private sealed class Fixture : IDisposable
+    internal sealed class Fixture : IDisposable
     {
         public OwnerHandler Handler { get; } = new(); public Store Store { get; } = new(); public DefaultHttpContext Http { get; } = new();
-        private readonly HttpClient client; private readonly CustomerOwnerClient owners; public CustomerSharingApplication Owner { get; }
+        private readonly HttpClient client; private readonly CustomerOwnerClient owners; public CustomerSharingApplication Owner { get; } public CustomerSharingReplacementApplication Replacement { get; }
         public Fixture()
         {
             Http.Request.Headers["X-Monergy-Tenant"] = "T001"; Http.Request.Headers["X-Monergy-Session"] = "current-session";
             var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
                 ["Monergy:ExecutionZone"] = "CI_EPHEMERAL", ["Monergy:AccessIntegration:Enabled"] = "true", ["Monergy:AccessIntegration:CustomerIdentityUrl"] = "http://127.0.0.1:5101/", ["Monergy:AccessIntegration:AccessManagementUrl"] = "http://127.0.0.1:5088/",
                 ["Monergy:AccessIntegration:CustomerContextToken"] = new string('a', 32), ["Monergy:AccessIntegration:CustomerIdentityToken"] = new string('b', 32), ["Monergy:AccessIntegration:MembershipToken"] = new string('c', 32), ["Monergy:AccessIntegration:RecipientLabelToken"] = new string('d', 32) }).Build();
-            client = new(Handler); owners = new(config, client); Owner = new(owners, Store, TimeProvider.System);
+            client = new(Handler); owners = new(config, client); Owner = new(owners, Store, TimeProvider.System); Replacement = new(owners, Store, TimeProvider.System);
         }
         public void Dispose() { owners.Dispose(); client.Dispose(); }
     }
     // Dependency adapters exercise coordination and actual HTTP boundaries;
     // they do not execute the PostgreSQL grant/receipt/audit/outbox transaction.
-    private sealed class Store : ICustomerSharingStore
+    internal sealed class Store : ICustomerSharingStore, ICustomerSharingReplacementStore
     {
         public int Writes { get; private set; } public string? Tenant { get; private set; } public string? OwnerActor { get; private set; } public ConsentGrantWrite? Write { get; private set; }
         public bool Fail { get; set; } public string? ReceiptMode { get; set; }
+        public ConsentGrant? Target { get; set; } = new("grant-old", "C001", "A300", "customer-advice", ["evidence.document.read"], DateTimeOffset.UtcNow.AddDays(1), null);
+        public ConsentReplacementWrite? ReplacementWrite { get; private set; }
+        public int ReplacementWrites { get; private set; }
+        public Task<ConsentOverview> ReadReplacementAsync(string tenant, string customer, string grant, CancellationToken ct) => Task.FromResult(new ConsentOverview(1, Target is null ? [] : [Target]));
+        public Task<ConsentReplacementReceipt> ReplaceAsync(string tenant, CustomerOwnerContext owner, string ownerActor, ConsentReplacementWrite request, CancellationToken ct)
+        {
+            if (Fail) throw new TenantBoundaryException("CONSENT_VERSION_CONFLICT", 409);
+            ReplacementWrites++; ReplacementWrite = request;
+            var revoked = new ConsentReceipt(ReceiptMode == "old" ? "wrong" : request.GrantId, request.CustomerId, request.ActorId, "Revoked", request.ExpectedVersion + 1, "old-evidence");
+            var granted = new ConsentReceipt(ReceiptMode == "same" ? request.GrantId : "grant-new", ReceiptMode == "customer" ? "C900" : request.CustomerId,
+                ReceiptMode == "actor" ? "A900" : request.ActorId, ReceiptMode == "operation" ? "Revoked" : "Granted", ReceiptMode == "version" ? 99 : request.ExpectedVersion + 2, ReceiptMode == "evidence" ? "old-evidence" : "new-evidence");
+            return Task.FromResult(new ConsentReplacementReceipt(request.RequestId, revoked, granted));
+        }
         public Task<ConsentOverview> ListAsync(string tenant, string customer, CancellationToken ct) => Task.FromResult(new ConsentOverview(1, []));
         public Task<ConsentReceipt> GrantAsync(string tenant, CustomerOwnerContext owner, string ownerActor, ConsentGrantWrite request, CancellationToken ct)
         {
@@ -203,7 +216,7 @@ public sealed class CustomerSharingTests
         public int Calls { get; private set; } public string? Email { get; private set; } public bool Foreign { get; set; }
         public Task<CustomerOwnerRecipientLabel?> ResolveAsync(string tenant, string email, CancellationToken ct) { Calls++; Email = email; return Task.FromResult<CustomerOwnerRecipientLabel?>(new(Foreign ? "T002" : tenant, "A300", email)); }
     }
-    private sealed class OwnerHandler : HttpMessageHandler
+    internal sealed class OwnerHandler : HttpMessageHandler
     {
         public int Owners { get; private set; } public int Sessions { get; private set; } public int Lookups { get; private set; } public int Memberships { get; private set; }
         public string? Email { get; private set; } public string? LookupToken { get; private set; }
@@ -221,6 +234,7 @@ public sealed class CustomerSharingTests
             }
             if (path.Contains("/customer-context/", StringComparison.Ordinal)) { Owners++; return Reply(new CustomerOwnerContext("T001", "C001", OwnerActor, OwnerChangeAt > 0 && Owners >= OwnerChangeAt ? 2 : 1, true)); }
             if (path.Contains("/access-subjects/", StringComparison.Ordinal)) { Memberships++; return Reply(new CustomerOwnerMembership("T001", "A300", Memberships != InactiveMemberAt, 3, 8)); }
+            if (path.Contains("/consent-recipient-label/", StringComparison.Ordinal)) return Reply(new CustomerOwnerRecipientLabel("T001", "A300", "advisor@example.test"));
             Lookups++; LookupToken = request.Headers.GetValues("X-Monergy-Owner-Token").Single(); var input = await request.Content!.ReadFromJsonAsync<JsonElement>(ct); Email = input.GetProperty("email").GetString();
             if (RecipientMode == "missing") return Reply(new { }, HttpStatusCode.NotFound);
             if (RecipientMode == "unavailable") return Reply(new { }, HttpStatusCode.ServiceUnavailable);
