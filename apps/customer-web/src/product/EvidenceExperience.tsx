@@ -42,19 +42,21 @@ const formatBytes = (value: number) =>
 function processingFailureMessage(code: string | null): string {
   switch (code) {
     case 'processing.document.unclassified':
-      return "We couldn't recognize a supported salary slip. Check that this is a clear, printed English salary slip in PNG, upright JPEG or single-page PDF format.";
+      return "We couldn't recognize a supported document. Check that this is a clear, printed English salary slip or loan statement in PNG, upright JPEG or single-page PDF format.";
     case 'processing.ocr.low-confidence':
-      return 'Some salary-slip details were unclear. Upload a clearer image and try again.';
+      return 'Some document details were unclear. Upload a clearer image and try again.';
+    case 'processing.loan-statement.incomplete':
+      return 'We need one clear outstanding balance, an explicit supported currency and an unambiguous statement date. Check these labels in your loan statement.';
     case 'processing.salary-slip.incomplete':
       return 'We need one clear net pay amount, an explicit supported currency and an unambiguous pay date. Check these labels in your salary slip.';
     case 'processing.jpeg.unsupported':
       return 'Use a clear, upright JPEG image. If the image is rotated or damaged, rotate it upright and save a new JPEG before trying again.';
     case 'processing.pdf.unsupported':
-      return 'Use a readable, unlocked, single-page salary-slip PDF without forms or scripts. Multi-page and protected PDFs are not supported yet.';
+      return 'Use a readable, unlocked, single-page salary-slip or loan-statement PDF without forms or scripts. Multi-page and protected PDFs are not supported yet.';
     case 'processing.ocr.unavailable':
       return 'Image text extraction is temporarily unavailable. Try again when the service is available.';
     default:
-      return 'Check that the document matches a supported salary slip, structured-text format or financial information CSV template, then try again.';
+      return 'Check that the document matches a supported salary slip, loan statement, structured-text format or financial information CSV template, then try again.';
   }
 }
 
@@ -568,7 +570,7 @@ export default function EvidenceExperience() {
         failure instanceof AccessApiError && failure.status === 403
           ? 'You no longer have access to extract details from this document.'
           : failure instanceof AccessApiError && failure.status === 422
-            ? 'Extracting details supports structured text, financial information CSV and printed English salary slips in PNG, upright JPEG or single-page PDF format.'
+            ? 'Extracting details supports structured text, financial information CSV and printed English salary slips or loan statements in PNG, upright JPEG or single-page PDF format.'
             : "We couldn't extract details from this document. Your financial information has not changed.",
       );
     } finally {
@@ -1030,6 +1032,10 @@ export default function EvidenceExperience() {
                     Extracted items <strong>{recoveredResult.facts.length}</strong>
                   </span>
                 </div>
+                {recoveredResult.facts.some((fact) => ['loan-statement-png-ocr/1.0.0', 'loan-statement-jpeg-ocr/1.0.0', 'loan-statement-pdf-ocr/1.0.0'].includes(fact.extractionVersion ?? '')) && (
+                  <Alert showIcon type="info" title="Recognized as a loan statement"
+                    description="This is the outstanding balance stated on the document's date. Check the amount, currency and statement date before adding it. It does not establish your current debt or verify the document's authenticity." />
+                )}
                 {recoveredResult.facts.some((fact) => ['salary-slip-png-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', 'salary-slip-pdf-ocr/1.0.0'].includes(fact.extractionVersion ?? '')) && (
                   <Alert showIcon type="info" title="Recognized as a salary slip"
                     description="Net pay was read from your document. Check the amount, currency and pay date against your document before adding it. Recognition does not verify the document's authenticity." />
@@ -1469,9 +1475,9 @@ export default function EvidenceExperience() {
                 <p>
                   {['text/plain', 'text/csv', 'image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)
                     ? ['image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)
-                      ? 'For printed English salary slips in PNG, upright JPEG or single-page PDF format with labelled net pay, currency and pay date. Review the extracted amount against your document.'
+                      ? 'For printed English salary slips or loan statements in PNG, upright JPEG or single-page PDF format with labelled net pay, currency and pay date, or outstanding balance, currency and statement date. Review the extracted amount against your document.'
                       : 'Review supported financial source figures before adding them to Financial information.'
-                    : 'Extracting details supports structured text, financial information CSV and printed English salary slips in PNG, upright JPEG or single-page PDF format.'}
+                    : 'Extracting details supports structured text, financial information CSV and printed English salary slips or loan statements in PNG, upright JPEG or single-page PDF format.'}
                 </p>
               </div>
               <Button
@@ -1572,7 +1578,7 @@ export default function EvidenceExperience() {
               showIcon
               type="info"
               title="Review before adding anything to your financial information"
-              description="Monergy can find supported income and expense details in this document. Review them against the document first. Your financial information is not changed by this step."
+              description="Monergy can find supported financial source details in this document. Review them against the document first. Your financial information is not changed by this step."
             />
             {!canUpdateFinancial && processing?.job.state === 'Completed' && (
               <Alert
@@ -1613,6 +1619,10 @@ export default function EvidenceExperience() {
                   processingFailureMessage(processing.processing?.failureCode ?? processing.job.failureCode)
                 }
               />
+            )}
+            {processing?.facts.some((fact) => ['loan-statement-png-ocr/1.0.0', 'loan-statement-jpeg-ocr/1.0.0', 'loan-statement-pdf-ocr/1.0.0'].includes(fact.extractionVersion)) && (
+              <Alert showIcon type="info" title="Recognized as a loan statement"
+                description="This is the outstanding balance stated on the document's date. Check the amount, currency and statement date before adding it. It does not establish your current debt or verify the document's authenticity." />
             )}
             {processing?.facts.some((fact) => ['salary-slip-png-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', 'salary-slip-pdf-ocr/1.0.0'].includes(fact.extractionVersion)) && (
               <Alert showIcon type="info" title="Recognized as a salary slip"

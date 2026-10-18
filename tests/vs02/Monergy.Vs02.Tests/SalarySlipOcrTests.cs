@@ -79,6 +79,7 @@ public sealed class SalarySlipOcrTests
     [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: INR|Net Pay: 5,24,800.00")]
     [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: INR|Gross Pay: 60000|Deductions: 7520")]
     [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: XYZ|Net Pay: 52480.00")]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: INR|Net Pay: INR 52480.00 INR")]
     public async Task IncompleteAmbiguousOrUnlabelledImagesProduceNoCandidates(string text)
     {
         var failure = await Assert.ThrowsAsync<DocumentRecognitionException>(() =>
@@ -146,6 +147,9 @@ public sealed class SalarySlipOcrTests
     [InlineData("salary-slip.png", "image/png")]
     [InlineData("salary-slip-scan.pdf", "application/pdf")]
     [InlineData("salary-slip.jpg", "image/jpeg")]
+    [InlineData("loan-statement.png", "image/png")]
+    [InlineData("loan-statement.jpg", "image/jpeg")]
+    [InlineData("loan-statement-scan.pdf", "application/pdf")]
     public async Task OwnerHttpBoundaryDeliversExactBinaryToRealOcrAndCustomerBoundProcessing(string fileName, string contentType)
     {
         var builder = WebApplication.CreateSlimBuilder(); builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -194,7 +198,13 @@ public sealed class SalarySlipOcrTests
             "process-png", "process-png", security));
         Assert.Equal(ProcessingState.Completed, result.Data?.State);
         var record = (await processingRepository.GetAsync("processing-png", default))!;
-        Assert.Equal(52480m, Assert.Single(record.Facts).CandidateValue);
+        var fact = Assert.Single(record.Facts);
+        var loan = fileName.StartsWith("loan-", StringComparison.Ordinal);
+        Assert.Equal(loan ? 176500.75m : 52480m, fact.CandidateValue);
+        Assert.Equal(loan ? "LOAN" : "INCOME", fact.FactType);
+        Assert.Equal(source!.Reference.DocumentVersionId, fact.DocumentVersionId);
+        Assert.Equal(source.Reference.CustomerId, fact.CustomerId);
+        Assert.Equal(source.Reference.EvidenceId, fact.EvidenceId);
         Assert.IsType<DomainEvent<ValidatedSourceFactsProducedPayload>>(Assert.Single(processingRepository.DrainOutbox()));
         // This path publishes candidates only. The existing Financial Profile review/adoption API remains the sole writer.
     }
