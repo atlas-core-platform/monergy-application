@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-64",
+  "applicationBase": "cf6f3219f1b3b09d0e049fe6b80c9d336be99bea",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "migrations": []
+}

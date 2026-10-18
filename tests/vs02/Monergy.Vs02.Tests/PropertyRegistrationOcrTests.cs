@@ -139,7 +139,7 @@ public sealed class PropertyRegistrationOcrTests
         var fact = Assert.Single(await new SalarySlipPngExtractor(new TextDouble(Tsv(Valid + "|Deed Date: 2026-09-25|Market Value: INR 9000000"))).ExtractAsync(Source(), "registration-date", default));
         AssertFact(fact);
         Assert.Contains("Registration Date: 2026-10-01", fact.SourceLocation, StringComparison.Ordinal);
-        Assert.Equal("PROPERTY", Monergy.Platform.AssetSourceFactBoundary.ForOwner(fact.FactType, fact.ExtractionVersion));
+        Assert.Equal("PROPERTY", Monergy.Platform.FinancialSourceFactBoundary.ForOwner(fact.FactType, fact.ExtractionVersion));
     }
     private static void AssertFact(ValidatedSourceFact fact)
     {
@@ -152,7 +152,7 @@ public sealed class PropertyRegistrationOcrTests
     [InlineData("VEHICLE", "property-registration-png-ocr/1.0.0")]
     public void OwnerMappingDoesNotReclassifyOtherSourcesOrObjectTypes(string type, string version)
     {
-        Assert.Equal(type, Monergy.Platform.AssetSourceFactBoundary.ForOwner(type, version));
+        Assert.Equal(type, Monergy.Platform.FinancialSourceFactBoundary.ForOwner(type, version));
     }
     private static string Tsv(string text,int lowLine=0)=>"level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n"+
         string.Join('\n',text.Split('|').SelectMany((line,index)=>line.Split(' ').Select((word,number)=>string.Create(CultureInfo.InvariantCulture,$"5\t1\t1\t1\t{index+1}\t{number+1}\t10\t10\t100\t40\t{(index+1==lowLine?89:99)}\t{word}"))));

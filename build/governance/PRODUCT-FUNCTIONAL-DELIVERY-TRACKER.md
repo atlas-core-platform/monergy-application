@@ -1,8 +1,18 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest bounded increment: T1-63 vehicle purchase invoice OCR. Classification/OCR/Extraction/Assets remain Partial. Full vehicle records and integrated UAT remain open.
+Status: ACTIVE · Latest bounded increment: T1-64 financial source-category compatibility. Existing Insurance/Tax review/adoption and source views are repaired. Original deliverables remain Partial/Pending; full financial models and integrated UAT remain open.
 
-## Current T1-63 update — vehicle purchase invoice OCR
+## Current T1-64 update — financial source-category compatibility
+
+Current source review exposed a real contract mismatch: customer INSURANCE/TAX categories were sent unchanged to the Financial Profile owner, whose canonical types are INSURANCE_POLICY/TAX_RECORD. Canonical responses were also omitted from category-filtered Search/Reports and appeared as unsupported types in customer source views. Two focused owner regression cases reproduced rejection before the fix.
+
+FinancialSourceFactBoundary generalizes the existing asset adapter. Insurance/Tax map to the canonical owner types before explicit adoption; Passport/list/detail/history/Search/basic Reports translate back to existing customer categories, retaining legacy category responses and current PROPERTY/VEHICLE behavior. No automatic adoption or new domain records. The old native insurance owner test's manual canonical translation is removed so it now exercises the shared boundary used by the Gateway. Receipt: [t1-64-financial-source-category-boundary.md](t1-64-financial-source-category-boundary.md).
+
+Untyped generic ASSET text/CSV/XLSX source figures still cannot be adopted without a canonical subtype. No property/vehicle identity is invented, and an invalid mixed batch writes nothing. This corrects the earlier seven-category adoption implication: seven categories extract; generic untyped asset adoption remains open. Existing source phases are retained.
+
+After paired merge:64 numbered units =63 implementations +1 governance closure. Original29 deliverables remain0 complete,17 partial and12 pending journeys. Workbook version6 was reconciled through T1-63 before this increment. Original151 IDs/81 features and126 Phase1-applicable memberships remain unchanged. Live ClamAV/physical PostgreSQL/durable processing/Compose/full browser UAT remain NOT RUN.
+
+## Previous T1-63 update — vehicle purchase invoice OCR
 
 The planned Vehicle Document class (Master sections11–14/41) now includes supported printed-English vehicle purchase invoices in PNG, upright JPEG and unlocked single-page scanned PDF. One early VEHICLE PURCHASE INVOICE title, one Invoice Date/Date of Invoice, one explicit Purchase Value and matching supported currency yield one dated ASSET source candidate. Registration date, invoice total, insured/market/estimated values and filenames are not purchase-value/date substitutes. Mixed titles and incomplete, ambiguous, invalid, conflicting or low-confidence required fields yield no facts.
 
@@ -72,6 +82,7 @@ This section supersedes the historical priority/verification labels below. Lates
 | P0 / implemented T1-61 | Property sale deed OCR in supported PNG/JPEG/single-page PDF; dated purchase value with explicit review/adoption | Exact evidence is in t1-61-property-sale-deed-ocr.md. Complete property records, ownership/valuation verification, wider document coverage and integrated UAT remain open |
 | P0 / implemented T1-62 | Property registration document OCR; explicit stated purchase value and registration date with independent review/adoption | Receipt t1-62-property-registration-ocr.md. Registration date is not purchase date; full records, ownership/valuation verification and integrated UAT remain open |
 | P0 / implemented T1-63 | Vehicle purchase invoice OCR; explicitly stated purchase figure and invoice date with independent review/adoption | Receipt t1-63-vehicle-purchase-ocr.md. Canonical VEHICLE owner storage and ASSET source presentation; full records/current valuation/ownership and integrated UAT remain open |
+| P0 / implemented T1-64 | Insurance/Tax review/adoption, canonical owner types and customer source views | Receipt t1-64-financial-source-category-boundary.md. Owner HTTP/replay/provenance and canonical/legacy projection checks; generic untyped ASSET adoption, full records and integrated UAT remain open |
 | P0 | Google Drive / OneDrive customer storage journey | Implement actual authorized provider import/status/refresh/disconnect, preserving exact folder/file/document identities; reference gateway is insufficient |
 | P0 | Full Loan account and financial truth | Seven source categories exist. Complete lender/type/sanction/outstanding/rate/EMI/tenure/dates and required asset/liability records; a typed source amount does not complete MON-FIN-006 |
 | P0 | Deterministic net worth | Assets minus Liabilities is already specified. Complete authoritative dated/currency/valuation inputs and customer calculation/provenance; scoring approval is a distinct gate |

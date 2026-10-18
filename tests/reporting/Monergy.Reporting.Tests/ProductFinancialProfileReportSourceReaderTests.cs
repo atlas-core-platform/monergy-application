@@ -14,12 +14,15 @@ namespace Monergy.Reporting.Tests;
 public sealed class ProductFinancialProfileReportSourceReaderTests
 {
     [Theory]
-    [InlineData("ASSET")]
-    [InlineData("PROPERTY")]
-    [InlineData("VEHICLE")]
-    public async Task ReadsOnlyCurrentSupportedFinancialFactsWithExactProvenance(string assetType)
+    [InlineData("ASSET", false)]
+    [InlineData("PROPERTY", false)]
+    [InlineData("VEHICLE", false)]
+    [InlineData("ASSET", true)]
+    [InlineData("PROPERTY", true)]
+    [InlineData("VEHICLE", true)]
+    public async Task ReadsOnlyCurrentSupportedFinancialFactsWithExactProvenance(string assetType, bool canonicalCategories)
     {
-        var handler = new FinancialProfileHandler { AssetType = assetType };
+        var handler = new FinancialProfileHandler { AssetType = assetType, CanonicalCategories = canonicalCategories };
         var accessor = Accessor();
         var reader = Reader(handler, accessor);
 
@@ -155,6 +158,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
     private sealed class FinancialProfileHandler : HttpMessageHandler
     {
         public string AssetType { get; set; } = "ASSET";
+        public bool CanonicalCategories { get; set; }
         public bool CrossCustomerProvenance { get; set; }
         public bool MismatchedTaxProvenance { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
@@ -208,11 +212,11 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                     new DateOnly(2026, 10, 1), 1, "provenance-investment"),
                 new AuthoritativeFinancialFact(
                     "ff-insurance", "financial-profile-reference-customer", "reference-customer",
-                    "INSURANCE", "Insurance source figure", 100m, "USD",
+                    CanonicalCategories ? FinancialObjectTypes.InsurancePolicy : "INSURANCE", "Insurance source figure", 100m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-insurance"),
                 new AuthoritativeFinancialFact(
                     "ff-tax", "financial-profile-reference-customer", "reference-customer",
-                    "TAX", "Tax source figure", 14000m, "USD",
+                    CanonicalCategories ? FinancialObjectTypes.TaxRecord : "TAX", "Tax source figure", 14000m, "USD",
                     new DateOnly(2026, 10, 1), 1, "provenance-tax"),
                 new AuthoritativeFinancialFact(
                     "ff-unsupported", "financial-profile-reference-customer", "reference-customer",
