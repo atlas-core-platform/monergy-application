@@ -1,10 +1,22 @@
+using System.Globalization;
+using System.Text.Json.Serialization;
 using Monergy.Contracts;
 
 namespace Monergy.Services.CustomerIdentity.Application;
 
 public sealed record SelfCustomerProfile(string TenantId, string ActorId, string CustomerId, string DisplayName,
-    string Email, string? Mobile, long Version, DateTimeOffset? UpdatedAt, DateTimeOffset? EmailVerifiedAt);
-public sealed record SelfCustomerProfileChange(string OperationId, long ExpectedVersion, string DisplayName, string? Mobile);
+    string Email, string? Mobile, long Version, DateTimeOffset? UpdatedAt, DateTimeOffset? EmailVerifiedAt)
+{
+    public string? DateOfBirth { get; init; }
+}
+public sealed record SelfCustomerProfileChange(string OperationId, long ExpectedVersion, string DisplayName, string? Mobile)
+{
+    private string? dateOfBirth;
+    // Omission preserves the stored date; explicit null clears it. Neither the
+    // presence flag nor an identity/KYC assertion is accepted from JSON.
+    [JsonIgnore] public bool HasDateOfBirth { get; private set; }
+    public string? DateOfBirth { get => dateOfBirth; init { dateOfBirth = value; HasDateOfBirth = true; } }
+}
 public sealed record SelfCustomerProfileReceipt(string OperationId, long Version);
 public interface ISelfCustomerProfileRepository
 {
@@ -24,6 +36,8 @@ public sealed class SelfCustomerProfileApplication(
         var profile = await repository.ReadAsync(current.TenantId, current.ActorId, ct).ConfigureAwait(false)
             ?? throw new TenantAccessException("OWNED_CUSTOMER_REQUIRED", 403);
         ValidateBinding(profile, current);
+        if (!ValidDateOfBirth(profile.DateOfBirth, clock.GetUtcNow()))
+            throw new TenantAccessException("PROFILE_RESPONSE_INVALID", 503);
         await ConfirmAsync(lookup, current, profile.CustomerId, ct).ConfigureAwait(false);
         return profile;
     }
@@ -36,15 +50,23 @@ public sealed class SelfCustomerProfileApplication(
         var mobile = string.IsNullOrWhiteSpace(change.Mobile) ? null : change.Mobile.Trim();
         if (mobile is not null && (mobile.Length is < 8 or > 16 || mobile[0] != '+' || mobile[1] is < '1' or > '9' || mobile[1..].Any(c => !char.IsAsciiDigit(c))))
             throw new TenantAccessException("PROFILE_MOBILE_INVALID", 400);
+        if (change.HasDateOfBirth && !ValidDateOfBirth(change.DateOfBirth, clock.GetUtcNow()))
+            throw new TenantAccessException("PROFILE_DATE_OF_BIRTH_INVALID", 400);
         var current = await sessions.ValidateAsync(lookup, ct).ConfigureAwait(false);
         var profile = await repository.ReadAsync(current.TenantId, current.ActorId, ct).ConfigureAwait(false)
             ?? throw new TenantAccessException("OWNED_CUSTOMER_REQUIRED", 403);
         ValidateBinding(profile, current);
+        if (!ValidDateOfBirth(profile.DateOfBirth, clock.GetUtcNow()))
+            throw new TenantAccessException("PROFILE_RESPONSE_INVALID", 503);
         var receipt = await repository.SaveAsync(current.TenantId, current.ActorId, profile.CustomerId,
             change with { DisplayName = change.DisplayName.Trim(), Mobile = mobile }, clock.GetUtcNow(), ct).ConfigureAwait(false);
         await ConfirmAsync(lookup, current, profile.CustomerId, ct).ConfigureAwait(false);
         return receipt;
     }
+
+    public static bool ValidDateOfBirth(string? value, DateTimeOffset now) => value is null ||
+        value.Length == 10 && DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+            DateTimeStyles.None, out var date) && date <= DateOnly.FromDateTime(now.UtcDateTime);
 
     private static void ValidateBinding(SelfCustomerProfile profile, TenantSessionContext session)
     {

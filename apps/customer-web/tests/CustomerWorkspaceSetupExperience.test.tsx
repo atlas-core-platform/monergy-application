@@ -10,7 +10,7 @@ import { WorkspaceSessionProvider } from '../src/access/WorkspaceSessionProvider
 const session = { tenantId: 'T001', actorId: 'A100', authenticationContextId: 'current-session', subjectVersion: 3, expiresAt: '2027-01-01T00:00:00Z' };
 const pending: CustomerWorkspaceSetup = { tenantId: 'T001', actorId: 'A100', customerId: 'C001', required: true, emailVerified: true, profileReviewed: false, agreementsPublished: true, agreementsAccepted: false, ready: false, revision: 'a'.repeat(64) };
 const product = { tenantId: 'T001', actorId: 'A100', customerId: 'C001', customerName: 'Customer', capabilities: [] as string[], environment: 'Test environment', dataDurability: 'Temporary data', productionAccepted: false, setup: pending };
-const profile = () => ({ tenantId: 'T001', actorId: 'A100', customerId: 'C001', displayName: 'Customer', email: 'owner@example.test', mobile: null, version: 0, updatedAt: null as string | null, emailVerifiedAt: '2026-01-01T00:00:00Z' });
+const profile = () => ({ tenantId: 'T001', actorId: 'A100', customerId: 'C001', displayName: 'Customer', email: 'owner@example.test', mobile: null, version: 0, updatedAt: null as string | null, emailVerifiedAt: '2026-01-01T00:00:00Z', dateOfBirth: null as string | null });
 function state(api: AccessApi, setup = pending): WorkspaceSessionState {
   return { status: 'authorized', session, api, authorization: { area: 'product', context: { ...product, setup } }, message: '', recovery: null,
     connect: vi.fn(), retry: vi.fn(), signOut: vi.fn(), cancel: vi.fn(), refreshContext: vi.fn() };

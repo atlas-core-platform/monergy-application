@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-55",
+  "applicationBase": "755bc8f7bc5eccddbb0b7b816af0a69c0fd09a09",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "migrations": [
+    {
+      "path": "services/customer-identity/migrations/0008_customer_date_of_birth.sql",
+      "sha256": "4179a20b68f57980a949dbe96b277ec9c94d554ee0395d8c8c39eccc8c340dfd"
+    }
+  ]
+}

@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-54",
-  "applicationBase": "4b3c681aa7889086bb6a8155f9bfe710a051e85f",
+  "asOf": "T1-55",
+  "applicationBase": "755bc8f7bc5eccddbb0b7b816af0a69c0fd09a09",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
     "libraryVersion": 2,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "T1-52; bounded T1-53 agreements and T1-54 guided existing-customer setup deltas applied"
+    "reviewThrough": "T1-52; bounded T1-53/54 identity setup and T1-55 date-of-birth profile deltas applied"
   },
   "counts": {
     "originalDeliverables": 29,
@@ -14,8 +14,8 @@
     "partial": 17,
     "pendingBusinessJourneys": 12,
     "remainingOriginalDeliverables": 29,
-    "numberedUnitsAfterPairedMerge": 54,
-    "mergedImplementationUnitsAfterPairedMerge": 53,
+    "numberedUnitsAfterPairedMerge": 55,
+    "mergedImplementationUnitsAfterPairedMerge": 54,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -53,11 +53,11 @@
       "area": "Customer",
       "name": "Profile",
       "state": "Partial",
-      "existing": "My Profile reads the registered email and edits display name and an optional unverified contact number, with versioned owner writes.",
-      "remaining": "Complete customer profile fields and KYC status required by \u00a713, including DOB and PAN under the approved data/privacy rules. Prove PostgreSQL persistence and replay.",
-      "units": "T1-44",
+      "existing": "My Profile reads the registered email and edits display name and an optional unverified contact number, with versioned owner writes. T1-55 adds optional self-declared date of birth, exact calendar-date validation and owner receipt/readback.",
+      "remaining": "Complete the remaining customer profile and KYC fields required by \u00a713, including PAN and authoritative KYC status under approved privacy rules. Prove PostgreSQL persistence/replay/concurrency and integrated UAT.",
+      "units": "T1-44, T1-55",
       "requirements": "MON-ID-005/012; MON-FIN-002",
-      "receipt": "build/governance/t1-44-customer-profile.md"
+      "receipt": "build/governance/t1-55-customer-date-of-birth.md"
     },
     {
       "id": "P1-04",

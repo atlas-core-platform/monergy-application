@@ -177,19 +177,113 @@ public sealed class SelfCustomerProfileTests
         await app.StopAsync();
     }
 
+    [Theory]
+    [InlineData("2000-02-29")]
+    [InlineData("1992-04-09")]
+    [InlineData("0001-01-01")]
+    [InlineData(null)]
+    public async Task BirthDateCanBeSavedOrExplicitlyClearedWithoutInferringKyc(string? birthDate)
+    {
+        var f = new Fixture();
+        var change = Change with { DateOfBirth = birthDate };
+        await f.Owner.SaveAsync(Lookup, change, default);
+        Assert.True(f.Repository.SavedChange!.HasDateOfBirth);
+        Assert.Equal(birthDate, f.Repository.SavedChange.DateOfBirth);
+        Assert.Equal("C001", f.Repository.SavedCustomer);
+        f.Repository.Profile = f.Repository.Profile! with { DateOfBirth = birthDate };
+        Assert.Equal(birthDate, (await f.Owner.ReadAsync(Lookup, default)).DateOfBirth);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1992-4-09")]
+    [InlineData("2001-02-29")]
+    [InlineData("1992-04-09T00:00:00Z")]
+    [InlineData("1992-04-09+05:30")]
+    [InlineData(" 1992-04-09")]
+    [InlineData("0000-01-01")]
+    [InlineData("１９９２-０４-０９")]
+    [InlineData("2099-01-01")]
+    public async Task InvalidBirthDateNeverReachesOwnerStorage(string birthDate)
+    {
+        var f = new Fixture();
+        Assert.Equal("PROFILE_DATE_OF_BIRTH_INVALID", (await Assert.ThrowsAsync<TenantAccessException>(
+            () => f.Owner.SaveAsync(Lookup, Change with { DateOfBirth = birthDate }, default))).Code);
+        Assert.Equal(0, f.Repository.Reads); Assert.Equal(0, f.Repository.Saves);
+    }
+
+    [Fact]
+    public async Task BirthDateUsesTheUtcCalendarDayAndDoesNotConvertTheSelectedDate()
+    {
+        var f = new Fixture(new FixedClock(new DateTimeOffset(2026, 10, 18, 23, 30, 0, TimeSpan.FromHours(-5))));
+        await f.Owner.SaveAsync(Lookup, Change with { DateOfBirth = "2026-10-19" }, default);
+        Assert.Equal("2026-10-19", f.Repository.SavedChange!.DateOfBirth);
+        await Assert.ThrowsAsync<TenantAccessException>(() => f.Owner.SaveAsync(Lookup, Change with { DateOfBirth = "2026-10-20" }, default));
+        Assert.Equal(1, f.Repository.Saves);
+    }
+
+    [Fact]
+    public async Task JsonOmissionAndNullRetainDistinctMeaningThroughRecordNormalization()
+    {
+        var json = "{\"operationId\":\"" + Change.OperationId + "\",\"expectedVersion\":2,\"displayName\":\"Updated\",\"mobile\":null";
+        var options = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+        var omitted = System.Text.Json.JsonSerializer.Deserialize<SelfCustomerProfileChange>(json + "}", options)!;
+        var cleared = System.Text.Json.JsonSerializer.Deserialize<SelfCustomerProfileChange>(json + ",\"dateOfBirth\":null}", options)!;
+        Assert.False(omitted.HasDateOfBirth); Assert.True(cleared.HasDateOfBirth);
+        var f = new Fixture(); f.Repository.Profile = f.Repository.Profile! with { DateOfBirth = "1992-04-09" };
+        await f.Owner.SaveAsync(Lookup, omitted, default); Assert.False(f.Repository.SavedChange!.HasDateOfBirth);
+        await f.Owner.SaveAsync(Lookup, cleared, default); Assert.True(f.Repository.SavedChange!.HasDateOfBirth); Assert.Null(f.Repository.SavedChange.DateOfBirth);
+    }
+
+    [Theory]
+    [InlineData("2001-02-29")]
+    [InlineData("2099-01-01")]
+    [InlineData("1992-04-09T00:00:00Z")]
+    public async Task MalformedStoredBirthDateIsNotPresentedOrOverwritten(string birthDate)
+    {
+        var f = new Fixture(); f.Repository.Profile = f.Repository.Profile! with { DateOfBirth = birthDate };
+        Assert.Equal(503, (await Assert.ThrowsAsync<TenantAccessException>(() => f.Owner.ReadAsync(Lookup, default))).StatusCode);
+        await Assert.ThrowsAsync<TenantAccessException>(() => f.Owner.SaveAsync(Lookup, Change, default));
+        Assert.Equal(0, f.Repository.Saves);
+    }
+
+    [Fact]
+    public async Task ActualHttpBirthDateWriteRejectsBadDatesAndScopeOverridesAndRetainsOmission()
+    {
+        var f = new Fixture(); var builder = WebApplication.CreateBuilder(); builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Services.ConfigureHttpJsonOptions(o => { o.SerializerOptions.UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow; o.SerializerOptions.RespectRequiredConstructorParameters = true; });
+        builder.Services.AddSingleton(f.Owner);
+        await using var app = builder.Build(); app.MapSelfCustomerProfile(); await app.StartAsync();
+        using var client = new HttpClient { BaseAddress = new(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single()) };
+        client.DefaultRequestHeaders.Add("X-Monergy-Tenant", "T001"); client.DefaultRequestHeaders.Add("X-Monergy-Session", "current-session");
+        async Task<HttpResponseMessage> Put(string fields) => await client.PutAsync("/local/v1/me/customer-profile",
+            new StringContent("{\"operationId\":\"" + Change.OperationId + "\",\"expectedVersion\":2,\"displayName\":\"Customer\",\"mobile\":null" + fields + "}", System.Text.Encoding.UTF8, "application/json"));
+        foreach (var fields in new[] { ",\"dateOfBirth\":\"2001-02-29\"", ",\"dateOfBirth\":12", ",\"dateOfBirth\":\"1992-04-09\",\"actorId\":\"A900\"", ",\"dateOfBirth\":\"1992-04-09\",\"kycStatus\":\"VERIFIED\"" })
+            Assert.Equal(HttpStatusCode.BadRequest, (await Put(fields)).StatusCode);
+        Assert.Equal(0, f.Repository.Saves);
+        Assert.Equal(HttpStatusCode.OK, (await Put(",\"dateOfBirth\":\"2000-02-29\"")).StatusCode);
+        Assert.Equal("2000-02-29", f.Repository.SavedChange!.DateOfBirth);
+        Assert.Equal(HttpStatusCode.OK, (await Put("")).StatusCode); Assert.False(f.Repository.SavedChange!.HasDateOfBirth);
+        Assert.Equal(HttpStatusCode.OK, (await Put(",\"dateOfBirth\":null")).StatusCode); Assert.True(f.Repository.SavedChange!.HasDateOfBirth);
+        f.Repository.Profile = f.Repository.Profile! with { DateOfBirth = "2000-02-29" };
+        Assert.Equal("2000-02-29", (await client.GetFromJsonAsync<SelfCustomerProfile>("/local/v1/me/customer-profile"))!.DateOfBirth);
+        await app.StopAsync();
+    }
+    private sealed class FixedClock(DateTimeOffset value) : TimeProvider { public override DateTimeOffset GetUtcNow() => value; }
+
     private sealed class Fixture
     {
         public Repository Repository { get; } = new();
         public Sessions Sessions { get; } = new();
         public Membership Membership { get; } = new();
         public SelfCustomerProfileApplication Owner { get; }
-        public Fixture()
+        public Fixture(TimeProvider? clock = null)
         {
             var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> {
                 ["Monergy:ExecutionZone"] = "CI_EPHEMERAL", ["Monergy:AccessIntegration:Enabled"] = "true",
                 ["Monergy:AccessIntegration:Identities:0:TenantId"] = "T001", ["Monergy:AccessIntegration:Identities:0:ActorId"] = "A100",
                 ["Monergy:AccessIntegration:Identities:0:Token"] = new string('a', 64) }).Build();
-            Owner = new(Repository, new(Sessions, Membership, new(config)), TimeProvider.System);
+            Owner = new(Repository, new(Sessions, Membership, new(config)), clock ?? TimeProvider.System);
         }
     }
     // Behavioral dependency doubles. These checks do not execute PostgreSQL SQL.
