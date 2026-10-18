@@ -7,7 +7,7 @@ using Npgsql;
 
 namespace Monergy.Services.Consent;
 
-public sealed class PostgresCustomerConsent : IAsyncDisposable
+public sealed class PostgresCustomerConsent : IAsyncDisposable, ICustomerSharingStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly Dictionary<string, NpgsqlDataSource> sources = new(StringComparer.Ordinal);

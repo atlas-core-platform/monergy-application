@@ -272,6 +272,16 @@ export class AccessApi {
       },
     );
   }
+  customerSharing<T>(customerId: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(customerId))
+      return Promise.reject(new AccessApiError(400, 'INVALID_CUSTOMER_ID'));
+    return this.guarded<T>('/consent-api/local/v1/consents/customers/' + encodeURIComponent(customerId) +
+      (body === undefined ? '/sharing-options' : '/sharing'), {
+      method: body === undefined ? 'GET' : 'POST', signal,
+      headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  }
   // Consent Service verifies owner, tenant and current session on every mutation.
   // The revision is the freshly loaded Consent owner's optimistic-concurrency token.
   revokeCustomerConsent<T>(

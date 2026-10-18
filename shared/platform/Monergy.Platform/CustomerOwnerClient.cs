@@ -128,6 +128,20 @@ public sealed class CustomerOwnerClient : IDisposable
             throw new TenantBoundaryException("MEMBERSHIP_REQUIRED", 409);
     }
 
+    public async Task<CustomerOwnerRecipientLabel?> ResolveConsentRecipientAsync(string tenant, string email, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(recipientLabelToken)) throw new TenantBoundaryException("RECIPIENT_LOOKUP_UNAVAILABLE", 503);
+        try
+        {
+            var result = await SendAsync<CustomerOwnerRecipientLabel>(identity,
+                "internal/v1/consent-recipients/resolve", tenant, recipientLabelToken, new { email }, ct).ConfigureAwait(false);
+            if (result.TenantId != tenant || !TenantAccessClient.Identifier(result.ActorId, 128) || result.RecipientLabel != email)
+                throw new TenantBoundaryException("RECIPIENT_RESPONSE_INVALID", 503);
+            return result;
+        }
+        catch (TenantBoundaryException failure) when (failure.Status == 404) { return null; }
+    }
+
     private async Task<T> SendAsync<T>(Uri endpoint, string path, string tenant, string token, object? body, CancellationToken ct)
     {
         if (!TenantAccessClient.Identifier(tenant, 64)) throw new TenantBoundaryException("INVALID_TENANT", 400);
