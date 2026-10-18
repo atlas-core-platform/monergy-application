@@ -159,6 +159,9 @@ public sealed class SalarySlipOcrTests
     [InlineData("loan-sanction.png", "image/png")]
     [InlineData("loan-sanction.jpg", "image/jpeg")]
     [InlineData("loan-sanction-scan.pdf", "application/pdf")]
+    [InlineData("vehicle-purchase-invoice.png", "image/png")]
+    [InlineData("vehicle-purchase-invoice.jpg", "image/jpeg")]
+    [InlineData("vehicle-purchase-invoice-scan.pdf", "application/pdf")]
     [InlineData("property-registration.png", "image/png")]
     [InlineData("property-registration.jpg", "image/jpeg")]
     [InlineData("property-registration-scan.pdf", "application/pdf")]
@@ -213,6 +216,7 @@ public sealed class SalarySlipOcrTests
             "process-png", "process-png", security));
         Assert.Equal(ProcessingState.Completed, result.Data?.State);
         var record = (await processingRepository.GetAsync("processing-png", default))!;
+        var vehicle = fileName.StartsWith("vehicle-purchase-invoice", StringComparison.Ordinal);
         var registration = fileName.StartsWith("property-registration", StringComparison.Ordinal);
         var property = registration || fileName.StartsWith("property-sale-deed", StringComparison.Ordinal);
         var sanction = fileName.StartsWith("loan-sanction", StringComparison.Ordinal);
@@ -239,27 +243,27 @@ public sealed class SalarySlipOcrTests
             Assert.All(record.Facts, f => Assert.Equal("LOAN", f.FactType));
         }
         var loan = fileName.StartsWith("loan-", StringComparison.Ordinal);
-        Assert.Equal(property ? 3500000m : sanction ? 650000m : investment ? 800000m : insurance ? 1000000m : loan ? 176500.75m : 52480m, fact.CandidateValue);
-        Assert.Equal(property ? "ASSET" : sanction ? "LOAN" : investment ? "INVESTMENT" : insurance ? "INSURANCE" : loan ? "LOAN" : "INCOME", fact.FactType);
+        Assert.Equal(vehicle ? 680000m : property ? 3500000m : sanction ? 650000m : investment ? 800000m : insurance ? 1000000m : loan ? 176500.75m : 52480m, fact.CandidateValue);
+        Assert.Equal(vehicle || property ? "ASSET" : sanction ? "LOAN" : investment ? "INVESTMENT" : insurance ? "INSURANCE" : loan ? "LOAN" : "INCOME", fact.FactType);
         Assert.Equal(source!.Reference.DocumentVersionId, fact.DocumentVersionId);
         Assert.Equal(source.Reference.CustomerId, fact.CustomerId);
         Assert.Equal(source.Reference.EvidenceId, fact.EvidenceId);
         Assert.IsType<DomainEvent<ValidatedSourceFactsProducedPayload>>(Assert.Single(processingRepository.DrainOutbox()));
-        if (insurance || investment || sanction || property)
+        if (insurance || investment || sanction || property || vehicle)
         {
             var financial = new Monergy.Services.FinancialProfile.Application.FinancialProfileApplication(
                 new Monergy.Services.FinancialProfile.Infrastructure.InMemoryFinancialProfileRepository(), new CapturingTelemetry(), TimeProvider.System);
             var adopted = await financial.NormalizeSourceFactsAsync(Vs02TestContext.Request(Vs02ContractNames.NormalizeSourceFacts,
-                new NormalizeSourceFacts("profile-insurance", "customer-001", "processing-png", record.Facts.Select(f => f with { FactType = property ? Monergy.Platform.PropertySourceFactBoundary.ForOwner(f.FactType, f.ExtractionVersion) : sanction ? FinancialObjectTypes.Loan : investment ? FinancialObjectTypes.Investment : FinancialObjectTypes.InsurancePolicy }).ToArray(),
+                new NormalizeSourceFacts("profile-insurance", "customer-001", "processing-png", record.Facts.Select(f => f with { FactType = vehicle || property ? Monergy.Platform.AssetSourceFactBoundary.ForOwner(f.FactType, f.ExtractionVersion) : sanction ? FinancialObjectTypes.Loan : investment ? FinancialObjectTypes.Investment : FinancialObjectTypes.InsurancePolicy }).ToArray(),
                     "provider-neutral-normalization/1.0.0", DateTimeOffset.UtcNow), "review-insurance", "review-insurance"));
-            Assert.Equal(ContractOutcome.Success, adopted.Outcome); Assert.Equal(property ? 1 : 2, adopted.Data?.Facts.Count);
-            Assert.All(adopted.Data!.Facts, item => Assert.Equal(property ? FinancialObjectTypes.Property : sanction ? FinancialObjectTypes.Loan : investment ? FinancialObjectTypes.Investment : FinancialObjectTypes.InsurancePolicy, item.FactType));
+            Assert.Equal(ContractOutcome.Success, adopted.Outcome); Assert.Equal(vehicle || property ? 1 : 2, adopted.Data?.Facts.Count);
+            Assert.All(adopted.Data!.Facts, item => Assert.Equal(vehicle ? FinancialObjectTypes.Vehicle : property ? FinancialObjectTypes.Property : sanction ? FinancialObjectTypes.Loan : investment ? FinancialObjectTypes.Investment : FinancialObjectTypes.InsurancePolicy, item.FactType));
             foreach (var item in adopted.Data.Facts)
             {
                 var provenance = await financial.GetFinancialProvenanceAsync(Vs02TestContext.Request(Vs02ContractNames.GetFinancialProvenance,
                     new GetFinancialProvenance(item.FinancialProvenanceId, "customer-001"), "insurance-source"));
                 Assert.Equal("document-version-001", provenance.Data?.DocumentVersionId);
-                Assert.StartsWith(registration ? "property-registration-" : property ? "property-sale-deed-" : sanction ? "loan-sanction-" : investment ? "investment-statement-" : "insurance-policy-", provenance.Data!.ExtractionVersion, StringComparison.Ordinal);
+                Assert.StartsWith(vehicle ? "vehicle-purchase-invoice-" : registration ? "property-registration-" : property ? "property-sale-deed-" : sanction ? "loan-sanction-" : investment ? "investment-statement-" : "insurance-policy-", provenance.Data!.ExtractionVersion, StringComparison.Ordinal);
             }
         }
         // This path publishes candidates only. The existing Financial Profile review/adoption API remains the sole writer.

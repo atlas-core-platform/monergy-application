@@ -13,7 +13,7 @@ public sealed class EvidenceContentUnsupportedException(string message) : Except
 
 public sealed class DocumentExtractionException(string message) : Exception(message);
 
-public enum DocumentRecognitionFailure { Unclassified, Incomplete, IncompleteLoan, LowConfidence, UnsupportedPdf, UnsupportedJpeg, IncompleteInsurance, IncompleteInvestment, IncompleteSanction, IncompletePropertySaleDeed, IncompletePropertyRegistration }
+public enum DocumentRecognitionFailure { Unclassified, Incomplete, IncompleteLoan, LowConfidence, UnsupportedPdf, UnsupportedJpeg, IncompleteInsurance, IncompleteInvestment, IncompleteSanction, IncompletePropertySaleDeed, IncompletePropertyRegistration, IncompleteVehiclePurchaseInvoice }
 public sealed class DocumentRecognitionException(DocumentRecognitionFailure reason) : Exception("The document could not produce reviewable document details.")
 { public DocumentRecognitionFailure Reason { get; } = reason; }
 public sealed class OcrEngineUnavailableException() : Exception("The LOCAL OCR engine is unavailable.");
@@ -490,6 +490,7 @@ public sealed class DocumentProcessingApplication(
                 DocumentRecognitionFailure.UnsupportedJpeg => "processing.jpeg.unsupported",
                 DocumentRecognitionFailure.UnsupportedPdf => "processing.pdf.unsupported",
                 DocumentRecognitionFailure.LowConfidence => "processing.ocr.low-confidence",
+                DocumentRecognitionFailure.IncompleteVehiclePurchaseInvoice => "processing.vehicle-purchase-invoice.incomplete",
                 DocumentRecognitionFailure.IncompletePropertyRegistration => "processing.property-registration.incomplete",
                 DocumentRecognitionFailure.IncompletePropertySaleDeed => "processing.property-sale-deed.incomplete",
                 DocumentRecognitionFailure.IncompleteSanction => "processing.loan-sanction.incomplete",

@@ -46,6 +46,7 @@ public sealed class ProductSearchProjectionSourceTests
     [Theory]
     [InlineData("ASSET")]
     [InlineData("PROPERTY")]
+    [InlineData("VEHICLE")]
     public async Task BuildsOnlySupportedFinancialFactsWithExactProvenance(string assetType)
     {
         var handler = new OwnerHandler { AssetType = assetType };

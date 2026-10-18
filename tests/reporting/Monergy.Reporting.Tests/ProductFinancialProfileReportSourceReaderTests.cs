@@ -16,6 +16,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
     [Theory]
     [InlineData("ASSET")]
     [InlineData("PROPERTY")]
+    [InlineData("VEHICLE")]
     public async Task ReadsOnlyCurrentSupportedFinancialFactsWithExactProvenance(string assetType)
     {
         var handler = new FinancialProfileHandler { AssetType = assetType };
