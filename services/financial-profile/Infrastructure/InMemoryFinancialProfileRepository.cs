@@ -47,6 +47,17 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
                 throw new InvalidOperationException("Financial Profile ownership conflict.");
             }
 
+            // A source keeps its reviewed canonical type across operation IDs and later revisions.
+            var incomingTypes = request.Payload.Facts.GroupBy(fact => fact.SourceFactId, StringComparer.Ordinal);
+            if (incomingTypes.Any(group => group.Select(fact => fact.FactType).Distinct(StringComparer.Ordinal).Count() > 1))
+                throw new InvalidOperationException("Source fact type conflict.");
+            var sourceTypes = incomingTypes.ToDictionary(group => group.Key, group => group.First().FactType, StringComparer.Ordinal);
+            if (factHistory.Values.SelectMany(history => history).Any(fact =>
+                    fact.FinancialProfileId == request.Payload.FinancialProfileId &&
+                    fact.CustomerId == request.Payload.CustomerId &&
+                    sourceTypes.TryGetValue(fact.SourceFactId, out var incomingType) && incomingType != fact.FactType))
+                throw new InvalidOperationException("Source fact type conflict.");
+
             var savedFacts = new List<FinancialFactRecord>();
             var savedProvenance = new List<FinancialProvenance>();
             var events = new List<object>();

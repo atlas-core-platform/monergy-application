@@ -324,6 +324,16 @@ public sealed class PersistentFoundationTests
             Assert.Equal(2, revised.Facts[0].Revision);
             Assert.Equal(125m, (await reconstructed.GetFactAsync(revised.Facts[0].FinancialFactId, default))!.Value);
 
+            // Historical source types remain immutable even after a later revision uses a new source.
+            var retypedRequest = request with
+            {
+                RequestId = $"request-retyped-{suffix}", IdempotencyKey = $"key-retyped-{suffix}",
+                Payload = payload with { Facts = [payload.Facts[0] with { FactType = FinancialObjectTypes.Property }] }
+            };
+            await Assert.ThrowsAsync<InvalidOperationException>(() => reconstructed.NormalizeAsync(
+                FinancialNormalizationIdentity.From(retypedRequest), retypedRequest, transition, default));
+            Assert.Equal(2, (await reconstructed.GetProfileAsync(payload.FinancialProfileId, default))!.Revision);
+
             var otherCustomerRequest = revisedRequest with
             {
                 RequestId = $"request-other-{suffix}",

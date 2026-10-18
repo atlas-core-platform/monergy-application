@@ -27,6 +27,7 @@ const formatMoney = (fact: ProductFinancialFact) =>
     currency: fact.currency,
   }).format(fact.value);
 
+const assetTypeName = (value?: string) => value === 'PROPERTY' ? 'Property' : value === 'VEHICLE' ? 'Vehicle' : null;
 const factTypeName = (value: string) =>
   ({ INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information', ASSET: 'Asset source figure', INVESTMENT: 'Investment source figure', INSURANCE: 'Insurance source figure', TAX: 'Tax source figure' })[value] ?? value;
 
@@ -94,34 +95,36 @@ export default function FinancialProfileExperience() {
       setActiveCategory(categoryFromLocation());
     };
     window.addEventListener('popstate', syncFromLocation);
-    return () => window.removeEventListener('popstate', syncFromLocation);
+    return () => { window.removeEventListener('popstate', syncFromLocation); };
   }, []);
 
   useEffect(() => {
-    if (!api || !canRead || !selectedFactId) {
-      setDetail(null);
-      return;
-    }
     const controller = new AbortController();
-    setDetailBusy(true);
-    setDetailError('');
-    setDetail(null);
-    void getFinancialFactDetail(api, selectedFactId, controller.signal)
-      .then(setDetail)
-      .catch((failure) => {
-        if (controller.signal.aborted) return;
-        setDetailError(
-          failure instanceof AccessApiError && failure.status === 403
-            ? "You no longer have access to view this financial information or its source."
-            : failure instanceof AccessApiError && failure.status === 404
-              ? "This financial information is no longer available in your current profile."
-              : "We couldn't load the source history for this item. Try again.",
-        );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setDetailBusy(false);
-      });
-    return () => controller.abort();
+    const start = window.setTimeout(() => {
+      if (!api || !canRead || !selectedFactId) {
+        setDetail(null);
+        return;
+      }
+      setDetailBusy(true);
+      setDetailError('');
+      setDetail(null);
+      void getFinancialFactDetail(api, selectedFactId, controller.signal)
+        .then(setDetail)
+        .catch((failure: unknown) => {
+          if (controller.signal.aborted) return;
+          setDetailError(
+            failure instanceof AccessApiError && failure.status === 403
+              ? "You no longer have access to view this financial information or its source."
+              : failure instanceof AccessApiError && failure.status === 404
+                ? "This financial information is no longer available in your current profile."
+                : "We couldn't load the source history for this item. Try again.",
+          );
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setDetailBusy(false);
+        });
+    }, 0);
+    return () => { window.clearTimeout(start); controller.abort(); };
   }, [api, canRead, selectedFactId]);
 
   const groups = useMemo(() => {
@@ -236,47 +239,47 @@ export default function FinancialProfileExperience() {
           <nav className="product-financial-category-filter" aria-label="Financial information categories">
             <Button
               type={activeCategory === '' ? 'primary' : 'default'}
-              onClick={() => selectCategory('')}
+              onClick={() => { selectCategory(''); }}
             >
               All
             </Button>
             <Button
               type={activeCategory === 'INCOME' ? 'primary' : 'default'}
-              onClick={() => selectCategory('INCOME')}
+              onClick={() => { selectCategory('INCOME'); }}
             >
               Income
             </Button>
             <Button
               type={activeCategory === 'EXPENSE' ? 'primary' : 'default'}
-              onClick={() => selectCategory('EXPENSE')}
+              onClick={() => { selectCategory('EXPENSE'); }}
             >
               Expenses
             </Button>
             <Button
               type={activeCategory === 'LOAN' ? 'primary' : 'default'}
-              onClick={() => selectCategory('LOAN')}
+              onClick={() => { selectCategory('LOAN'); }}
             >
               Loan information
             </Button>
             <Button
               type={activeCategory === 'ASSET' ? 'primary' : 'default'}
-              onClick={() => selectCategory('ASSET')}
+              onClick={() => { selectCategory('ASSET'); }}
             >
               Asset source figures
             </Button>
             <Button
               type={activeCategory === 'INVESTMENT' ? 'primary' : 'default'}
-              onClick={() => selectCategory('INVESTMENT')}
+              onClick={() => { selectCategory('INVESTMENT'); }}
             >
               Investment source figures
             </Button>
             <Button
               type={activeCategory === 'INSURANCE' ? 'primary' : 'default'}
-              onClick={() => selectCategory('INSURANCE')}
+              onClick={() => { selectCategory('INSURANCE'); }}
             >
               Insurance source figures
             </Button>
-            <Button type={activeCategory === 'TAX' ? 'primary' : 'default'} onClick={() => selectCategory('TAX')}>
+            <Button type={activeCategory === 'TAX' ? 'primary' : 'default'} onClick={() => { selectCategory('TAX'); }}>
               Tax source figures
             </Button>
           </nav>
@@ -297,6 +300,7 @@ export default function FinancialProfileExperience() {
                   <article key={fact.financialFactId} className="product-financial-card">
                     <div className="product-financial-value">
                       <Tag>{factTypeName(fact.factType)}</Tag>
+                      {fact.factType === 'ASSET' && assetTypeName(fact.assetType) && <Tag>Asset type: {assetTypeName(fact.assetType)}</Tag>}
                       <strong>{formatMoney(fact)}</strong>
                       <span>{fact.label}</span>
                     </div>
@@ -308,7 +312,7 @@ export default function FinancialProfileExperience() {
                       </span>
                     </div>
                     <div className="product-financial-card-actions">
-                      <Button type="link" onClick={() => openFact(fact.financialFactId)}>
+                      <Button type="link" onClick={() => { openFact(fact.financialFactId); }}>
                         View source &amp; history
                       </Button>
                     </div>
@@ -361,7 +365,7 @@ export default function FinancialProfileExperience() {
                 <Button type="primary" href="/evidence">
                   Review documents
                 </Button>
-                <Button onClick={() => selectCategory('')}>Show all financial information</Button>
+                <Button onClick={() => { selectCategory(''); }}>Show all financial information</Button>
               </div>
             </section>
           )}
@@ -403,6 +407,7 @@ export default function FinancialProfileExperience() {
             <section className="product-financial-detail-hero">
               <div>
                 <Tag>{factTypeName(detail.current.factType)}</Tag>
+                {detail.current.factType === 'ASSET' && assetTypeName(detail.current.assetType) && <Tag>Asset type: {assetTypeName(detail.current.assetType)}</Tag>}
                 <p className="workspace-eyebrow">TRUSTED INFORMATION</p>
                 <h2>{detail.current.label}</h2>
                 <strong>{formatMoney(detail.current)}</strong>
@@ -468,6 +473,7 @@ export default function FinancialProfileExperience() {
                     </div>
                     <div className="product-financial-history-meta">
                       <span>Effective {formatDate(revision.effectiveDate)}</span>
+                      {revision.factType === 'ASSET' && assetTypeName(revision.assetType) && <Tag>Asset type: {assetTypeName(revision.assetType)}</Tag>}
                       <span>Source: {revision.source.sourceName}</span>
                       <span>Recorded {formatDateTime(revision.source.recordedAt)}</span>
                     </div>

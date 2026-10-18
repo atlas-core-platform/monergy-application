@@ -24,6 +24,7 @@ import {
   type ProductEvidenceReceipt,
   type ProductEvidenceSource,
   type ProductEvidenceVersionHistory,
+  type ProductAssetTypeSelection,
   type ProductFinancialFact,
   type ProductFinancialProfile,
   type ProductFinancialPromotionResult,
@@ -82,6 +83,10 @@ const typeName = (value: string) =>
     'text/csv': 'Financial information CSV',
     [financialXlsxType]: 'Financial information Excel',
   })[value] ?? value;
+interface AssetReviewFact { sourceFactId: string; factType: string; extractionVersion?: string }
+const canChooseAssetType = (fact: AssetReviewFact) => fact.factType === 'ASSET' && ['fixture-extractor/1.0.0', 'financial-csv/1.0.0', 'financial-xlsx/1.0.0'].includes(fact.extractionVersion ?? '');
+const assetReviewIncomplete = (facts: AssetReviewFact[], selected: string[], choices: Record<string, 'PROPERTY' | 'VEHICLE'>) => facts.some((fact) => selected.includes(fact.sourceFactId) && fact.factType === 'ASSET' && (canChooseAssetType(fact) ? !choices[fact.sourceFactId] : !isPropertyExtraction(fact.extractionVersion) && !isRegistrationExtraction(fact.extractionVersion) && !isVehicleExtraction(fact.extractionVersion)));
+const selectedAssetTypes = (selected: string[], choices: Record<string, 'PROPERTY' | 'VEHICLE'>): ProductAssetTypeSelection[] => selected.flatMap((sourceFactId) => { const assetType = choices[sourceFactId]; return assetType ? [{ sourceFactId, assetType }] : []; });
 const isVehicleExtraction = (version?: string) => ['vehicle-purchase-invoice-png-ocr/1.0.0', 'vehicle-purchase-invoice-jpeg-ocr/1.0.0', 'vehicle-purchase-invoice-pdf-ocr/1.0.0'].includes(version ?? '');
 const isRegistrationExtraction = (version?: string) => ['property-registration-png-ocr/1.0.0', 'property-registration-jpeg-ocr/1.0.0', 'property-registration-pdf-ocr/1.0.0'].includes(version ?? '');
 const isPropertyExtraction = (version?: string) => ['property-sale-deed-png-ocr/1.0.0', 'property-sale-deed-jpeg-ocr/1.0.0', 'property-sale-deed-pdf-ocr/1.0.0'].includes(version ?? '');
@@ -173,6 +178,8 @@ export default function EvidenceExperience() {
     useState<ProductRecoveredProcessingResult | null>(null);
   const [recoveredResultBusy, setRecoveredResultBusy] = useState(false);
   const [recoveredResultError, setRecoveredResultError] = useState('');
+  const [recoveredAssetTypes, setRecoveredAssetTypes] = useState<Record<string, 'PROPERTY' | 'VEHICLE'>>({});
+  const [selectedAssetTypesById, setSelectedAssetTypesById] = useState<Record<string, 'PROPERTY' | 'VEHICLE'>>({});
   const [recoveredSelectedSourceFactIds, setRecoveredSelectedSourceFactIds] = useState<string[]>([]);
   const [recoveredPromotionBusy, setRecoveredPromotionBusy] = useState(false);
   const [recoveredPromotionError, setRecoveredPromotionError] = useState('');
@@ -474,6 +481,7 @@ export default function EvidenceExperience() {
     setRecoveredResult(null);
     setRecoveredResultError('');
     setRecoveredSelectedSourceFactIds([]);
+    setRecoveredAssetTypes({});
     setRecoveredPromotionError('');
     setRecoveredPromotionResult(null);
     setRecoveredResultBusy(true);
@@ -503,6 +511,7 @@ export default function EvidenceExperience() {
     setRecoveredResult(null);
     setRecoveredResultError('');
     setRecoveredSelectedSourceFactIds([]);
+    setRecoveredAssetTypes({});
     setRecoveredPromotionError('');
     setRecoveredPromotionResult(null);
   };
@@ -525,7 +534,8 @@ export default function EvidenceExperience() {
       !canUpdateFinancial ||
       !canReadFinancial ||
       financialProfile === null ||
-      Boolean(financialLinkError)
+      Boolean(financialLinkError) ||
+      assetReviewIncomplete(recoveredResult.facts, recoveredSelectedSourceFactIds, recoveredAssetTypes)
     )
       return;
 
@@ -538,6 +548,8 @@ export default function EvidenceExperience() {
         recoveredResultJob.jobId,
         crypto.randomUUID().replaceAll('-', ''),
         recoveredSelectedSourceFactIds,
+        undefined,
+        selectedAssetTypes(recoveredSelectedSourceFactIds, recoveredAssetTypes),
       );
       setRecoveredPromotionResult(result);
       setFinancialProfile(result.profile);
@@ -560,6 +572,7 @@ export default function EvidenceExperience() {
     setProcessing(null);
     setProcessingError('');
     setSelectedSourceFactIds([]);
+    setSelectedAssetTypesById({});
     setPromotionError('');
     setPromotionResult(null);
   };
@@ -616,7 +629,8 @@ export default function EvidenceExperience() {
       processing?.job.state !== 'Completed' ||
       selectedSourceFactIds.length === 0 ||
       promotionBusy ||
-      !canUpdateFinancial
+      !canUpdateFinancial ||
+      assetReviewIncomplete(processing.facts, selectedSourceFactIds, selectedAssetTypesById)
     )
       return;
     setPromotionBusy(true);
@@ -628,6 +642,8 @@ export default function EvidenceExperience() {
         processing.job.jobId,
         crypto.randomUUID().replaceAll('-', ''),
         selectedSourceFactIds,
+        undefined,
+        selectedAssetTypes(selectedSourceFactIds, selectedAssetTypesById),
       );
       setPromotionResult(result);
       setFinancialProfile(result.profile);
@@ -1134,6 +1150,15 @@ export default function EvidenceExperience() {
                               <Tag>{fact.factType === 'INCOME' ? 'Income' : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INSURANCE' ? 'Insurance source figure' : fact.factType === 'TAX' ? 'Tax source figure' : 'Expense'}</Tag>
                               {trusted && <Tag color="success">ALREADY TRUSTED</Tag>}
                             </span>
+                            {reviewReady && !trusted && canChooseAssetType(fact) && (
+                              <div>
+                                <Select aria-label={'Asset type for ' + fact.label} placeholder="Choose asset type" style={{ width: 180 }}
+                                  value={recoveredAssetTypes[fact.sourceFactId]} disabled={recoveredPromotionBusy || Boolean(recoveredPromotionResult)}
+                                  options={[{ value: 'PROPERTY', label: 'Property' }, { value: 'VEHICLE', label: 'Vehicle' }]}
+                                  onChange={(value: 'PROPERTY' | 'VEHICLE') => { setRecoveredAssetTypes((current) => ({ ...current, [fact.sourceFactId]: value })); }} />
+                                <p>Classify this source figure before adding it. Ownership and current value are not verified.</p>
+                              </div>
+                            )}
                             <strong>{fact.label}</strong>
                             <span>
                               {fact.sourceLocation} · {fact.effectiveDate}
@@ -1250,6 +1275,7 @@ export default function EvidenceExperience() {
                       loading={recoveredPromotionBusy}
                       disabled={
                         recoveredSelectedSourceFactIds.length === 0 ||
+                        assetReviewIncomplete(recoveredResult.facts, recoveredSelectedSourceFactIds, recoveredAssetTypes) ||
                         Boolean(recoveredPromotionResult)
                       }
                       onClick={() => {
@@ -1537,6 +1563,7 @@ export default function EvidenceExperience() {
                   setProcessing(null);
                   setProcessingError('');
                   setSelectedSourceFactIds([]);
+                  setSelectedAssetTypesById({});
                   setPromotionError('');
                   setPromotionResult(null);
                 }}
@@ -1586,7 +1613,7 @@ export default function EvidenceExperience() {
                 <Button
                   type="primary"
                   loading={promotionBusy}
-                  disabled={!canUpdateFinancial || selectedSourceFactIds.length === 0}
+                  disabled={!canUpdateFinancial || selectedSourceFactIds.length === 0 || assetReviewIncomplete(processing.facts, selectedSourceFactIds, selectedAssetTypesById)}
                   onClick={() => void addReviewedFacts()}
                 >
                   Add selected information
@@ -1734,6 +1761,15 @@ export default function EvidenceExperience() {
                               ? 'Expense'
                               : fact.factType === 'LOAN' ? 'Loan information' : fact.factType === 'ASSET' ? 'Asset source figure' : fact.factType === 'INVESTMENT' ? 'Investment source figure' : fact.factType === 'INSURANCE' ? 'Insurance source figure' : fact.factType === 'TAX' ? 'Tax source figure' : fact.factType}
                         </Tag>
+                        {canChooseAssetType(fact) && (
+                          <div>
+                            <Select aria-label={'Asset type for ' + fact.label} placeholder="Choose asset type" style={{ width: 180 }}
+                              value={selectedAssetTypesById[fact.sourceFactId]} disabled={promotionBusy || Boolean(promotionResult)}
+                              options={[{ value: 'PROPERTY', label: 'Property' }, { value: 'VEHICLE', label: 'Vehicle' }]}
+                              onChange={(value: 'PROPERTY' | 'VEHICLE') => { setSelectedAssetTypesById((current) => ({ ...current, [fact.sourceFactId]: value })); }} />
+                            <p>Classify this source figure before adding it. Ownership and current value are not verified.</p>
+                          </div>
+                        )}
                         <strong>{fact.label}</strong>
                         <span>
                           {fact.sourceLocation} · {fact.effectiveDate}

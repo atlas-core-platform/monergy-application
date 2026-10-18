@@ -2536,3 +2536,202 @@ it.each(['png', 'jpeg', 'pdf'])('reviews the stated vehicle purchase figure from
   expect(request).toHaveBeenCalledWith(`v1/financial-profile/from-processing/${result.job.jobId}`, 'POST',
     { operationId: 'd'.repeat(32), sourceFactIds: ['vehicle-purchase'] }, undefined);
 });
+
+it.each(['text', 'csv', 'xlsx'].flatMap((format) => ['PROPERTY', 'VEHICLE'].map((assetType) => ({ format, assetType }))))('requires explicit $assetType classification for a generic $format asset', async ({ format, assetType }) => {
+  const api = new AccessApi(session);
+  const item = { documentId: 'vehicle-document', documentVersionId: 'vehicle-version', evidenceId: 'vehicle-evidence', version: 1,
+    sourceName: 'Customer upload', originalFileName: 'asset-source.' + (format === 'text' ? 'txt' : format),
+    contentType: format === 'xlsx' ? financialXlsxType : format === 'csv' ? 'text/csv' : 'text/plain', contentLength: 1234,
+    contentSha256: 'e'.repeat(64), receivedAt: '2026-10-18T00:00:00Z', createdAt: '2026-10-18T00:00:00Z' };
+  const label = 'Stated asset figure';
+  const fact = { sourceFactId: 'vehicle-purchase', customerId: 'reference-customer', factType: 'ASSET', label,
+    candidateValue: 680000, currency: 'USD', effectiveDate: '2026-10-01', sourceLocation: 'row 1',
+    confidence: 0.98, evidenceId: item.evidenceId, documentVersionId: item.documentVersionId,
+    extractionVersion: format === 'text' ? 'fixture-extractor/1.0.0' : `financial-${format}/1.0.0`, validationVersion: 'canonical-source-fact/1.0.0' };
+  const result = { job: { jobId: `job-processing-${'c'.repeat(32)}`, jobName: 'document-processing', ownerService: 'Document Intelligence Service',
+      payloadReference: item.documentVersionId, customerId: 'reference-customer', state: 'Completed', attempt: 1, failureCode: null,
+      retryable: false, updatedAt: '2026-10-18T00:00:01Z' },
+    processing: { processingId: `processing-${'c'.repeat(32)}`, documentVersionId: item.documentVersionId, state: 'Completed',
+      failureCode: null, retryable: false, updatedAt: '2026-10-18T00:00:01Z' },
+    facts: [fact], dataDurability: 'Temporary data', processingMode: 'Document extraction' };
+  const request = vi.spyOn(api, 'product').mockImplementation((path, method) => {
+    if (path === 'v1/evidence' && method === 'GET') return Promise.resolve({ items: [item], dataDurability: 'Temporary data' });
+    if (path.endsWith('/processing') && method === 'POST') return Promise.resolve(result);
+    if (path.includes('v1/financial-profile/from-processing/') && method === 'POST') return Promise.resolve({ confirmed: 1,
+      profile: { financialProfileId: 'financial-profile-reference-customer', revision: 1, updatedAt: '2026-10-18T00:00:02Z',
+        dataDurability: 'Temporary data', facts: [{ financialFactId: 'vehicle-trusted', factType: 'ASSET', assetType, label,
+          value: 680000, currency: 'USD', effectiveDate: '2026-10-01', revision: 1,
+          source: { sourceName: item.originalFileName, documentVersion: item.documentVersionId, recordedAt: '2026-10-18T00:00:02Z', technicalSourceFactId: 'vehicle-purchase' } }] } });
+    return Promise.reject(new Error('Unexpected vehicle endpoint: ' + path));
+  });
+  vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('cccccccc-cccc-cccc-cccc-cccccccccccc').mockReturnValueOnce('dddddddd-dddd-dddd-dddd-dddddddddddd');
+  mount(api, ['evidence.document.read', 'document-intelligence.document.process', 'financial-profile.profile.update']);
+  const user = userEvent.setup(); await screen.findByText(item.originalFileName);
+  await user.click(screen.getByRole('button', { name: `View document details for ${item.originalFileName}` }));
+  await user.click(within(screen.getByRole('dialog', { name: 'Document details' })).getByRole('button', { name: 'Extract details' }));
+  const review = await screen.findByRole('dialog', { name: 'Extract and review details' });
+  await user.click(within(review).getByRole('button', { name: 'Extract details' }));
+  expect(await within(review).findByText(label)).toBeVisible();
+  expect(review).toHaveTextContent('Ownership and current value are not verified.');
+  const add = within(review).getByRole('button', { name: 'Add selected information' }); expect(add).toBeDisabled();
+  expect(request.mock.calls.filter(([path]) => path.includes('/from-processing/'))).toHaveLength(0);
+  await user.click(within(review).getByRole('checkbox', { name: `Add ${label} to financial information` }));
+  expect(add).toBeDisabled();
+  await user.click(within(review).getByRole('combobox', { name: `Asset type for ${label}` }));
+  await user.click(screen.getByText(assetType === 'PROPERTY' ? 'Property' : 'Vehicle', { selector: '.ant-select-item-option-content' }));
+  expect(add).toBeEnabled();
+  expect(request.mock.calls.filter(([path]) => path.includes('/from-processing/'))).toHaveLength(0);
+  await user.click(add);
+  expect(await screen.findByText('Your financial information was updated')).toBeVisible();
+  expect(review).toHaveTextContent('1 reviewed item confirmed');
+  expect(request).toHaveBeenCalledWith(`v1/financial-profile/from-processing/${result.job.jobId}`, 'POST',
+    { operationId: 'd'.repeat(32), sourceFactIds: ['vehicle-purchase'], assetTypes: [{ sourceFactId: 'vehicle-purchase', assetType }] }, undefined);
+});
+
+it.each(['PROPERTY', 'VEHICLE'])('requires %s classification when resuming a generic asset review', async (assetType) => {
+  const api = new AccessApi(session);
+  const document = {
+    documentId: 'document-resume',
+    documentVersionId: 'document-version-resume',
+    evidenceId: 'evidence-resume',
+    version: 1,
+    sourceName: 'Customer upload',
+    originalFileName: 'resume-review.txt',
+    contentType: 'text/plain',
+    contentLength: 64,
+    contentSha256: '6'.repeat(64),
+    receivedAt: '2026-10-16T08:00:00Z',
+    createdAt: '2026-10-16T08:00:00Z',
+  };
+  const emptyProfile = {
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 0,
+    updatedAt: null,
+    dataDurability: 'Temporary data',
+    facts: [],
+  };
+  const promotedProfile = {
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 1,
+    updatedAt: '2026-10-16T09:05:00Z',
+    dataDurability: 'Temporary data',
+    facts: [
+      {
+        financialFactId: 'financial-fact-income',
+        factType: 'ASSET', assetType,
+        label: 'Stated asset figure',
+        value: 125000,
+        currency: 'USD',
+        effectiveDate: '2026-10-01',
+        revision: 1,
+        source: {
+          sourceName: 'resume-review.txt',
+          documentVersion: document.documentVersionId,
+          recordedAt: '2026-10-16T09:05:00Z',
+          technicalSourceFactId: 'source-fact-income',
+          technicalProvenanceId: 'provenance-income',
+        },
+      },
+    ],
+  };
+  const request = vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
+    if (path === 'v1/evidence')
+      return Promise.resolve({ items: [document], dataDurability: 'Temporary data' });
+    if (path === 'v1/financial-profile')
+      return Promise.resolve(emptyProfile);
+    if (path === 'v1/processing-activity')
+      return Promise.resolve({
+        dataDurability: 'Temporary data',
+        items: [
+          {
+            jobId: 'job-processing-resume',
+            documentVersionId: document.documentVersionId,
+            state: 'Completed',
+            attempt: 1,
+            updatedAt: '2026-10-16T09:00:00Z',
+          },
+        ],
+      });
+    if (path === 'v1/processing-result/job-processing-resume')
+      return Promise.resolve({
+        jobId: 'job-processing-resume',
+        documentVersionId: document.documentVersionId,
+        state: 'Completed',
+        updatedAt: '2026-10-16T09:00:00Z',
+        dataDurability: 'Temporary data',
+        facts: [
+          {
+            sourceFactId: 'source-fact-income',
+            factType: 'ASSET', extractionVersion: 'financial-csv/1.0.0',
+            label: 'Stated asset figure',
+            candidateValue: 125000,
+            currency: 'USD',
+            effectiveDate: '2026-10-01',
+            sourceLocation: 'line 1',
+            confidence: 0.98,
+            documentVersionId: document.documentVersionId,
+          },
+        ],
+      });
+    if (
+      path === 'v1/financial-profile/from-processing/job-processing-resume' &&
+      method === 'POST'
+    ) {
+      expect(body).toEqual(
+        expect.objectContaining({
+          operationId: expect.stringMatching(/^[0-9a-f]{32}$/),
+          sourceFactIds: ['source-fact-income'],
+          assetTypes: [{ sourceFactId: 'source-fact-income', assetType }],
+        }),
+      );
+      return Promise.resolve({
+        profile: promotedProfile,
+        confirmed: 1,
+      });
+    }
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api, [
+    'evidence.document.read',
+    'job-management.job.read',
+    'financial-profile.profile.read',
+    'financial-profile.profile.update',
+  ]);
+  const user = userEvent.setup();
+
+  await openCompletedProcessingResult(user);
+  const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
+
+  expect(drawer).toHaveTextContent('Resume review from this completed processing result');
+  const checkbox = within(drawer).getByRole('checkbox', {
+    name: 'Add Stated asset figure to financial information',
+  });
+  await user.click(checkbox);
+  const add = within(drawer).getByRole('button', { name: 'Add selected information' });
+  expect(add).toBeDisabled();
+  await user.click(within(drawer).getByRole('combobox', { name: 'Asset type for Stated asset figure' }));
+  await user.click(screen.getByText(assetType === 'PROPERTY' ? 'Property' : 'Vehicle', { selector: '.ant-select-item-option-content' }));
+  expect(request.mock.calls.filter(([path]) => path.includes('/from-processing/'))).toHaveLength(0);
+  await user.click(add);
+
+  expect(
+    await within(drawer).findByText('1 item added to Financial information'),
+  ).toBeVisible();
+  expect(request).toHaveBeenCalledWith(
+    'v1/financial-profile/from-processing/job-processing-resume',
+    'POST',
+    expect.objectContaining({ sourceFactIds: ['source-fact-income'] }),
+    undefined,
+  );
+  expect(
+    within(drawer).queryByRole('checkbox', {
+      name: 'Add Stated asset figure to financial information',
+    }),
+  ).not.toBeInTheDocument();
+  expect(drawer).toHaveTextContent('ALREADY TRUSTED');
+  expect(
+    within(drawer).getByRole('link', { name: 'View trusted Financial information' }),
+  ).toHaveAttribute('href', '/finances?fact=financial-fact-income');
+  expect(drawer).toHaveTextContent('All supported items from this run are already trusted');
+});

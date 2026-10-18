@@ -129,7 +129,9 @@ public sealed class FinancialProfileApplication(
             payload.Facts.Count == 0 ||
             !string.Equals(payload.CustomerId, request.Security.Access.CustomerId, StringComparison.Ordinal) ||
             payload.Facts.Any(fact => !Valid(fact, payload.CustomerId)) ||
-            payload.Facts.GroupBy(fact => $"{fact.FactType}|{fact.Label}", StringComparer.Ordinal).Any(group => group.Count() > 1))
+            payload.Facts.GroupBy(fact => $"{fact.FactType}|{fact.Label}", StringComparer.Ordinal).Any(group => group.Count() > 1) ||
+            payload.Facts.GroupBy(fact => fact.SourceFactId, StringComparer.Ordinal)
+                .Any(group => group.Select(fact => fact.FactType).Distinct(StringComparer.Ordinal).Count() > 1))
         {
             return ContractResult<NormalizationResult>.Rejected(
                 request, "financial.normalization.invalid", ContractErrorCategory.ValidationError, "Validated source facts are invalid.");

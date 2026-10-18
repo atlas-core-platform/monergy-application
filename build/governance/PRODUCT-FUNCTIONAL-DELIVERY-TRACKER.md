@@ -1,8 +1,16 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest bounded increment: T1-64 financial source-category compatibility. Existing Insurance/Tax review/adoption and source views are repaired. Original deliverables remain Partial/Pending; full financial models and integrated UAT remain open.
+Status: ACTIVE · Latest bounded increment: T1-65 reviewed generic asset source types. Customers explicitly classify text/CSV/XLSX source figures as Property or Vehicle before adoption. Original deliverables remain Partial/Pending; full financial models and integrated UAT remain open.
 
-## Current T1-64 update — financial source-category compatibility
+## Current T1-65 update — reviewed generic asset source types
+
+Generic ASSET text/CSV/bounded XLSX figures now require an explicit Property/Vehicle choice before current or recovered-result adoption. The shared boundary validates selected choices, preserves original source meanings/provenance and cannot override existing OCR-derived types. Canonical owner classification is visible on Financial information current and exact historical readback. Reusing one source with a different type is rejected atomically even under a new operation ID; PostgreSQL uses its existing transaction/profile lock. Receipt: [t1-65-reviewed-asset-source-types.md](t1-65-reviewed-asset-source-types.md).
+
+746 backend,125 Documents/Financial information UI and65 Expert checks pass after paired merge. Source figures do not verify ownership or current value, create full asset records or establish net worth. Other asset kinds, full records, broader documents and live integrated UAT remain open. Physical PostgreSQL regression is authored, not run.
+
+After paired merge:65 numbered units =64 implementations +1 governance closure. Original29 deliverables remain0 complete,17 partial and12 pending journeys. Workbook version7 reconciled through T1-64 before this increment. Original151 IDs/81 features and126 Phase1-applicable memberships/source phases remain unchanged.
+
+## Previous T1-64 update — financial source-category compatibility
 
 Current source review exposed a real contract mismatch: customer INSURANCE/TAX categories were sent unchanged to the Financial Profile owner, whose canonical types are INSURANCE_POLICY/TAX_RECORD. Canonical responses were also omitted from category-filtered Search/Reports and appeared as unsupported types in customer source views. Two focused owner regression cases reproduced rejection before the fix.
 
@@ -83,6 +91,7 @@ This section supersedes the historical priority/verification labels below. Lates
 | P0 / implemented T1-62 | Property registration document OCR; explicit stated purchase value and registration date with independent review/adoption | Receipt t1-62-property-registration-ocr.md. Registration date is not purchase date; full records, ownership/valuation verification and integrated UAT remain open |
 | P0 / implemented T1-63 | Vehicle purchase invoice OCR; explicitly stated purchase figure and invoice date with independent review/adoption | Receipt t1-63-vehicle-purchase-ocr.md. Canonical VEHICLE owner storage and ASSET source presentation; full records/current valuation/ownership and integrated UAT remain open |
 | P0 / implemented T1-64 | Insurance/Tax review/adoption, canonical owner types and customer source views | Receipt t1-64-financial-source-category-boundary.md. Owner HTTP/replay/provenance and canonical/legacy projection checks; generic untyped ASSET adoption, full records and integrated UAT remain open |
+| P0 / implemented T1-65 | Explicit generic asset Property/Vehicle review and canonical type readback | Receipt t1-65-reviewed-asset-source-types.md. Text/CSV/XLSX choices and historical source type immutability; other asset kinds, full records and live integrated UAT remain open |
 | P0 | Google Drive / OneDrive customer storage journey | Implement actual authorized provider import/status/refresh/disconnect, preserving exact folder/file/document identities; reference gateway is insufficient |
 | P0 | Full Loan account and financial truth | Seven source categories exist. Complete lender/type/sanction/outstanding/rate/EMI/tenure/dates and required asset/liability records; a typed source amount does not complete MON-FIN-006 |
 | P0 | Deterministic net worth | Assets minus Liabilities is already specified. Complete authoritative dated/currency/valuation inputs and customer calculation/provenance; scoring approval is a distinct gate |

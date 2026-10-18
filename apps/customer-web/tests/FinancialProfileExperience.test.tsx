@@ -235,9 +235,9 @@ it('opens a bounded trusted-fact drill-down with revision and source history', a
         updatedAt: current.source.recordedAt,
         dataDurability: 'Temporary data',
         facts: [current],
-      }) as never;
+      });
     if (path === 'v1/financial-profile/facts/ff-income')
-      return Promise.resolve({ current, history: [current, revisionOne] }) as never;
+      return Promise.resolve({ current, history: [current, revisionOne] });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
@@ -297,16 +297,16 @@ it('opens a Passport deep link directly to the requested trusted fact', async ()
         updatedAt: fact.source.recordedAt,
         dataDurability: 'Temporary data',
         facts: [fact],
-      }) as never;
+      });
     if (path === 'v1/financial-profile/facts/ff-income')
-      return Promise.resolve({ current: fact, history: [fact] }) as never;
+      return Promise.resolve({ current: fact, history: [fact] });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
 
   mount(api);
 
   const drawer = await screen.findByRole('dialog', { name: 'Financial information details' });
-  expect(drawer).toHaveTextContent('Employment income');
+  expect(await within(drawer).findByText('Employment income', { selector: 'h2' })).toBeVisible();
   expect(drawer).toHaveTextContent('1 revision');
 });
 
@@ -478,4 +478,79 @@ it('shows a reviewed Tax source figure without claiming assessed tax or refund',
   expect(screen.getByText('Source: tax-statement.txt')).toBeVisible();
   expect(window.location.pathname + window.location.search).toBe('/finances?type=TAX');
   expect(screen.queryByText(/Assessed tax liability|Refund payable/i)).not.toBeInTheDocument();
+});
+
+it.each(['PROPERTY', 'VEHICLE'])('shows the reviewed %s type on Asset source readback', async (assetType) => {
+  window.history.replaceState(null, '', '/finances?type=ASSET');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    financialProfileId: 'financial-profile-reference-customer',
+    revision: 4,
+    updatedAt: '2026-10-17T06:30:00Z',
+    dataDurability: 'Temporary data',
+    facts: [{
+      financialFactId: 'ff-asset-source',
+      factType: 'ASSET', assetType,
+      label: 'Property value stated in document',
+      value: 900000,
+      currency: 'INR',
+      effectiveDate: '2026-10-16',
+      revision: 1,
+      source: {
+        sourceName: 'property-source.txt',
+        documentVersion: 'document-version-asset',
+        recordedAt: '2026-10-17T06:30:00Z',
+        technicalSourceFactId: 'source-fact-asset',
+        technicalProvenanceId: 'provenance-asset',
+      },
+    }],
+  });
+  mount(api);
+  expect(await screen.findByText('Property value stated in document')).toBeVisible();
+  expect(screen.getByText('Asset type: ' + (assetType === 'PROPERTY' ? 'Property' : 'Vehicle'))).toBeVisible();
+  expect(screen.getByRole('heading', { name: 'Asset source figures' })).toBeVisible();
+  expect(screen.getByText('Source: property-source.txt')).toBeVisible();
+  expect(screen.queryByText(/Total net worth|Verified valuation/i)).not.toBeInTheDocument();
+  expect(window.location.pathname + window.location.search).toBe('/finances?type=ASSET');
+});
+
+it.each(['PROPERTY', 'VEHICLE'])('retains the reviewed %s type in exact source history', async (assetType) => {
+  window.history.replaceState(null, '', '/finances?fact=ff-income');
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path) => {
+    const fact = {
+      financialFactId: 'ff-income',
+      factType: 'ASSET', assetType,
+      label: 'Stated asset figure',
+      value: 125000,
+      currency: 'USD',
+      effectiveDate: '2026-10-01',
+      revision: 1,
+      source: {
+        sourceName: 'income-statement.txt',
+        documentVersion: 'document-version-001',
+        recordedAt: '2026-10-15T12:00:00Z',
+        technicalSourceFactId: 'source-fact-001',
+        technicalProvenanceId: 'provenance-001',
+      },
+    };
+    if (path === 'v1/financial-profile')
+      return Promise.resolve({
+        financialProfileId: 'financial-profile-reference-customer',
+        revision: 1,
+        updatedAt: fact.source.recordedAt,
+        dataDurability: 'Temporary data',
+        facts: [fact],
+      });
+    if (path === 'v1/financial-profile/facts/ff-income')
+      return Promise.resolve({ current: fact, history: [fact] });
+    return Promise.reject(new Error('unexpected product endpoint'));
+  });
+
+  mount(api);
+
+  const drawer = await screen.findByRole('dialog', { name: 'Financial information details' });
+  expect(await within(drawer).findByText('Stated asset figure', { selector: 'h2' })).toBeVisible();
+  expect(drawer).toHaveTextContent('1 revision');
+  expect(within(drawer).getAllByText('Asset type: ' + (assetType === 'PROPERTY' ? 'Property' : 'Vehicle'))).toHaveLength(2);
 });

@@ -1,14 +1,18 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Monergy.Contracts;
 using Monergy.Platform;
 
 namespace Monergy.UatGateway;
 
+public sealed record ProductAssetTypeSelection(string SourceFactId, string AssetType);
+
 public sealed record ProductFinancialPromotionRequest(
     string OperationId,
-    IReadOnlyList<string> SourceFactIds);
+    IReadOnlyList<string> SourceFactIds,
+    IReadOnlyList<ProductAssetTypeSelection>? AssetTypes = null);
 
 public sealed record ProductFinancialSourceView(
     string SourceName,
@@ -25,7 +29,8 @@ public sealed record ProductFinancialFactView(
     string Currency,
     DateOnly EffectiveDate,
     int Revision,
-    ProductFinancialSourceView Source);
+    ProductFinancialSourceView Source,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AssetType = null);
 
 public sealed record ProductFinancialProfileView(
     string FinancialProfileId,
@@ -187,6 +192,16 @@ public static class ProductFinancialProfileEndpoints
                         StringComparer.Ordinal).Any(group => group.Count() > 1))
                     throw new TenantBoundaryException("FINANCIAL_REVIEW_DUPLICATE_FACT", 409);
 
+                IReadOnlyDictionary<string, string> reviewedTypes;
+                try
+                {
+                    reviewedTypes = FinancialSourceFactBoundary.ReviewedTypes(
+                        selected.Select(fact => (fact.SourceFactId, fact.FactType, (string?)fact.ExtractionVersion)).ToArray(),
+                        submission.AssetTypes?.Select(choice => (choice.SourceFactId, choice.AssetType)).ToArray());
+                }
+                catch (FinancialSourceSelectionException failure)
+                { throw new TenantBoundaryException(failure.Code, 400); }
+
                 var now = DateTimeOffset.UtcNow;
                 var request = new ContractRequest<NormalizeSourceFacts>(
                     Vs02ContractNames.NormalizeSourceFacts,
@@ -200,7 +215,7 @@ public static class ProductFinancialProfileEndpoints
                         ProfileId(customer.CustomerId),
                         customer.CustomerId,
                         reviewed.Result.ProcessingId,
-                        selected.Select(fact => fact with { FactType = FinancialSourceFactBoundary.ForOwner(fact.FactType, fact.ExtractionVersion) }).ToArray(),
+                        selected.Select(fact => fact with { FactType = reviewedTypes[fact.SourceFactId] }).ToArray(),
                         "reviewed-document-facts/1.0.0",
                         now));
 
@@ -291,7 +306,8 @@ public static class ProductFinancialProfileEndpoints
                     provenance.Data.DocumentVersionId,
                     provenance.Data.RecordedAt,
                     provenance.Data.SourceFactId,
-                    provenance.Data.FinancialProvenanceId)));
+                    provenance.Data.FinancialProvenanceId),
+                FinancialSourceFactBoundary.CustomerAssetType(fact.FactType)));
         }
 
         return new ProductFinancialProfileView(
@@ -381,7 +397,8 @@ public static class ProductFinancialProfileEndpoints
                 provenance.Data.DocumentVersionId,
                 provenance.Data.RecordedAt,
                 provenance.Data.SourceFactId,
-                provenance.Data.FinancialProvenanceId));
+                provenance.Data.FinancialProvenanceId),
+            FinancialSourceFactBoundary.CustomerAssetType(factResult.Data.FactType));
     }
 
     private static async Task<ProductFinancialFactView?> ReadFinancialFactExactAsync(
@@ -468,7 +485,8 @@ public static class ProductFinancialProfileEndpoints
                 provenance.Data.DocumentVersionId,
                 provenance.Data.RecordedAt,
                 provenance.Data.SourceFactId,
-                provenance.Data.FinancialProvenanceId));
+                provenance.Data.FinancialProvenanceId),
+            FinancialSourceFactBoundary.CustomerAssetType(factResult.Data.FactType));
     }
 
     private static TrustedSecurityContext Security(
@@ -487,7 +505,7 @@ public static class ProductFinancialProfileEndpoints
         if (!TenantAccessClient.Identifier(jobId, 160) ||
             !jobId.StartsWith("job-processing-", StringComparison.Ordinal))
             throw new TenantBoundaryException("PROCESSING_JOB_INVALID", 400);
-        if (submission.OperationId.Length != 32 ||
+        if (submission.OperationId is null || submission.OperationId.Length != 32 ||
             submission.OperationId.Any(character =>
                 !char.IsAsciiHexDigit(character) || char.IsAsciiLetterUpper(character)))
             throw new TenantBoundaryException("FINANCIAL_OPERATION_INVALID", 400);
@@ -495,6 +513,9 @@ public static class ProductFinancialProfileEndpoints
             submission.SourceFactIds.Count is < 1 or > 50 ||
             submission.SourceFactIds.Distinct(StringComparer.Ordinal).Count() != submission.SourceFactIds.Count ||
             submission.SourceFactIds.Any(id => !TenantAccessClient.Identifier(id, 160)))
+            throw new TenantBoundaryException("FINANCIAL_REVIEW_SELECTION_INVALID", 400);
+        if (submission.AssetTypes?.Count > 50 || submission.AssetTypes?.Any(choice => choice is null ||
+                !TenantAccessClient.Identifier(choice.SourceFactId, 160) || choice.AssetType is not ("PROPERTY" or "VEHICLE")) == true)
             throw new TenantBoundaryException("FINANCIAL_REVIEW_SELECTION_INVALID", 400);
     }
 

@@ -132,3 +132,7 @@ Supported printed-English vehicle purchase invoice PNG/JPEG/single-page PDF yiel
 ## T1-64 financial source-category compatibility
 
 Insurance/Tax review now maps to canonical owner types and back for Passport/history/Search/basic Reports. The shared boundary preserves property/vehicle behavior; untyped generic ASSET adoption remains unsupported. See [bounded receipt](../governance/t1-64-financial-source-category-boundary.md). Physical/integrated UAT remains open.
+
+## T1-65 reviewed generic asset types
+
+Current and recovered review require an explicit Property/Vehicle choice for selected generic text/CSV/bounded XLSX asset figures. The Gateway validates choices against selected owned sources. Financial Profile retains the canonical source type across operation IDs/history; current and historical customer views display it. See [bounded receipt](../governance/t1-65-reviewed-asset-source-types.md). Other asset kinds, full asset records, ownership/current value verification and physical/integrated UAT remain open.

@@ -67,6 +67,19 @@ public sealed class PostgresFinancialProfileRepository : IFinancialProfileReposi
         if (currentProfile is not null && currentProfile.CustomerId != request.Payload.CustomerId)
             throw new InvalidOperationException("Financial Profile ownership conflict.");
 
+        // The profile lock also serializes competing reviewed types under different operation IDs.
+        var incomingTypes = request.Payload.Facts.GroupBy(fact => fact.SourceFactId, StringComparer.Ordinal);
+        if (incomingTypes.Any(group => group.Select(fact => fact.FactType).Distinct(StringComparer.Ordinal).Count() > 1))
+            throw new InvalidOperationException("Source fact type conflict.");
+        var sourceTypes = incomingTypes.ToDictionary(group => group.Key, group => group.First().FactType, StringComparer.Ordinal);
+        var previousSources = await connection.QueryAsync<FinancialFactRecord>(new CommandDefinition($"""
+            SELECT {FactColumns} FROM financial_profile.fact_revisions
+            WHERE financial_profile_id=@Id AND customer_id=@CustomerId AND source_fact_id=ANY(@SourceIds);
+            """, new { Id = request.Payload.FinancialProfileId, request.Payload.CustomerId, SourceIds = sourceTypes.Keys.ToArray() },
+            transaction, cancellationToken: cancellationToken));
+        if (previousSources.Any(fact => sourceTypes[fact.SourceFactId] != fact.FactType))
+            throw new InvalidOperationException("Source fact type conflict.");
+
         var existing = (await connection.QueryAsync<FinancialFactRecord>(new CommandDefinition($"""
             SELECT DISTINCT ON (financial_fact_id) {FactColumns}
             FROM financial_profile.fact_revisions WHERE financial_profile_id=@Id
