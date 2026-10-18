@@ -1,8 +1,16 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest bounded increment: T1-62 property registration document OCR. Classification/OCR/Extraction/Assets remain Partial. Full property records and integrated UAT remain open.
+Status: ACTIVE · Latest bounded increment: T1-63 vehicle purchase invoice OCR. Classification/OCR/Extraction/Assets remain Partial. Full vehicle records and integrated UAT remain open.
 
-## Current T1-62 update — property registration document OCR
+## Current T1-63 update — vehicle purchase invoice OCR
+
+The planned Vehicle Document class (Master sections11–14/41) now includes supported printed-English vehicle purchase invoices in PNG, upright JPEG and unlocked single-page scanned PDF. One early VEHICLE PURCHASE INVOICE title, one Invoice Date/Date of Invoice, one explicit Purchase Value and matching supported currency yield one dated ASSET source candidate. Registration date, invoice total, insured/market/estimated values and filenames are not purchase-value/date substitutes. Mixed titles and incomplete, ambiguous, invalid, conflicting or low-confidence required fields yield no facts.
+
+Original scan/hash/customer/tenant/native controls and explicit customer selection/confirmation remain. The existing property adapter is generalized to AssetSourceFactBoundary: exact vehicle OCR versions map ASSET to canonical VEHICLE; existing property versions keep canonical PROPERTY. Passport/list/detail/history/Search/basic Reports present both as ASSET source figures with original meaning and provenance. Current/recovered Documents identify the invoice; recovered views remain read-only. Receipt: [t1-63-vehicle-purchase-ocr.md](t1-63-vehicle-purchase-ocr.md). No ownership/authenticity/current-value/depreciation or full vehicle-record claim is made.
+
+After paired merge:63 numbered units =62 implementations +1 governance closure. Original29 deliverables remain0 complete,17 partial and12 pending journeys. Workbook version5 was reconciled through T1-62 before this increment; the next workbook version carries T1-63. Original151 IDs/81 features and126 Phase1-applicable memberships remain unchanged. Broader financial model source phases are retained. Live ClamAV/physical PostgreSQL/durable processing/Compose/full browser UAT remain NOT RUN.
+
+## Previous T1-62 update — property registration document OCR
 
 The planned Registration Document class (Master sections11–13/41) now includes printed-English property registration documents in supported PNG, upright JPEG and unlocked single-page scanned PDF. One early PROPERTY REGISTRATION DOCUMENT title, one Registration Date/Date of Registration, one explicit Purchase Value and matching supported currency yield one dated ASSET source candidate. Registration date is not purchase date. Deed date, market/estimated value and filenames are not substitutes. Ambiguous, incomplete, conflicting, mixed-title and low-confidence input yields no facts.
 
@@ -63,6 +71,7 @@ This section supersedes the historical priority/verification labels below. Lates
 | P0 / implemented T1-60 | Loan Sanction Letter OCR in PNG/upright JPEG/single-page PDF; sanctioned amount and EMI preserve dated source meaning and independent review | Receipt t1-60-loan-sanction-ocr.md records pinned native/owner HTTP proof and coexistence with prior outstanding balances. Full loan records, disbursement/current debt, verification, broader classes/layouts and live integrated UAT remain open |
 | P0 / implemented T1-61 | Property sale deed OCR in supported PNG/JPEG/single-page PDF; dated purchase value with explicit review/adoption | Exact evidence is in t1-61-property-sale-deed-ocr.md. Complete property records, ownership/valuation verification, wider document coverage and integrated UAT remain open |
 | P0 / implemented T1-62 | Property registration document OCR; explicit stated purchase value and registration date with independent review/adoption | Receipt t1-62-property-registration-ocr.md. Registration date is not purchase date; full records, ownership/valuation verification and integrated UAT remain open |
+| P0 / implemented T1-63 | Vehicle purchase invoice OCR; explicitly stated purchase figure and invoice date with independent review/adoption | Receipt t1-63-vehicle-purchase-ocr.md. Canonical VEHICLE owner storage and ASSET source presentation; full records/current valuation/ownership and integrated UAT remain open |
 | P0 | Google Drive / OneDrive customer storage journey | Implement actual authorized provider import/status/refresh/disconnect, preserving exact folder/file/document identities; reference gateway is insufficient |
 | P0 | Full Loan account and financial truth | Seven source categories exist. Complete lender/type/sanction/outstanding/rate/EMI/tenure/dates and required asset/liability records; a typed source amount does not complete MON-FIN-006 |
 | P0 | Deterministic net worth | Assets minus Liabilities is already specified. Complete authoritative dated/currency/valuation inputs and customer calculation/provenance; scoring approval is a distinct gate |

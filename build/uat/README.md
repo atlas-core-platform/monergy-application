@@ -124,3 +124,7 @@ T1-61 supports printed-English Property Sale Deed OCR in PNG, upright JPEG and s
 ## T1-62 property registration document OCR
 
 Supported printed-English property registration PNG/JPEG/single-page PDF yields one explicitly stated purchase figure dated by registration, with review before adoption. Registration date is not purchase date. See [bounded verification receipt](../governance/t1-62-property-registration-ocr.md). Full property records and integrated physical UAT remain open.
+
+## T1-63 vehicle purchase invoice OCR
+
+Supported printed-English vehicle purchase invoice PNG/JPEG/single-page PDF yields one explicitly stated purchase figure dated by invoice, with review before adoption. The canonical owner type is VEHICLE; source views retain ASSET presentation. See [bounded receipt](../governance/t1-63-vehicle-purchase-ocr.md). Full vehicle records, current valuation/ownership verification and integrated physical UAT remain open.
