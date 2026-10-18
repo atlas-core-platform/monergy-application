@@ -43,9 +43,11 @@ const formatBytes = (value: number) =>
 function processingFailureMessage(code: string | null): string {
   switch (code) {
     case 'processing.document.unclassified':
-      return "We couldn't recognize a supported document. Check that this is a clear, printed English salary slip, loan statement, insurance policy or investment statement in PNG, upright JPEG or single-page PDF format.";
+      return "We couldn't recognize a supported document. Check that this is a clear, printed English salary slip, loan statement, loan sanction letter, insurance policy or investment statement in PNG, upright JPEG or single-page PDF format.";
     case 'processing.ocr.low-confidence':
       return 'Some document details were unclear. Upload a clearer image and try again.';
+    case 'processing.loan-sanction.incomplete':
+      return 'We need one clear sanctioned amount, one EMI amount, an explicit matching supported currency and an unambiguous sanction date. Check these labels in your loan sanction letter.';
     case 'processing.investment-statement.incomplete':
       return 'We need one clear purchase value, one current value, an explicit matching supported currency and an unambiguous statement date. Check these labels in your investment statement.';
     case 'processing.insurance-policy.incomplete':
@@ -57,11 +59,11 @@ function processingFailureMessage(code: string | null): string {
     case 'processing.jpeg.unsupported':
       return 'Use a clear, upright JPEG image. If the image is rotated or damaged, rotate it upright and save a new JPEG before trying again.';
     case 'processing.pdf.unsupported':
-      return 'Use a readable, unlocked, single-page salary-slip, loan-statement, insurance-policy or investment-statement PDF without forms or scripts. Multi-page and protected PDFs are not supported yet.';
+      return 'Use a readable, unlocked, single-page salary-slip, loan-statement, loan-sanction, insurance-policy or investment-statement PDF without forms or scripts. Multi-page and protected PDFs are not supported yet.';
     case 'processing.ocr.unavailable':
       return 'Image text extraction is temporarily unavailable. Try again when the service is available.';
     default:
-      return 'Check that the document matches a supported salary slip, loan statement, insurance policy, investment statement, structured-text format or financial information CSV or Excel template, then try again.';
+      return 'Check that the document matches a supported salary slip, loan statement, loan sanction letter, insurance policy, investment statement, structured-text format or financial information CSV or Excel template, then try again.';
   }
 }
 
@@ -74,6 +76,7 @@ const typeName = (value: string) =>
     'text/csv': 'Financial information CSV',
     [financialXlsxType]: 'Financial information Excel',
   })[value] ?? value;
+const isSanctionExtraction = (version?: string) => ['loan-sanction-png-ocr/1.0.0', 'loan-sanction-jpeg-ocr/1.0.0', 'loan-sanction-pdf-ocr/1.0.0'].includes(version ?? '');
 const isInvestmentExtraction = (version?: string) => ['investment-statement-png-ocr/1.0.0', 'investment-statement-jpeg-ocr/1.0.0', 'investment-statement-pdf-ocr/1.0.0'].includes(version ?? '');
 const isInsuranceExtraction = (version?: string) => ['insurance-policy-png-ocr/1.0.0', 'insurance-policy-jpeg-ocr/1.0.0', 'insurance-policy-pdf-ocr/1.0.0'].includes(version ?? '');
 const extractionLabel = (fact: { confidence: number; extractionVersion?: string }) =>
@@ -582,7 +585,7 @@ export default function EvidenceExperience() {
         failure instanceof AccessApiError && failure.status === 403
           ? 'You no longer have access to extract details from this document.'
           : failure instanceof AccessApiError && failure.status === 422
-            ? 'Extracting details supports structured text, financial information CSV/Excel and printed English salary slips, loan statements, insurance policies or investment statements in PNG, upright JPEG or single-page PDF format.'
+            ? 'Extracting details supports structured text, financial information CSV/Excel and printed English salary slips, loan statements, loan sanction letters, insurance policies or investment statements in PNG, upright JPEG or single-page PDF format.'
             : "We couldn't extract details from this document. Your financial information has not changed.",
       );
     } finally {
@@ -1046,6 +1049,10 @@ export default function EvidenceExperience() {
                     Extracted items <strong>{recoveredResult.facts.length}</strong>
                   </span>
                 </div>
+                {recoveredResult.facts.some((fact) => isSanctionExtraction(fact.extractionVersion)) && (
+                  <Alert showIcon type="info" title="Recognized as a loan sanction letter"
+                    description="Sanctioned amount and EMI were read as stated on the letter's date. Review each figure against your document. This does not verify the lender's offer, disbursement, current debt, repayment status or authenticity." />
+                )}
                 {recoveredResult.facts.some((fact) => isInvestmentExtraction(fact.extractionVersion)) && (
                   <Alert showIcon type="info" title="Recognized as an investment statement"
                     description="Purchase value and current value were read as stated on the document's date. Review each figure against your document. This does not establish a live price, return, gain, verified position or asset valuation." />
@@ -1495,9 +1502,9 @@ export default function EvidenceExperience() {
                 <p>
                   {['text/plain', 'text/csv', financialXlsxType, 'image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)
                     ? ['image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType)
-                      ? 'For printed English salary slips, loan statements, insurance policies or investment statements in PNG, upright JPEG or single-page PDF format with labelled net pay, currency and pay date, outstanding balance, currency and statement date, sum assured, premium, currency and policy date, or purchase value, current value, currency and statement date. Review the extracted figures against your document.'
+                      ? 'For printed English salary slips, loan statements, loan sanction letters, insurance policies or investment statements in PNG, upright JPEG or single-page PDF format. Each supported document needs clear labelled amounts, a supported currency and the required document date. Review the figures against your document.'
                       : 'Review supported financial source figures before adding them to Financial information.'
-                    : 'Extracting details supports structured text, financial information CSV/Excel and printed English salary slips, loan statements, insurance policies or investment statements in PNG, upright JPEG or single-page PDF format.'}
+                    : 'Extracting details supports structured text, financial information CSV/Excel and printed English salary slips, loan statements, loan sanction letters, insurance policies or investment statements in PNG, upright JPEG or single-page PDF format.'}
                 </p>
               </div>
               <Button
@@ -1639,6 +1646,10 @@ export default function EvidenceExperience() {
                   processingFailureMessage(processing.processing?.failureCode ?? processing.job.failureCode)
                 }
               />
+            )}
+            {processing?.facts.some((fact) => isSanctionExtraction(fact.extractionVersion)) && (
+              <Alert showIcon type="info" title="Recognized as a loan sanction letter"
+                description="Sanctioned amount and EMI were read as stated on the letter's date. Review each figure against your document. This does not verify the lender's offer, disbursement, current debt, repayment status or authenticity." />
             )}
             {processing?.facts.some((fact) => isInvestmentExtraction(fact.extractionVersion)) && (
               <Alert showIcon type="info" title="Recognized as an investment statement"

@@ -89,7 +89,7 @@ public sealed class LoanStatementOcrTests
     [InlineData("LOAN STATEMENT|SALARY SLIP")]
     [InlineData("SALARY SLIP|LOAN STATEMENT")]
     [InlineData("LOAN STATEMENT|LOAN ACCOUNT STATEMENT")]
-    [InlineData("LOAN SANCTION LETTER")]
+    [InlineData("LOAN APPLICATION")]
     [InlineData("INVOICE")]
     [InlineData("Header|Header|Header|Header|Header|Header|Header|Header|Header|Header|LOAN STATEMENT")]
     public async Task UnknownOrMultipleKnownTitlesFailClassification(string titles)
