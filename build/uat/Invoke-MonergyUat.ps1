@@ -63,7 +63,9 @@ function Invoke-UatDocker([string[]]$Arguments) {
     if ($LASTEXITCODE -ne 0) { throw "Docker command failed: $($Arguments[0])" }
 }
 function Compose([string[]]$Arguments) {
-    Invoke-UatDocker (@('compose','--env-file',(Join-Path $folder 'compose.env'),'-f',(Join-Path $PSScriptRoot 'compose.yml'),'--project-name',"monergy-uat-$($state.instanceId.Substring(0,8))") + $Arguments)
+    $composeArgs = @('compose','--env-file',(Join-Path $folder 'compose.env'),'-f',(Join-Path $PSScriptRoot 'compose.yml'),'--project-name',"monergy-uat-$($state.instanceId.Substring(0,8))")
+    if ($state.onboarding) { $composeArgs += @('--profile','document-security') }
+    Invoke-UatDocker ($composeArgs + $Arguments)
 }
 function Connection($database, $scope) {
     $password = $database."${scope}Password"
@@ -192,7 +194,7 @@ if ($Action -in @('Prepare','Start')) {
             $config.Monergy.ReferenceAdapters='true'
             if ($onboarding -and $service -eq 'evidence') {
                 $config.Monergy.OnboardingFixtures='true'
-                $config.Monergy.ProductIntake=@{ Enabled='true'; EvidenceToken=$state.tokens.evidenceIntake; ProcessingToken=$state.tokens.evidenceProcessing }
+                $config.Monergy.ProductIntake=@{ Enabled='true'; EvidenceToken=$state.tokens.evidenceIntake; ProcessingToken=$state.tokens.evidenceProcessing; ClamdPort=3310 }
             } elseif ($onboarding -and $service -eq 'document-intelligence') {
                 $config.Monergy.DocumentProcessing=@{
                     EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceProcessing

@@ -38,26 +38,36 @@ public static class EvidenceReferenceIntakeEndpoints
         if (customerTenants.Count == 0 || customerTenants.Any(entry =>
                 !TenantAccessClient.Identifier(entry.Key, 128) || !TenantAccessClient.Identifier(entry.Value, 64)))
             throw new InvalidOperationException("Evidence processing requires valid operator-owned customer/tenant bindings.");
-        endpoints.MapPost("/internal/local/v1/evidence/content", (
+        endpoints.MapPost("/internal/local/v1/evidence/content", async (
             HttpRequest request,
             ReferenceEvidenceContentRequest input,
-            ReferenceEvidenceContentStore content) =>
+            ReferenceEvidenceContentStore content, IEvidenceMalwareScanner scanner, HttpResponse response, CancellationToken ct) =>
         {
+            response.Headers.CacheControl = "no-store";
             if (!LocalControlToken.IsValid(request.Headers["X-Monergy-Product-Token"].ToString(), token))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             if (!SupportedContentTypes.Contains(input.ContentType))
                 return Results.BadRequest(new { error = "EVIDENCE_CONTENT_TYPE_UNSUPPORTED" });
-            if (input.OperationId.Length != 32 || input.OperationId.Any(character =>
+            if (input.OperationId is null || input.OperationId.Length != 32 || input.OperationId.Any(character =>
                 !char.IsAsciiHexDigit(character) || char.IsAsciiLetterUpper(character)))
                 return Results.BadRequest(new { error = "EVIDENCE_OPERATION_INVALID" });
             byte[] value;
             try { value = Convert.FromBase64String(input.ContentBase64); }
-            catch (FormatException) { return Results.BadRequest(new { error = "EVIDENCE_CONTENT_INVALID" }); }
+            catch (Exception failure) when (failure is FormatException or ArgumentNullException) { return Results.BadRequest(new { error = "EVIDENCE_CONTENT_INVALID" }); }
             if (value.Length is < 1 or > 1_048_576)
                 return Results.BadRequest(new { error = "EVIDENCE_CONTENT_SIZE_INVALID" });
             if (!ContentMatchesType(value, input.ContentType))
                 return Results.BadRequest(new { error = "EVIDENCE_CONTENT_TYPE_MISMATCH" });
-            try { return Results.Ok(content.Stage(input.OperationId, value, input.ContentType)); }
+            try
+            {
+                var check = await scanner.CheckAsync(value, ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
+                return Results.Ok(content.StageScanned(input.OperationId, value, input.ContentType, check));
+            }
+            catch (EvidenceScanRejectedException)
+            { return Results.Json(new { error = "EVIDENCE_SCAN_REJECTED" }, statusCode: 422); }
+            catch (EvidenceScanUnavailableException)
+            { return Results.Json(new { error = "EVIDENCE_SCAN_UNAVAILABLE" }, statusCode: 503); }
             catch (InvalidOperationException)
             { return Results.Conflict(new { error = "EVIDENCE_OPERATION_CONFLICT" }); }
         });

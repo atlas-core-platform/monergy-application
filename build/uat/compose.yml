@@ -99,6 +99,30 @@ services:
         target: /app/evidence/appsettings.Development.json
     depends_on:
       workspace: { condition: service_started }
+  clamav:
+    image: clamav/clamav:1.4.6-debian@sha256:1d4083fccfcd485cdaeee593db7655c923afdb8ed528e828d03e1c8b1e351bec
+    profiles: [document-security]
+    network_mode: service:workspace
+    user: '1000:1000'
+    entrypoint: [/init-unprivileged]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    mem_limit: 4g
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000,mode=1770
+      - /var/log/clamav:rw,noexec,nosuid,size=8m,uid=1000,gid=1000,mode=0750
+    environment:
+      TZ: Etc/UTC
+      FRESHCLAM_CHECKS: '12'
+      CLAMAV_NO_MILTERD: 'true'
+    volumes: ['clamav-signatures:/var/lib/clamav']
+    configs:
+      - source: evidence-clamd
+        target: /etc/clamav/clamd.conf
+    restart: unless-stopped
+    depends_on:
+      workspace: { condition: service_started }
   document-intelligence:
     <<: *runtime
     network_mode: service:workspace
@@ -208,6 +232,10 @@ services:
 volumes:
   tenant-data:
   onboarding-data:
+  clamav-signatures:
+configs:
+  evidence-clamd:
+    file: ./clamd.conf
 secrets:
   postgres-password:
     file: '${UAT_CONFIG_ROOT}/postgres-password'

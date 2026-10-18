@@ -18,6 +18,18 @@ if (physicalPersistence)
     builder.Services.AddEvidencePhysicalPersistence(builder.Configuration);
 }
 
+if (referenceAdapters && builder.Configuration.GetValue<bool>("Monergy:ProductIntake:Enabled"))
+{
+    builder.Services.AddHealthChecks().AddCheck<Monergy.Services.Evidence.Infrastructure.EvidenceScannerHealthCheck>("upload-malware-scanner");
+    builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 1_500_000);
+    builder.Services.ConfigureHttpJsonOptions(options =>
+    {
+        options.SerializerOptions.RespectRequiredConstructorParameters = true;
+        options.SerializerOptions.RespectNullableAnnotations = true;
+        options.SerializerOptions.UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow;
+    });
+}
+
 var app = builder.Build();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
 app.MapHealthChecks("/health/ready");

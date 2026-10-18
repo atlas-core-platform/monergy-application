@@ -10,7 +10,8 @@ public sealed record EvidenceContentDescriptor(
     string ContentType,
     long ContentLength = 0,
     string? StorageKey = null,
-    string? StorageVersionId = null);
+    string? StorageVersionId = null,
+    EvidenceMalwareCheck? MalwareCheck = null);
 
 public sealed record EvidenceVersionRecord(
     string DocumentId,
@@ -114,6 +115,11 @@ public sealed class EvidenceApplication(
                 ContractErrorCategory.PreconditionFailed,
                 "The staged evidence content could not be verified.");
         }
+
+        if (payload.ContentReference.StartsWith("reference://customer-intake/", StringComparison.Ordinal) &&
+            !EvidenceMalwarePolicy.Verified(content.MalwareCheck, content.Sha256, timeProvider.GetUtcNow()))
+            return ContractResult<DocumentVersionCreatedResult>.Rejected(request, "evidence.scan.unverified",
+                ContractErrorCategory.PreconditionFailed, "The uploaded content has no current verified malware check.");
 
         var now = timeProvider.GetUtcNow();
         var candidate = new EvidenceVersionRecord(

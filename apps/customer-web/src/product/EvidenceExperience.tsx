@@ -217,55 +217,46 @@ export default function EvidenceExperience() {
     };
   }, [loadProcessingActivity]);
   useEffect(() => {
-    if (!api || !canReadFinancial) {
-      setFinancialProfile(null);
-      setFinancialLinkError('');
-      return;
-    }
     const controller = new AbortController();
-    setFinancialLinkError('');
-    void getFinancialProfile(api, controller.signal)
-      .then(setFinancialProfile)
-      .catch((failure) => {
-        if (!controller.signal.aborted) {
-          setFinancialProfile(null);
-          setFinancialLinkError(
-            failure instanceof AccessApiError && failure.status === 403
+    const start = window.setTimeout(() => {
+      if (!api || !canReadFinancial) {
+        setFinancialProfile(null); setFinancialLinkError(''); return;
+      }
+      setFinancialLinkError('');
+      void getFinancialProfile(api, controller.signal)
+        .then(value => { if (!controller.signal.aborted) setFinancialProfile(value); })
+        .catch((failure: unknown) => {
+          if (!controller.signal.aborted) {
+            setFinancialProfile(null);
+            setFinancialLinkError(failure instanceof AccessApiError && failure.status === 403
               ? "Linked financial information isn't included in your current access."
-              : "We couldn't refresh linked financial information.",
-          );
-        }
-      });
-    return () => controller.abort();
+              : "We couldn't refresh linked financial information.");
+          }
+        });
+    }, 0);
+    return () => { window.clearTimeout(start); controller.abort(); };
   }, [api, canReadFinancial]);
   useEffect(() => {
-    if (!selectedEvidence || !api || !canRead) {
-      setVersionHistory(null);
-      setVersionHistoryError('');
-      setVersionHistoryBusy(false);
-      return;
-    }
     const controller = new AbortController();
-    setVersionHistory(null);
-    setVersionHistoryError('');
-    setVersionHistoryBusy(true);
-    void getEvidenceVersionHistory(api, selectedEvidence.documentId, controller.signal)
-      .then(setVersionHistory)
-      .catch((failure) => {
-        if (controller.signal.aborted) return;
-        setVersionHistory(null);
-        setVersionHistoryError(
-          failure instanceof AccessApiError && failure.status === 403
+    const start = window.setTimeout(() => {
+      if (!selectedEvidence || !api || !canRead) {
+        setVersionHistory(null); setVersionHistoryError(''); setVersionHistoryBusy(false); return;
+      }
+      setVersionHistory(null); setVersionHistoryError(''); setVersionHistoryBusy(true);
+      void getEvidenceVersionHistory(api, selectedEvidence.documentId, controller.signal)
+        .then(value => { if (!controller.signal.aborted) setVersionHistory(value); })
+        .catch((failure: unknown) => {
+          if (controller.signal.aborted) return;
+          setVersionHistory(null);
+          setVersionHistoryError(failure instanceof AccessApiError && failure.status === 403
             ? "You no longer have access to this document history."
             : failure instanceof AccessApiError && failure.status === 404
               ? "This document history isn't available in your current document access."
-              : "We couldn't refresh this document's version history.",
-        );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setVersionHistoryBusy(false);
-      });
-    return () => controller.abort();
+              : "We couldn't refresh this document's version history.");
+        })
+        .finally(() => { if (!controller.signal.aborted) setVersionHistoryBusy(false); });
+    }, 0);
+    return () => { window.clearTimeout(start); controller.abort(); };
   }, [api, canRead, selectedEvidence]);
 
   useEffect(() => {
@@ -278,7 +269,7 @@ export default function EvidenceExperience() {
     setSourceFocusError('');
     void getEvidenceSource(api, version, controller.signal)
       .then(setFocusedSource)
-      .catch((failure) => {
+      .catch((failure: unknown) => {
         if (controller.signal.aborted) return;
         setSourceFocusError(
           failure instanceof AccessApiError && failure.status === 403
@@ -291,7 +282,7 @@ export default function EvidenceExperience() {
       .finally(() => {
         if (!controller.signal.aborted) setSourceFocusBusy(false);
       });
-    return () => controller.abort();
+    return () => { controller.abort(); };
   }, [api, canRead]);
   const linkedFactsByVersion = useMemo(() => {
     const grouped = new Map<string, ProductFinancialFact[]>();
@@ -319,14 +310,11 @@ export default function EvidenceExperience() {
 
   useEffect(() => {
     if (!recoveredResult || trustedFactsBySourceKey.size === 0) return;
-    setRecoveredSelectedSourceFactIds((current) =>
-      current.filter(
-        (sourceFactId) =>
-          !trustedFactsBySourceKey.has(
-            financialSourceKey(sourceFactId, recoveredResult.documentVersionId),
-          ),
-      ),
-    );
+    const start = window.setTimeout(() => {
+      setRecoveredSelectedSourceFactIds((current) => current.filter((sourceFactId) =>
+        !trustedFactsBySourceKey.has(financialSourceKey(sourceFactId, recoveredResult.documentVersionId))));
+    }, 0);
+    return () => { window.clearTimeout(start); };
   }, [recoveredResult, trustedFactsBySourceKey]);
 
   const visibleEvidence = useMemo(() => {
@@ -421,7 +409,11 @@ export default function EvidenceExperience() {
       window.setTimeout(close, 250);
     } catch (failure) {
       setError(
-        failure instanceof AccessApiError && failure.status === 403
+        failure instanceof AccessApiError && failure.code === 'EVIDENCE_SCAN_REJECTED'
+          ? "This file failed the security check and was not accepted. Close this review and choose another file."
+          : failure instanceof AccessApiError && failure.code === 'EVIDENCE_SCAN_UNAVAILABLE'
+            ? "The file security check is unavailable. This file has not been accepted. Try again when the check is available."
+            : failure instanceof AccessApiError && failure.status === 403
           ? "You don't have permission to upload documents. Contact your organization administrator."
           : failure instanceof AccessApiError && failure.status === 409
             ? "We couldn't confirm this upload because the same request was used for different content. Choose the file again."
@@ -482,8 +474,7 @@ export default function EvidenceExperience() {
     if (
       !api ||
       !recoveredResultJob ||
-      !recoveredResult ||
-      recoveredResult.state !== 'Completed' ||
+      !recoveredResult?.jobId ||
       recoveredSelectedSourceFactIds.length === 0 ||
       recoveredPromotionBusy ||
       !canUpdateFinancial ||
@@ -577,8 +568,7 @@ export default function EvidenceExperience() {
   const addReviewedFacts = async () => {
     if (
       !api ||
-      !processing?.job ||
-      processing.job.state !== 'Completed' ||
+      processing?.job.state !== 'Completed' ||
       selectedSourceFactIds.length === 0 ||
       promotionBusy ||
       !canUpdateFinancial
@@ -942,7 +932,7 @@ export default function EvidenceExperience() {
                     {processingActivityLabel(item.state)}
                   </Tag>
                   <div className="product-processing-activity-actions">
-                    {item.state === 'Completed' && canReadProcessingActivity && canRead && (
+                    {item.state === 'Completed' && canRead && (
                       <Button
                         type="link"
                         onClick={() => {
@@ -1055,8 +1045,7 @@ export default function EvidenceExperience() {
                             <Checkbox
                               checked={selected}
                               disabled={recoveredPromotionBusy || Boolean(recoveredPromotionResult)}
-                              onChange={(event) =>
-                                toggleRecoveredSourceFact(fact.sourceFactId, event.target.checked)
+                              onChange={(event) => { toggleRecoveredSourceFact(fact.sourceFactId, event.target.checked); }
                               }
                               aria-label={'Add ' + fact.label + ' to financial information'}
                             />
@@ -1622,8 +1611,7 @@ export default function EvidenceExperience() {
                       <Checkbox
                         checked={selectedSourceFactIds.includes(fact.sourceFactId)}
                         disabled={promotionBusy || Boolean(promotionResult)}
-                        onChange={(event) =>
-                          toggleSourceFact(fact.sourceFactId, event.target.checked)
+                        onChange={(event) => { toggleSourceFact(fact.sourceFactId, event.target.checked); }
                         }
                         aria-label={'Add ' + fact.label + ' to financial information'}
                       />
@@ -1724,7 +1712,7 @@ export default function EvidenceExperience() {
             {busy && (
               <div className="product-processing-progress" aria-live="polite">
                 <Spin size="small" />
-                <p>Uploading document…</p>
+                <p>Checking file security and uploading document…</p>
               </div>
             )}
             <dl>
