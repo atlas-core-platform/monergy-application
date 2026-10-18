@@ -11,6 +11,7 @@ namespace Monergy.Services.DocumentIntelligence.Infrastructure;
 internal static class FinancialDocumentOcrClassifier
 {
     private static readonly Regex SalaryTitle = Pattern(@"^(SALARY\s+SLIP|PAY\s*SLIP)$");
+    private static readonly Regex SanctionTitle = Pattern(@"^LOAN\s+SANCTION\s+LETTER$");
     private static readonly Regex InvestmentTitle = Pattern(@"^INVESTMENT\s+STATEMENT$");
     private static readonly Regex InsuranceTitle = Pattern(@"^(?:LIFE\s+)?INSURANCE\s+POLICY$");
     private static readonly Regex LoanTitle = Pattern(@"^LOAN(?:\s+ACCOUNT)?\s+STATEMENT$");
@@ -29,10 +30,12 @@ internal static class FinancialDocumentOcrClassifier
         EvidenceContent content, string processingId, string tsv, string salaryExtractionVersion)
     {
         var lines = ParseTsv(tsv);
-        // A second known title anywhere in the page is ambiguous, including mixed salary/loan/insurance/investment pages.
-        var titles = lines.Where(line => SalaryTitle.IsMatch(line.Text) || LoanTitle.IsMatch(line.Text) || InsuranceTitle.IsMatch(line.Text) || InvestmentTitle.IsMatch(line.Text)).ToArray();
+        // A second known title anywhere in the page is ambiguous, including mixed salary/loan statement/sanction/insurance/investment pages.
+        var titles = lines.Where(line => SalaryTitle.IsMatch(line.Text) || LoanTitle.IsMatch(line.Text) || InsuranceTitle.IsMatch(line.Text) || InvestmentTitle.IsMatch(line.Text) || SanctionTitle.IsMatch(line.Text)).ToArray();
         if (titles.Length != 1 || titles[0].Number > 10)
             throw new DocumentRecognitionException(DocumentRecognitionFailure.Unclassified);
+        if (SanctionTitle.IsMatch(titles[0].Text))
+            return LoanSanctionOcrExtractor.CreateCandidates(content, processingId, lines, titles[0], salaryExtractionVersion);
         if (InvestmentTitle.IsMatch(titles[0].Text))
             return InvestmentStatementOcrExtractor.CreateCandidates(content, processingId, lines, titles[0], salaryExtractionVersion);
         if (InsuranceTitle.IsMatch(titles[0].Text))
