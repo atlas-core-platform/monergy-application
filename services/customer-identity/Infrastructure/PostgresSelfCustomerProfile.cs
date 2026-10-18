@@ -37,16 +37,21 @@ public sealed class PostgresSelfCustomerProfile(PostgresTenantSessions sessions)
         return new(tenant, actor, row.CustomerId, row.DisplayName, row.Email, row.Mobile, row.Version, Utc(row.UpdatedAt), Utc(row.EmailVerifiedAt));
     }
 
-    public async Task<SelfCustomerProfileReceipt> SaveAsync(string tenant, string actor, SelfCustomerProfileChange change, DateTimeOffset now, CancellationToken ct)
+    public async Task<SelfCustomerProfileReceipt> SaveAsync(string tenant, string actor, string customer, SelfCustomerProfileChange change, DateTimeOffset now, CancellationToken ct)
     {
         await using var connection = await OpenAsync(tenant, ct).ConfigureAwait(false);
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        // Serialize edits to this profile without granting UPDATE on the
+        // ownership table merely to obtain a SELECT FOR UPDATE row lock.
+        await connection.ExecuteAsync(new CommandDefinition(
+            "SELECT pg_advisory_xact_lock(hashtextextended(@Customer, 44));",
+            new { Customer = customer }, transaction, cancellationToken: ct)).ConfigureAwait(false);
         var customers = (await connection.QueryAsync<string>(new CommandDefinition("""
             SELECT customer_id FROM customer_identity.customers WHERE owner_actor_id=@Actor AND active
-            ORDER BY customer_id LIMIT 2 FOR UPDATE;
+            ORDER BY customer_id LIMIT 2;
             """, new { Actor = actor }, transaction, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
         if (customers.Length != 1) throw new TenantAccessException("OWNED_CUSTOMER_REQUIRED", 403);
-        var customer = customers[0];
+        if (customers[0] != customer) throw new TenantAccessException("PROFILE_CUSTOMER_CHANGED", 409);
         var operation = Guid.ParseExact(change.OperationId, "N");
         var fingerprint = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(
             new { Customer = customer, Actor = actor, change.ExpectedVersion, change.DisplayName, change.Mobile }))));
@@ -75,6 +80,11 @@ public sealed class PostgresSelfCustomerProfile(PostgresTenantSessions sessions)
             VALUES (@Operation,@Customer,@Actor,@Fingerprint,@Version,@Now);
             """, new { Customer = customer, change.DisplayName, change.Mobile, Version = version, Now = now,
                 Operation = operation, Actor = actor, Fingerprint = fingerprint }, transaction, cancellationToken: ct)).ConfigureAwait(false);
+        var stillOwned = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            SELECT EXISTS(SELECT 1 FROM customer_identity.customers WHERE customer_id=@Customer AND owner_actor_id=@Actor AND active)
+                AND (SELECT count(*) FROM customer_identity.customers WHERE owner_actor_id=@Actor AND active)=1;
+            """, new { Customer = customer, Actor = actor }, transaction, cancellationToken: ct)).ConfigureAwait(false);
+        if (!stillOwned) throw new TenantAccessException("PROFILE_CUSTOMER_CHANGED", 409);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
         return new(change.OperationId, version);
     }

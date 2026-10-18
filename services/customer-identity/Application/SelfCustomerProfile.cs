@@ -10,7 +10,7 @@ public interface ISelfCustomerProfileRepository
 {
     Task<SelfCustomerProfile?> ReadAsync(string tenant, string actor, CancellationToken ct);
     Task<bool> OwnsAsync(string tenant, string actor, string customer, CancellationToken ct);
-    Task<SelfCustomerProfileReceipt> SaveAsync(string tenant, string actor, SelfCustomerProfileChange change, DateTimeOffset now, CancellationToken ct);
+    Task<SelfCustomerProfileReceipt> SaveAsync(string tenant, string actor, string customer, SelfCustomerProfileChange change, DateTimeOffset now, CancellationToken ct);
 }
 
 // Intrinsic self-service identity operation, like ending one's own session or
@@ -40,7 +40,7 @@ public sealed class SelfCustomerProfileApplication(
         var profile = await repository.ReadAsync(current.TenantId, current.ActorId, ct).ConfigureAwait(false)
             ?? throw new TenantAccessException("OWNED_CUSTOMER_REQUIRED", 403);
         ValidateBinding(profile, current);
-        var receipt = await repository.SaveAsync(current.TenantId, current.ActorId,
+        var receipt = await repository.SaveAsync(current.TenantId, current.ActorId, profile.CustomerId,
             change with { DisplayName = change.DisplayName.Trim(), Mobile = mobile }, clock.GetUtcNow(), ct).ConfigureAwait(false);
         await ConfirmAsync(lookup, current, profile.CustomerId, ct).ConfigureAwait(false);
         return receipt;

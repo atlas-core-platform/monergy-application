@@ -41,7 +41,6 @@ export default function CustomerProfileExperience() {
     pending.current?.abort();
     const controller = new AbortController(); pending.current = controller;
     const id = ++generation.current;
-    setView({ api, scope, profile: null, loading: true, saving: false, dirty: false, uncertain: false, error: '', notice: '' });
     try {
       const profile = await api.selfCustomerProfile<unknown>('GET', undefined, controller.signal);
       if (id !== generation.current || controller.signal.aborted) return;
@@ -54,8 +53,8 @@ export default function CustomerProfileExperience() {
     }
   }, [api, scope, customer, tenant, actor, form]);
   useEffect(() => {
-    void load();
-    return () => { generation.current += 1; pending.current?.abort(); };
+    const start = window.setTimeout(() => { void load(); }, 0);
+    return () => { window.clearTimeout(start); generation.current += 1; pending.current?.abort(); };
   }, [load]);
   const save = async (values: ProfileDraft) => {
     if (!api || !current?.profile || current.saving || current.uncertain) return;
@@ -64,24 +63,25 @@ export default function CustomerProfileExperience() {
     pending.current?.abort();
     const controller = new AbortController(); pending.current = controller;
     const id = ++generation.current;
+    const isCurrent = () => id === generation.current && !controller.signal.aborted;
     setView({ ...current, saving: true, error: '', notice: '' });
     try {
       const receipt = await api.selfCustomerProfile<{ operationId?: string; version?: number }>('PUT', {
         operationId, expectedVersion: expected, displayName: values.displayName.trim(), mobile: values.mobile.trim() || null,
       }, controller.signal);
-      if (id !== generation.current || controller.signal.aborted) return;
+      if (!isCurrent()) return;
       if (receipt.operationId !== operationId || receipt.version !== expected + 1)
         throw new AccessApiError(503, 'PROFILE_RECEIPT_INVALID');
       const profile = await api.selfCustomerProfile<unknown>('GET', undefined, controller.signal);
-      if (id !== generation.current || controller.signal.aborted) return;
+      if (!isCurrent()) return;
       if (!validProfile(profile, tenant, actor, customer) || profile.version < receipt.version)
         throw new AccessApiError(503, 'PROFILE_RESPONSE_INVALID');
       await refreshContext?.();
-      if (id !== generation.current || controller.signal.aborted) return;
+      if (!isCurrent()) return;
       form.setFieldsValue({ displayName: profile.displayName, mobile: profile.mobile ?? '' });
       setView({ api, scope, profile, loading: false, saving: false, dirty: false, uncertain: false, error: '', notice: 'Your profile has been saved.' });
     } catch (failure) {
-      if (id !== generation.current || controller.signal.aborted) return;
+      if (!isCurrent()) return;
       setView({ ...current, saving: false, dirty: true, uncertain: true, notice: '', error:
         failure instanceof AccessApiError && failure.status === 409
           ? 'Your profile changed since it was loaded. Reload the latest profile before saving again.'
@@ -91,7 +91,7 @@ export default function CustomerProfileExperience() {
   if (!api || !customer) return <Alert type="warning" showIcon title="Connect to your own customer workspace to open My Profile." />;
   return <section className="product-page" aria-labelledby="customer-profile-title">
     <header className="product-page-header"><div><p className="workspace-eyebrow">YOUR ACCOUNT</p><h1 id="customer-profile-title">My Profile</h1><p>Keep your name and contact details up to date.</p></div>
-      <Button disabled={current?.saving} loading={current?.loading} onClick={() => { void load(); }}>{current?.dirty ? 'Discard changes and reload' : 'Reload profile'}</Button>
+      <Button disabled={current?.saving} loading={!current && !!api} onClick={() => { setView(null); void load(); }}>{current?.dirty ? 'Discard changes and reload' : 'Reload profile'}</Button>
     </header>
     {current?.error && <Alert type="error" showIcon title={current.error} />}
     {current?.notice && <Alert type="success" showIcon title={current.notice} />}
@@ -104,7 +104,7 @@ export default function CustomerProfileExperience() {
           ? new Date(current.profile.updatedAt).toLocaleString() : 'No profile changes recorded' },
       ]} />
       <Form<ProfileDraft> form={form} layout="vertical" disabled={current.saving || current.uncertain} onFinish={(values) => { void save(values); }}
-        onValuesChange={(_: unknown, values: ProfileDraft) => { setView({ ...current, dirty: values.displayName.trim() !== current.profile?.displayName || (values.mobile.trim() || null) !== current.profile?.mobile, notice: '' }); }}>
+        onValuesChange={(_: unknown, values: ProfileDraft) => { setView({ ...current, dirty: values.displayName.trim() !== current.profile?.displayName || (values.mobile.trim() || null) !== current.profile.mobile, notice: '' }); }}>
         <Form.Item name="displayName" label="Your name" rules={[{ required: true, whitespace: true, message: 'Enter your name.' }, { max: 120, message: 'Use 120 characters or fewer.' }]}><Input maxLength={120} autoComplete="name" /></Form.Item>
         <Form.Item name="mobile" label="Mobile number" extra="Optional contact detail. This number has not been verified for sign-in." rules={[{ pattern: /^\+[1-9][0-9]{6,14}$/, message: 'Include the country code, for example +919876543210.' }]}><Input maxLength={16} type="tel" autoComplete="tel" placeholder="+919876543210" /></Form.Item>
         <Space><Button type="primary" htmlType="submit" loading={current.saving} disabled={!current.dirty || current.uncertain}>Save profile</Button>
