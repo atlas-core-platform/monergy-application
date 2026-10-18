@@ -7,7 +7,8 @@ param(
     [ValidateSet('A900','A100','A200','A300')][string]$Actor = 'A900',
     [switch]$ConfirmReset,
     [switch]$EnableOnboarding,
-    [switch]$EnableEmailAccess
+    [switch]$EnableEmailAccess,
+    [string]$AccountAgreementFile
 )
 $ErrorActionPreference = 'Stop'
 if ($EnableOnboarding -and $Profile -eq 'default') { throw 'Use a new named profile for onboarding, for example -Profile onboarding -EnableOnboarding. The retained default profile is not upgraded.' }
@@ -173,6 +174,16 @@ if ($Action -in @('Prepare','Start')) {
                     @{ TenantId='T002'; ResourceId='C002'; DisplayName='Sample Customer Two'; SecondaryLabel='Additional UAT customer' }
                 )
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.CustomerIdentityDatabases[$db.tenant] = Connection $db 'runtime' }
+                if (-not [string]::IsNullOrWhiteSpace($AccountAgreementFile)) {
+                    $publicationFile = Get-Item -LiteralPath $AccountAgreementFile -ErrorAction Stop
+                    if ($publicationFile.PSIsContainer -or $publicationFile.Length -gt 1048576) { throw 'Invalid account-agreement publication file.' }
+                    $publication = Get-Content -LiteralPath $publicationFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+                    if ($null -eq $publication -or @($publication.PSObject.Properties.Name).Count -ne 1 -or
+                        $publication.PSObject.Properties.Name -notcontains 'Publications') { throw 'Account agreements require a Publications object.' }
+                    # Owner validates tenant, kinds, exact body hashes and publication
+                    # revision at startup; no fabricated content or acceptance is seeded.
+                    $config.Monergy.AccountAgreements = $publication
+                }
                 if ($EnableEmailAccess) {
                     $smtpPort = 587
                     if (-not [string]::IsNullOrWhiteSpace($env:MONERGY_EMAIL_SMTP_PORT)) { $smtpPort = [int]$env:MONERGY_EMAIL_SMTP_PORT }
