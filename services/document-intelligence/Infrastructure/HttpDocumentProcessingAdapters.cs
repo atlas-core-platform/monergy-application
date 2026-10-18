@@ -17,14 +17,15 @@ public sealed record EvidenceProcessingSource(
     string ContentReference,
     string ContentSha256,
     string ContentType,
-    string Content);
+    string Content,
+    string? ContentBase64 = null);
 
 public sealed class HttpEvidenceContentReader : IEvidenceContentReader, IDisposable
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true };
     private readonly HttpClient client = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
-    { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1_048_576 };
+    { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1_500_000 };
     private readonly Uri evidence;
     private readonly string token;
 
@@ -55,15 +56,26 @@ public sealed class HttpEvidenceContentReader : IEvidenceContentReader, IDisposa
             using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
             if (response.StatusCode == HttpStatusCode.NotFound) return null;
             if (response.StatusCode == HttpStatusCode.UnprocessableEntity)
-                throw new EvidenceContentUnsupportedException("The LOCAL processor supports structured text and template CSV evidence only.");
+                throw new EvidenceContentUnsupportedException("This evidence format is unsupported by the LOCAL processor.");
             if (!response.IsSuccessStatusCode)
                 throw new EvidenceDependencyException("The Evidence owner did not supply the requested version.");
             var source = await response.Content.ReadFromJsonAsync<EvidenceProcessingSource>(Json, cancellationToken)
                 .ConfigureAwait(false) ?? throw new EvidenceDependencyException("The Evidence owner returned an invalid response.");
+            byte[] bytes;
+            var png = source.ContentType == "image/png";
+            try
+            {
+                if (png && (source.Content.Length != 0 || source.ContentBase64 is null || source.ContentBase64.Length > 1_398_104) ||
+                    !png && source.ContentBase64 is not null)
+                    throw new EvidenceDependencyException("The Evidence owner returned conflicting source content.");
+                bytes = png ? Convert.FromBase64String(source.ContentBase64!) : Encoding.UTF8.GetBytes(source.Content);
+            }
+            catch (FormatException) { throw new EvidenceDependencyException("The Evidence owner returned invalid source bytes."); }
             if (source.DocumentVersionId != documentVersionId || source.CustomerId != customerId ||
-                (source.ContentType != "text/plain" && source.ContentType != "text/csv") || source.ContentSha256.Length != 64 ||
+                (source.ContentType != "text/plain" && source.ContentType != "text/csv" && !png) ||
+                bytes.Length is < 1 or > 1_048_576 || source.ContentSha256.Length != 64 ||
                 !string.Equals(source.ContentSha256,
-                    Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(source.Content))),
+                    Convert.ToHexStringLower(SHA256.HashData(bytes)),
                     StringComparison.OrdinalIgnoreCase))
                 throw new EvidenceDependencyException("The Evidence owner returned a mismatched source version.");
             return new EvidenceContent(new EvidenceReference(
@@ -73,7 +85,7 @@ public sealed class HttpEvidenceContentReader : IEvidenceContentReader, IDisposa
                 source.CustomerId,
                 source.ContentReference,
                 source.ContentSha256,
-                source.ContentType), source.Content);
+                source.ContentType), source.Content, png ? bytes : null);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         { throw new EvidenceDependencyException("The Evidence owner timed out."); }

@@ -1,0 +1,252 @@
+using System.Buffers.Binary;
+using System.Globalization;
+using System.Net;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Monergy.Contracts;
+using Monergy.Services.DocumentIntelligence.Application;
+using Monergy.Services.DocumentIntelligence.Infrastructure;
+using Monergy.Services.Evidence;
+using Monergy.Services.Evidence.Application;
+using Monergy.Services.Evidence.Infrastructure;
+using Xunit;
+
+namespace Monergy.Vs02.Tests;
+
+public sealed class SalarySlipOcrTests
+{
+    private static byte[] Fixture(string name = "salary-slip.png") => File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", name));
+    private static EvidenceContent Source(byte[]? bytes = null)
+    {
+        bytes ??= Fixture();
+        return new EvidenceContent(new EvidenceReference("evidence-001", "document-001", "document-version-001",
+            "customer-001", "reference://salary-slip", Convert.ToHexStringLower(SHA256.HashData(bytes)), "image/png"), "", bytes);
+    }
+    private static ConfigurationManager NativeConfiguration() => new()
+    {
+        ["Monergy:DocumentProcessing:OcrExecutable"] = Environment.GetEnvironmentVariable("MONERGY_TEST_TESSERACT") ?? "/usr/bin/tesseract",
+        ["Monergy:DocumentProcessing:OcrDataDirectory"] = Environment.GetEnvironmentVariable("MONERGY_TEST_TESSDATA") ?? "/usr/share/tesseract-ocr/5/tessdata",
+    };
+
+    [Theory, Trait("Category", "NativeOcr")]
+    [InlineData("salary-slip.png")]
+    [InlineData("salary-slip-alternate.png")]
+    public async Task RealPinnedEngineReadsDifferentPrintedLayoutsWithExactProvenance(string name)
+    {
+        using var engine = new TesseractImageTextRecognizer(NativeConfiguration());
+        var extractor = new StructuredDocumentExtractor(new SalarySlipPngExtractor(engine));
+        var source = Source(Fixture(name));
+        var fact = Assert.Single(await extractor.ExtractAsync(source, "processing-native", default));
+        Assert.Equal(52480m, fact.CandidateValue);
+        Assert.Equal("INR", fact.Currency);
+        Assert.Equal(new DateOnly(2026, 9, 30), fact.EffectiveDate);
+        Assert.Equal("INCOME", fact.FactType);
+        Assert.Equal("Net pay", fact.Label);
+        Assert.Equal(source.Reference.EvidenceId, fact.EvidenceId);
+        Assert.Equal(source.Reference.CustomerId, fact.CustomerId);
+        Assert.Equal(source.Reference.DocumentVersionId, fact.DocumentVersionId);
+        Assert.InRange(fact.Confidence, .9m, 1m);
+        Assert.StartsWith("Salary slip OCR: page 1, line ", fact.SourceLocation, StringComparison.Ordinal);
+        Assert.Equal(SalarySlipPngExtractor.ExtractionVersion, fact.ExtractionVersion);
+        Assert.Equal(fact, Assert.Single(await extractor.ExtractAsync(source, "processing-native", default)));
+    }
+
+    [Fact, Trait("Category", "NativeOcr")]
+    public async Task RealEngineDoesNotTurnAnInvoiceIntoSalary()
+    {
+        using var engine = new TesseractImageTextRecognizer(NativeConfiguration());
+        var failure = await Assert.ThrowsAsync<DocumentRecognitionException>(() =>
+            new SalarySlipPngExtractor(engine).ExtractAsync(Source(Fixture("unclassified-image.png")), "invoice", default));
+        Assert.Equal(DocumentRecognitionFailure.Unclassified, failure.Reason);
+    }
+
+    [Theory]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: INR|Net Pay: 52480.00|Net Salary: 52480.00")]
+    [InlineData("SALARY SLIP|Pay Date: 09/10/2026|Currency: INR|Net Pay: 52480.00")]
+    [InlineData("SALARY SLIP|Pay Date: 2026-02-30|Currency: INR|Net Pay: 52480.00")]
+    [InlineData("SALARY SLIP|Pay Period: September 2026|Currency: INR|Net Pay: 52480.00")]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Net Pay: 52480.00")]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: USD|Net Pay: INR 52480.00")]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: INR|Currency: INR|Net Pay: 52480.00")]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: INR|Net Pay: 52,48O.00")]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: INR|Net Pay: -10.00")]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: INR|Net Pay: 5,24,800.00")]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: INR|Gross Pay: 60000|Deductions: 7520")]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: XYZ|Net Pay: 52480.00")]
+    public async Task IncompleteAmbiguousOrUnlabelledImagesProduceNoCandidates(string text)
+    {
+        var failure = await Assert.ThrowsAsync<DocumentRecognitionException>(() =>
+            new SalarySlipPngExtractor(new TextDouble(Tsv(text))).ExtractAsync(Source(), "invalid", default));
+        Assert.Equal(DocumentRecognitionFailure.Incomplete, failure.Reason);
+    }
+
+    [Theory]
+    [InlineData("SALARY SLIP|Pay Date: 2026-09-30|Currency: INR|Net Pay: 52480.00", 89, DocumentRecognitionFailure.LowConfidence)]
+    [InlineData("INVOICE|Pay Date: 2026-09-30|Currency: INR|Net Pay: 52480.00", 99, DocumentRecognitionFailure.Unclassified)]
+    public async Task TitleAndWordConfidenceAreRequired(string text, int confidence, DocumentRecognitionFailure reason)
+    {
+        var failure = await Assert.ThrowsAsync<DocumentRecognitionException>(() =>
+            new SalarySlipPngExtractor(new TextDouble(Tsv(text, confidence))).ExtractAsync(Source(), "unclear", default));
+        Assert.Equal(reason, failure.Reason);
+    }
+
+    [Fact]
+    public async Task RejectsMismatchedBytesAndOversizedRasterBeforeCallingNativeEngine()
+    {
+        var engine = new TextDouble(""); var extractor = new SalarySlipPngExtractor(engine);
+        await Assert.ThrowsAsync<DocumentRecognitionException>(() => extractor.ExtractAsync(
+            Source() with { Reference = Source().Reference with { ContentSha256 = new string('0', 64) } }, "wrong-hash", default));
+        var oversized = Fixture(); BinaryPrimitives.WriteUInt32BigEndian(oversized.AsSpan(16, 4), 65536);
+        await Assert.ThrowsAsync<DocumentRecognitionException>(() => extractor.ExtractAsync(Source(oversized), "large", default));
+        await Assert.ThrowsAsync<DocumentRecognitionException>(() => extractor.ExtractAsync(Source([1, 2, 3]), "bad", default));
+        Assert.Equal(0, engine.Calls);
+    }
+
+    [Theory]
+    [InlineData("garbage")]
+    [InlineData("level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n5\t2\t1\t1\t1\t1\t0\t0\t100\t40\t99\tSALARY")]
+    public async Task InvalidNativeOutputFailsClosed(string tsv) => await Assert.ThrowsAsync<DocumentRecognitionException>(() =>
+        new SalarySlipPngExtractor(new TextDouble(tsv)).ExtractAsync(Source(), "bad-tsv", default));
+
+    [Fact]
+    public async Task NativeUnavailableAndCancellationAreDistinctAndNeverReturnCandidates()
+    {
+        using var unavailable = new TesseractImageTextRecognizer(new ConfigurationManager());
+        await Assert.ThrowsAsync<OcrEngineUnavailableException>(() => unavailable.RecognizeAsync(Fixture(), default));
+        using var cancelled = new CancellationTokenSource(); await cancelled.CancelAsync();
+        using var native = new TesseractImageTextRecognizer(NativeConfiguration());
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => native.RecognizeAsync(Fixture(), cancelled.Token));
+    }
+
+    [Theory]
+    [InlineData(false, "processing.document.unclassified", false)]
+    [InlineData(true, "processing.ocr.unavailable", true)]
+    public async Task ProcessingRecordsTypedFailureAndNoFacts(bool unavailable, string code, bool retryable)
+    {
+        var repository = new InMemoryDocumentProcessingRepository();
+        var engine = new TextDouble(Tsv("INVOICE"), unavailable);
+        var app = new DocumentProcessingApplication(repository, new SourceDouble(Source()),
+            new StructuredDocumentExtractor(new SalarySlipPngExtractor(engine)), new ReferenceExecutionPolicy(),
+            new CapturingTelemetry(), TimeProvider.System);
+        var result = await app.ProcessDocumentAsync(Vs02TestContext.Request(Vs02ContractNames.ProcessDocument,
+            new ProcessDocument("processing-ocr", "document-version-001", "evidence-001", "customer-001", DateTimeOffset.UtcNow), "process-ocr", "process-ocr"));
+        Assert.Equal(code, result.Error?.Code); Assert.Equal(retryable, result.Error?.Retryable);
+        var record = await repository.GetAsync("processing-ocr", default);
+        Assert.Equal(ProcessingState.Failed, record?.State); Assert.Empty(record!.Facts);
+        Assert.IsType<DomainEvent<DocumentProcessingFailedPayload>>(Assert.Single(repository.DrainOutbox()));
+    }
+
+    [Fact, Trait("Category", "NativeOcr")]
+    public async Task OwnerHttpBoundaryDeliversExactPngToRealOcrAndCustomerBoundProcessing()
+    {
+        var builder = WebApplication.CreateSlimBuilder(); builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Monergy:ReferenceAdapters"] = "true", ["Monergy:ExecutionZone"] = "LOCAL",
+            ["Monergy:ProductIntake:EvidenceToken"] = new string('a', 64),
+            ["Monergy:ProductIntake:ProcessingToken"] = new string('b', 64),
+            ["Monergy:TenantBoundary:CustomerTenants:customer-001"] = "T001",
+        });
+        var store = new ReferenceEvidenceContentStore(); var repository = new InMemoryEvidenceRepository();
+        builder.Services.AddSingleton(store); builder.Services.AddSingleton<IEvidenceRepository>(repository);
+        builder.Services.AddSingleton<IEvidenceMalwareScanner, FixtureMalwareScanner>();
+        await using var host = builder.Build(); host.MapEvidenceReferenceIntake(builder.Configuration); await host.StartAsync();
+        using var client = new HttpClient { BaseAddress = new Uri(host.Urls.Single()) };
+        client.DefaultRequestHeaders.Add("X-Monergy-Product-Token", new string('a', 64));
+        var bytes = Fixture();
+        using var staged = await client.PostAsJsonAsync("/internal/local/v1/evidence/content", new ReferenceEvidenceContentRequest(
+            new string('c', 32), Convert.ToBase64String(bytes), "image/png"));
+        Assert.Equal(HttpStatusCode.OK, staged.StatusCode);
+        var descriptor = (await staged.Content.ReadFromJsonAsync<EvidenceContentDescriptor>())!;
+        var evidence = new EvidenceApplication(repository, store, new CapturingTelemetry(), TimeProvider.System);
+        var created = await evidence.CreateDocumentVersionAsync(Vs02TestContext.Request(Vs02ContractNames.CreateDocumentVersion,
+            Vs02TestContext.CreateVersionPayload() with { OriginalFileName = "salary-slip.png", DeclaredContentType = "image/png",
+                ContentReference = descriptor.Reference, ContentSha256 = descriptor.Sha256 }, "create-png", "create-png"));
+        Assert.Equal(ContractOutcome.Success, created.Outcome);
+        var config = new ConfigurationManager { ["Monergy:DocumentProcessing:EvidenceUrl"] = client.BaseAddress.AbsoluteUri,
+            ["Monergy:DocumentProcessing:EvidenceToken"] = new string('b', 64) };
+        using var reader = new HttpEvidenceContentReader(config);
+        var security = Vs02TestContext.Security() with { Workload = new WorkloadContext("job-management", "job-management:T001") };
+        var source = await reader.ReadAsync("document-version-001", "customer-001", security, "correlation-ocr", default);
+        Assert.Equal(bytes, source?.BinaryContent); Assert.Equal("", source?.Content);
+        var exposed = await store.ReadBytesAsync(descriptor.Reference, default); exposed![0] = 0;
+        Assert.Equal(bytes, await store.ReadBytesAsync(descriptor.Reference, default));
+        await Assert.ThrowsAsync<EvidenceDependencyException>(() => reader.ReadAsync("document-version-001", "customer-other", security, "correlation-ocr", default));
+        Assert.Null(await reader.ReadAsync("missing-version", "customer-001", security, "correlation-ocr", default));
+        await Assert.ThrowsAsync<EvidenceDependencyException>(() => reader.ReadAsync("document-version-001", "customer-001",
+            security with { Workload = new WorkloadContext("job-management", "job-management:T002") }, "wrong-tenant", default));
+        using var engine = new TesseractImageTextRecognizer(NativeConfiguration());
+        var processingRepository = new InMemoryDocumentProcessingRepository();
+        var processing = new DocumentProcessingApplication(processingRepository, reader,
+            new StructuredDocumentExtractor(new SalarySlipPngExtractor(engine)), new ReferenceExecutionPolicy(), new CapturingTelemetry(), TimeProvider.System);
+        var result = await processing.ProcessDocumentAsync(Vs02TestContext.Request(Vs02ContractNames.ProcessDocument,
+            new ProcessDocument("processing-png", "document-version-001", "evidence-001", "customer-001", DateTimeOffset.UtcNow),
+            "process-png", "process-png", security));
+        Assert.Equal(ProcessingState.Completed, result.Data?.State);
+        var record = (await processingRepository.GetAsync("processing-png", default))!;
+        Assert.Equal(52480m, Assert.Single(record.Facts).CandidateValue);
+        Assert.IsType<DomainEvent<ValidatedSourceFactsProducedPayload>>(Assert.Single(processingRepository.DrainOutbox()));
+        // This path publishes candidates only. The existing Financial Profile review/adoption API remains the sole writer.
+    }
+
+    [Theory, Trait("Category", "NativeOcr")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NativeProcessDeadlineAndInFlightCancellationReapProcessAndRemovePrivateInput(bool cancel)
+    {
+        if (!OperatingSystem.IsLinux()) throw new InvalidOperationException("This LOCAL native lifecycle check requires Linux.");
+        var root = Path.Combine(Path.GetTempPath(), "monergy-ocr-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        try
+        {
+            var executable = Path.Combine(root, "engine-double");
+            var ready = Path.Combine(root, "ready");
+            // Explicit process-protocol double: it never purports to recognize document text.
+            var script = "#!/usr/bin/python3\nimport sys, time, os\n" +
+                "if '--version' in sys.argv:\n print('tesseract 5.3.4')\n sys.exit(0)\n" +
+                "with open(" + System.Text.Json.JsonSerializer.Serialize(ready) + ", 'w') as f:\n f.write(str(os.getpid()) + '\\n' + sys.argv[1])\n" +
+                "time.sleep(60)\n";
+            await File.WriteAllTextAsync(executable, script);
+            File.SetUnixFileMode(executable, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            var config = NativeConfiguration(); config["Monergy:DocumentProcessing:OcrExecutable"] = executable;
+            using var engine = new TesseractImageTextRecognizer(config);
+            using var cancellation = new CancellationTokenSource();
+            var operation = engine.RecognizeAsync(Fixture(), cancellation.Token);
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            while (!File.Exists(ready) && timer.Elapsed < TimeSpan.FromSeconds(3)) await Task.Delay(10);
+            Assert.True(File.Exists(ready), "The process double did not reach its input phase.");
+            var state = await File.ReadAllLinesAsync(ready);
+            Assert.Equal(2, state.Length);
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(state[1]));
+            if (cancel)
+            {
+                await cancellation.CancelAsync();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => operation);
+            }
+            else await Assert.ThrowsAsync<OcrEngineUnavailableException>(() => operation);
+            Assert.False(Directory.Exists(Path.GetDirectoryName(state[1])));
+            Assert.Throws<ArgumentException>(() => System.Diagnostics.Process.GetProcessById(int.Parse(state[0], CultureInfo.InvariantCulture)));
+            Assert.True(timer.Elapsed < TimeSpan.FromSeconds(12));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    private static string Tsv(string text, int confidence = 99) =>
+        "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n" +
+        string.Join('\n', text.Split('|').SelectMany((line, index) => line.Split(' ').Select((word, number) =>
+            string.Create(CultureInfo.InvariantCulture, $"5\t1\t1\t1\t{index + 1}\t{number + 1}\t10\t10\t100\t40\t{confidence}\t{word}"))));
+    private sealed class TextDouble(string text, bool unavailable = false) : IImageTextRecognizer
+    {
+        public int Calls { get; private set; }
+        public Task<string> RecognizeAsync(byte[] png, CancellationToken cancellationToken)
+        { Calls++; return unavailable ? throw new OcrEngineUnavailableException() : Task.FromResult(text); }
+    }
+    private sealed class SourceDouble(EvidenceContent content) : IEvidenceContentReader
+    {
+        public Task<EvidenceContent?> ReadAsync(string version, string customer, TrustedSecurityContext security, string correlation, CancellationToken cancellationToken) => Task.FromResult<EvidenceContent?>(content);
+    }
+}

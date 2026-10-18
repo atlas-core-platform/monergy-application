@@ -43,7 +43,7 @@ directly and returns candidate facts only for the exact completed record.
 The projection does not invoke extraction, retry, reprocessing, normalization,
 or Financial Profile mutation. The customer product response further narrows
 the result to accepted Income/Expense candidate fields and omits customer,
-Evidence, implementation-version and failure/retry internals.
+Evidence and failure/retry internals. T1-49 additionally preserves the extraction version to label recognized salary-slip candidates during recovered review.
 
 ## T1-42 financial information CSV
 
@@ -68,7 +68,13 @@ The scenario inventory is maintained in
 
 This implementation is in-memory reference evidence restricted to `LOCAL` and
 `CI_EPHEMERAL`. It does not establish restart durability, exactly-once delivery,
-a production broker, OCR/AI/provider compatibility, automatic financial
-correction, a frontend workflow, deployment readiness, or acceptance. D11 is
+a production broker, general OCR/AI/provider compatibility, automatic financial
+correction, deployment readiness, or acceptance. D11 is
 not a source dependency; its deferred acceptance and recorded OCI security
 failure remain unchanged.
+
+## T1-49 salary-slip image OCR
+
+The LOCAL customer flow supports a bounded first scanned-document path: printed English salary slips in PNG format. Evidence supplies original bytes over its existing workload-only processing-source endpoint; Document Intelligence verifies the exact source hash and customer/version identity. A pinned local Tesseract 5.3.4 engine reads the image. Deterministic recognition requires one Salary Slip / Payslip title in the first ten text lines, one labelled net-pay value and an explicit pay/payment date. Currency must be labelled or an explicit supported code beside net pay. Only a single INCOME net-pay candidate is published, with source version, OCR line/confidence and extraction version. Existing customer selection/adoption remains mandatory.
+
+See `build/uat/Salary-Slip-OCR.md` for exact formats, bounds, native verification and the separate unexecuted Docker acceptance steps. This is a partial MR sections11/12 and AR-003 COV-013/014 implementation, not the full document catalog or general salary-slip layout/language support.

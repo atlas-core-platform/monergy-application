@@ -15,6 +15,8 @@ public static class DocumentIntelligenceRegistration
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<InMemoryDocumentProcessingRepository>();
         services.AddSingleton<IDocumentProcessingRepository>(provider => provider.GetRequiredService<InMemoryDocumentProcessingRepository>());
+        services.AddSingleton<IImageTextRecognizer, TesseractImageTextRecognizer>();
+        services.AddSingleton<SalarySlipPngExtractor>();
         services.AddSingleton<IDocumentExtractor, StructuredDocumentExtractor>();
         services.AddSingleton<TenantAccessClient>();
         services.AddSingleton<IEvidenceContentReader, HttpEvidenceContentReader>();

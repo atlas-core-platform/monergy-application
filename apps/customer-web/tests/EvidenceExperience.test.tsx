@@ -210,7 +210,7 @@ it('keeps the library hidden without evidence read authority', () => {
   expect(request).not.toHaveBeenCalled();
 });
 
-it('requires explicit source-fact selection before updating Financial information', async () => {
+it.each(['text/plain', 'image/png'])('requires explicit source-fact selection before updating Financial information from %s', async (contentType) => {
   const api = new AccessApi(session);
   const item = {
     documentId: 'document-003',
@@ -219,7 +219,7 @@ it('requires explicit source-fact selection before updating Financial informatio
     version: 1,
     sourceName: 'Customer upload',
     originalFileName: 'financial-facts.txt',
-    contentType: 'text/plain',
+    contentType,
     contentLength: 96,
     contentSha256: 'e'.repeat(64),
     receivedAt: '2026-10-14T00:00:00Z',
@@ -259,7 +259,7 @@ it('requires explicit source-fact selection before updating Financial informatio
         confidence: 0.98,
         evidenceId: item.evidenceId,
         documentVersionId: item.documentVersionId,
-        extractionVersion: 'fixture-extractor/1.0.0',
+        extractionVersion: contentType === 'image/png' ? 'salary-slip-png-ocr/1.0.0' : 'fixture-extractor/1.0.0',
         validationVersion: 'canonical-source-fact/1.0.0',
       },
     ],
@@ -321,6 +321,7 @@ it('requires explicit source-fact selection before updating Financial informatio
   expect(review).toHaveTextContent('Your financial information is not changed by this step');
   await user.click(within(review).getByRole('button', { name: 'Extract details' }));
   expect(await screen.findByText('Employment income')).toBeVisible();
+  if (contentType === 'image/png') expect(review).toHaveTextContent('Recognized as a salary slip');
   expect(review).toHaveTextContent('$125,000.00');
   expect(review).toHaveTextContent('98% confidence');
   expect(request).toHaveBeenCalledWith(
@@ -2090,4 +2091,30 @@ it.each([
   expect(await within(drawer).findByText(message)).toBeVisible();
   expect(screen.queryByText('Your document was uploaded.')).not.toBeInTheDocument();
   expect(submit.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(1);
+});
+
+it.each([
+  ['processing.document.unclassified', "We couldn't recognize a supported salary slip."],
+  ['processing.ocr.low-confidence', 'Some salary-slip details were unclear.'],
+  ['processing.salary-slip.incomplete', 'We need one clear net pay amount'],
+  ['processing.ocr.unavailable', 'Image text extraction is temporarily unavailable.'],
+])('explains PNG extraction failure %s without offering financial adoption', async (code, message) => {
+  const api = new AccessApi(session);
+  const item = { documentId: 'png-document', documentVersionId: 'png-version', evidenceId: 'png-evidence', version: 1,
+    sourceName: 'Customer upload', originalFileName: 'salary-slip.png', contentType: 'image/png', contentLength: 100,
+    contentSha256: 'b'.repeat(64), receivedAt: '2026-10-18T00:00:00Z', createdAt: '2026-10-18T00:00:00Z' };
+  const request = vi.spyOn(api, 'product').mockImplementation((path, method) => {
+    if (method === 'POST') return Promise.resolve({ job: { jobId: 'job-processing-png', state: 'Failed', failureCode: code },
+      processing: { state: 'Failed', failureCode: code }, facts: [], processingMode: 'Document extraction' });
+    return Promise.resolve({ items: path === 'v1/evidence' ? [item] : [], dataDurability: 'Temporary data' });
+  });
+  mount(api, ['evidence.document.read', 'document-intelligence.document.process', 'financial-profile.profile.update']);
+  const user = userEvent.setup(); await screen.findByText('salary-slip.png');
+  await user.click(screen.getByRole('button', { name: 'View document details for salary-slip.png' }));
+  await user.click(within(screen.getByRole('dialog', { name: 'Document details' })).getByRole('button', { name: 'Extract details' }));
+  const review = screen.getByRole('dialog', { name: 'Extract and review details' });
+  await user.click(within(review).getByRole('button', { name: 'Extract details' }));
+  expect(await within(review).findByText((text) => text.startsWith(message))).toBeVisible();
+  expect(within(review).queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(request.mock.calls.filter(([path]) => path.includes('financial-profile/from-processing'))).toHaveLength(0);
 });

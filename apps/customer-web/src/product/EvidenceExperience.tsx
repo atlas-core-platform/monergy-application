@@ -39,6 +39,21 @@ const formatBytes = (value: number) =>
     : value < 1_048_576
       ? `${(value / 1024).toFixed(1)} KB`
       : '1 MB';
+function processingFailureMessage(code: string | null): string {
+  switch (code) {
+    case 'processing.document.unclassified':
+      return "We couldn't recognize a supported salary slip. Check that this is a clear, printed English salary slip in PNG format.";
+    case 'processing.ocr.low-confidence':
+      return 'Some salary-slip details were unclear. Upload a clearer image and try again.';
+    case 'processing.salary-slip.incomplete':
+      return 'We need one clear net pay amount, an explicit supported currency and an unambiguous pay date. Check these labels in your salary slip.';
+    case 'processing.ocr.unavailable':
+      return 'Image text extraction is temporarily unavailable. Try again when the service is available.';
+    default:
+      return 'Check that the document matches a supported salary slip, structured-text format or financial information CSV template, then try again.';
+  }
+}
+
 const typeName = (value: string) =>
   ({
     'application/pdf': 'PDF document',
@@ -549,7 +564,7 @@ export default function EvidenceExperience() {
         failure instanceof AccessApiError && failure.status === 403
           ? 'You no longer have access to extract details from this document.'
           : failure instanceof AccessApiError && failure.status === 422
-            ? 'Extracting details is available for structured text and financial information CSV files.'
+            ? 'Extracting details supports structured text, financial information CSV and printed English salary slips in PNG format.'
             : "We couldn't extract details from this document. Your financial information has not changed.",
       );
     } finally {
@@ -1011,6 +1026,10 @@ export default function EvidenceExperience() {
                     Extracted items <strong>{recoveredResult.facts.length}</strong>
                   </span>
                 </div>
+                {recoveredResult.facts.some((fact) => fact.extractionVersion === 'salary-slip-png-ocr/1.0.0') && (
+                  <Alert showIcon type="info" title="Recognized as a salary slip"
+                    description="Net pay was read from the image. Check the amount, currency and pay date against your document before adding it. Recognition does not verify the document's authenticity." />
+                )}
                 <section className="product-facts" aria-labelledby="recovered-source-facts-title">
                   <div className="product-section-heading">
                     <div>
@@ -1444,14 +1463,16 @@ export default function EvidenceExperience() {
               <div>
                 <strong>Extract details from this document</strong>
                 <p>
-                  {['text/plain', 'text/csv'].includes(selectedEvidence.contentType)
-                    ? 'Review supported financial source figures before adding them to Financial information.'
-                    : 'Extracting details is available for structured text and financial information CSV files.'}
+                  {['text/plain', 'text/csv', 'image/png'].includes(selectedEvidence.contentType)
+                    ? selectedEvidence.contentType === 'image/png'
+                      ? 'For printed English salary slips with labelled net pay, currency and pay date. Review the extracted amount against your document.'
+                      : 'Review supported financial source figures before adding them to Financial information.'
+                    : 'Extracting details supports structured text, financial information CSV and printed English salary slips in PNG format.'}
                 </p>
               </div>
               <Button
                 type="primary"
-                disabled={!canProcess || !['text/plain', 'text/csv'].includes(selectedEvidence.contentType)}
+                disabled={!canProcess || !['text/plain', 'text/csv', 'image/png'].includes(selectedEvidence.contentType)}
                 onClick={() => {
                   setProcessingEvidence(selectedEvidence);
                   setSelectedEvidence(null);
@@ -1495,7 +1516,7 @@ export default function EvidenceExperience() {
               <Button
                 type="primary"
                 loading={processingBusy}
-                disabled={!canProcess || !['text/plain', 'text/csv'].includes(processingEvidence?.contentType ?? '')}
+                disabled={!canProcess || !['text/plain', 'text/csv', 'image/png'].includes(processingEvidence?.contentType ?? '')}
                 onClick={() => void processDocument()}
               >
                 Extract details
@@ -1585,9 +1606,13 @@ export default function EvidenceExperience() {
                 type="error"
                 title="We couldn't extract details from this document"
                 description={
-                  'Check that the document matches the structured-text format or financial information CSV template, then try again.'
+                  processingFailureMessage(processing.processing?.failureCode ?? processing.job.failureCode)
                 }
               />
+            )}
+            {processing?.facts.some((fact) => fact.extractionVersion === 'salary-slip-png-ocr/1.0.0') && (
+              <Alert showIcon type="info" title="Recognized as a salary slip"
+                description="Net pay was read from the image. Check the amount, currency and pay date against your document before adding it. Recognition does not verify the document's authenticity." />
             )}
             {processing?.facts.length ? (
               <section className="product-facts" aria-labelledby="source-facts-title">

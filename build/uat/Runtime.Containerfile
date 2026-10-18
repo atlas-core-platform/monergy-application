@@ -18,7 +18,14 @@ RUN dotnet publish /access-management/src/Monergy.AccessManagement -c Release -p
 # empty directory onto a destination does not carry the source directory mode.
 RUN mkdir -p /runtime-data/monergy-onboarding && chmod 1777 /runtime-data/monergy-onboarding
 
+# LOCAL OCR toolchain is isolated from the production service images.
+FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d AS ocr
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr=5.3.4-1build5 libtesseract5=5.3.4-1build5 liblept5=1.82.0-3build4 tesseract-ocr-eng=1:4.1.0-2 && rm -rf /var/lib/apt/lists/*
+COPY build/uat/prepare-ocr.sh /prepare-ocr.sh
+RUN sh /prepare-ocr.sh
+
 FROM mcr.microsoft.com/dotnet/aspnet:10.0.13-noble-chiseled@sha256:84def277556c2843a44fdeefbd3145d0a2e32d8f736d0c1a7b0a96b2880b0187
+COPY --from=ocr /opt/monergy-ocr /opt/monergy-ocr
 COPY --from=build /out /app
 COPY --from=build /source/services/customer-identity/migrations /source/services/customer-identity/migrations
 COPY --from=build /source/services/audit/migrations /source/services/audit/migrations

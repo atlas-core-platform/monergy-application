@@ -84,7 +84,8 @@ public sealed record ProductProcessingResultFact(
     DateOnly EffectiveDate,
     string SourceLocation,
     decimal Confidence,
-    string DocumentVersionId);
+    string DocumentVersionId,
+    string? ExtractionVersion = null);
 
 public sealed record ProductProcessingResultView(
     string JobId,
@@ -410,7 +411,8 @@ public static class ProductWorkspaceEndpoints
             var source = library.Items.SingleOrDefault(item => item.DocumentVersionId == documentVersionId)
                 ?? throw new TenantBoundaryException("EVIDENCE_VERSION_NOT_FOUND", 404);
             if (!string.Equals(source.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(source.ContentType, "text/csv", StringComparison.OrdinalIgnoreCase))
+                !string.Equals(source.ContentType, "text/csv", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(source.ContentType, "image/png", StringComparison.OrdinalIgnoreCase))
                 throw new TenantBoundaryException("PROCESSING_CONTENT_TYPE_UNSUPPORTED", 422);
             var now = DateTimeOffset.UtcNow;
             var jobId = "job-processing-" + submission.OperationId;
@@ -439,7 +441,7 @@ public static class ProductWorkspaceEndpoints
                 null,
                 [],
                 "Temporary data",
-                "Structured text reference processor"));
+                "Document extraction"));
         });
         app.MapGet("/product-api/v1/processing-activity", async (
             HttpContext http,
@@ -527,7 +529,8 @@ public static class ProductWorkspaceEndpoints
                     fact.EffectiveDate,
                     fact.SourceLocation,
                     fact.Confidence,
-                    fact.DocumentVersionId)).ToArray(),
+                    fact.DocumentVersionId,
+                    fact.ExtractionVersion)).ToArray(),
                 "Temporary data"));
         });
 
@@ -556,7 +559,7 @@ public static class ProductWorkspaceEndpoints
                 null,
                 new GetJobStatus(jobId, customer.CustomerId));
             var view = await processing.StatusAsync(session.TenantId, request, http.RequestAborted).ConfigureAwait(false);
-            return Results.Ok(view with { DataDurability = "Temporary data", ProcessingMode = "Structured text reference processor" });
+            return Results.Ok(view with { DataDurability = "Temporary data", ProcessingMode = "Document extraction" });
         });
     }
 
@@ -763,7 +766,7 @@ public sealed class ProductDocumentProcessingClient : IDisposable
             view.Processing,
             view.Facts,
             "Temporary data",
-            "Structured text reference processor");
+            "Document extraction");
     }
 
     private HttpRequestMessage Message(HttpMethod method, string path, string tenantId, object body)

@@ -164,6 +164,12 @@ public sealed class ReferenceEvidenceContentStore : IEvidenceContentStore
         return Task.FromResult(content.TryGetValue(reference, out var item) ? item.Descriptor : null);
     }
 
+    public Task<byte[]?> ReadBytesAsync(string reference, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(content.TryGetValue(reference, out var item) ? item.Content.ToArray() : null);
+    }
+
     public Task<string?> ReadAsync(string reference, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
