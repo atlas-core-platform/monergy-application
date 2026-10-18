@@ -112,3 +112,5 @@ Production remains blocked until real IdP/MFA/invitation delivery, workload iden
 Onboarding starts the pinned ClamAV security sidecar. Evidence upload readiness requires current engine/signature metadata; rejected or unavailable checks cannot accept an upload. See [Document security setup and live acceptance](Document-Security.md) for resource needs, retained definitions and the authored live-engine test. Docker/engine acceptance has not run in the implementation workspace.
 
 T1-57 XLSX template instructions and limits: [Financial-Information-XLSX.md](Financial-Information-XLSX.md). Existing original-byte malware gating and explicit review/adoption apply.
+
+T1-58 adds bounded printed-English Insurance Policy OCR in PNG, upright JPEG and single-page scanned PDF. Required labels are Policy Date, Sum Assured, Premium/Premium Amount and explicit matching currency. Both literal source figures require review; this does not establish active cover, asset/cash value or premium frequency. See build/governance/t1-58-insurance-policy-ocr.md for exact limits and verification.
