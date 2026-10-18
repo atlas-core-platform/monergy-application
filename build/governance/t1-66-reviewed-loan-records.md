@@ -21,7 +21,7 @@ Financial Profile owns the new DTOs, application and reference/PostgreSQL
 repositories. Creation validates current source ownership/category/exact revision
 and original provenance; a superseded immutable source revision remains an exact
 reference. Existing facts and their amounts/provenance are not rewritten. The
-source currency is owner-derived. New local owner resource routes require
+source currency is owner-derived. New local owner resource routes enforce the existing operator-owned customer-to-tenant binding before current policy evaluation, matching the contract boundary. A foreign tenant with a colliding customer ID is rejected even if its PDP allows that ID. They require
 current Self access to Financial Profile and source documents; creation also
 requires update access with consistent authority versions. Tenant/customer/actor
 come from current server authority, never browser fields. Unknown authority
@@ -57,8 +57,8 @@ Search/basic Reports and dashboard coverage; no aggregate debt is invented.
 
 ## Verification
 
-788 backend checks pass:573 VS02,84 Financial Profile owner,40 reprocessing,
-64 Reporting,27 Search, confirmed with unique TRX receipts.42 new owner cases
+789 backend checks pass:573 VS02,85 Financial Profile owner,40 reprocessing,
+64 Reporting,27 Search, confirmed with unique TRX receipts.43 new owner cases
 cover invalid terms, exact historical source/provenance without amount changes,
 foreign/wrong-category/missing sources, replay/payload conflicts, competing
 creation and actual owner+Gateway HTTP routes. Current session/customer/PDP
@@ -92,3 +92,5 @@ central audit integration, full asset/liability records and complete financial
 truth/calculation journeys remain open. Original151 IDs/81 features/126 Phase1
 memberships/source phases are retained. Paired Expert receipt records exact
 merged source, source graph and validation. The same tracker identity is updated.
+
+Final source review found the new resource route initially omitted the existing customer/tenant binding. A bounded follow-up closes that gap with an actual owner HTTP customer-ID collision regression covering list/detail/create. Final Application and paired Expert source references supersede the initial PR116/Expert68 source snapshots. The same T1-66 unit/count is retained.

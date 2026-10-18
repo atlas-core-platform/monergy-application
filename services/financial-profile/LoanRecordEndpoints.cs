@@ -22,19 +22,19 @@ public static class LoanRecordEndpoints
             catch (IOException) { return Results.Json(new { error = "LOAN_RECORD_TOO_LARGE" }, statusCode: 413); }
             catch (System.Data.Common.DbException) { return Results.Json(new { error = "LOAN_RECORD_UNAVAILABLE" }, statusCode: 503); }
         });
-        group.MapGet("", async (string customerId, HttpContext http, TenantAccessClient access, LoanRecordsApplication owner) =>
+        group.MapGet("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
         {
-            var (tenant, _) = await AuthorizeAsync(http, customerId, access, false).ConfigureAwait(false);
+            var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
             return await owner.ListAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
         });
-        group.MapGet("/{loanRecordId}", async (string customerId, string loanRecordId, HttpContext http, TenantAccessClient access, LoanRecordsApplication owner) =>
+        group.MapGet("/{loanRecordId}", async (string customerId, string loanRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
         {
-            var (tenant, _) = await AuthorizeAsync(http, customerId, access, false).ConfigureAwait(false);
+            var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
             return await owner.ReadAsync(tenant, customerId, loanRecordId, http.RequestAborted).ConfigureAwait(false);
         });
-        group.MapPost("", async (string customerId, HttpContext http, TenantAccessClient access, LoanRecordsApplication owner) =>
+        group.MapPost("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
         {
-            var (tenant, actor) = await AuthorizeAsync(http, customerId, access, true).ConfigureAwait(false);
+            var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);
             http.Request.EnableBuffering(32768, 32768);
             using var json = await JsonDocument.ParseAsync(http.Request.Body, cancellationToken: http.RequestAborted).ConfigureAwait(false);
             RejectDuplicates(json.RootElement);
@@ -42,9 +42,11 @@ public static class LoanRecordEndpoints
             return await owner.CreateAsync(tenant, customerId, actor, input, http.RequestAborted).ConfigureAwait(false);
         });
     }
-    private static async Task<(string Tenant, string Actor)> AuthorizeAsync(HttpContext http, string customer, TenantAccessClient access, bool write)
+    private static async Task<(string Tenant, string Actor)> AuthorizeAsync(HttpContext http, string customer, TenantAccessClient access, TenantBoundaryOptions bindings, bool write)
     {
         var (tenant, _) = TenantAccessClient.Headers(http);
+        if (!bindings.CustomerTenants.TryGetValue(customer, out var sourceTenant) || sourceTenant != tenant)
+            throw new TenantBoundaryException("CUSTOMER_TENANT_MISMATCH", 403);
         var read = await access.EvaluateCustomerAsync(http, "financial-profile.profile.read", customer).ConfigureAwait(false);
         var evidence = await access.EvaluateCustomerAsync(http, "evidence.document.read", customer).ConfigureAwait(false);
         if (read.Outcome != "Allow" || read.AccessBasis != "Self" || evidence.Outcome != "Allow" || evidence.AccessBasis != "Self" || evidence.ActorId != read.ActorId || evidence.SubjectVersion != read.SubjectVersion || evidence.CustomerVersion != read.CustomerVersion)
