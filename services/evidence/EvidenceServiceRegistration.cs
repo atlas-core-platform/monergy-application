@@ -27,6 +27,8 @@ public static class EvidenceServiceRegistration
             return store;
         });
         services.AddSingleton<IEvidenceContentStore>(provider => provider.GetRequiredService<ReferenceEvidenceContentStore>());
+        services.AddSingleton<ClamdEvidenceMalwareScanner>();
+        services.AddSingleton<IEvidenceMalwareScanner>(provider => provider.GetRequiredService<ClamdEvidenceMalwareScanner>());
         services.AddSingleton<EvidenceApplication>();
         return services;
     }

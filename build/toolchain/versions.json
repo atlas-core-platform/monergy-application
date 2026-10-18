@@ -15,6 +15,8 @@
   "containerImages": {
     "sdk": "mcr.microsoft.com/dotnet/sdk:10.0.401-noble@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d",
     "aspnet": "mcr.microsoft.com/dotnet/aspnet:10.0.13-noble-chiseled@sha256:84def277556c2843a44fdeefbd3145d0a2e32d8f736d0c1a7b0a96b2880b0187",
-    "runtime": "mcr.microsoft.com/dotnet/runtime:10.0.13-noble-chiseled@sha256:75e4232c875a07e46e447ca0a56a61f7cd72d9fb361639018a19e9fc605c6827"
-  }
+    "runtime": "mcr.microsoft.com/dotnet/runtime:10.0.13-noble-chiseled@sha256:75e4232c875a07e46e447ca0a56a61f7cd72d9fb361639018a19e9fc605c6827",
+    "clamav": "clamav/clamav:1.4.6-debian@sha256:1d4083fccfcd485cdaeee593db7655c923afdb8ed528e828d03e1c8b1e351bec"
+  },
+  "clamav": "1.4.6"
 }

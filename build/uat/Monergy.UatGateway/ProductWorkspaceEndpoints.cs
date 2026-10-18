@@ -807,6 +807,10 @@ public sealed class ProductEvidenceClient : IDisposable
         request.Headers.Add("X-Monergy-Product-Token", token);
         request.Content = JsonContent.Create(new { operationId, contentBase64, contentType });
         using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
+            throw new TenantBoundaryException("EVIDENCE_SCAN_REJECTED", 422);
+        if (response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
+            throw new TenantBoundaryException("EVIDENCE_SCAN_UNAVAILABLE", 503);
         if (!response.IsSuccessStatusCode)
             throw new TenantBoundaryException(response.StatusCode == System.Net.HttpStatusCode.Conflict
                 ? "EVIDENCE_OPERATION_CONFLICT" : "EVIDENCE_STAGING_FAILED",

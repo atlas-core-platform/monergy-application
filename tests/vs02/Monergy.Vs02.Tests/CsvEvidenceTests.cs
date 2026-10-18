@@ -116,6 +116,7 @@ public sealed class CsvEvidenceTests
         var store = new ReferenceEvidenceContentStore();
         var repository = new InMemoryEvidenceRepository();
         builder.Services.AddSingleton(store);
+        builder.Services.AddSingleton<IEvidenceMalwareScanner, FixtureMalwareScanner>();
         builder.Services.AddSingleton<IEvidenceRepository>(repository);
         await using var host = builder.Build();
         host.MapEvidenceReferenceIntake(builder.Configuration);
@@ -165,7 +166,9 @@ public sealed class CsvEvidenceTests
     {
         var value = Header + Row + (invalidTail ? "TAX,Invalid,not-an-amount,INR,2026-10-01,Statement\n" : "");
         var store = new ReferenceEvidenceContentStore();
-        var descriptor = store.Stage(new string('f', 32), Encoding.UTF8.GetBytes(value), "text/csv");
+        var contentBytes = Encoding.UTF8.GetBytes(value);
+        var check = await new FixtureMalwareScanner().CheckAsync(contentBytes, default);
+        var descriptor = store.StageScanned(new string('f', 32), contentBytes, "text/csv", check);
         var telemetry = new CapturingTelemetry();
         var evidence = new EvidenceApplication(new InMemoryEvidenceRepository(), store, telemetry, TimeProvider.System);
         var created = await evidence.CreateDocumentVersionAsync(Vs02TestContext.Request(

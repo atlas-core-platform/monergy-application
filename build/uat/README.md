@@ -106,3 +106,7 @@ are redacted before upload as `uat-diagnostics.log` in the acceptance artifact.
 A separate Windows job exercises the actual launcher under Windows PowerShell 5.1 and PowerShell 7. It verifies private ACLs and native Docker Compose file reads, deliberately denies access to existing credentials/configuration, and proves that repair preserves file contents, write times and owners. These checks do not start Linux containers on the Windows runner; the Docker process acceptance job remains Linux-based.
 
 Production remains blocked until real IdP/MFA/invitation delivery, workload identity/TLS, event transport, managed secrets, provider/Consent/business consumers, managed database backup/restore, monitoring, HA/DR, capacity and release approval are implemented and accepted. The new local gateway, tenant adapters and bootstrap reject an unsupported Production environment. Readiness of local processes does not upgrade D01–D16 or SG acceptance.
+
+## Upload malware checks
+
+Onboarding starts the pinned ClamAV security sidecar. Evidence upload readiness requires current engine/signature metadata; rejected or unavailable checks cannot accept an upload. See [Document security setup and live acceptance](Document-Security.md) for resource needs, retained definitions and the authored live-engine test. Docker/engine acceptance has not run in the implementation workspace.

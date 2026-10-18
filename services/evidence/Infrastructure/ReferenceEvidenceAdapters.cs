@@ -144,6 +144,20 @@ public sealed class ReferenceEvidenceContentStore : IEvidenceContentStore
         return descriptor;
     }
 
+    public EvidenceContentDescriptor StageScanned(string operationId, byte[] value, string contentType, EvidenceMalwareCheck check)
+    {
+        var hash = Convert.ToHexStringLower(SHA256.HashData(value));
+        if (!EvidenceMalwarePolicy.Verified(check, hash, DateTimeOffset.UtcNow)) throw new EvidenceScanUnavailableException();
+        var reference = "reference://customer-intake/" + operationId;
+        var descriptor = new EvidenceContentDescriptor(reference, hash, contentType, value.LongLength, MalwareCheck: check);
+        return content.AddOrUpdate(reference, _ => (descriptor, value.ToArray()), (_, current) =>
+        {
+            if (current.Descriptor.Sha256 != hash || current.Descriptor.ContentType != contentType || current.Descriptor.ContentLength != value.LongLength)
+                throw new InvalidOperationException("Reference evidence operation identifies different content.");
+            return (descriptor, current.Content);
+        }).Descriptor;
+    }
+
     public Task<EvidenceContentDescriptor?> GetDescriptorAsync(string reference, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

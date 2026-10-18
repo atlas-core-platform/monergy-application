@@ -2073,3 +2073,21 @@ it.each([true, false])('enables CSV extraction only with current processing acce
   }
   expect(request.mock.calls.some((call) => call[1] === 'POST')).toBe(false);
 });
+
+it.each([
+  [422, 'EVIDENCE_SCAN_REJECTED', 'This file failed the security check and was not accepted. Close this review and choose another file.'],
+  [503, 'EVIDENCE_SCAN_UNAVAILABLE', 'The file security check is unavailable. This file has not been accepted. Try again when the check is available.'],
+])('shows the precise file-check outcome for %s without confirming an upload', async (status, code, message) => {
+  const api = new AccessApi(session);
+  const submit = vi.spyOn(api, 'product').mockImplementation((_path, method) => method === 'POST'
+    ? Promise.reject(new AccessApiError(status, code))
+    : Promise.resolve({ items: [], dataDurability: 'Temporary data' }));
+  mount(api); const user = userEvent.setup(); await screen.findByText('No documents yet.');
+  const input = document.querySelector('input[type="file"]'); expect(input).toBeInstanceOf(HTMLInputElement);
+  await user.upload(input as HTMLInputElement, new File(['account evidence'], 'statement.txt', { type: 'text/plain' }));
+  const drawer = await screen.findByRole('dialog', { name: 'Review document upload' });
+  await user.click(within(drawer).getByRole('button', { name: 'Upload document' }));
+  expect(await within(drawer).findByText(message)).toBeVisible();
+  expect(screen.queryByText('Your document was uploaded.')).not.toBeInTheDocument();
+  expect(submit.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(1);
+});
