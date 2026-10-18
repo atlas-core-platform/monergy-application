@@ -955,12 +955,13 @@ it('fails closed when Document history response identity does not match the sele
 });
 
 
-it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', 'loan-statement-png-ocr/1.0.0', 'loan-statement-jpeg-ocr/1.0.0', 'loan-statement-pdf-ocr/1.0.0', 'insurance-policy-png-ocr/1.0.0', 'insurance-policy-jpeg-ocr/1.0.0', 'insurance-policy-pdf-ocr/1.0.0'])('reopens a completed result with extraction version %s read-only from durable activity', async (extractionVersion) => {
+it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', 'loan-statement-png-ocr/1.0.0', 'loan-statement-jpeg-ocr/1.0.0', 'loan-statement-pdf-ocr/1.0.0', 'insurance-policy-png-ocr/1.0.0', 'insurance-policy-jpeg-ocr/1.0.0', 'insurance-policy-pdf-ocr/1.0.0', 'investment-statement-png-ocr/1.0.0', 'investment-statement-jpeg-ocr/1.0.0', 'investment-statement-pdf-ocr/1.0.0'])('reopens a completed result with extraction version %s read-only from durable activity', async (extractionVersion) => {
   const api = new AccessApi(session);
   const jpeg = extractionVersion?.includes('-jpeg-');
   const png = extractionVersion?.includes('-png-');
   const loan = extractionVersion?.startsWith('loan-statement-');
   const insurance = extractionVersion?.startsWith('insurance-policy-');
+  const investment = extractionVersion?.startsWith('investment-statement-');
   const document = {
     documentId: 'document-result',
     documentVersionId: 'document-version-result',
@@ -1001,8 +1002,8 @@ it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', '
           {
             extractionVersion,
             sourceFactId: 'source-fact-income',
-            factType: insurance ? 'INSURANCE' : loan ? 'LOAN' : 'INCOME',
-            label: insurance ? 'Sum assured stated on policy' : loan ? 'Outstanding loan balance stated on document' : 'Employment income',
+            factType: investment ? 'INVESTMENT' : insurance ? 'INSURANCE' : loan ? 'LOAN' : 'INCOME',
+            label: investment ? 'Purchase value stated on statement' : insurance ? 'Sum assured stated on policy' : loan ? 'Outstanding loan balance stated on document' : 'Employment income',
             candidateValue: 125000,
             currency: 'USD',
             effectiveDate: '2026-10-01',
@@ -1012,9 +1013,9 @@ it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', '
           },
           {
             sourceFactId: 'source-fact-expense',
-            extractionVersion: insurance ? extractionVersion : undefined,
-            factType: insurance ? 'INSURANCE' : 'EXPENSE',
-            label: insurance ? 'Premium stated on policy (frequency not established)' : 'Housing',
+            extractionVersion: insurance || investment ? extractionVersion : undefined,
+            factType: investment ? 'INVESTMENT' : insurance ? 'INSURANCE' : 'EXPENSE',
+            label: investment ? 'Current value stated on statement' : insurance ? 'Premium stated on policy (frequency not established)' : 'Housing',
             candidateValue: 2500,
             currency: 'USD',
             effectiveDate: '2026-10-01',
@@ -1022,7 +1023,7 @@ it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', '
             confidence: 0.96,
             documentVersionId: document.documentVersionId,
           },
-        ].filter((fact) => !extractionVersion || fact.factType === (insurance ? 'INSURANCE' : loan ? 'LOAN' : 'INCOME')),
+        ].filter((fact) => !extractionVersion || fact.factType === (investment ? 'INVESTMENT' : insurance ? 'INSURANCE' : loan ? 'LOAN' : 'INCOME')),
       });
     return Promise.reject(new Error('unexpected product endpoint'));
   });
@@ -1034,8 +1035,14 @@ it.each([undefined, 'salary-slip-pdf-ocr/1.0.0', 'salary-slip-jpeg-ocr/1.0.0', '
 
   const drawer = await screen.findByRole('dialog', { name: 'Processing result' });
   expect(drawer).toHaveTextContent(document.originalFileName);
-  if (extractionVersion) expect(drawer).toHaveTextContent(insurance ? 'Recognized as an insurance policy' : loan ? 'Recognized as a loan statement' : 'Recognized as a salary slip');
-  expect(drawer).toHaveTextContent(insurance ? 'Sum assured stated on policy' : loan ? 'Outstanding loan balance stated on document' : 'Employment income');
+  if (extractionVersion) expect(drawer).toHaveTextContent(investment ? 'Recognized as an investment statement' : insurance ? 'Recognized as an insurance policy' : loan ? 'Recognized as a loan statement' : 'Recognized as a salary slip');
+  expect(drawer).toHaveTextContent(investment ? 'Purchase value stated on statement' : insurance ? 'Sum assured stated on policy' : loan ? 'Outstanding loan balance stated on document' : 'Employment income');
+  if (investment) {
+    expect(drawer).toHaveTextContent('Current value stated on statement');
+    expect(drawer).toHaveTextContent('does not establish a live price, return, gain, verified position or asset valuation');
+    expect(drawer).not.toHaveTextContent('Recognized as an insurance policy');
+    expect(drawer).not.toHaveTextContent('Recognized as a salary slip');
+  }
   if (insurance) {
     expect(drawer).toHaveTextContent('Premium stated on policy (frequency not established)');
     expect(drawer).toHaveTextContent('does not verify active cover');
@@ -2121,9 +2128,10 @@ it.each([
   ['processing.ocr.low-confidence', 'Some document details were unclear.'],
   ['processing.loan-statement.incomplete', 'We need one clear outstanding balance'],
   ['processing.insurance-policy.incomplete', 'We need one clear sum assured, one premium amount'],
+  ['processing.investment-statement.incomplete', 'We need one clear purchase value, one current value'],
   ['processing.salary-slip.incomplete', 'We need one clear net pay amount'],
   ['processing.ocr.unavailable', 'Image text extraction is temporarily unavailable.'],
-  ['processing.pdf.unsupported', 'Use a readable, unlocked, single-page salary-slip, loan-statement or insurance-policy PDF'],
+  ['processing.pdf.unsupported', 'Use a readable, unlocked, single-page salary-slip, loan-statement, insurance-policy or investment-statement PDF'],
   ['processing.jpeg.unsupported', 'Use a clear, upright JPEG image.'],
 ])('explains document extraction failure %s without offering financial adoption', async (code, message) => {
   const api = new AccessApi(session);
@@ -2259,4 +2267,55 @@ it.each(['png', 'jpeg', 'pdf'])('reviews both insurance figures from %s and adop
   expect(review).toHaveTextContent('1 reviewed item confirmed');
   expect(request).toHaveBeenCalledWith(`v1/financial-profile/from-processing/${result.job.jobId}`, 'POST',
     { operationId: 'd'.repeat(32), sourceFactIds: ['policy-premium'] }, undefined);
+});
+
+
+it.each(['png', 'jpeg', 'pdf'])('reviews both investment figures from %s and adopts only the selected current value', async (format) => {
+  const api = new AccessApi(session);
+  const item = { documentId: 'investment-document', documentVersionId: 'investment-version', evidenceId: 'investment-evidence', version: 1,
+    sourceName: 'Customer upload', originalFileName: 'investment-statement.' + (format === 'jpeg' ? 'jpg' : format),
+    contentType: format === 'pdf' ? 'application/pdf' : 'image/' + format, contentLength: 1234,
+    contentSha256: 'e'.repeat(64), receivedAt: '2026-10-18T00:00:00Z', createdAt: '2026-10-18T00:00:00Z' };
+  const currentLabel = 'Current value stated on statement';
+  const source = { customerId: 'reference-customer', factType: 'INVESTMENT', currency: 'USD', effectiveDate: '2026-10-01',
+    sourceLocation: 'Investment statement OCR: page 1', confidence: 0.98, evidenceId: item.evidenceId,
+    documentVersionId: item.documentVersionId, extractionVersion: `investment-statement-${format}-ocr/1.0.0`, validationVersion: 'canonical-source-fact/1.0.0' };
+  const result = { job: { jobId: `job-processing-${'c'.repeat(32)}`, jobName: 'document-processing', ownerService: 'Document Intelligence Service',
+      payloadReference: item.documentVersionId, customerId: 'reference-customer', state: 'Completed', attempt: 1, failureCode: null,
+      retryable: false, updatedAt: '2026-10-18T00:00:01Z' },
+    processing: { processingId: `processing-${'c'.repeat(32)}`, documentVersionId: item.documentVersionId, state: 'Completed',
+      failureCode: null, retryable: false, updatedAt: '2026-10-18T00:00:01Z' },
+    facts: [{ ...source, sourceFactId: 'investment-purchase', label: 'Purchase value stated on statement', candidateValue: 400000 },
+      { ...source, sourceFactId: 'investment-current', label: currentLabel, candidateValue: 2500 }],
+    dataDurability: 'Temporary data', processingMode: 'Document extraction' };
+  const request = vi.spyOn(api, 'product').mockImplementation((path, method) => {
+    if (path === 'v1/evidence' && method === 'GET') return Promise.resolve({ items: [item], dataDurability: 'Temporary data' });
+    if (path.endsWith('/processing') && method === 'POST') return Promise.resolve(result);
+    if (path.includes('v1/financial-profile/from-processing/') && method === 'POST') return Promise.resolve({ confirmed: 1,
+      profile: { financialProfileId: 'financial-profile-reference-customer', revision: 1, updatedAt: '2026-10-18T00:00:02Z',
+        dataDurability: 'Temporary data', facts: [{ financialFactId: 'investment-trusted-current', factType: 'INVESTMENT', label: currentLabel,
+          value: 2500, currency: 'USD', effectiveDate: '2026-10-01', revision: 1,
+          source: { sourceName: item.originalFileName, documentVersion: item.documentVersionId, recordedAt: '2026-10-18T00:00:02Z', technicalSourceFactId: 'investment-current' } }] } });
+    return Promise.reject(new Error('Unexpected investment endpoint: ' + path));
+  });
+  vi.spyOn(crypto, 'randomUUID').mockReturnValueOnce('cccccccc-cccc-cccc-cccc-cccccccccccc').mockReturnValueOnce('dddddddd-dddd-dddd-dddd-dddddddddddd');
+  mount(api, ['evidence.document.read', 'document-intelligence.document.process', 'financial-profile.profile.update']);
+  const user = userEvent.setup(); await screen.findByText(item.originalFileName);
+  await user.click(screen.getByRole('button', { name: `View document details for ${item.originalFileName}` }));
+  await user.click(within(screen.getByRole('dialog', { name: 'Document details' })).getByRole('button', { name: 'Extract details' }));
+  const review = await screen.findByRole('dialog', { name: 'Extract and review details' });
+  await user.click(within(review).getByRole('button', { name: 'Extract details' }));
+  expect(await within(review).findByText('Recognized as an investment statement')).toBeVisible();
+  expect(review).toHaveTextContent('does not establish a live price, return, gain, verified position or asset valuation');
+  expect(review).toHaveTextContent('$400,000.00'); expect(review).toHaveTextContent('$2,500.00');
+  expect(review).not.toHaveTextContent('Recognized as a salary slip'); expect(review).not.toHaveTextContent('Recognized as an insurance policy');
+  const add = within(review).getByRole('button', { name: 'Add selected information' }); expect(add).toBeDisabled();
+  expect(request.mock.calls.filter(([path]) => path.includes('/from-processing/'))).toHaveLength(0);
+  await user.click(within(review).getByRole('checkbox', { name: `Add ${currentLabel} to financial information` }));
+  expect(within(review).getByRole('checkbox', { name: 'Add Purchase value stated on statement to financial information' })).not.toBeChecked();
+  await user.click(add);
+  expect(await screen.findByText('Your financial information was updated')).toBeVisible();
+  expect(review).toHaveTextContent('1 reviewed item confirmed');
+  expect(request).toHaveBeenCalledWith(`v1/financial-profile/from-processing/${result.job.jobId}`, 'POST',
+    { operationId: 'd'.repeat(32), sourceFactIds: ['investment-current'] }, undefined);
 });

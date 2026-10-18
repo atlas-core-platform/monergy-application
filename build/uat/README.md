@@ -114,3 +114,5 @@ Onboarding starts the pinned ClamAV security sidecar. Evidence upload readiness 
 T1-57 XLSX template instructions and limits: [Financial-Information-XLSX.md](Financial-Information-XLSX.md). Existing original-byte malware gating and explicit review/adoption apply.
 
 T1-58 adds bounded printed-English Insurance Policy OCR in PNG, upright JPEG and single-page scanned PDF. Required labels are Policy Date, Sum Assured, Premium/Premium Amount and explicit matching currency. Both literal source figures require review; this does not establish active cover, asset/cash value or premium frequency. See build/governance/t1-58-insurance-policy-ocr.md for exact limits and verification.
+
+T1-59 adds bounded printed-English Investment Statement OCR in PNG, upright JPEG and single-page scanned PDF. Required labels are Statement Date, Purchase Value, Current Value and explicit matching currency. Both literal dated figures require independent review; this does not establish live prices, returns, gains, verified positions or asset valuation. See build/governance/t1-59-investment-statement-ocr.md for exact limits and verification.

@@ -153,6 +153,9 @@ public sealed class SalarySlipOcrTests
     [InlineData("insurance-policy.png", "image/png")]
     [InlineData("insurance-policy.jpg", "image/jpeg")]
     [InlineData("insurance-policy-scan.pdf", "application/pdf")]
+    [InlineData("investment-statement.png", "image/png")]
+    [InlineData("investment-statement.jpg", "image/jpeg")]
+    [InlineData("investment-statement-scan.pdf", "application/pdf")]
     public async Task OwnerHttpBoundaryDeliversExactBinaryToRealOcrAndCustomerBoundProcessing(string fileName, string contentType)
     {
         var builder = WebApplication.CreateSlimBuilder(); builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -201,8 +204,9 @@ public sealed class SalarySlipOcrTests
             "process-png", "process-png", security));
         Assert.Equal(ProcessingState.Completed, result.Data?.State);
         var record = (await processingRepository.GetAsync("processing-png", default))!;
+        var investment = fileName.StartsWith("investment-", StringComparison.Ordinal);
         var insurance = fileName.StartsWith("insurance-", StringComparison.Ordinal);
-        Assert.Equal(insurance ? 2 : 1, record.Facts.Count);
+        Assert.Equal(insurance || investment ? 2 : 1, record.Facts.Count);
         var fact = record.Facts[0];
         if (insurance)
         {
@@ -210,28 +214,34 @@ public sealed class SalarySlipOcrTests
             Assert.Equal("Premium stated on policy (frequency not established)", record.Facts[1].Label);
             Assert.All(record.Facts, f => Assert.Equal("INSURANCE", f.FactType));
         }
+        if (investment)
+        {
+            Assert.Equal(925750.25m, record.Facts[1].CandidateValue);
+            Assert.Equal("Current value stated on statement", record.Facts[1].Label);
+            Assert.All(record.Facts, f => Assert.Equal("INVESTMENT", f.FactType));
+        }
         var loan = fileName.StartsWith("loan-", StringComparison.Ordinal);
-        Assert.Equal(insurance ? 1000000m : loan ? 176500.75m : 52480m, fact.CandidateValue);
-        Assert.Equal(insurance ? "INSURANCE" : loan ? "LOAN" : "INCOME", fact.FactType);
+        Assert.Equal(investment ? 800000m : insurance ? 1000000m : loan ? 176500.75m : 52480m, fact.CandidateValue);
+        Assert.Equal(investment ? "INVESTMENT" : insurance ? "INSURANCE" : loan ? "LOAN" : "INCOME", fact.FactType);
         Assert.Equal(source!.Reference.DocumentVersionId, fact.DocumentVersionId);
         Assert.Equal(source.Reference.CustomerId, fact.CustomerId);
         Assert.Equal(source.Reference.EvidenceId, fact.EvidenceId);
         Assert.IsType<DomainEvent<ValidatedSourceFactsProducedPayload>>(Assert.Single(processingRepository.DrainOutbox()));
-        if (insurance)
+        if (insurance || investment)
         {
             var financial = new Monergy.Services.FinancialProfile.Application.FinancialProfileApplication(
                 new Monergy.Services.FinancialProfile.Infrastructure.InMemoryFinancialProfileRepository(), new CapturingTelemetry(), TimeProvider.System);
             var adopted = await financial.NormalizeSourceFactsAsync(Vs02TestContext.Request(Vs02ContractNames.NormalizeSourceFacts,
-                new NormalizeSourceFacts("profile-insurance", "customer-001", "processing-png", record.Facts.Select(f => f with { FactType = FinancialObjectTypes.InsurancePolicy }).ToArray(),
+                new NormalizeSourceFacts("profile-insurance", "customer-001", "processing-png", record.Facts.Select(f => f with { FactType = investment ? FinancialObjectTypes.Investment : FinancialObjectTypes.InsurancePolicy }).ToArray(),
                     "provider-neutral-normalization/1.0.0", DateTimeOffset.UtcNow), "review-insurance", "review-insurance"));
             Assert.Equal(ContractOutcome.Success, adopted.Outcome); Assert.Equal(2, adopted.Data?.Facts.Count);
-            Assert.All(adopted.Data!.Facts, item => Assert.Equal(FinancialObjectTypes.InsurancePolicy, item.FactType));
+            Assert.All(adopted.Data!.Facts, item => Assert.Equal(investment ? FinancialObjectTypes.Investment : FinancialObjectTypes.InsurancePolicy, item.FactType));
             foreach (var item in adopted.Data.Facts)
             {
                 var provenance = await financial.GetFinancialProvenanceAsync(Vs02TestContext.Request(Vs02ContractNames.GetFinancialProvenance,
                     new GetFinancialProvenance(item.FinancialProvenanceId, "customer-001"), "insurance-source"));
                 Assert.Equal("document-version-001", provenance.Data?.DocumentVersionId);
-                Assert.StartsWith("insurance-policy-", provenance.Data!.ExtractionVersion, StringComparison.Ordinal);
+                Assert.StartsWith(investment ? "investment-statement-" : "insurance-policy-", provenance.Data!.ExtractionVersion, StringComparison.Ordinal);
             }
         }
         // This path publishes candidates only. The existing Financial Profile review/adoption API remains the sole writer.
