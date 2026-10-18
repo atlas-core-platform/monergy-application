@@ -1,31 +1,12 @@
 import { Alert, Button, Checkbox, Modal, Skeleton, Tag } from 'antd';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { AccessApi } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
+import { validOverview, validRevocationReceipt } from './consentModels';
+import type { ConsentOverview, DelegatedConsent } from './consentModels';
+import { CustomerSharingDialog } from './CustomerSharingDialog';
 import './product.css';
 
-interface DelegatedConsent {
-  id: string;
-  customerId: string;
-  actorId: string;
-  recipientLabel?: string | null;
-  purpose: string;
-  capabilityIds: string[];
-  expiresAt: string;
-  revokedAt: string | null;
-}
-interface ConsentOverview {
-  version: number;
-  items: DelegatedConsent[];
-}
-interface ConsentRevocationReceipt {
-  id: string;
-  customerId: string;
-  actorId: string;
-  operation: 'Revoked';
-  version: number;
-  evidenceReference: string;
-}
 interface RevokeIntent {
   api: AccessApi;
   scope: string;
@@ -39,37 +20,6 @@ interface ConsentViewState {
   overview: ConsentOverview | null;
   busy: boolean;
   error: string;
-}
-function validOverview(value: unknown, customerId: string): value is ConsentOverview {
-  if (!value || typeof value !== 'object') return false;
-  const data = value as { version?: number; items?: unknown[] };
-  return (
-    Number.isSafeInteger(data.version) &&
-    (data.version ?? 0) >= 1 &&
-    Array.isArray(data.items) &&
-    data.items.length <= 100 &&
-    data.items.every((value) => {
-      if (!value || typeof value !== 'object') return false;
-      const item = value as Partial<DelegatedConsent>;
-      return (
-        typeof item.id === 'string' &&
-        item.id.length > 0 &&
-        item.customerId === customerId &&
-        typeof item.actorId === 'string' &&
-        item.actorId.length > 0 &&
-        item.purpose === 'customer-advice' &&
-        (item.recipientLabel === undefined || item.recipientLabel === null ||
-         (typeof item.recipientLabel === 'string' &&
-          item.recipientLabel.trim().length > 0 && item.recipientLabel.length <= 320)) &&
-        Array.isArray(item.capabilityIds) &&
-        item.capabilityIds.every((capability) => typeof capability === 'string') &&
-        typeof item.expiresAt === 'string' &&
-        Number.isFinite(Date.parse(item.expiresAt)) &&
-        (item.revokedAt === null ||
-          (typeof item.revokedAt === 'string' && Number.isFinite(Date.parse(item.revokedAt))))
-      );
-    })
-  );
 }
 function status(item: DelegatedConsent) {
   if (item.revokedAt !== null) return 'Revoked';
@@ -96,12 +46,15 @@ export default function ConsentExperience() {
   const activeMutation = useRef<AbortController | null>(null);
   const [revokeIntent, setRevokeIntent] = useState<RevokeIntent | null>(null);
   const [revokeConfirmed, setRevokeConfirmed] = useState(false);
-  const [revokeBusy, setRevokeBusy] = useState(false);
+  const [revokeActivity, setRevokeActivity] = useState<{ api: AccessApi; scope: string } | null>(null);
+  const revokeBusy = revokeActivity?.api === api && revokeActivity.scope === scope;
+  const [grantIntent, setGrantIntent] = useState<{ api: AccessApi; scope: string } | null>(null);
+  const [grantOutcome, setGrantOutcome] = useState<{ api: AccessApi; scope: string; warning: boolean; text: string } | null>(null);
   const [revokeOutcome, setRevokeOutcome] = useState<{
     api: AccessApi; scope: string; level: 'info' | 'warning'; text: string;
   } | null>(null);
   const currentContext = useRef({ api, scope });
-  currentContext.current = { api, scope };
+  useLayoutEffect(() => { currentContext.current = { api, scope }; }, [api, scope]);
   const revokeMessage = revokeOutcome?.api === api && revokeOutcome.scope === scope &&
     revokeOutcome.level === 'info' ? revokeOutcome.text : '';
   const revokeError = revokeOutcome?.api === api && revokeOutcome.scope === scope &&
@@ -113,6 +66,8 @@ export default function ConsentExperience() {
   const error = current?.error ?? '';
   const selectedRevoke = revokeIntent?.api === api && revokeIntent.scope === scope
     ? revokeIntent : null;
+  const sharing = grantIntent?.api === api && grantIntent.scope === scope;
+  const sharingOutcome = grantOutcome?.api === api && grantOutcome.scope === scope ? grantOutcome : null;
 
   const refresh = useCallback(async () => {
     activeRequest.current?.abort();
@@ -149,24 +104,23 @@ export default function ConsentExperience() {
   }, [refresh]);
 
   const revoke = async () => {
-    if (!api || !selectedRevoke || !revokeConfirmed || !overview || busy || revokeBusy) return;
+    if (!api || !selectedRevoke || !revokeConfirmed || !overview || busy || revokeBusy || sharing) return;
     const grant = overview.items.find((item) =>
       item.id === selectedRevoke.grantId && item.actorId === selectedRevoke.actorId);
     if (!grant || grant.revokedAt || Date.parse(grant.expiresAt) <= Date.now()) return;
     const controller = new AbortController();
     activeMutation.current = controller;
-    setRevokeBusy(true);
+    setRevokeActivity({ api, scope });
     setRevokeOutcome(null);
     const operationId = crypto.randomUUID().replaceAll('-', '');
     try {
-      const receipt = await api.revokeCustomerConsent<ConsentRevocationReceipt>(
+      const receipt = await api.revokeCustomerConsent<unknown>(
         customerId, grant.id, overview.version, operationId, controller.signal,
       );
       if (controller.signal.aborted || activeMutation.current !== controller ||
           currentContext.current.api !== api || currentContext.current.scope !== scope) return;
-      if (!receipt || receipt.id !== grant.id || receipt.customerId !== customerId ||
-          receipt.actorId !== grant.actorId || receipt.operation !== 'Revoked' ||
-          receipt.version !== overview.version + 1 || !receipt.evidenceReference) {
+      if (!validRevocationReceipt(receipt) || receipt.id !== grant.id || receipt.customerId !== customerId ||
+          receipt.actorId !== grant.actorId || receipt.version !== overview.version + 1) {
         throw new Error('CONSENT_RECEIPT_INVALID');
       }
       setRevokeIntent(null);
@@ -187,7 +141,7 @@ export default function ConsentExperience() {
     } finally {
       if (activeMutation.current === controller) {
         activeMutation.current = null;
-        setRevokeBusy(false);
+        setRevokeActivity(null);
       }
     }
   };
@@ -214,14 +168,18 @@ export default function ConsentExperience() {
       <div className="product-drawer-actions">
         <Button
           onClick={() => {
+            setGrantOutcome(null);
             setState(null);
             void refresh();
           }}
-          disabled={!api || !customerId || busy || revokeBusy}
+          disabled={!api || !customerId || busy || revokeBusy || sharing}
         >
           Refresh permissions
         </Button>
+        <Button type="primary" disabled={!api || !overview || busy || revokeBusy || sharing || !!selectedRevoke}
+          onClick={() => { if (api) { setGrantOutcome(null); setRevokeOutcome(null); setGrantIntent({ api, scope }); } }}>Share information</Button>
       </div>
+      {sharingOutcome && <Alert showIcon type={sharingOutcome.warning ? 'warning' : 'success'} title={sharingOutcome.warning ? 'Sharing needs verification' : 'Sharing permission recorded'} description={sharingOutcome.text} />}
       {revokeMessage && <Alert showIcon type="info" title={revokeMessage} />}
       {revokeError && <Alert showIcon type="warning" title="Revocation needs verification" description={revokeError} />}
       {!customerId ? (
@@ -269,8 +227,10 @@ export default function ConsentExperience() {
                     <p>Expires: {formatted(item.expiresAt)}</p>
                     {item.revokedAt && <p>Revoked: {formatted(item.revokedAt)}</p>}
                     {current === 'Unexpired record' && (
-                      <Button danger disabled={busy || revokeBusy} onClick={() => {
-                        setRevokeIntent({ api: api!, scope, grantId: item.id, actorId: item.actorId, recipientLabel: item.recipientLabel });
+                      <Button danger disabled={busy || revokeBusy || sharing} onClick={() => {
+                        if (!api) return;
+                        setGrantOutcome(null);
+                        setRevokeIntent({ api, scope, grantId: item.id, actorId: item.actorId, recipientLabel: item.recipientLabel });
                         setRevokeConfirmed(false);
                         setRevokeOutcome(null);
                       }}>Stop sharing</Button>
@@ -292,6 +252,7 @@ export default function ConsentExperience() {
       ) : null}
       <Modal
         title="Confirm stopping a sharing permission"
+        destroyOnHidden
         open={Boolean(selectedRevoke)}
         okText="Stop sharing"
         okButtonProps={{ danger: true, disabled: !revokeConfirmed || revokeBusy }}
@@ -299,7 +260,7 @@ export default function ConsentExperience() {
         onOk={() => { void revoke(); }}
         onCancel={() => { if (!revokeBusy) { setRevokeIntent(null); setRevokeConfirmed(false); } }}
         closable={!revokeBusy}
-        maskClosable={!revokeBusy}
+        mask={{ closable: !revokeBusy }}
       >
         {selectedRevoke?.recipientLabel ? (
           <p>Recipient: <strong>{selectedRevoke.recipientLabel}</strong></p>
@@ -310,13 +271,23 @@ export default function ConsentExperience() {
         <p>Recipient reference: <code>{selectedRevoke?.actorId}</code></p>
         <p>Grant reference: <code>{selectedRevoke?.grantId}</code></p>
         <p>Re-authorization requires a separate customer action.</p>
-        <Checkbox checked={revokeConfirmed} onChange={(event) => setRevokeConfirmed(event.target.checked)}>
+        <Checkbox checked={revokeConfirmed} onChange={(event) => { setRevokeConfirmed(event.target.checked); }}>
           I recognize this recipient reference and confirm that I want to stop sharing.
         </Checkbox>
       </Modal>
+      {sharing && <CustomerSharingDialog api={api} tenant={session?.tenantId ?? ''} actor={session?.actorId ?? ''} customer={customerId}
+        onClose={() => { setGrantIntent(null); }}
+        onVerified={(result, email) => {
+          setGrantIntent(null); setState({ api, scope, overview: result, busy: false, error: '' });
+          setGrantOutcome({ api, scope, warning: false, text: `Your sharing permission for ${email} is recorded. Current organization access is evaluated separately.` });
+        }}
+        onUncertain={() => {
+          setGrantIntent(null); setState({ api, scope, overview: null, busy: false, error: '' });
+          setGrantOutcome({ api, scope, warning: true, text: 'The sharing outcome could not be confirmed. Refresh permissions before attempting another change.' });
+        }} />}
       <p>
-        Sharing permissions are purpose-bound. Adding or changing grants and naming recipients
-        remain outside this current customer experience.
+        Sharing permissions are purpose-bound. You can record a new permission for an existing
+        organization recipient or stop a recorded permission. Changing or renewing an existing grant remains a separate workflow.
       </p>
     </main>
   );

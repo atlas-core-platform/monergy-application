@@ -63,6 +63,7 @@ public static class CustomerConsentEndpoints
                 await owners.RequireActiveMemberAsync(session.TenantId, request.ActorId, http.RequestAborted).ConfigureAwait(false);
                 return await store.GrantAsync(session.TenantId, customer, session.ActorId, request, http.RequestAborted).ConfigureAwait(false);
             }));
+        app.MapCustomerSharing();
         app.MapDelete("/local/v1/consents/customers/{customerId}/grants/{grantId}", (string customerId, string grantId,
             [FromBody] ConsentRevocation request, HttpContext http, PostgresCustomerConsent store, CustomerOwnerClient owners) =>
             InvokeAsync(async () =>

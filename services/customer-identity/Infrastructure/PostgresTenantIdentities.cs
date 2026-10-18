@@ -1,11 +1,12 @@
 using Dapper;
 using Monergy.Contracts;
+using Monergy.Platform;
 
 namespace Monergy.Services.CustomerIdentity.Infrastructure;
 
 // Uses the same validated C&I tenant connection boundary as sessions. The
 // transaction covers identity creation and its durable receipt, never AM SQL.
-public sealed class PostgresTenantIdentities(PostgresTenantSessions connections)
+public sealed class PostgresTenantIdentities(PostgresTenantSessions connections) : IConsentRecipientDirectory
 {
     public async Task<TenantIdentityProvisioningReceipt> ProvisionAsync(string trustedTenant,
         TenantIdentityProvisioningRequest request, CancellationToken cancellationToken)
@@ -71,6 +72,18 @@ public sealed class PostgresTenantIdentities(PostgresTenantSessions connections)
             SELECT normalized_email FROM customer_identity.tenant_principals
             WHERE actor_id=@ActorId LIMIT 1;
             """, new { ActorId = actorId }, cancellationToken: cancellationToken)).ConfigureAwait(false);
+    }
+
+    // Exact email lookup for the Consent owner's customer-confirmed operation.
+    // No directory enumeration or identity/provisioning mutation is exposed.
+    public async Task<CustomerOwnerRecipientLabel?> ResolveAsync(string tenant, string email, CancellationToken ct)
+    {
+        TenantAccessProtocol.Identifier(tenant, 64);
+        await using var connection = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
+        var actor = await connection.QuerySingleOrDefaultAsync<string>(new CommandDefinition("""
+            SELECT actor_id FROM customer_identity.tenant_principals WHERE normalized_email=@Email;
+            """, new { Email = email }, cancellationToken: ct)).ConfigureAwait(false);
+        return actor is null ? null : new(tenant, actor, email);
     }
 
     private sealed class ReceiptRow

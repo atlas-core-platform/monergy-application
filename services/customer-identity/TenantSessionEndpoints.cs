@@ -13,6 +13,7 @@ public static class TenantSessionEndpoints
         services.AddSingleton<PostgresTenantSessions>();
         services.AddSingleton<ITenantSessionRepository>(provider => provider.GetRequiredService<PostgresTenantSessions>());
         services.AddSingleton<PostgresTenantIdentities>();
+        services.AddSingleton<IConsentRecipientDirectory>(provider => provider.GetRequiredService<PostgresTenantIdentities>());
         services.AddSingleton<ITenantMembershipClient, HttpTenantMembershipClient>();
         services.AddSingleton<ReferenceTenantAuthenticator>();
         services.AddSingleton<TenantSessionAuthority>();
@@ -60,6 +61,7 @@ public static class TenantSessionEndpoints
                     recipientLabelToken == eventToken ||
                     recipientLabelToken == app.Configuration["Monergy:AccessIntegration:IdentityProvisioningToken"])
                     throw new InvalidOperationException("Recipient label lookup requires its own workload token.");
+                app.MapConsentRecipientLookup(recipientLabelToken);
                 app.MapGet("/internal/v1/consent-recipient-label/{actorId}", async (
                     string actorId, HttpContext http, PostgresTenantIdentities identities) =>
                 {

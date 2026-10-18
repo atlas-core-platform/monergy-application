@@ -21,7 +21,10 @@ if (customerConsent)
         options.SerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
     });
     builder.Services.AddSingleton<PostgresCustomerConsent>();
+    builder.Services.AddSingleton<ICustomerSharingStore>(provider => provider.GetRequiredService<PostgresCustomerConsent>());
     builder.Services.AddSingleton<CustomerOwnerClient>();
+    builder.Services.AddSingleton(TimeProvider.System);
+    builder.Services.AddSingleton<CustomerSharingApplication>();
 }
 
 var app = builder.Build();

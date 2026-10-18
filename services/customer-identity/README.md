@@ -89,3 +89,7 @@ When LOCAL/CI customer relationships are enabled, GET/PUT `/local/v1/me/customer
 ## Own session activity and revocation (T1-45)
 
 Development LOCAL/CI GET `/local/v1/me/sessions` lists at most 100 sessions belonging to the current trusted actor, with owner-scoped cursor pagination. POST `/local/v1/me/sessions/revoke` explicitly ends a selected other session and atomically records its operation receipt. Current session/membership checks, strict JSON and origin enforcement apply; current-session termination uses the existing Sign out flow. No bearer credential, verified device/location claim or administrator grant is introduced. See [scope and native evidence](../../build/governance/t1-45-self-sessions.md); actual PostgreSQL owner UAT remains open.
+
+## Consent recipient resolution (T1-46)
+
+The Consent owner may POST an exact registered email to `/internal/v1/consent-recipients/resolve` using its existing dedicated RecipientLabelToken and trusted tenant header. C&I resolves one existing principal inside that tenant; the client checks exact tenant/email/actor binding. This is not a browser directory or identity-creation route. Recipient AM membership and customer ownership remain separately enforced by Consent. See [the sharing implementation receipt](../../build/governance/t1-46-customer-sharing.md).
