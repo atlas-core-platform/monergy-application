@@ -43,9 +43,11 @@ const formatBytes = (value: number) =>
 function processingFailureMessage(code: string | null): string {
   switch (code) {
     case 'processing.document.unclassified':
-      return "We couldn't recognize a supported document. Check that this is a clear, printed English salary slip, loan statement, loan sanction letter, insurance policy, investment statement or property sale deed in PNG, upright JPEG or single-page PDF format.";
+      return "We couldn't recognize a supported document. Check that this is a clear, printed English salary slip, loan statement, loan sanction letter, insurance policy, investment statement, property sale deed or property registration document in PNG, upright JPEG or single-page PDF format.";
     case 'processing.ocr.low-confidence':
       return 'Some document details were unclear. Upload a clearer image and try again.';
+    case 'processing.property-registration.incomplete':
+      return 'We need one clear purchase value, an explicit supported currency and an unambiguous registration date. Check these labels in your property registration document.';
     case 'processing.property-sale-deed.incomplete':
       return 'We need one clear purchase value, an explicit supported currency and an unambiguous deed date. Check these labels in your property sale deed.';
     case 'processing.loan-sanction.incomplete':
@@ -61,7 +63,7 @@ function processingFailureMessage(code: string | null): string {
     case 'processing.jpeg.unsupported':
       return 'Use a clear, upright JPEG image. If the image is rotated or damaged, rotate it upright and save a new JPEG before trying again.';
     case 'processing.pdf.unsupported':
-      return 'Use a readable, unlocked, single-page salary-slip, loan-statement, loan-sanction, insurance-policy, investment-statement or property-sale-deed PDF without forms or scripts. Multi-page and protected PDFs are not supported yet.';
+      return 'Use a readable, unlocked, single-page salary-slip, loan-statement, loan-sanction, insurance-policy, investment-statement, property-sale-deed or property-registration PDF without forms or scripts. Multi-page and protected PDFs are not supported yet.';
     case 'processing.ocr.unavailable':
       return 'Image text extraction is temporarily unavailable. Try again when the service is available.';
     default:
@@ -78,6 +80,7 @@ const typeName = (value: string) =>
     'text/csv': 'Financial information CSV',
     [financialXlsxType]: 'Financial information Excel',
   })[value] ?? value;
+const isRegistrationExtraction = (version?: string) => ['property-registration-png-ocr/1.0.0', 'property-registration-jpeg-ocr/1.0.0', 'property-registration-pdf-ocr/1.0.0'].includes(version ?? '');
 const isPropertyExtraction = (version?: string) => ['property-sale-deed-png-ocr/1.0.0', 'property-sale-deed-jpeg-ocr/1.0.0', 'property-sale-deed-pdf-ocr/1.0.0'].includes(version ?? '');
 const isSanctionExtraction = (version?: string) => ['loan-sanction-png-ocr/1.0.0', 'loan-sanction-jpeg-ocr/1.0.0', 'loan-sanction-pdf-ocr/1.0.0'].includes(version ?? '');
 const isInvestmentExtraction = (version?: string) => ['investment-statement-png-ocr/1.0.0', 'investment-statement-jpeg-ocr/1.0.0', 'investment-statement-pdf-ocr/1.0.0'].includes(version ?? '');
@@ -1052,6 +1055,10 @@ export default function EvidenceExperience() {
                     Extracted items <strong>{recoveredResult.facts.length}</strong>
                   </span>
                 </div>
+                {recoveredResult.facts.some((fact) => isRegistrationExtraction(fact.extractionVersion)) && (
+                  <Alert showIcon type="info" title="Recognized as a property registration document"
+                    description="The purchase value was read as stated on the registration date. Review it against your document before adding it. Registration date is not the purchase date. Ownership, authenticity and current property value have not been verified." />
+                )}
                 {recoveredResult.facts.some((fact) => isPropertyExtraction(fact.extractionVersion)) && (
                   <Alert showIcon type="info" title="Recognized as a property sale deed"
                     description="The purchase value was read as stated on the deed date. Review it against your document before adding it. Ownership, authenticity and current property value have not been verified." />
@@ -1653,6 +1660,10 @@ export default function EvidenceExperience() {
                   processingFailureMessage(processing.processing?.failureCode ?? processing.job.failureCode)
                 }
               />
+            )}
+            {processing?.facts.some((fact) => isRegistrationExtraction(fact.extractionVersion)) && (
+              <Alert showIcon type="info" title="Recognized as a property registration document"
+                description="The purchase value was read as stated on the registration date. Review it against your document before adding it. Registration date is not the purchase date. Ownership, authenticity and current property value have not been verified." />
             )}
             {processing?.facts.some((fact) => isPropertyExtraction(fact.extractionVersion)) && (
               <Alert showIcon type="info" title="Recognized as a property sale deed"

@@ -120,3 +120,7 @@ T1-59 adds bounded printed-English Investment Statement OCR in PNG, upright JPEG
 T1-60 adds bounded printed-English Loan Sanction Letter OCR in PNG, upright JPEG and single-page scanned PDF. Required labels are Sanction Date, Sanctioned Amount/Sanction Amount, EMI/EMI Amount and explicit matching currency. Both source terms require independent review; no verified offer, disbursement, current debt or repayment status is established. Prior reviewed outstanding-balance figures retain their distinct meaning. See build/governance/t1-60-loan-sanction-ocr.md.
 
 T1-61 supports printed-English Property Sale Deed OCR in PNG, upright JPEG and single-page scanned PDF. An exact early title, Deed Date/Sale Deed Date, Purchase Value and explicit supported currency are required. Purchase value requires explicit review and does not verify ownership, authenticity or current value. The product ASSET source category maps to the canonical PROPERTY owner type for these exact extraction versions; Passport/source history/Search/basic Reports retain the asset-source presentation and original provenance. See build/governance/t1-61-property-sale-deed-ocr.md.
+
+## T1-62 property registration document OCR
+
+Supported printed-English property registration PNG/JPEG/single-page PDF yields one explicitly stated purchase figure dated by registration, with review before adoption. Registration date is not purchase date. See [bounded verification receipt](../governance/t1-62-property-registration-ocr.md). Full property records and integrated physical UAT remain open.
