@@ -1,0 +1,13 @@
+using System.Text.Json.Serialization;
+namespace Monergy.Contracts;
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record IncomeRecordDraft(string Name, string IncomeSource, string IncomeType,
+    decimal Amount, string Frequency, string FinancialYear, DateOnly PeriodStart, DateOnly PeriodEnd,
+    string SourceFinancialFactId, int SourceRevision);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CreateIncomeRecord(string OperationId, IncomeRecordDraft Income);
+public sealed record ReviewedIncomeRecord(string IncomeRecordId, string OperationId, string CustomerId,
+    IncomeRecordDraft Income, string Currency, string SourceProvenanceId, string DocumentVersionId,
+    string EvidenceId, string RecordedBy, DateTimeOffset RecordedAt, string VerificationStatus);
+public sealed record IncomeRecordList(IReadOnlyList<ReviewedIncomeRecord> Items, bool HasMore);
