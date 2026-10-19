@@ -30,7 +30,7 @@ app.MapHealthChecks("/health/ready");
 if (referenceAdapters || physicalPersistence)
 {
     app.MapFinancialProfileContracts();
-    if (TenantBoundaryOptions.Selected(builder.Configuration)) { app.MapLoanRecords(); app.MapInvestmentRecords(); app.MapIncomeRecords(); app.MapExpenseRecords(); app.MapLiabilityRecords(); }
+    if (TenantBoundaryOptions.Selected(builder.Configuration)) { app.MapLoanRecords(); app.MapInvestmentRecords(); app.MapPropertyRecords(); app.MapIncomeRecords(); app.MapExpenseRecords(); app.MapLiabilityRecords(); }
 }
 if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Profile"], "persisted-reporting", StringComparison.Ordinal))
 {

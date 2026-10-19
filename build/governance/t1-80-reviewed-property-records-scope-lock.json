@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-80",
+  "applicationBase": "124d5fb44002c4d22dcc33742c18bc8abc2df530",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections13/14/20/43",
+    "COV-022",
+    "MON-FIN-009/011/012/014",
+    "M2-WS04-E02-F02",
+    "Original P1-15 Assets / P1-22 Assets snapshot foundation"
+  ],
+  "scope": "Create,list and read immutable source-linked customer-reviewed property records. Explicit name,location summary,property type,purchase/current values and value-as-of date. Canonical PROPERTY source only;product ASSET must be explicitly PROPERTY. Exact historical source,currency/provenance,current Self profile/document authority;replay/conflict/strict bounded input and fresh readback. No automatic value copying,ownership/valuation verification,corrections/history,liability links,snapshot,total assets,net worth or calculations.",
+  "migrations": [
+    "services/financial-profile/migrations/0013_reviewed_property_records.sql"
+  ],
+  "remaining": "Broader asset sources,property ownership/valuation/legal workflows,corrections/history,liability links,vehicles,asset-position completeness,reconciliation,Financial Rules totals/net worth,Search/Reports record integration,central audit and physical/full UAT."
+}

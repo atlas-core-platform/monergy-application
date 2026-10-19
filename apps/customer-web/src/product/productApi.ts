@@ -550,3 +550,16 @@ export const getLiabilityRecordHistory = (api: AccessApi, id: string, beforeRevi
 export interface ProductLiabilitySnapshot { asOfDate: string; currency: string; items: ProductLiabilityRecord[]; hasMore: boolean }
 export const getLiabilitySnapshot = (api: AccessApi, asOfDate: string, currency: string, signal?: AbortSignal) =>
   api.product<ProductLiabilitySnapshot>('v1/liability-records/snapshot?asOfDate='+encodeURIComponent(asOfDate)+'&currency='+encodeURIComponent(currency),'GET',undefined,signal);
+
+export interface ProductPropertyDraft {
+  name: string; location: string; propertyType: string; purchaseValue: number; currentValue: number;
+  valueAsOfDate: string; sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductPropertyRecord {
+  propertyRecordId: string; operationId: string; customerId: string; property: ProductPropertyDraft; currency: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+}
+export interface ProductPropertyRecordList { items: ProductPropertyRecord[]; hasMore: boolean; dataDurability: string }
+export const getPropertyRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductPropertyRecordList>('v1/property-records', 'GET', undefined, signal);
+export const createPropertyRecord = (api: AccessApi, input: { operationId: string; property: ProductPropertyDraft }, signal?: AbortSignal) =>
+  api.product<ProductPropertyRecord>('v1/property-records', 'POST', input, signal);

@@ -2,6 +2,7 @@ import LiabilityRecordsExperience from './LiabilityRecordsExperience';
 import ExpenseRecordsExperience from './ExpenseRecordsExperience';
 import IncomeRecordsExperience from './IncomeRecordsExperience';
 import InvestmentRecordsExperience from './InvestmentRecordsExperience';
+import PropertyRecordsExperience from './PropertyRecordsExperience';
 import LoanRecordsExperience from './LoanRecordsExperience';
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Collapse, Drawer, Skeleton, Spin, Tag } from 'antd';
@@ -207,6 +208,11 @@ export default function FinancialProfileExperience() {
       {activeCategory === 'EXPENSE' && api && canRead && <ExpenseRecordsExperience
         key={[product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
         facts={profile?.facts.filter(fact=>fact.factType==='EXPENSE') ?? []}
+        canRead={product?.capabilities.includes('evidence.document.read') ?? false}
+        canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
+      {activeCategory === 'ASSET' && api && canRead && <PropertyRecordsExperience
+        key={[product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
+        facts={profile?.facts.filter(fact=>fact.factType==='ASSET' && fact.assetType==='PROPERTY') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
       {activeCategory === 'INVESTMENT' && api && canRead && <InvestmentRecordsExperience

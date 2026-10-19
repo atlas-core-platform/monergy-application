@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AccessApi } from '../src/access/accessApi';
@@ -609,4 +609,22 @@ it('opens liabilities from the financial navigation using reviewed loan sources 
   expect(await screen.findByRole('heading',{name:'Liability records'})).toBeVisible();expect(screen.getByRole('button',{name:'Add liability record'})).toBeEnabled();
   expect(window.location.search).toBe('?type=LIABILITY');expect(request.mock.calls.every(([,method])=>method==='GET')).toBe(true);
   expect(screen.getByText(/do not establish total debt/)).toBeVisible();
+});
+
+it('opens property records under Assets with only explicitly classified property sources',async()=>{
+  window.history.replaceState(null,'','/finances?type=ASSET');const api=new AccessApi(session);
+  const fact={financialFactId:'ff-property',factType:'ASSET',assetType:'PROPERTY',label:'Property source amount',value:120000,currency:'USD',effectiveDate:'2026-10-01',revision:1,
+    source:{sourceName:'property.txt',documentVersion:'document-property',recordedAt:'2026-10-19T00:00:00Z',technicalSourceFactId:'source-property',technicalProvenanceId:'provenance-property'}};
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/property-records'
+    ?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({financialProfileId:'profile',revision:1,updatedAt:'2026-10-19T00:00:00Z',dataDurability:'Temporary data',facts:[fact,{...fact,financialFactId:'ff-vehicle',assetType:'VEHICLE',label:'Vehicle source amount'}]}));
+  mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
+  expect(await screen.findByRole('heading',{name:'Property records'})).toBeVisible();
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Add property record'})).toBeEnabled());
+  expect(request.mock.calls.some(([path])=>path==='v1/property-records')).toBe(true);
+  await userEvent.setup().click(screen.getByRole('button',{name:'Add property record'}));
+  const drawer=screen.getByRole('dialog',{name:'Add property record'});
+  await userEvent.setup().click(within(drawer).getByRole('combobox',{name:'Reviewed property source'}));
+  await waitFor(()=>expect(screen.getByText(/Property source amount ·/,{selector:'.ant-select-item-option-content'})).toBeVisible());
+  expect(screen.queryByText(/Vehicle source amount ·/,{selector:'.ant-select-item-option-content'})).not.toBeInTheDocument();
 });

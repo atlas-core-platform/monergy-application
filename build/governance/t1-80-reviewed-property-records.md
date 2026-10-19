@@ -1,0 +1,30 @@
+# T1-80 — Reviewed property records
+
+Bounded planned implementation under Master §§13/14/20/43, COV-022, MON-FIN-009/011/012/014 and M2-WS04-E02-F02; original P1-15 Assets and the P1-22 asset-position foundation. Application base `124d5fb44002c4d22dcc33742c18bc8abc2df530`. Architecture remains `90934b51b2b203795acf95da2252a2cf1a1d1f4c`. No stage-gate, business-acceptance or deployment advancement.
+
+## Delivered behavior
+
+Customers with current Self profile read/update and source-document access can explicitly add a reviewed property record under Financial information > Assets. Read-only customers with profile/document access can view saved records. The record has a required property name, location summary and customer-described property type (each trimmed, bounded120 characters, no controls), separate nonnegative purchase/current values (at most two decimals and999999999999999), and an explicit value-as-of date within the existing financial-date envelope. Values are never inferred or copied from the source amount. Zero values are allowed; purchase and current value have no ordering assumption.
+
+The customer selects an exact reviewed source revision. Only canonical PROPERTY facts owned by the current customer qualify; the product ASSET facade must carry the explicit PROPERTY classification. Vehicle, unclassified, wrong-category and foreign-customer sources do not qualify. Exact immutable source, currency, provenance, evidence/document version and review actor/time are retained. A newer source does not rewrite the saved record or its original source.
+
+Owner `POST/GET /local/v1/customers/{customerId}/property-records` plus exact ID reads and corresponding `POST/GET /product-api/v1/property-records` expose one Financial Profile owner. Operator customer-to-tenant bindings, current session/owned-customer identity, matching Self profile/document/update decisions and post-readback authority/context confirmation remain required. Same-origin and no-store responses, strict32KiB JSON input, unknown/duplicate/missing/null rejection and bounded identifiers/fields apply. Product ingress validates complete normalized receipt fields, requested operation, actor/customer and exact fresh saved readback. Lists are bounded200 with hasMore, unique IDs and complete customer-bound records.
+
+A deterministic tenant/customer/actor/operation identity and normalized payload fingerprint produce replay-safe immutable creation receipts; changed payload conflicts without overwrite. In-memory locking and PostgreSQL transaction/advisory locking preserve one receipt under concurrency. Migration `0013_reviewed_property_records.sql` creates owner-local append-only storage with exact source revision foreign key, customer index and SELECT/INSERT runtime grants; UPDATE/DELETE are revoked. Physical insert rechecks exact source type/customer/revision. No shared-service SQL is added.
+
+The UI retains uncertain operation/payload for retry or drawer reopen. Invalid400 allows editing; stale source selection requires explicit reselection. API/session changes, capability loss and ignored cancellation cannot restore sensitive late results. Details expose separate values, currency, value date, location/type and exact source-history link.
+
+## Verification
+
+- **747 Financial Profile checks pass**, including **61 new property cases**, with all **686 previous cases** retained and rerun (TRX inventory compared).
+- **37 affected UI checks pass:16 Property records and21 Financial Information**, including the20 existing parent cases. The parent integration proves Assets exposes only explicitly classified property sources. A visibility assertion waits for the drawer/select transition.
+- Native checks use actual owner/Gateway HTTP with current-session/customer/PDP doubles and an in-memory financial owner. Exact old source preservation, independent values/zero/precision/date validation, replay/conflict/concurrency, actor/tenant/customer scope, strict owner/product JSON, access loss/read-only access, forged receipt/fresh-readback and malformed list rejection are covered. Unsupported ASSET normalization is tested as rejection before source storage.
+- TypeScript, changed-source/test ESLint and Vite pass. Gateway and physical persistence test-project builds pass with zero warnings/errors.
+- New PostgreSQL restart/replay/conflict/isolation/runtime mutation-denial regression is **compiled only**. Physical migration/database/query/grant execution, live scanner/Compose and full integrated authenticated browser UAT are **NOT RUN**.
+- Unchanged T1-69 VS02/real OCR573,reprocessing40,Reporting64,Search27,Documents111;T1-70 Loan22/Investment20 UI;T1-75 Income23/IncomeComparison13 UI;T1-76 Expense23/ExpenseComparison13 UI;T1-79 Liability23/Snapshot18 UI are carried forward, **not rerun or counted as new passes**. Financial Information20 is rerun within21 here.
+
+## Product limits and tracker treatment
+
+These are customer-reviewed property details and values. They do not verify legal title, ownership, address, market value, valuation methodology or debt. No professional valuer/legal workflow, external provider, arbitrary source kind, correction/history, ownership share, loan/liability association, deduplication/reconciliation, asset snapshot, total assets, net worth or financial arithmetic is implemented. Financial Rules retains calculation ownership. Source figures stay separate. Search/Reports record integration and central Audit delivery are not claimed.
+
+Broader property/vehicle records and lifecycle, ownership/valuation/legal verification, liability links, complete asset position, reconciliation/calculations and physical/full UAT remain open. P1-15 Assets and P1-22 Assets snapshot remain **Partial**; no original journey status changes. After paired merges there are **80 numbered units:79 implementations plus1 governance closure**; original29 journeys remain **0 complete/19 partial/10 pending**. All151 requirement IDs,81 features,126 Phase1 memberships,source phases and business acceptance are preserved. Exact merged Application/System Expert identities are recorded by the paired Expert receipt and tracker.
