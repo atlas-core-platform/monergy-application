@@ -14,7 +14,7 @@ const loan: ProductLoanDraft = { name: 'Home loan', lender: 'Example lender', lo
   sourceFinancialFactId: 'ff-loan', sourceRevision: 2 };
 const record: ProductLoanRecord = { loanRecordId: 'loan-saved', operationId: 'a'.repeat(32), customerId: 'reference-customer', loan,
   currency: 'USD', sourceProvenanceId: 'provenance-2', documentVersionId: 'document-v2', evidenceId: 'evidence-loan',
-  recordedBy: 'A100', recordedAt: '2026-10-19T00:00:00Z', revision: 1 };
+  recordedBy: 'A100', recordedAt: '2026-10-19T00:00:00Z', revision: 1, lifecycleStatus: 'UNREVIEWED', lifecycleAsOfDate: null };
 function mount(api: AccessApi, canCreate = true, canRead = true, facts: ProductFinancialFact[] = [source]) {
   return render(<FoundationProvider appearance="midnight"><LoanRecordsExperience api={api} canCreate={canCreate} canRead={canRead} facts={facts} /></FoundationProvider>);
 }
@@ -217,4 +217,89 @@ it('shows history failure and hides prior history immediately after a session sc
   const other=new AccessApi({...session,actorId:'A200'});vi.spyOn(other,'product').mockResolvedValue({items:[],hasMore:false,dataDurability:'Temporary data'});
   view.rerender(<FoundationProvider appearance="midnight"><LoanRecordsExperience api={other} facts={[]} canRead canCreate={false} /></FoundationProvider>);
   expect(screen.queryByRole('dialog',{name:'Loan record history'})).not.toBeInTheDocument();await screen.findByText(/No loan records added yet/);
+});
+
+async function chooseLoanStatus(user: ReturnType<typeof userEvent.setup>, label='Closed') {
+  await user.click(await screen.findByRole('button',{name:'Review loan status: Home loan'}));
+  const drawer=screen.getByRole('dialog',{name:'Review loan status'});
+  await user.click(within(drawer).getByRole('combobox',{name:'Loan status'}));
+  await user.click(screen.getByText(label,{selector:'.ant-select-item-option-content'}));
+  fireEvent.change(within(drawer).getByLabelText('Status as of'),{target:{value:'2026-10-19'}});
+  return drawer;
+}
+
+it('requires explicit dated status review and keeps the original balance and terms when closed', async () => {
+  const api=new AccessApi(session);let current=record;
+  const closed: ProductLoanRecord={...record,revision:2,lifecycleStatus:'CLOSED',lifecycleAsOfDate:'2026-10-19'};
+  const request=vi.spyOn(api,'product').mockImplementation((path,method,body)=>{
+    if(method==='GET')return Promise.resolve({items:[current],hasMore:false,dataDurability:'Temporary data'});
+    expect(path).toBe('v1/loan-records/loan-saved/lifecycle');expect(body).toEqual({operationId:'a'.repeat(32),expectedRevision:1,status:'CLOSED',asOfDate:'2026-10-19'});
+    current=closed;return Promise.resolve(closed);
+  });vi.spyOn(crypto,'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');mount(api);
+  expect(await screen.findByText('Status not reviewed')).toBeVisible();const user=userEvent.setup();
+  await user.click(screen.getByRole('button',{name:'Review loan status: Home loan'}));const drawer=screen.getByRole('dialog',{name:'Review loan status'});
+  expect(within(drawer).getByRole('button',{name:'Save reviewed loan status'})).toBeDisabled();expect(within(drawer).getByLabelText('Status as of')).toHaveValue('');
+  await user.click(within(drawer).getByRole('combobox',{name:'Loan status'}));await user.click(screen.getByText('Closed',{selector:'.ant-select-item-option-content'}));
+  expect(within(drawer).getByRole('button',{name:'Save reviewed loan status'})).toBeDisabled();
+  fireEvent.change(within(drawer).getByLabelText('Status as of'),{target:{value:'2026-10-19'}});
+  expect(request.mock.calls.filter(([,method])=>method==='POST')).toHaveLength(0);expect(drawer).toHaveTextContent('does not verify repayment');
+  await user.click(within(drawer).getByRole('button',{name:'Save reviewed loan status'}));await screen.findByText('Loan status saved: Home loan');
+  expect(screen.getByText('Closed — customer reported')).toBeVisible();expect(screen.getByText('Recorded balance: $400,000.00 · as of 2026-10-01')).toBeVisible();
+  await user.click(screen.getByRole('button',{name:'View loan record: Home loan'}));const details=screen.getByRole('dialog',{name:'Loan record details'});
+  expect(details).toHaveTextContent('Closed — customer reported as of 2026-10-19');expect(details).toHaveTextContent('8.25%');expect(details).toHaveTextContent('$10,000.00');
+});
+
+it('explicitly reopens a closed historical-source record without requiring a current extracted figure', async () => {
+  const api=new AccessApi(session);const closed: ProductLoanRecord={...record,revision:2,lifecycleStatus:'CLOSED',lifecycleAsOfDate:'2026-10-10'};
+  const active: ProductLoanRecord={...closed,revision:3,lifecycleStatus:'ACTIVE',lifecycleAsOfDate:'2026-10-19'};let current=closed;
+  vi.spyOn(api,'product').mockImplementation((_path,method,body)=>{
+    if(method==='GET')return Promise.resolve({items:[current],hasMore:false,dataDurability:'Temporary data'});
+    expect(body).toMatchObject({expectedRevision:2,status:'ACTIVE',asOfDate:'2026-10-19'});current=active;return Promise.resolve(active);
+  });vi.spyOn(crypto,'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');mount(api,true,true,[]);
+  const user=userEvent.setup();const drawer=await chooseLoanStatus(user,'Active — reopen record');
+  expect(within(drawer).getByText(/This will reopen the record as customer reported/)).toBeVisible();
+  await user.click(within(drawer).getByRole('button',{name:'Save reviewed loan status'}));await screen.findByText('Loan status saved: Home loan');
+  expect(screen.getByText('Active — customer reported')).toBeVisible();expect(screen.getByText(/Outstanding balance: \$400,000.00/)).toBeVisible();
+});
+
+it('freezes an uncertain status request across drawer close and blocks overlapping term edits', async () => {
+  const api=new AccessApi(session);let attempts=0;
+  const request=vi.spyOn(api,'product').mockImplementation((_path,method)=>{
+    if(method==='GET')return Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'});
+    return ++attempts===1?Promise.reject(new AccessApiError(503,'unavailable')):Promise.resolve({...record,revision:2,lifecycleStatus:'CLOSED',lifecycleAsOfDate:'2026-10-19'});
+  });vi.spyOn(crypto,'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');mount(api,true,true,[]);
+  const user=userEvent.setup();const drawer=await chooseLoanStatus(user);await user.click(within(drawer).getByRole('button',{name:'Save reviewed loan status'}));
+  await within(drawer).findByText(/The status save has not been confirmed/);expect(within(drawer).getByLabelText('Status as of')).toBeDisabled();
+  await user.click(within(drawer).getByRole('button',{name:'Close'}));expect(screen.getByRole('button',{name:'Edit loan record: Home loan'})).toBeDisabled();
+  await user.click(screen.getByRole('button',{name:'Continue loan status confirmation'}));const reopened=screen.getByRole('dialog',{name:'Review loan status'});
+  expect(within(reopened).getByLabelText('Status as of')).toBeDisabled();await user.click(within(reopened).getByRole('button',{name:'Retry status confirmation'}));
+  await screen.findByText('Loan status saved: Home loan');const posts=request.mock.calls.filter(([,method])=>method==='POST');expect(posts).toHaveLength(2);expect(posts[0]?.[2]).toEqual(posts[1]?.[2]);
+});
+
+it('allows confirmed date correction but stops a stale status edit until the newer version is reviewed', async () => {
+  const api=new AccessApi(session);let failure=400;
+  vi.spyOn(api,'product').mockImplementation((_path,method)=>method==='GET'?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'}):Promise.reject(new AccessApiError(failure,failure===400?'invalid':'LOAN_REVISION_CONFLICT')));
+  mount(api);const user=userEvent.setup();const drawer=await chooseLoanStatus(user);await user.click(within(drawer).getByRole('button',{name:'Save reviewed loan status'}));
+  await within(drawer).findByText(/Check the status and date/);expect(within(drawer).getByLabelText('Status as of')).toBeEnabled();
+  failure=409;await user.click(within(drawer).getByRole('button',{name:'Save reviewed loan status'}));await within(drawer).findByText(/A newer version has been saved/);
+  expect(within(drawer).getByRole('button',{name:'Save reviewed loan status'})).toBeDisabled();expect(within(drawer).getByLabelText('Status as of')).toBeDisabled();
+});
+
+it('shows reviewed status history to read-only customers without offering status changes', async () => {
+  const api=new AccessApi(session);const closed: ProductLoanRecord={...record,revision:2,lifecycleStatus:'CLOSED',lifecycleAsOfDate:'2026-10-19'};
+  vi.spyOn(api,'product').mockImplementation(path=>path==='v1/loan-records'?Promise.resolve({items:[closed],hasMore:false,dataDurability:'Temporary data'}):Promise.resolve({items:[closed,record],hasMore:false,nextBeforeRevision:null}));
+  mount(api,false);const user=userEvent.setup();await screen.findByText('Closed — customer reported');expect(screen.queryByRole('button',{name:'Review loan status: Home loan'})).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button',{name:'View change history: Home loan'}));const drawer=screen.getByRole('dialog',{name:'Loan record history'});
+  await within(drawer).findByText('Closed — customer reported as of 2026-10-19');expect(within(drawer).getByText('Status not reviewed')).toBeVisible();
+  await user.click(within(drawer).getByRole('button',{name:'View version 2'}));const saved=within(drawer).getByRole('region',{name:'Saved loan version 2'});
+  expect(saved).toHaveTextContent('Closed — customer reported as of 2026-10-19');expect(saved).toHaveTextContent('$400,000.00');
+});
+
+it('hides an unconfirmed prior-session status form and prevents a request after scope changes', async () => {
+  const api=new AccessApi(session);vi.spyOn(api,'product').mockImplementation((_path,method)=>method==='GET'?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'}):Promise.reject(new AccessApiError(503,'unavailable')));
+  const view=mount(api);const user=userEvent.setup();const drawer=await chooseLoanStatus(user);await user.click(within(drawer).getByRole('button',{name:'Save reviewed loan status'}));await within(drawer).findByText(/The status save has not been confirmed/);
+  const other=new AccessApi({...session,actorId:'A200'});const request=vi.spyOn(other,'product').mockResolvedValue({items:[],hasMore:false,dataDurability:'Temporary data'});
+  view.rerender(<FoundationProvider appearance="midnight"><LoanRecordsExperience api={other} facts={[]} canRead canCreate={false} /></FoundationProvider>);
+  expect(screen.queryByRole('dialog',{name:'Review loan status'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Continue loan status confirmation'})).not.toBeInTheDocument();
+  await screen.findByText(/No loan records added yet/);expect(request.mock.calls.every(([,method])=>method==='GET')).toBe(true);
 });

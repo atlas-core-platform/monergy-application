@@ -19,7 +19,8 @@ public sealed partial class ReviewedLoanRecordTests
     {
         var (financial,source)=await Seed();var app=new LoanRecordsApplication(financial,new InMemoryLoanRecords(),TimeProvider.System);
         var first=await app.CreateAsync("T001",Customer,"actor-001",Input(source.FinancialFactId),default);
-        var legacy=JsonSerializer.Serialize(first,ContractJson.Options).Replace(",\"revision\":1}","}",StringComparison.Ordinal);
+        var node=JsonSerializer.SerializeToNode(first,ContractJson.Options)!.AsObject();
+        node.Remove("revision");node.Remove("lifecycleStatus");node.Remove("lifecycleAsOfDate");var legacy=node.ToJsonString();
         Assert.DoesNotContain("\"revision\"",legacy,StringComparison.Ordinal);
         Assert.Equal(first,JsonSerializer.Deserialize<ReviewedLoanRecord>(legacy,ContractJson.Options));
     }

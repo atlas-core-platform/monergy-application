@@ -46,6 +46,15 @@ public static class LoanRecordEndpoints
             var input = json.RootElement.Deserialize<ReviseLoanRecord>(Json) ?? throw new TenantBoundaryException("LOAN_RECORD_INVALID", 400);
             return await owner.ReviseAsync(tenant, customerId, actor, loanRecordId, input, http.RequestAborted).ConfigureAwait(false);
         });
+        group.MapPost("/{loanRecordId}/lifecycle", async (string customerId, string loanRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
+        {
+            var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);
+            http.Request.EnableBuffering(32768,32768);
+            using var json = await JsonDocument.ParseAsync(http.Request.Body,cancellationToken:http.RequestAborted).ConfigureAwait(false);
+            RejectDuplicates(json.RootElement);
+            var input = json.RootElement.Deserialize<ReviewLoanRecordStatus>(Json) ?? throw new TenantBoundaryException("LOAN_RECORD_INVALID",400);
+            return await owner.ReviewStatusAsync(tenant,customerId,actor,loanRecordId,input,http.RequestAborted).ConfigureAwait(false);
+        });
         group.MapPost("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
         {
             var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);
