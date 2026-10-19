@@ -13,8 +13,8 @@ interface Editor { api: AccessApi; open: boolean; values: FormValues; operationI
 const money = (value: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency }).format(value);
 const terms = (record: ProductInvestmentRecord) => record.investment.investmentType;
 
-export default function InvestmentRecordsExperience({ api, facts, canRead, canCreate }: {
-  api: AccessApi; facts: ProductFinancialFact[]; canRead: boolean; canCreate: boolean;
+export default function InvestmentRecordsExperience({ api, facts, canRead, canCreate, onRecordsChanged }: {
+  api: AccessApi; facts: ProductFinancialFact[]; canRead: boolean; canCreate: boolean; onRecordsChanged?: () => void;
 }) {
   const scope = useRef({ api, canRead, canCreate });
   useLayoutEffect(() => { scope.current = { api, canRead, canCreate }; }, [api, canRead, canCreate]);
@@ -41,12 +41,12 @@ export default function InvestmentRecordsExperience({ api, facts, canRead, canCr
     try {
       const list = await getInvestmentRecords(api, controller.signal);
       if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean') throw new Error('Invalid record list');
-      if (active()) setLoaded({ api, list });
+      if (active()) { setLoaded({ api, list }); onRecordsChanged?.(); }
     } catch (error) {
       if (active()) { setLoaded(null); setFailure({ api, text: error instanceof AccessApiError && error.status === 403
         ? 'Your current access does not include investment records and their source documents.' : 'Investment records are unavailable. Try again.' }); }
     } finally { signal?.removeEventListener('abort', abort); if (active()) setLoading(false); }
-  }, [api, canRead]);
+  }, [api, canRead, onRecordsChanged]);
   useEffect(() => {
     const controller = new AbortController();
     const start = window.setTimeout(() => { void load(controller.signal); }, 0);

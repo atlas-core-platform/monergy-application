@@ -72,6 +72,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<InvestmentRecordsApplication>();
         services.AddSingleton<PropertyRecordsApplication>();
         services.AddSingleton<VehicleRecordsApplication>();
+        services.AddSingleton<AssetSnapshotApplication>();
         services.AddSingleton<LoanRecordsApplication>();
         return services.AddAuditDelivery(configuration);
     }
@@ -97,6 +98,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<InvestmentRecordsApplication>();
         services.AddSingleton<PropertyRecordsApplication>();
         services.AddSingleton<VehicleRecordsApplication>();
+        services.AddSingleton<AssetSnapshotApplication>();
         services.AddSingleton<LoanRecordsApplication>();
         return services.AddAuditDelivery(configuration);
     }

@@ -65,6 +65,19 @@ public sealed class InMemoryInvestmentRecords : IInvestmentRecordRepository
                 revision == 1 ? value.Record : history?.SingleOrDefault(x => x.Revision == revision));
         }
     }
+    public Task<InvestmentRecordList> SnapshotAsync(string tenant, string customer, DateOnly asOfDate, string currency, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            // Filter latest versions across the complete owned record set before applying the view bound.
+            var items=records.Where(x=>x.Key.Tenant==tenant && x.Key.Customer==customer)
+                .OrderByDescending(x=>x.Value.Record.RecordedAt).ThenBy(x=>x.Key.Id,StringComparer.Ordinal)
+                .Select(x=>revisions.GetValueOrDefault(x.Key)?.LastOrDefault() ?? x.Value.Record)
+                .Where(x=>x.Currency==currency && x.Investment.ValueAsOfDate==asOfDate).Take(201).ToArray();
+            return Task.FromResult(new InvestmentRecordList(items.Take(200).ToArray(),items.Length>200));
+        }
+    }
     public Task<InvestmentRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-84",
+  "applicationBase": "fa39349a1662eacb49ba714792541b3b02fa9992",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections13/14/20/41",
+    "COV-022/025",
+    "MON-DAS-001/004",
+    "MON-FIN-011/012/014",
+    "M2-WS08-E01-F02",
+    "Original P1-22 Assets snapshot"
+  ],
+  "scope": "Read-only dated asset snapshot of latest customer-reviewed Investment,Property and Vehicle versions with explicit exact date/currency. Full-set per-kind filtering before200 limit,unchanged values/source identities,separate coverage/hasMore. No source inference,carry-forward,currency conversion,deduplication,totals/net worth or complete asset position. Independent per-kind owner reads,not a cross-kind atomic historical snapshot.",
+  "migrations": [],
+  "remaining": "Broader asset kinds,ownership/valuation verification,lifecycle,liability links,complete comparable asset position,reconciliation,Financial Rules totals/net worth,Search/Reports record integration,central audit and physical/full UAT."
+}

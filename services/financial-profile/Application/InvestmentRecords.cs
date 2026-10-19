@@ -11,6 +11,7 @@ public interface IInvestmentRecordRepository
     Task<ReviewedInvestmentRecord> CreateAsync(string tenant, string customer, string actor,
         string fingerprint, ReviewedInvestmentRecord record, CancellationToken ct);
     Task<ReviewedInvestmentRecord?> ReadAsync(string tenant, string customer, string id, CancellationToken ct, int? revision = null);
+    Task<InvestmentRecordList> SnapshotAsync(string tenant, string customer, DateOnly asOfDate, string currency, CancellationToken ct);
     Task<InvestmentRecordList> ListAsync(string tenant, string customer, CancellationToken ct);
     Task<ReviewedInvestmentRecord> ReviseAsync(string tenant, string customer, string actor, string fingerprint,
         int expectedRevision, ReviewedInvestmentRecord record, CancellationToken ct);

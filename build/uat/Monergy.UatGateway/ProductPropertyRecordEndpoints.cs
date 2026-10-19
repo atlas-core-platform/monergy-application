@@ -118,7 +118,7 @@ public static class ProductPropertyRecordEndpoints
         }
         else if(element.ValueKind == JsonValueKind.Array) foreach(var item in element.EnumerateArray()) RejectDuplicates(item);
     }
-    private static bool Bound(ReviewedPropertyRecord? value, string customer) => value is { Property: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
+    internal static bool Bound(ReviewedPropertyRecord? value, string customer) => value is { Property: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
         value.Revision > 0 && TenantAccessClient.Identifier(value.PropertyRecordId, 80) && Guid.TryParseExact(value.OperationId, "N", out _) &&
         value.Currency.Length == 3 && value.Currency.All(char.IsAsciiLetterUpper) &&
         Text(value.Property.Name) && Text(value.Property.Location) && Text(value.Property.PropertyType) &&
