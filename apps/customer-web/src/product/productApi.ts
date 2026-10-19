@@ -592,3 +592,22 @@ export const getVehicleRecordHistory = (api: AccessApi, id: string, beforeRevisi
 export interface ProductAssetSnapshot { asOfDate: string; currency: string; investments: {items:ProductInvestmentRecord[];hasMore:boolean}; properties: {items:ProductPropertyRecord[];hasMore:boolean}; vehicles: {items:ProductVehicleRecord[];hasMore:boolean} }
 export const getAssetSnapshot = (api:AccessApi,asOfDate:string,currency:string,signal?:AbortSignal) =>
   api.product<ProductAssetSnapshot>('v1/asset-records/snapshot?asOfDate='+encodeURIComponent(asOfDate)+'&currency='+encodeURIComponent(currency),'GET',undefined,signal);
+
+export interface ProductInsuranceDraft {
+  name: string; provider: string; policyType: string; sumAssured: number; premiumAmount: number;
+  policyAsOfDate: string; maturityDate: string | null; sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductInsuranceRecord {
+  insuranceRecordId: string; operationId: string; customerId: string; insurance: ProductInsuranceDraft; currency: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
+}
+export interface ProductInsuranceRecordList { items: ProductInsuranceRecord[]; hasMore: boolean; dataDurability: string }
+export const getInsuranceRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductInsuranceRecordList>('v1/insurance-records', 'GET', undefined, signal);
+export const createInsuranceRecord = (api: AccessApi, input: { operationId: string; insurance: ProductInsuranceDraft }, signal?: AbortSignal) =>
+  api.product<ProductInsuranceRecord>('v1/insurance-records', 'POST', input, signal);
+
+export interface ProductInsuranceRecordHistory { items: ProductInsuranceRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const reviseInsuranceRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; insurance: ProductInsuranceDraft }) =>
+  api.product<ProductInsuranceRecord>('v1/insurance-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getInsuranceRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductInsuranceRecordHistory>('v1/insurance-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);

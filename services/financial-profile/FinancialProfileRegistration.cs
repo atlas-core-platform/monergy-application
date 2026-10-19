@@ -63,6 +63,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<IInvestmentRecordRepository, InMemoryInvestmentRecords>();
         services.AddSingleton<IPropertyRecordRepository, InMemoryPropertyRecords>();
         services.AddSingleton<IVehicleRecordRepository, InMemoryVehicleRecords>();
+        services.AddSingleton<IInsuranceRecordRepository, InMemoryInsuranceRecords>();
         services.AddSingleton<IIncomeRecordRepository, InMemoryIncomeRecords>();
         services.AddSingleton<IncomeRecordsApplication>();
         services.AddSingleton<IExpenseRecordRepository, InMemoryExpenseRecords>();
@@ -72,6 +73,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<InvestmentRecordsApplication>();
         services.AddSingleton<PropertyRecordsApplication>();
         services.AddSingleton<VehicleRecordsApplication>();
+        services.AddSingleton<InsuranceRecordsApplication>();
         services.AddSingleton<AssetSnapshotApplication>();
         services.AddSingleton<LoanRecordsApplication>();
         return services.AddAuditDelivery(configuration);
@@ -89,6 +91,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<IInvestmentRecordRepository, PostgresInvestmentRecords>();
         services.AddSingleton<IPropertyRecordRepository, PostgresPropertyRecords>();
         services.AddSingleton<IVehicleRecordRepository, PostgresVehicleRecords>();
+        services.AddSingleton<IInsuranceRecordRepository, PostgresInsuranceRecords>();
         services.AddSingleton<IIncomeRecordRepository, PostgresIncomeRecords>();
         services.AddSingleton<IncomeRecordsApplication>();
         services.AddSingleton<IExpenseRecordRepository, PostgresExpenseRecords>();
@@ -98,6 +101,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<InvestmentRecordsApplication>();
         services.AddSingleton<PropertyRecordsApplication>();
         services.AddSingleton<VehicleRecordsApplication>();
+        services.AddSingleton<InsuranceRecordsApplication>();
         services.AddSingleton<AssetSnapshotApplication>();
         services.AddSingleton<LoanRecordsApplication>();
         return services.AddAuditDelivery(configuration);

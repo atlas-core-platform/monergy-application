@@ -416,7 +416,7 @@ it('shows reviewed Investment source figures with exact source, not a market val
 it('shows a reviewed Insurance source figure linked to exact Evidence history, not policy coverage', async () => {
   window.history.replaceState(null, '', '/finances?type=INSURANCE');
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue({
+  vi.spyOn(api, 'product').mockImplementation(path => path === 'v1/insurance-records' ? Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'}) : Promise.resolve({
     financialProfileId: 'financial-profile-reference-customer',
     revision: 6,
     updatedAt: '2026-10-17T09:00:00Z',
@@ -437,13 +437,21 @@ it('shows a reviewed Insurance source figure linked to exact Evidence history, n
         technicalProvenanceId: 'provenance-insurance',
       },
     }],
-  });
-  mount(api);
+  }));
+  mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
   expect(await screen.findByText('Insurance amount stated in source document')).toBeVisible();
   expect(screen.getByRole('heading', { name: 'Insurance source figures' })).toBeVisible();
   expect(screen.getByText('Source: insurance-source.txt')).toBeVisible();
   expect(screen.queryByText(/verified coverage|claim eligibility|cash value/i)).not.toBeInTheDocument();
   expect(window.location.pathname + window.location.search).toBe('/finances?type=INSURANCE');
+  expect(screen.getByRole('heading',{name:'Insurance policies'})).toBeVisible();
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Add insurance record'})).toBeEnabled());
+  const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Add insurance record'}));
+  const drawer=screen.getByRole('dialog',{name:'Add insurance record'});
+  await user.click(within(drawer).getByRole('combobox',{name:'Reviewed insurance source'}));
+  await waitFor(()=>expect(screen.getByText(/Insurance amount stated in source document ·/,{selector:'.ant-select-item-option-content'})).toBeVisible());
+  expect(within(drawer).getByLabelText('Sum assured')).toHaveValue(null);
+  expect(within(drawer).getByLabelText('Premium amount')).toHaveValue(null);
 });
 
 
