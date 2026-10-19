@@ -13,3 +13,5 @@ public sealed record LiabilityRecordList(IReadOnlyList<ReviewedLiabilityRecord> 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ReviseLiabilityRecord(string OperationId, int ExpectedRevision, LiabilityRecordDraft Liability);
 public sealed record LiabilityRecordHistory(IReadOnlyList<ReviewedLiabilityRecord> Items, bool HasMore, int? NextBeforeRevision);
+
+public sealed record LiabilityRecordSnapshot(DateOnly AsOfDate, string Currency, IReadOnlyList<ReviewedLiabilityRecord> Items, bool HasMore);

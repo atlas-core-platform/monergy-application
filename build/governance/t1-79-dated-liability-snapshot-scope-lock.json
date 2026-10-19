@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-79",
+  "applicationBase": "e3ff9e55aa6149005e62961acf8d63f2e1c7009c",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": ["Master sections20/41", "Original Phase1 P1-21 liability snapshot", "COV-019", "MON-DAS-001/004", "MON-FIN-011/012/014", "M2-WS04-E01-F03", "M2-WS08-E01-F02"],
+  "migrations": []
+}

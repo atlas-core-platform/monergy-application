@@ -12,6 +12,7 @@ public interface ILiabilityRecordRepository
         string fingerprint, ReviewedLiabilityRecord record, CancellationToken ct);
     Task<ReviewedLiabilityRecord?> ReadAsync(string tenant, string customer, string id, CancellationToken ct, int? revision = null);
     Task<LiabilityRecordList> ListAsync(string tenant, string customer, CancellationToken ct);
+    Task<LiabilityRecordSnapshot> SnapshotAsync(string tenant, string customer, DateOnly asOfDate, string currency, CancellationToken ct);
     Task<ReviewedLiabilityRecord> ReviseAsync(string tenant, string customer, string actor, string fingerprint,
         int expectedRevision, ReviewedLiabilityRecord record, CancellationToken ct);
     Task<LiabilityRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct);
@@ -84,6 +85,12 @@ public sealed class LiabilityRecordsApplication(IFinancialProfileRepository fina
         if (!TenantAccessClient.Identifier(id, 80) || revision is < 1) throw new TenantBoundaryException("LIABILITY_RECORD_INVALID", 400);
         return await repository.ReadAsync(tenant, customer, id, ct, revision).ConfigureAwait(false)
             ?? throw new TenantBoundaryException("LIABILITY_RECORD_NOT_FOUND", 404);
+    }
+    public Task<LiabilityRecordSnapshot> SnapshotAsync(string tenant, string customer, DateOnly asOfDate, string currency, CancellationToken ct)
+    {
+        if (asOfDate.Year < 1900 || asOfDate > DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime.AddHours(14)) || currency is null || !Currency(currency))
+            throw new TenantBoundaryException("LIABILITY_SNAPSHOT_INVALID",400);
+        return repository.SnapshotAsync(tenant,customer,asOfDate,currency,ct);
     }
     private static bool Text(string? value, int maxLength=120) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= maxLength && !value.Any(char.IsControl);
     private static bool Money(decimal value) => value is >= 0 and <= 999999999999.99m && decimal.Round(value, 2) == value;

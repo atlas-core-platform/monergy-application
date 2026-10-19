@@ -27,6 +27,12 @@ public static class LiabilityRecordEndpoints
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
             return await owner.ListAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
         });
+        group.MapGet("/snapshot",async (string customerId,HttpContext http,TenantAccessClient access,TenantBoundaryOptions bindings,LiabilityRecordsApplication owner)=>
+        {
+            var(tenant,_)=await AuthorizeAsync(http,customerId,access,bindings,false).ConfigureAwait(false);
+            var(date,currency)=SnapshotSelection(http.Request);
+            return await owner.SnapshotAsync(tenant,customerId,date,currency,http.RequestAborted).ConfigureAwait(false);
+        });
         group.MapGet("/{liabilityRecordId}", async (string customerId, string liabilityRecordId, int? revision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LiabilityRecordsApplication owner) =>
         {
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
@@ -55,6 +61,17 @@ public static class LiabilityRecordEndpoints
             var input = json.RootElement.Deserialize<CreateLiabilityRecord>(Json) ?? throw new TenantBoundaryException("LIABILITY_RECORD_INVALID", 400);
             return await owner.CreateAsync(tenant, customerId, actor, input, http.RequestAborted).ConfigureAwait(false);
         });
+    }
+    private static (DateOnly Date,string Currency) SnapshotSelection(HttpRequest request)
+    {
+        if (request.Query.Count!=2 || request.Query.Keys.Any(key=>key is not ("asOfDate" or "currency")) ||
+            request.Query["asOfDate"].Count!=1 || request.Query["currency"].Count!=1 ||
+            !DateOnly.TryParseExact(request.Query["asOfDate"].ToString(),"yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.None,out var date) ||
+            date.Year<1900 || date>DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime.AddHours(14)))
+            throw new TenantBoundaryException("LIABILITY_SNAPSHOT_INVALID",400);
+        var currency=request.Query["currency"].ToString();
+        if(currency.Length!=3 || !currency.All(char.IsAsciiLetterUpper)) throw new TenantBoundaryException("LIABILITY_SNAPSHOT_INVALID",400);
+        return(date,currency);
     }
     private static async Task<(string Tenant, string Actor)> AuthorizeAsync(HttpContext http, string customer, TenantAccessClient access, TenantBoundaryOptions bindings, bool write)
     {

@@ -214,6 +214,25 @@ public sealed partial class ReviewedLiabilityRecordTests
         {
             var variation=scenario;
             var response=await base.SendAsync(request,ct);
+            if(scenario.StartsWith("snapshot-",StringComparison.Ordinal))
+            {
+                if(request.Method!=HttpMethod.Get || !request.RequestUri!.AbsolutePath.EndsWith("/snapshot",StringComparison.Ordinal) || !response.IsSuccessStatusCode) return response;
+                var value=JsonNode.Parse(await response.Content.ReadAsStringAsync(ct))!.AsObject();var items=value["items"]!.AsArray();var item=items[0]!;
+                switch(scenario[9..]) {
+                    case "date":value["asOfDate"]="2026-09-29";break;
+                    case "currency":value["currency"]="INR";break;
+                    case "item-date":item["liability"]!["balanceAsOfDate"]="2026-09-29";break;
+                    case "item-currency":item["currency"]="INR";break;
+                    case "customer":item["customerId"]="foreign";break;
+                    case "status":item["verificationStatus"]="VERIFIED";break;
+                    case "revision":item["revision"]=0;break;
+                    case "duplicate":items.Add(item.DeepClone());break;
+                    case "large":for(var i=1;i<201;i++)items.Add(item.DeepClone());break;
+                    case "hasMore":value["hasMore"]=true;break;
+                    default:items[0]=null;break;
+                }
+                response.Content.Dispose();response.Content=new StringContent(value.ToJsonString(),Encoding.UTF8,"application/json");return response;
+            }
             if(scenario.StartsWith("correction-",StringComparison.Ordinal))
             {
                 variation=scenario[11..];

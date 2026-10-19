@@ -1,3 +1,4 @@
+import LiabilitySnapshotExperience from './LiabilitySnapshotExperience';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Drawer, Input, Select, Space, Tag } from 'antd';
 import type { AccessApi} from '../access/accessApi';
@@ -111,6 +112,7 @@ export default function LiabilityRecordsExperience({ api, facts, canRead, canCre
     {loading && <p role="status">Loading liability records…</p>}
     {list?.items.length === 0 && <p>No liability records added yet. Review a loan/debt source figure in Documents, then enter its creditor, balance and as-of date here.</p>}
     {list?.hasMore && <Alert type="info" title="Showing the 200 most recently added liability records." />}
+    <LiabilitySnapshotExperience api={api} refreshKey={list} />
     {list?.items.map((record) => <Card key={record.liabilityRecordId} size="small" style={{ marginBlock: 12 }}>
       <Space wrap><strong>{record.liability.name}</strong><Tag>Customer reviewed</Tag><span>{record.liability.creditor}</span></Space>
       <p>Outstanding balance: {money(record.liability.outstandingAmount, record.currency)} · as of {record.liability.balanceAsOfDate}</p>
