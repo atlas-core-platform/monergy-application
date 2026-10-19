@@ -65,6 +65,19 @@ public sealed class InMemoryPropertyRecords : IPropertyRecordRepository
                 revision == 1 ? value.Record : history?.SingleOrDefault(x => x.Revision == revision));
         }
     }
+    public Task<PropertyRecordList> SnapshotAsync(string tenant, string customer, DateOnly asOfDate, string currency, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            // Filter latest versions across the complete owned record set before applying the view bound.
+            var items=records.Where(x=>x.Key.Tenant==tenant && x.Key.Customer==customer)
+                .OrderByDescending(x=>x.Value.Record.RecordedAt).ThenBy(x=>x.Key.Id,StringComparer.Ordinal)
+                .Select(x=>revisions.GetValueOrDefault(x.Key)?.LastOrDefault() ?? x.Value.Record)
+                .Where(x=>x.Currency==currency && x.Property.ValueAsOfDate==asOfDate).Take(201).ToArray();
+            return Task.FromResult(new PropertyRecordList(items.Take(200).ToArray(),items.Length>200));
+        }
+    }
     public Task<PropertyRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

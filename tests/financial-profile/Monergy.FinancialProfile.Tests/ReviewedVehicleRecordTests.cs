@@ -390,13 +390,14 @@ public sealed partial class ReviewedVehicleRecordTests
             var ob = WebApplication.CreateSlimBuilder(); ob.WebHost.UseUrls("http://127.0.0.1:0"); ob.Configuration.AddInMemoryCollection(values);
             ob.Services.AddSingleton(new TenantAccessClient(ob.Configuration, new HttpClient(authority,false)));
             ob.Services.AddSingleton(new TenantBoundaryOptions { Service="financial-profile", CapabilityPrefix="financial-profile.", CustomerTenants=new Dictionary<string,string> { [Customer]="T001" }, ProbeUrl="http://127.0.0.1:5199/" });
-            ob.Services.AddSingleton(new VehicleRecordsApplication(financial,records,TimeProvider.System)); var owner=ob.Build(); owner.MapVehicleRecords(); await owner.StartAsync();
+            ob.Services.AddSingleton(new VehicleRecordsApplication(financial,records,TimeProvider.System)); ob.Services.AddSingleton(new AssetSnapshotApplication(new InMemoryInvestmentRecords(),new InMemoryPropertyRecords(),records,TimeProvider.System)); var owner=ob.Build(); owner.MapVehicleRecords(); owner.MapAssetSnapshot(); await owner.StartAsync();
             values["Monergy:Product:FinancialProfileUrl"]=owner.Urls.Single()+"/";
             var gb=WebApplication.CreateSlimBuilder(); gb.WebHost.UseUrls("http://127.0.0.1:0"); gb.Configuration.AddInMemoryCollection(values);
             gb.Services.AddSingleton(new CustomerOwnerClient(gb.Configuration,new HttpClient(authority,false)));
-            gb.Services.AddSingleton(new TenantAccessClient(gb.Configuration,new HttpClient(authority,false))); gb.AddProductVehicleRecords();
-            if(tamper is not null) gb.Services.AddSingleton(new ProductVehicleRecordClient(gb.Configuration,new HttpClient(new TamperHandler(tamper))));
-            var gateway=gb.Build(); gateway.MapProductVehicleRecords(); await gateway.StartAsync(); return new(owner,gateway,authority,records,source);
+            gb.Services.AddSingleton(new TenantAccessClient(gb.Configuration,new HttpClient(authority,false))); gb.AddProductVehicleRecords(); gb.AddProductAssetSnapshot();
+            if(tamper is not null && !tamper.StartsWith("asset-",StringComparison.Ordinal)) gb.Services.AddSingleton(new ProductVehicleRecordClient(gb.Configuration,new HttpClient(new TamperHandler(tamper))));
+            if(tamper?.StartsWith("asset-",StringComparison.Ordinal)==true) gb.Services.AddSingleton(new ProductAssetSnapshotClient(gb.Configuration,new HttpClient(new AssetTamperHandler(tamper))));
+            var gateway=gb.Build(); gateway.MapProductVehicleRecords(); gateway.MapProductAssetSnapshot(); await gateway.StartAsync(); return new(owner,gateway,authority,records,source);
         }
         public HttpClient Client(string? tenant="T001") => ClientFor(gateway,tenant);
         public HttpClient OwnerClient(string tenant="T001") => ClientFor(owner,tenant);

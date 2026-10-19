@@ -112,7 +112,7 @@ public static class ProductInvestmentRecordEndpoints
         }
         else if(element.ValueKind == JsonValueKind.Array) foreach(var item in element.EnumerateArray()) RejectDuplicates(item);
     }
-    private static bool Bound(ReviewedInvestmentRecord? value, string customer) => value is { Investment: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
+    internal static bool Bound(ReviewedInvestmentRecord? value, string customer) => value is { Investment: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
         value.Revision > 0 && TenantAccessClient.Identifier(value.InvestmentRecordId, 80) && Guid.TryParseExact(value.OperationId, "N", out _) &&
         value.Currency.Length == 3 && value.Currency.All(char.IsAsciiLetterUpper) &&
         Text(value.Investment.Name) && Text(value.Investment.Institution) && Text(value.Investment.InvestmentType) &&

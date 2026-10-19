@@ -119,6 +119,23 @@ public sealed class PostgresVehicleRecords : IVehicleRecordRepository, IAsyncDis
             """, new { Tenant = tenant, Customer = customer }, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
         return new(rows.Take(200).Select(Decode).ToArray(), rows.Length > 200);
     }
+    public async Task<VehicleRecordList> SnapshotAsync(string tenant, string customer, DateOnly asOfDate, string currency, CancellationToken ct)
+    {
+        await using var db=await source.OpenConnectionAsync(ct).ConfigureAwait(false);
+        var rows=(await db.QueryAsync<string>(new CommandDefinition("""
+            WITH latest AS (
+              SELECT l.recorded_at,l.vehicle_record_id,COALESCE((SELECT r.payload::text
+                FROM financial_profile.vehicle_record_revisions r WHERE r.tenant_id=l.tenant_id
+                AND r.customer_id=l.customer_id AND r.vehicle_record_id=l.vehicle_record_id
+                ORDER BY r.revision DESC LIMIT 1),l.payload::text) AS payload
+              FROM financial_profile.vehicle_records l WHERE l.tenant_id=@Tenant AND l.customer_id=@Customer
+            )
+            SELECT payload FROM latest WHERE (CAST(payload AS jsonb)->>'currency')=@Currency
+              AND (CAST(payload AS jsonb)#>>'{vehicle,valueAsOfDate}')=@AsOfDate
+            ORDER BY recorded_at DESC,vehicle_record_id LIMIT 201;
+            """,new {Tenant=tenant,Customer=customer,Currency=currency,AsOfDate=asOfDate.ToString("yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture)},cancellationToken:ct)).ConfigureAwait(false)).ToArray();
+        return new(rows.Take(200).Select(Decode).ToArray(),rows.Length>200);
+    }
     public async Task<VehicleRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct)
     {
         await using var db = await source.OpenConnectionAsync(ct).ConfigureAwait(false);

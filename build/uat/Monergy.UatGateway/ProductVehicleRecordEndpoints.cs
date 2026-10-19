@@ -118,7 +118,7 @@ public static class ProductVehicleRecordEndpoints
         }
         else if(element.ValueKind == JsonValueKind.Array) foreach(var item in element.EnumerateArray()) RejectDuplicates(item);
     }
-    private static bool Bound(ReviewedVehicleRecord? value, string customer) => value is { Vehicle: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
+    internal static bool Bound(ReviewedVehicleRecord? value, string customer) => value is { Vehicle: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
         value.Revision > 0 && TenantAccessClient.Identifier(value.VehicleRecordId, 80) && Guid.TryParseExact(value.OperationId, "N", out _) &&
         value.Currency.Length == 3 && value.Currency.All(char.IsAsciiLetterUpper) &&
         Text(value.Vehicle.Name) && OptionalRegistration(value.Vehicle.RegistrationNumber) && Text(value.Vehicle.VehicleType) &&

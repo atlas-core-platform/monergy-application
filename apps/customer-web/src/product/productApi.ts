@@ -588,3 +588,7 @@ export const reviseVehicleRecord = (api: AccessApi, id: string, input: { operati
   api.product<ProductVehicleRecord>('v1/vehicle-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
 export const getVehicleRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductVehicleRecordHistory>('v1/vehicle-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
+export interface ProductAssetSnapshot { asOfDate: string; currency: string; investments: {items:ProductInvestmentRecord[];hasMore:boolean}; properties: {items:ProductPropertyRecord[];hasMore:boolean}; vehicles: {items:ProductVehicleRecord[];hasMore:boolean} }
+export const getAssetSnapshot = (api:AccessApi,asOfDate:string,currency:string,signal?:AbortSignal) =>
+  api.product<ProductAssetSnapshot>('v1/asset-records/snapshot?asOfDate='+encodeURIComponent(asOfDate)+'&currency='+encodeURIComponent(currency),'GET',undefined,signal);

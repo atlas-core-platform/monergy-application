@@ -11,6 +11,7 @@ public interface IVehicleRecordRepository
     Task<ReviewedVehicleRecord> CreateAsync(string tenant, string customer, string actor,
         string fingerprint, ReviewedVehicleRecord record, CancellationToken ct);
     Task<ReviewedVehicleRecord?> ReadAsync(string tenant, string customer, string id, CancellationToken ct, int? revision = null);
+    Task<VehicleRecordList> SnapshotAsync(string tenant, string customer, DateOnly asOfDate, string currency, CancellationToken ct);
     Task<VehicleRecordList> ListAsync(string tenant, string customer, CancellationToken ct);
     Task<ReviewedVehicleRecord> ReviseAsync(string tenant, string customer, string actor, string fingerprint,
         int expectedRevision, ReviewedVehicleRecord record, CancellationToken ct);

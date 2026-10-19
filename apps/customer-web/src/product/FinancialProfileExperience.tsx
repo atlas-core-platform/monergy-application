@@ -1,3 +1,4 @@
+import AssetSnapshotExperience from './AssetSnapshotExperience';
 import LiabilityRecordsExperience from './LiabilityRecordsExperience';
 import ExpenseRecordsExperience from './ExpenseRecordsExperience';
 import IncomeRecordsExperience from './IncomeRecordsExperience';
@@ -52,6 +53,9 @@ export default function FinancialProfileExperience() {
   const product = authorization?.area === 'product' ? authorization.context : null;
   const canRead = product?.capabilities.includes('financial-profile.profile.read') ?? false;
   const [profile, setProfile] = useState<ProductFinancialProfile | null>(null);
+  const [assetRecordsVersion,setAssetRecordsVersion]=useState(0);
+  const assetRecordsChanged=useCallback(()=>{setAssetRecordsVersion(value=>value+1);},[]);
+  const assetSnapshotScope=useMemo(()=>({profile,assetRecordsVersion}),[profile,assetRecordsVersion]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<FinancialCategory | ''>(categoryFromLocation);
@@ -211,17 +215,18 @@ export default function FinancialProfileExperience() {
         facts={profile?.facts.filter(fact=>fact.factType==='EXPENSE') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
-      {activeCategory === 'ASSET' && api && canRead && <VehicleRecordsExperience
+      {activeCategory === 'ASSET' && api && canRead && product?.capabilities.includes('evidence.document.read') && <AssetSnapshotExperience api={api} refreshKey={assetSnapshotScope} />}
+      {activeCategory === 'ASSET' && api && canRead && <VehicleRecordsExperience onRecordsChanged={assetRecordsChanged}
         key={['vehicle',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
         facts={profile?.facts.filter(fact=>fact.factType==='ASSET' && fact.assetType==='VEHICLE') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
-      {activeCategory === 'ASSET' && api && canRead && <PropertyRecordsExperience
+      {activeCategory === 'ASSET' && api && canRead && <PropertyRecordsExperience onRecordsChanged={assetRecordsChanged}
         key={['property',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
         facts={profile?.facts.filter(fact=>fact.factType==='ASSET' && fact.assetType==='PROPERTY') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
-      {activeCategory === 'INVESTMENT' && api && canRead && <InvestmentRecordsExperience
+      {activeCategory === 'INVESTMENT' && api && canRead && <InvestmentRecordsExperience onRecordsChanged={assetRecordsChanged}
         key={[product?.tenantId, product?.actorId, product?.customerId].join(':')}
         api={api} facts={profile?.facts.filter((fact) => fact.factType === 'INVESTMENT') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}

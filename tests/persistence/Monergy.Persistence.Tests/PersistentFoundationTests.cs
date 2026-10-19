@@ -541,6 +541,8 @@ public sealed class PersistentFoundationTests
             Assert.Equal(saved,await new InvestmentRecordsApplication(financial,reconstructed,TimeProvider.System).CreateAsync("T001",customer,"actor-investment",input,default));
             Assert.Null(await reconstructed.ReadAsync("T002",customer,saved.InvestmentRecordId,default));
             Assert.Single((await reconstructed.ListAsync("T001",customer,default)).Items);
+            Assert.Equal(corrected,Assert.Single((await reconstructed.SnapshotAsync("T001",customer,corrected.Investment.ValueAsOfDate,corrected.Currency,default)).Items));
+            Assert.Empty((await reconstructed.SnapshotAsync("T002",customer,corrected.Investment.ValueAsOfDate,corrected.Currency,default)).Items);
         }
         await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
         var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.investment_records SET payload=payload WHERE investment_record_id=@Id;",new {Id=saved.InvestmentRecordId}));
@@ -587,6 +589,8 @@ public sealed class PersistentFoundationTests
             Assert.Equal(saved,await new PropertyRecordsApplication(financial,reconstructed,TimeProvider.System).CreateAsync("T001",customer,"actor-property",input,default));
             Assert.Null(await reconstructed.ReadAsync("T002",customer,saved.PropertyRecordId,default));
             Assert.Single((await reconstructed.ListAsync("T001",customer,default)).Items);
+            Assert.Equal(corrected,Assert.Single((await reconstructed.SnapshotAsync("T001",customer,corrected.Property.ValueAsOfDate,corrected.Currency,default)).Items));
+            Assert.Empty((await reconstructed.SnapshotAsync("T002",customer,corrected.Property.ValueAsOfDate,corrected.Currency,default)).Items);
         }
         await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
         var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.property_records SET payload=payload WHERE property_record_id=@Id;",new {Id=saved.PropertyRecordId}));
@@ -633,6 +637,8 @@ public sealed class PersistentFoundationTests
             Assert.Equal(saved,await new VehicleRecordsApplication(financial,reconstructed,TimeProvider.System).CreateAsync("T001",customer,"actor-vehicle",input,default));
             Assert.Null(await reconstructed.ReadAsync("T002",customer,saved.VehicleRecordId,default));
             Assert.Single((await reconstructed.ListAsync("T001",customer,default)).Items);
+            Assert.Equal(corrected,Assert.Single((await reconstructed.SnapshotAsync("T001",customer,corrected.Vehicle.ValueAsOfDate,corrected.Currency,default)).Items));
+            Assert.Empty((await reconstructed.SnapshotAsync("T002",customer,corrected.Vehicle.ValueAsOfDate,corrected.Currency,default)).Items);
         }
         await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
         var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.vehicle_records SET payload=payload WHERE vehicle_record_id=@Id;",new {Id=saved.VehicleRecordId}));
