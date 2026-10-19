@@ -776,6 +776,53 @@ public sealed class PersistentFoundationTests
         Assert.Equal("42501",correctionDenied.SqlState);Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.liability_records WHERE tenant_id='T001' AND customer_id=@Customer;",new {Customer=customer}));
     }
 
+    [Fact]
+    public async Task ReviewedInsuranceRecordRetainsExactSourceAcrossRestartAndRuntimeCannotRewriteIt()
+    {
+        var configuration=Configuration("FinancialProfile"); var suffix=Guid.NewGuid().ToString("N"); var customer="customer-insurance-"+suffix;
+        var now=DateTimeOffset.UtcNow;
+        var security=new TrustedSecurityContext(new("actor-insurance","CUSTOMER",now,"authn-insurance"),new("financial-profile","workload-insurance"),new("D09_TEST",null,"authorization-insurance",customer));
+        var request=new ContractRequest<NormalizeSourceFacts>(Vs02ContractNames.NormalizeSourceFacts,ContractGuard.CurrentVersion,
+            "request-"+suffix,"correlation-"+suffix,null,security,"source-"+suffix,
+            new("profile-"+suffix,customer,"processing-"+suffix,[new("source-"+suffix,customer,"INSURANCE_POLICY","Purchase value",100000m,"USD",new(2026,1,1),"line 1",1m,"evidence-"+suffix,"document-"+suffix,"extract/1","validate/1")],"normalize/1",now));
+        await using var financial=new PostgresFinancialProfileRepository(configuration);
+        var normalized=await financial.NormalizeAsync(FinancialNormalizationIdentity.From(request),request,new(now,request.CorrelationId,request.RequestId),default);
+        var source=Assert.Single(normalized.Facts);
+        var input=new CreateInsuranceRecord(suffix,new("Family policy","Example provider","Life",500000m,400000m,new(2026,10,1),null,source.FinancialFactId,1));
+        ReviewedInsuranceRecord saved;
+        ReviewedInsuranceRecord corrected;
+        ReviseInsuranceRecord correction;
+        await using(var records=new PostgresInsuranceRecords(configuration))
+        {
+            var app=new InsuranceRecordsApplication(financial,records,TimeProvider.System);
+            saved=await app.CreateAsync("T001",customer,"actor-insurance",input,default);
+            Assert.Equal(saved,await app.CreateAsync("T001",customer,"actor-insurance",input,default));
+            Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>app.CreateAsync("T001",customer,"actor-insurance",input with {Insurance=input.Insurance with {PremiumAmount=390000}},default))).Status);
+            correction = new(Guid.NewGuid().ToString("N"),1,input.Insurance with {PremiumAmount=390000m});
+            corrected = await app.ReviseAsync("T001",customer,"actor-insurance",saved.InsuranceRecordId,correction,default);
+            Assert.Equal(2,corrected.Revision);
+        }
+        await using(var reconstructed=new PostgresInsuranceRecords(configuration))
+        {
+            Assert.Equal(corrected,await reconstructed.ReadAsync("T001",customer,saved.InsuranceRecordId,default));
+            Assert.Equal(saved,await reconstructed.ReadAsync("T001",customer,saved.InsuranceRecordId,default,1));
+            var owner = new InsuranceRecordsApplication(financial,reconstructed,TimeProvider.System);
+            Assert.Equal(corrected,await owner.ReviseAsync("T001",customer,"actor-insurance",saved.InsuranceRecordId,correction,default));
+            Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>owner.ReviseAsync("T001",customer,"actor-insurance",saved.InsuranceRecordId,correction with {OperationId=Guid.NewGuid().ToString("N")},default))).Status);
+            Assert.Equal([corrected,saved],(await owner.HistoryAsync("T001",customer,saved.InsuranceRecordId,null,default)).Items);
+            Assert.Equal(saved,await new InsuranceRecordsApplication(financial,reconstructed,TimeProvider.System).CreateAsync("T001",customer,"actor-insurance",input,default));
+            Assert.Null(await reconstructed.ReadAsync("T002",customer,saved.InsuranceRecordId,default));
+            Assert.Single((await reconstructed.ListAsync("T001",customer,default)).Items);
+        }
+        await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
+        var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.insurance_records SET payload=payload WHERE insurance_record_id=@Id;",new {Id=saved.InsuranceRecordId}));
+        Assert.Equal("42501",denied.SqlState);
+        var correctionDenied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.insurance_record_revisions SET payload=payload WHERE insurance_record_id=@Id;",new {Id=saved.InsuranceRecordId}));
+        Assert.Equal("42501",correctionDenied.SqlState);
+        Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.insurance_records WHERE tenant_id='T001' AND customer_id=@Customer;",new {Customer=customer}));
+    }
+
+
     private static readonly string[] Services = ["evidence", "financial-profile", "financial-rules", "reporting", "audit"];
     private static IConfiguration Configuration(string service)
     {

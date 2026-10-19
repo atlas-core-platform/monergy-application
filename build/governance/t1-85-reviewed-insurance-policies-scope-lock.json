@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-85",
+  "applicationBase": "02d6460f671e3a55fdce3cc2c1226f8685a7b880",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections13/20/42",
+    "COV-021",
+    "MON-FIN-008/011/012/014",
+    "M2-WS04-E02-F02",
+    "Original extraction/financial-data foundation"
+  ],
+  "scope": "Create,list,read,correct and inspect immutable history for reviewed insurance policy name,provider,type,separate sum assured/premium amount,policy information date and optional maturity/expiry. Exact owned canonical INSURANCE_POLICY source/currency/evidence immutable. No source amount inference,active-cover/provider/payment/benefit verification,premium cadence inference,coverage advice,asset totals or net worth.",
+  "migrations": [
+    "services/financial-profile/migrations/0017_reviewed_insurance_records.sql",
+    "services/financial-profile/migrations/0018_reviewed_insurance_corrections.sql"
+  ],
+  "remaining": "Insurance verification/coverage/benefit interpretation,premium cadence/payment/lifecycle,professional advice,full protection position,broader financial records,reconciliation,Financial Rules calculations,Search/Reports record integration,central audit and physical/full UAT. MON-FIN-008 source phase2 retained."
+}
