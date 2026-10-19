@@ -253,6 +253,22 @@ public sealed partial class ReviewedPropertyRecordTests
         {
             var variation=scenario;
             var response=await base.SendAsync(request,ct);
+            if(scenario.StartsWith("history-",StringComparison.Ordinal))
+            {
+                if(!response.IsSuccessStatusCode || request.Method!=HttpMethod.Get || !request.RequestUri!.AbsolutePath.EndsWith("/history",StringComparison.Ordinal)) return response;
+                var history=JsonNode.Parse(await response.Content.ReadAsStringAsync(ct))!.AsObject();var items=history["items"]!.AsArray();
+                switch(scenario) {
+                    case "history-currency":items[0]!["currency"]="INR";break;
+                    case "history-source":items[0]!["property"]!["sourceRevision"]=99;break;
+                    case "history-evidence":items[0]!["evidenceId"]="other-evidence";break;
+                    case "history-null":history["items"]=null;break;
+                    case "history-gap":items[0]!["revision"]=99;break;
+                    case "history-empty":history["items"]=new JsonArray();break;
+                    case "history-cursor":history["nextBeforeRevision"]=2;break;
+                    case "history-tail":items.RemoveAt(items.Count-1);break;
+                }
+                response.Content.Dispose();response.Content=new StringContent(history.ToJsonString(),Encoding.UTF8,"application/json");return response;
+            }
             if(scenario.StartsWith("list-",StringComparison.Ordinal))
             {
                 if(!response.IsSuccessStatusCode || request.Method!=HttpMethod.Get || !request.RequestUri!.AbsolutePath.EndsWith("/property-records",StringComparison.Ordinal)) return response;
