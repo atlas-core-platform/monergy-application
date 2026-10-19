@@ -27,10 +27,24 @@ public static class PropertyRecordEndpoints
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
             return await owner.ListAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
         });
-        group.MapGet("/{propertyRecordId}", async (string customerId, string propertyRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, PropertyRecordsApplication owner) =>
+        group.MapGet("/{propertyRecordId}", async (string customerId, string propertyRecordId, int? revision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, PropertyRecordsApplication owner) =>
         {
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
-            return await owner.ReadAsync(tenant, customerId, propertyRecordId, http.RequestAborted).ConfigureAwait(false);
+            return await owner.ReadAsync(tenant, customerId, propertyRecordId, http.RequestAborted, revision).ConfigureAwait(false);
+        });
+        group.MapGet("/{propertyRecordId}/history", async (string customerId, string propertyRecordId, int? beforeRevision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, PropertyRecordsApplication owner) =>
+        {
+            var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
+            return await owner.HistoryAsync(tenant, customerId, propertyRecordId, beforeRevision, http.RequestAborted).ConfigureAwait(false);
+        });
+        group.MapPost("/{propertyRecordId}/corrections", async (string customerId, string propertyRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, PropertyRecordsApplication owner) =>
+        {
+            var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);
+            http.Request.EnableBuffering(32768, 32768);
+            using var json = await JsonDocument.ParseAsync(http.Request.Body, cancellationToken: http.RequestAborted).ConfigureAwait(false);
+            RejectDuplicates(json.RootElement);
+            var input = json.RootElement.Deserialize<RevisePropertyRecord>(Json) ?? throw new TenantBoundaryException("PROPERTY_RECORD_INVALID", 400);
+            return await owner.ReviseAsync(tenant, customerId, actor, propertyRecordId, input, http.RequestAborted).ConfigureAwait(false);
         });
         group.MapPost("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, PropertyRecordsApplication owner) =>
         {

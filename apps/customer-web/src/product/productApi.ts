@@ -557,9 +557,15 @@ export interface ProductPropertyDraft {
 }
 export interface ProductPropertyRecord {
   propertyRecordId: string; operationId: string; customerId: string; property: ProductPropertyDraft; currency: string;
-  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
 }
 export interface ProductPropertyRecordList { items: ProductPropertyRecord[]; hasMore: boolean; dataDurability: string }
 export const getPropertyRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductPropertyRecordList>('v1/property-records', 'GET', undefined, signal);
 export const createPropertyRecord = (api: AccessApi, input: { operationId: string; property: ProductPropertyDraft }, signal?: AbortSignal) =>
   api.product<ProductPropertyRecord>('v1/property-records', 'POST', input, signal);
+
+export interface ProductPropertyRecordHistory { items: ProductPropertyRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const revisePropertyRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; property: ProductPropertyDraft }) =>
+  api.product<ProductPropertyRecord>('v1/property-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getPropertyRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductPropertyRecordHistory>('v1/property-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);

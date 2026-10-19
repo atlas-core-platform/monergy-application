@@ -12,7 +12,7 @@ const source: ProductFinancialFact = { financialFactId: 'ff-property', factType:
 const property: ProductPropertyDraft = { name:'Family home', location:'Example location', propertyType:'Apartment',
   purchaseValue:500000, currentValue:400000, valueAsOfDate:'2026-10-01', sourceFinancialFactId:'ff-property', sourceRevision:2 };
 const record: ProductPropertyRecord = { propertyRecordId:'property-saved',operationId:'a'.repeat(32),customerId:'reference-customer',property,
-  currency:'USD',sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-property',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z' };
+  currency:'USD',sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-property',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',revision:1 };
 function mount(api: AccessApi, canCreate = true, canRead = true, facts: ProductFinancialFact[] = [source]) {
   return render(<FoundationProvider appearance="midnight"><PropertyRecordsExperience api={api} canCreate={canCreate} canRead={canRead} facts={facts} /></FoundationProvider>);
 }
@@ -159,4 +159,118 @@ it.each(['unclassified','VEHICLE','INVESTMENT'])('requires an explicitly classif
   const fact={...source,...(kind==='INVESTMENT'?{factType:'INVESTMENT',assetType:undefined}:{assetType:kind==='VEHICLE'?'VEHICLE' as const:undefined})};
   mount(api,true,true,[fact]);
   expect(await screen.findByRole('button',{name:'Add property record'})).toBeDisabled();
+});
+
+it('edits the saved terms explicitly using the exact record version and immutable historical source', async () => {
+  const api=new AccessApi(session);let current=record;
+  const corrected={...record,revision:2,property:{...property,currentValue:390000}};
+  const request=vi.spyOn(api,'product').mockImplementation((path,method,body)=>{
+    if(method==='GET') return Promise.resolve({items:[current],hasMore:false,dataDurability:'Temporary data'});
+    expect(path).toBe('v1/property-records/property-saved/corrections');
+    expect(body).toEqual({operationId:'a'.repeat(32),expectedRevision:1,property:corrected.property});current=corrected;return Promise.resolve(corrected);
+  });
+  vi.spyOn(crypto,'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');mount(api,true,true,[]);
+  const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit property record: Family home'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit property record'});
+  expect(within(drawer).getByText(/Editing version 1 · USD · Source revision 2/)).toBeVisible();
+  expect(within(drawer).queryByRole('combobox',{name:'Reviewed property source'})).not.toBeInTheDocument();
+  expect(within(drawer).getByLabelText('Current value')).toHaveValue(400000);
+  fireEvent.change(within(drawer).getByLabelText('Current value'),{target:{value:'390000'}});
+  expect(request.mock.calls.filter(([,method])=>method==='POST')).toHaveLength(0);
+  await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await screen.findByText('Property record saved: Family home');expect(screen.getByText(/Current value: \$390,000.00/)).toBeVisible();
+});
+
+it('blocks a stale correction and requires review of the refreshed version', async () => {
+  const api=new AccessApi(session);let current=record;
+  const request=vi.spyOn(api,'product').mockImplementation((_path,method)=>method==='GET'
+    ? Promise.resolve({items:[current],hasMore:false,dataDurability:'Temporary data'})
+    : Promise.reject(new AccessApiError(409,'PROPERTY_REVISION_CONFLICT')));
+  mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit property record: Family home'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit property record'});await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  expect(await within(drawer).findByText(/A newer version has been saved/)).toBeVisible();
+  expect(within(drawer).getByRole('button',{name:'Save reviewed corrections'})).toBeDisabled();expect(within(drawer).getByLabelText('Current value')).toBeDisabled();
+  await user.click(within(drawer).getByRole('button',{name:'Close'}));current={...record,revision:2,property:{...property,currentValue:380000}};
+  await user.click(screen.getByRole('button',{name:'Refresh property records'}));await screen.findByText(/Current value: \$380,000.00/);
+  await user.click(screen.getByRole('button',{name:'Edit property record: Family home'}));
+  expect(within(screen.getByRole('dialog',{name:'Edit property record'})).getByText(/Editing version 2/)).toBeVisible();
+  expect(request.mock.calls.filter(([,method])=>method==='POST')).toHaveLength(1);
+});
+
+it('retains an uncertain correction and its expected version after closing with no current source figures', async () => {
+  const api=new AccessApi(session);let attempts=0;
+  const request=vi.spyOn(api,'product').mockImplementation((_path,method)=>{
+    if(method==='GET')return Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'});
+    attempts++;return attempts===1?Promise.reject(new AccessApiError(503,'unavailable')):Promise.resolve({...record,revision:2});
+  });
+  vi.spyOn(crypto,'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');mount(api,true,true,[]);
+  const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit property record: Family home'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit property record'});await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await within(drawer).findByText(/The save has not been confirmed/);expect(within(drawer).getByLabelText('Location summary')).toBeDisabled();
+  await user.click(within(drawer).getByRole('button',{name:'Close'}));await user.click(screen.getByRole('button',{name:'Continue save confirmation'}));
+  const reopened=screen.getByRole('dialog',{name:'Edit property record'});await user.click(within(reopened).getByRole('button',{name:'Retry save confirmation'}));
+  await screen.findByText('Property record saved: Family home');const calls=request.mock.calls.filter(([,method])=>method==='POST');
+  expect(calls).toHaveLength(2);expect(calls[0]?.[2]).toEqual(calls[1]?.[2]);expect(calls[0]?.[2]).toMatchObject({expectedRevision:1});
+});
+
+it('allows correction after confirmed validation rejection and keeps uncertain conflicts frozen', async () => {
+  const api=new AccessApi(session);let conflict=false;
+  vi.spyOn(api,'product').mockImplementation((_path,method)=>method==='GET'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.reject(new AccessApiError(conflict?409:400,conflict?'PROPERTY_OPERATION_CONFLICT':'invalid')));
+  mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit property record: Family home'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit property record'});await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await within(drawer).findByText(/Check the required amounts/);expect(within(drawer).getByLabelText('Location summary')).toBeEnabled();
+  conflict=true;await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await within(drawer).findByText(/The save has not been confirmed/);expect(within(drawer).getByLabelText('Location summary')).toBeDisabled();
+});
+
+it('reads original and corrected terms in bounded history pages without enabling edits for read-only access', async () => {
+  const api=new AccessApi(session);const latest={...record,revision:51,property:{...property,currentValue:300000}};
+  const request=vi.spyOn(api,'product').mockImplementation((path)=>{
+    if(path==='v1/property-records')return Promise.resolve({items:[latest],hasMore:false,dataDurability:'Temporary data'});
+    if(path==='v1/property-records/property-saved/history')return Promise.resolve({items:[latest],hasMore:true,nextBeforeRevision:2});
+    if(path==='v1/property-records/property-saved/history?beforeRevision=2')return Promise.resolve({items:[record],hasMore:false,nextBeforeRevision:null});
+    return Promise.reject(new Error('unexpected route'));
+  });mount(api,false);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View property history: Family home'}));
+  expect(screen.queryByRole('button',{name:'Edit property record: Family home'})).not.toBeInTheDocument();
+  const drawer=screen.getByRole('dialog',{name:'Property record history'});await user.click(await within(drawer).findByRole('button',{name:'Earlier versions'}));
+  await user.click(await within(drawer).findByRole('button',{name:'View version 1'}));
+  const version=within(drawer).getByRole('region',{name:'Saved property version 1'});expect(version).toHaveTextContent('$400,000.00 as of 2026-10-01');
+  expect(version).toHaveTextContent('$500,000.00');expect(within(version).getByRole('link',{name:'View exact property source history'})).toHaveAttribute('href','/finances?fact=ff-property');
+  await user.click(within(drawer).getByRole('button',{name:'Latest versions'}));await within(drawer).findByRole('button',{name:'View version 51'});
+  expect(request.mock.calls.every(([,method])=>method==='GET')).toBe(true);
+});
+
+it('shows history failure and hides prior history immediately after a session scope change', async () => {
+  const api=new AccessApi(session);vi.spyOn(api,'product').mockImplementation(path=>path==='v1/property-records'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'}):Promise.reject(new AccessApiError(403,'denied')));
+  const view=mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View property history: Family home'}));
+  await screen.findByText('Property history is unavailable.');expect(screen.queryByRole('button',{name:'View version 1'})).not.toBeInTheDocument();
+  const other=new AccessApi({...session,actorId:'A200'});vi.spyOn(other,'product').mockResolvedValue({items:[],hasMore:false,dataDurability:'Temporary data'});
+  view.rerender(<FoundationProvider appearance="midnight"><PropertyRecordsExperience api={other} facts={[]} canRead canCreate={false} /></FoundationProvider>);
+  expect(screen.queryByRole('dialog',{name:'Property record history'})).not.toBeInTheDocument();await screen.findByText(/No property records added yet/);
+});
+
+it('aborts pending history and rejects a late previous-session response',async()=>{
+  const api=new AccessApi(session);let complete:(value:unknown)=>void=()=>undefined;
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/property-records'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'})
+    :new Promise(resolve=>{complete=resolve;}));
+  const view=mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View property history: Family home'}));
+  await screen.findByText('Loading property history…');
+  const signal=request.mock.calls.find(([path])=>path.endsWith('/history'))?.[3];expect(signal).toBeDefined();
+  const next=new AccessApi({...session,actorId:'A200'});vi.spyOn(next,'product').mockResolvedValue({items:[],hasMore:false,dataDurability:'Temporary data'});
+  view.rerender(<FoundationProvider appearance="midnight"><PropertyRecordsExperience api={next} facts={[]} canRead canCreate={false} /></FoundationProvider>);
+  expect(signal?.aborted).toBe(true);complete({items:[record],hasMore:false,nextBeforeRevision:null});
+  await screen.findByText(/No property records added yet/);expect(screen.queryByRole('dialog',{name:'Property record history'})).not.toBeInTheDocument();
+});
+
+it.each(['source','customer'])('rejects property history with changed %s identity',async(variation)=>{
+  const api=new AccessApi(session);const changed=variation==='source'?{...record,property:{...property,sourceRevision:99}}:{...record,customerId:'foreign'};
+  vi.spyOn(api,'product').mockImplementation(path=>path==='v1/property-records'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({items:[changed],hasMore:false,nextBeforeRevision:null}));
+  mount(api,false);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View property history: Family home'}));
+  expect(await screen.findByText('Property history is unavailable.')).toBeVisible();expect(screen.queryByRole('button',{name:'View version 1'})).not.toBeInTheDocument();
 });

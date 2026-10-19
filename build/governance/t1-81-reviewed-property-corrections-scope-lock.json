@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-81",
+  "applicationBase": "8f7ab95da22c22aa32199c2b3aab406e0ebd60e1",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections13/14/20/43",
+    "COV-022",
+    "MON-FIN-009/011/012/014",
+    "M2-WS04-E02-F02",
+    "Original P1-15 Assets / P1-22 asset-position foundation"
+  ],
+  "scope": "Version-checked property corrections,exact saved-version reads and paged immutable history. Correct name,location summary,property type,separate purchase/current values and value date while preserving original exact PROPERTY source,currency and evidence/provenance. Replay-safe creation/correction receipts,current Self/document/update authority,fresh exact saved readback,source-bound history and stale-response guards. No ownership/valuation/legal verification,liability links,asset snapshot,total assets,net worth or arithmetic.",
+  "migrations": [
+    "services/financial-profile/migrations/0014_reviewed_property_corrections.sql"
+  ],
+  "remaining": "Property ownership/valuation/legal workflows,broader asset/vehicle records and lifecycle,liability links,complete asset position,reconciliation,Financial Rules totals/net worth,Search/Reports record integration,central audit and physical/full UAT."
+}
