@@ -70,12 +70,15 @@ public static class ProductLoanRecordEndpoints
         {
             var (session, customer) = await ResolveAsync(http, owners, access, true).ConfigureAwait(false);
             if (!TenantAccessClient.Identifier(loanRecordId,80)) throw new TenantBoundaryException("LOAN_RECORD_INVALID",400);
-            var input = await ReadCorrectionAsync(http).ConfigureAwait(false);
+            var input = await ReadInputAsync<ReviseLoanRecord>(http).ConfigureAwait(false);
             if (input.Loan is null || input.ExpectedRevision is < 1 or int.MaxValue) throw new TenantBoundaryException("LOAN_RECORD_INVALID",400);
             var original = await client.ReadAsync(session, customer.CustomerId, loanRecordId, http.RequestAborted, 1).ConfigureAwait(false);
             var receipt = await client.ReviseAsync(session, customer.CustomerId, loanRecordId, input, http.RequestAborted).ConfigureAwait(false);
+            var previous = await client.ReadAsync(session,customer.CustomerId,loanRecordId,http.RequestAborted,input.ExpectedRevision).ConfigureAwait(false);
             if (!Bound(original,customer.CustomerId) || !Bound(receipt,customer.CustomerId) || original.LoanRecordId != loanRecordId || receipt.LoanRecordId != loanRecordId ||
                 receipt.OperationId != input.OperationId || receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision + 1 ||
+                !Bound(previous,customer.CustomerId) || previous.LoanRecordId != loanRecordId || previous.Revision != input.ExpectedRevision ||
+                receipt.LifecycleStatus != previous.LifecycleStatus || receipt.LifecycleAsOfDate != previous.LifecycleAsOfDate ||
                 receipt.Loan != input.Loan with { Name = input.Loan.Name.Trim(), Lender = input.Loan.Lender.Trim() } ||
                 receipt.Currency != original.Currency || receipt.SourceProvenanceId != original.SourceProvenanceId || receipt.DocumentVersionId != original.DocumentVersionId || receipt.EvidenceId != original.EvidenceId ||
                 receipt.Loan.SourceFinancialFactId != original.Loan.SourceFinancialFactId || receipt.Loan.SourceRevision != original.Loan.SourceRevision)
@@ -85,10 +88,34 @@ public static class ProductLoanRecordEndpoints
             await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
             return saved;
         });
+        group.MapPost("/{loanRecordId}/lifecycle", async (string loanRecordId, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductLoanRecordClient client) =>
+        {
+            var (session,customer) = await ResolveAsync(http,owners,access,true).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(loanRecordId,80)) throw new TenantBoundaryException("LOAN_RECORD_INVALID",400);
+            var input = await ReadInputAsync<ReviewLoanRecordStatus>(http).ConfigureAwait(false);
+            if (input.ExpectedRevision is < 1 or int.MaxValue) throw new TenantBoundaryException("LOAN_RECORD_INVALID",400);
+            ReviewedLoanRecord previous;
+            try { previous = await client.ReadAsync(session,customer.CustomerId,loanRecordId,http.RequestAborted,input.ExpectedRevision).ConfigureAwait(false); }
+            catch (TenantBoundaryException error) when (error.Status == 404) { throw new TenantBoundaryException("LOAN_REVISION_CONFLICT",409); }
+            if (!Bound(previous,customer.CustomerId) || previous.LoanRecordId != loanRecordId || previous.Revision != input.ExpectedRevision)
+                throw new TenantBoundaryException("LOAN_RECORD_RESPONSE_INVALID",503);
+            var receipt = await client.ReviewStatusAsync(session,customer.CustomerId,loanRecordId,input,http.RequestAborted).ConfigureAwait(false);
+            if (!Bound(receipt,customer.CustomerId) || receipt.LoanRecordId != loanRecordId || receipt.OperationId != input.OperationId ||
+                receipt.Revision != input.ExpectedRevision + 1 || receipt.RecordedBy != session.ActorId || receipt.LifecycleStatus != input.Status || receipt.LifecycleAsOfDate != input.AsOfDate ||
+                receipt.Loan != previous.Loan || receipt.Currency != previous.Currency || receipt.SourceProvenanceId != previous.SourceProvenanceId || receipt.DocumentVersionId != previous.DocumentVersionId || receipt.EvidenceId != previous.EvidenceId)
+                throw new TenantBoundaryException("LOAN_RECORD_RESPONSE_INVALID",503);
+            var saved = await client.ReadAsync(session,customer.CustomerId,loanRecordId,http.RequestAborted,receipt.Revision).ConfigureAwait(false);
+            if (saved != receipt) throw new TenantBoundaryException("LOAN_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http,owners,access,session,customer,true).ConfigureAwait(false);
+            return saved;
+        });
     }
     private static bool Bound(ReviewedLoanRecord? value, string customer) => value is { Loan: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
-        value.Revision > 0 && TenantAccessClient.Identifier(value.LoanRecordId, 80) && Guid.TryParseExact(value.OperationId, "N", out _) &&
+        value.Revision > 0 && LifecycleBound(value) && TenantAccessClient.Identifier(value.LoanRecordId, 80) && Guid.TryParseExact(value.OperationId, "N", out _) &&
         value.Loan is not null && value.Currency.Length == 3 && value.SourceProvenanceId.Length > 0 && value.DocumentVersionId.Length > 0;
+    private static bool LifecycleBound(ReviewedLoanRecord value) => value.LifecycleStatus == "UNREVIEWED" ? value.LifecycleAsOfDate is null :
+        value.LifecycleStatus is "ACTIVE" or "CLOSED" && value.LifecycleAsOfDate is { } date && date >= value.Loan.StartDate &&
+        date <= DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime.AddHours(14)) && (value.LifecycleStatus != "CLOSED" || date >= value.Loan.BalanceAsOfDate);
     private static async Task<(CustomerOwnerSession Session, CustomerOwnerWorkspace Customer)> ResolveAsync(
         HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, bool write)
     {
@@ -128,14 +155,14 @@ public static class ProductLoanRecordEndpoints
         }
         else if (element.ValueKind == JsonValueKind.Array) foreach(var item in element.EnumerateArray()) RejectDuplicates(item);
     }
-    private static async Task<ReviseLoanRecord> ReadCorrectionAsync(HttpContext http)
+    private static async Task<T> ReadInputAsync<T>(HttpContext http) where T : class
     {
         try
         {
             http.Request.EnableBuffering(32768,32768);
             using var json = await JsonDocument.ParseAsync(http.Request.Body,cancellationToken:http.RequestAborted).ConfigureAwait(false);
             RejectDuplicates(json.RootElement);
-            return json.RootElement.Deserialize<ReviseLoanRecord>(StrictJson) ?? throw new TenantBoundaryException("LOAN_RECORD_INVALID",400);
+            return json.RootElement.Deserialize<T>(StrictJson) ?? throw new TenantBoundaryException("LOAN_RECORD_INVALID",400);
         }
         catch (JsonException) { throw new TenantBoundaryException("LOAN_RECORD_INVALID",400); }
     }
@@ -162,6 +189,8 @@ public sealed class ProductLoanRecordClient : IDisposable
         SendAsync<ReviewedLoanRecord>(session, customer, "", input, ct);
     public Task<ReviewedLoanRecord> ReviseAsync(CustomerOwnerSession session, string customer, string id, ReviseLoanRecord input, CancellationToken ct) =>
         SendAsync<ReviewedLoanRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
+    public Task<ReviewedLoanRecord> ReviewStatusAsync(CustomerOwnerSession session, string customer, string id, ReviewLoanRecordStatus input, CancellationToken ct) =>
+        SendAsync<ReviewedLoanRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/lifecycle", input, ct);
     public Task<LoanRecordHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
         SendAsync<LoanRecordHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
     private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, object? input, CancellationToken ct)

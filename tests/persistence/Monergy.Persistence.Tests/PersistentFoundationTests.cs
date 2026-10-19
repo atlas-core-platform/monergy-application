@@ -464,6 +464,8 @@ public sealed class PersistentFoundationTests
         var input=new CreateLoanRecord(suffix,new("Home loan","Example lender","HOME",500000m,400000m,8.25m,10000m,60,new(2026,1,1),new(2030,12,31),new(2026,10,1),source.FinancialFactId,1));
         ReviewedLoanRecord saved;
         ReviewedLoanRecord corrected;
+        ReviewedLoanRecord closed;
+        ReviewLoanRecordStatus statusReview;
         ReviseLoanRecord correction;
         await using(var records=new PostgresLoanRecords(configuration))
         {
@@ -474,15 +476,22 @@ public sealed class PersistentFoundationTests
             correction = new(Guid.NewGuid().ToString("N"),1,input.Loan with {Outstanding=390000m});
             corrected = await app.ReviseAsync("T001",customer,"actor-loan",saved.LoanRecordId,correction,default);
             Assert.Equal(2,corrected.Revision);
+            statusReview = new(Guid.NewGuid().ToString("N"),corrected.Revision,"CLOSED",new(2026,10,19));
+            closed = await app.ReviewStatusAsync("T001",customer,"actor-loan",saved.LoanRecordId,statusReview,default);
+            Assert.Equal(corrected.Loan,closed.Loan);Assert.Equal("CLOSED",closed.LifecycleStatus);
         }
         await using(var reconstructed=new PostgresLoanRecords(configuration))
         {
-            Assert.Equal(corrected,await reconstructed.ReadAsync("T001",customer,saved.LoanRecordId,default));
+            Assert.Equal(closed,await reconstructed.ReadAsync("T001",customer,saved.LoanRecordId,default));
             Assert.Equal(saved,await reconstructed.ReadAsync("T001",customer,saved.LoanRecordId,default,1));
             Assert.Equal(corrected,await new LoanRecordsApplication(financial,reconstructed,TimeProvider.System).ReviseAsync("T001",customer,"actor-loan",saved.LoanRecordId,correction,default));
             var app = new LoanRecordsApplication(financial,reconstructed,TimeProvider.System);
+            Assert.Equal(closed,await app.ReviewStatusAsync("T001",customer,"actor-loan",saved.LoanRecordId,statusReview,default));
+            var reopened = await app.ReviewStatusAsync("T001",customer,"actor-loan",saved.LoanRecordId,new(Guid.NewGuid().ToString("N"),closed.Revision,"ACTIVE",new(2026,10,19)),default);
+            Assert.Equal("ACTIVE",reopened.LifecycleStatus);Assert.Equal(closed.Loan,reopened.Loan);
+            Assert.Equal(closed,await app.ReviewStatusAsync("T001",customer,"actor-loan",saved.LoanRecordId,statusReview,default));
             Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>app.ReviseAsync("T001",customer,"actor-loan",saved.LoanRecordId,correction with {OperationId=Guid.NewGuid().ToString("N")},default))).Status);
-            Assert.Equal([corrected,saved],(await app.HistoryAsync("T001",customer,saved.LoanRecordId,null,default)).Items);
+            Assert.Equal([reopened,closed,corrected,saved],(await app.HistoryAsync("T001",customer,saved.LoanRecordId,null,default)).Items);
             Assert.Null(await reconstructed.ReadAsync("T002",customer,saved.LoanRecordId,default));
             Assert.Single((await reconstructed.ListAsync("T001",customer,default)).Items);
         }
@@ -492,7 +501,7 @@ public sealed class PersistentFoundationTests
         var correctionDenied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.loan_record_revisions SET payload=payload WHERE loan_record_id=@Id;",new {Id=saved.LoanRecordId}));
         Assert.Equal("42501",correctionDenied.SqlState);
         Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.loan_records WHERE tenant_id='T001' AND customer_id=@Customer;",new {Customer=customer}));
-        Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.loan_record_revisions WHERE tenant_id='T001' AND customer_id=@Customer;",new {Customer=customer}));
+        Assert.Equal(3,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.loan_record_revisions WHERE tenant_id='T001' AND customer_id=@Customer;",new {Customer=customer}));
     }
 
     private static readonly string[] Services = ["evidence", "financial-profile", "financial-rules", "reporting", "audit"];

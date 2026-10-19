@@ -146,3 +146,7 @@ T1-66 owner routes also require the existing operator customer-to-tenant binding
 ## T1-67 reviewed loan corrections and history
 
 Run owner bootstrap migrations through0004 before using the physical loan adapter. Customers can explicitly correct saved terms with version checks; prior versions, original source/currency and creation receipts remain immutable. Current lists show latest terms; history has bounded older-version pages. Current Self read/document/update access and fresh exact-version confirmation remain required. Stale edits require refresh/review; unconfirmed saves retry the identical operation/body/version. [Receipt](../governance/t1-67-reviewed-loan-corrections.md). Closing/lifecycle, central Audit integration and physical/integrated UAT remain open.
+
+## T1-68 reviewed loan status
+
+Review loan status records a customer-reported Active or Closed state with an explicit date; Active can reopen a previously Closed record. Existing records remain Status not reviewed until explicit review. Existing append-only migrations0003/0004 retain status/history; no new migration is required. Closing does not clear a balance/EMI, change contractual dates or verify lender repayment. Corrections preserve status/date; stale or uncertain requests follow the existing exact-version retry/refresh rules. [Receipt](../governance/t1-68-reviewed-loan-lifecycle.md). Central Audit, broader lender/financial truth and physical/integrated UAT remain open.
