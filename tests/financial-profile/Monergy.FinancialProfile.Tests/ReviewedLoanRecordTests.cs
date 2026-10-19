@@ -15,7 +15,7 @@ using Monergy.UatGateway;
 using Xunit;
 namespace Monergy.FinancialProfile.Tests;
 
-public sealed class ReviewedLoanRecordTests
+public sealed partial class ReviewedLoanRecordTests
 {
     private static readonly string[] Changes = ["", "name", "lender", "control", "type", "sanction", "zero-sanction", "precision", "outstanding", "emi", "rate", "rate-high", "rate-precision", "tenure", "tenure-high", "start", "end", "asof", "future", "source", "revision"];
     public static TheoryData<string> InvalidChanges => new(Changes);
@@ -192,6 +192,7 @@ public sealed class ReviewedLoanRecordTests
         public int DenyAfterEvaluations { get; set; }
         public bool AllowForeignTenant { get; set; }
         private int evaluations;
+        public void ResetEvaluations() => evaluations = 0;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             if (Failure == "unavailable") return new(HttpStatusCode.ServiceUnavailable);
