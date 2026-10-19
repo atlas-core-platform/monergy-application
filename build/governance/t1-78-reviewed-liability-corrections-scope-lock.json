@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-78",
+  "applicationBase": "3b61877ebf1259445b795938e22b2e209382c9bd",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections13/14/20/41",
+    "Original Phase1 P1-16 liabilities",
+    "COV-019",
+    "MON-FIN-001/011/012/014",
+    "M2-WS04-E01-F03"
+  ],
+  "migrations": [
+    "0012_reviewed_liability_corrections.sql"
+  ]
+}
