@@ -457,3 +457,17 @@ export const reviewLoanRecordStatus = (api: AccessApi, id: string, input: Produc
   api.product<ProductLoanRecord>('v1/loan-records/' + encodeURIComponent(id) + '/lifecycle', 'POST', input);
 export const getLoanRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductLoanRecordHistory>('v1/loan-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
+
+export interface ProductInvestmentDraft {
+  name: string; institution: string; investmentType: string; purchaseValue: number; currentValue: number;
+  valueAsOfDate: string; sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductInvestmentRecord {
+  investmentRecordId: string; operationId: string; customerId: string; investment: ProductInvestmentDraft; currency: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+}
+export interface ProductInvestmentRecordList { items: ProductInvestmentRecord[]; hasMore: boolean; dataDurability: string }
+export const getInvestmentRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductInvestmentRecordList>('v1/investment-records', 'GET', undefined, signal);
+export const createInvestmentRecord = (api: AccessApi, input: { operationId: string; investment: ProductInvestmentDraft }, signal?: AbortSignal) =>
+  api.product<ProductInvestmentRecord>('v1/investment-records', 'POST', input, signal);

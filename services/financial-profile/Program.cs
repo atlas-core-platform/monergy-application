@@ -30,7 +30,7 @@ app.MapHealthChecks("/health/ready");
 if (referenceAdapters || physicalPersistence)
 {
     app.MapFinancialProfileContracts();
-    if (TenantBoundaryOptions.Selected(builder.Configuration)) app.MapLoanRecords();
+    if (TenantBoundaryOptions.Selected(builder.Configuration)) { app.MapLoanRecords(); app.MapInvestmentRecords(); }
 }
 if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Profile"], "persisted-reporting", StringComparison.Ordinal))
 {

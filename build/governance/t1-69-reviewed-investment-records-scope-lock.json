@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-69",
+  "applicationBase": "4cc9c06ea377874f9032701d24618df2d96137d2",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "MON-FIN-007",
+    "COV-020",
+    "M2-WS04-E02-F01",
+    "Master section13"
+  ],
+  "migrations": [
+    "services/financial-profile/migrations/0005_reviewed_investment_records.sql"
+  ]
+}
