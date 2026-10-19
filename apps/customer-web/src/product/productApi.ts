@@ -518,3 +518,7 @@ export const reviseExpenseRecord = (api: AccessApi, id: string, input: { operati
   api.product<ProductExpenseRecord>('v1/expense-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
 export const getExpenseRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductExpenseRecordHistory>('v1/expense-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
+export interface ProductIncomePeriodComparison { earlier: ProductIncomeRecord; later: ProductIncomeRecord; periodDays: number }
+export const compareIncomePeriods = (api: AccessApi, input: { earlierIncomeRecordId: string; earlierRevision: number; laterIncomeRecordId: string; laterRevision: number }, signal?: AbortSignal) =>
+  api.product<ProductIncomePeriodComparison>('v1/income-records/comparison', 'POST', input, signal);

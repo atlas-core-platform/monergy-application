@@ -87,6 +87,29 @@ public sealed class IncomeRecordsApplication(IFinancialProfileRepository financi
         return await repository.ReadAsync(tenant, customer, id, ct, revision).ConfigureAwait(false)
             ?? throw new TenantBoundaryException("INCOME_RECORD_NOT_FOUND", 404);
     }
+    public async Task<IncomePeriodComparison> CompareAsync(string tenant, string customer, CompareIncomePeriods input, CancellationToken ct)
+    {
+        if (input is null || !TenantAccessClient.Identifier(input.EarlierIncomeRecordId,80) || !TenantAccessClient.Identifier(input.LaterIncomeRecordId,80) || input.EarlierRevision < 1 || input.LaterRevision < 1)
+            throw new TenantBoundaryException("INCOME_COMPARISON_INVALID",400);
+        if (input.EarlierIncomeRecordId == input.LaterIncomeRecordId)
+            throw new TenantBoundaryException("INCOME_COMPARISON_DISTINCT_RECORDS_REQUIRED",400);
+        // Read the exact immutable versions the customer selected; later corrections do not change this view.
+        var earlier = await ReadAsync(tenant,customer,input.EarlierIncomeRecordId,ct,input.EarlierRevision).ConfigureAwait(false);
+        var later = await ReadAsync(tenant,customer,input.LaterIncomeRecordId,ct,input.LaterRevision).ConfigureAwait(false);
+        if (earlier.VerificationStatus != "CUSTOMER_REVIEWED" || later.VerificationStatus != "CUSTOMER_REVIEWED")
+            throw new TenantBoundaryException("INCOME_RECORD_UNAVAILABLE",503);
+        if (earlier.Income.SourceFinancialFactId == later.Income.SourceFinancialFactId)
+            throw new TenantBoundaryException("INCOME_COMPARISON_DISTINCT_SOURCES_REQUIRED",400);
+        if (earlier.Currency != later.Currency) throw new TenantBoundaryException("INCOME_COMPARISON_CURRENCY_MISMATCH",400);
+        if (!string.Equals(earlier.Income.IncomeSource,later.Income.IncomeSource,StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(earlier.Income.IncomeType,later.Income.IncomeType,StringComparison.OrdinalIgnoreCase))
+            throw new TenantBoundaryException("INCOME_COMPARISON_PAYER_TYPE_MISMATCH",400);
+        var days = earlier.Income.PeriodEnd.DayNumber - earlier.Income.PeriodStart.DayNumber + 1;
+        if (days < 1 || days != later.Income.PeriodEnd.DayNumber - later.Income.PeriodStart.DayNumber + 1 || earlier.Income.PeriodEnd >= later.Income.PeriodStart)
+            throw new TenantBoundaryException("INCOME_COMPARISON_PERIODS_NOT_COMPARABLE",400);
+        // Date eligibility only. Financial arithmetic/aggregation remains owned by Financial Rules.
+        return new(earlier,later,days);
+    }
     private static bool Text(string? value, int maxLength=120) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= maxLength && !value.Any(char.IsControl);
     private static bool Money(decimal value) => value is >= 0 and <= 999999999999.99m && decimal.Round(value, 2) == value;
     private static bool Currency(string value) => value.Length == 3 && value.All(char.IsAsciiLetterUpper);

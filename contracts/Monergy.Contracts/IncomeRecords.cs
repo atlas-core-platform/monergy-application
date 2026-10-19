@@ -14,3 +14,6 @@ public sealed record IncomeRecordList(IReadOnlyList<ReviewedIncomeRecord> Items,
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ReviseIncomeRecord(string OperationId, int ExpectedRevision, IncomeRecordDraft Income);
 public sealed record IncomeRecordHistory(IReadOnlyList<ReviewedIncomeRecord> Items, bool HasMore, int? NextBeforeRevision);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CompareIncomePeriods(string EarlierIncomeRecordId, int EarlierRevision, string LaterIncomeRecordId, int LaterRevision);
+public sealed record IncomePeriodComparison(ReviewedIncomeRecord Earlier, ReviewedIncomeRecord Later, int PeriodDays);
