@@ -486,9 +486,15 @@ export interface ProductIncomeDraft {
 export interface ProductIncomeRecord {
   incomeRecordId: string; operationId: string; customerId: string; income: ProductIncomeDraft; currency: string;
   sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
-  verificationStatus: string;
+  verificationStatus: string; revision: number;
 }
 export interface ProductIncomeRecordList { items: ProductIncomeRecord[]; hasMore: boolean; dataDurability: string }
 export const getIncomeRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductIncomeRecordList>('v1/income-records', 'GET', undefined, signal);
 export const createIncomeRecord = (api: AccessApi, input: { operationId: string; income: ProductIncomeDraft }, signal?: AbortSignal) =>
   api.product<ProductIncomeRecord>('v1/income-records', 'POST', input, signal);
+
+export interface ProductIncomeRecordHistory { items: ProductIncomeRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const reviseIncomeRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; income: ProductIncomeDraft }) =>
+  api.product<ProductIncomeRecord>('v1/income-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getIncomeRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductIncomeRecordHistory>('v1/income-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);

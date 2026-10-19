@@ -10,8 +10,11 @@ public interface IIncomeRecordRepository
 {
     Task<ReviewedIncomeRecord> CreateAsync(string tenant, string customer, string actor,
         string fingerprint, ReviewedIncomeRecord record, CancellationToken ct);
-    Task<ReviewedIncomeRecord?> ReadAsync(string tenant, string customer, string id, CancellationToken ct);
+    Task<ReviewedIncomeRecord?> ReadAsync(string tenant, string customer, string id, CancellationToken ct, int? revision = null);
     Task<IncomeRecordList> ListAsync(string tenant, string customer, CancellationToken ct);
+    Task<ReviewedIncomeRecord> ReviseAsync(string tenant, string customer, string actor, string fingerprint,
+        int expectedRevision, ReviewedIncomeRecord record, CancellationToken ct);
+    Task<IncomeRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct);
 }
 
 public sealed class IncomeRecordsApplication(IFinancialProfileRepository financial,
@@ -50,10 +53,38 @@ public sealed class IncomeRecordsApplication(IFinancialProfileRepository financi
         return await repository.CreateAsync(tenant, customer, actor, fingerprint, record, ct).ConfigureAwait(false);
     }
     public Task<IncomeRecordList> ListAsync(string tenant, string customer, CancellationToken ct) => repository.ListAsync(tenant, customer, ct);
-    public async Task<ReviewedIncomeRecord> ReadAsync(string tenant, string customer, string id, CancellationToken ct)
+    public async Task<ReviewedIncomeRecord> ReviseAsync(string tenant, string customer, string actor, string id,
+        ReviseIncomeRecord input, CancellationToken ct)
     {
-        if (!TenantAccessClient.Identifier(id, 80)) throw new TenantBoundaryException("INCOME_RECORD_INVALID", 400);
-        return await repository.ReadAsync(tenant, customer, id, ct).ConfigureAwait(false)
+        if (input is null || input.ExpectedRevision is < 1 or int.MaxValue ||
+            !Valid(new(input.OperationId, input.Income), clock.GetUtcNow()))
+            throw new TenantBoundaryException("INCOME_RECORD_INVALID", 400);
+        var original = await ReadAsync(tenant, customer, id, ct, 1).ConfigureAwait(false);
+        if (original.Income.SourceFinancialFactId != input.Income.SourceFinancialFactId || original.Income.SourceRevision != input.Income.SourceRevision)
+            throw new TenantBoundaryException("INCOME_SOURCE_IMMUTABLE", 400);
+        var source = await financial.GetFactAsync(original.Income.SourceFinancialFactId, original.Income.SourceRevision, ct).ConfigureAwait(false);
+        var provenance = await financial.GetProvenanceAsync(original.SourceProvenanceId, ct).ConfigureAwait(false);
+        if (source is null || source.CustomerId != customer || source.FactType != FinancialObjectTypes.Income ||
+            original.VerificationStatus != "CUSTOMER_REVIEWED" || source.Currency != original.Currency || source.FinancialProvenanceId != original.SourceProvenanceId ||
+            provenance is null || provenance.CustomerId != customer || provenance.FinancialFactId != source.FinancialFactId ||
+            provenance.SourceFactId != source.SourceFactId || provenance.EvidenceId != original.EvidenceId || provenance.DocumentVersionId != original.DocumentVersionId)
+            throw new TenantBoundaryException("INCOME_SOURCE_UNAVAILABLE", 503);
+        var normalized = input with { Income = input.Income with { Name = input.Income.Name.Trim(), IncomeSource = input.Income.IncomeSource.Trim(), IncomeType = input.Income.IncomeType.Trim(), FinancialYear = input.Income.FinancialYear.Trim() } };
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(normalized, ContractJson.Options)));
+        var record = original with { OperationId = input.OperationId, Income = normalized.Income, RecordedBy = actor,
+            RecordedAt = clock.GetUtcNow(), Revision = input.ExpectedRevision + 1 };
+        return await repository.ReviseAsync(tenant, customer, actor, fingerprint, input.ExpectedRevision, record, ct).ConfigureAwait(false);
+    }
+    public async Task<IncomeRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct)
+    {
+        if (beforeRevision is < 1) throw new TenantBoundaryException("INCOME_RECORD_INVALID", 400);
+        await ReadAsync(tenant, customer, id, ct, 1).ConfigureAwait(false);
+        return await repository.HistoryAsync(tenant, customer, id, beforeRevision, ct).ConfigureAwait(false);
+    }
+    public async Task<ReviewedIncomeRecord> ReadAsync(string tenant, string customer, string id, CancellationToken ct, int? revision = null)
+    {
+        if (!TenantAccessClient.Identifier(id, 80) || revision is < 1) throw new TenantBoundaryException("INCOME_RECORD_INVALID", 400);
+        return await repository.ReadAsync(tenant, customer, id, ct, revision).ConfigureAwait(false)
             ?? throw new TenantBoundaryException("INCOME_RECORD_NOT_FOUND", 404);
     }
     private static bool Text(string? value, int maxLength=120) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= maxLength && !value.Any(char.IsControl);

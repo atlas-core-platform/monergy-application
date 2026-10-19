@@ -27,10 +27,24 @@ public static class IncomeRecordEndpoints
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
             return await owner.ListAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
         });
-        group.MapGet("/{incomeRecordId}", async (string customerId, string incomeRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, IncomeRecordsApplication owner) =>
+        group.MapGet("/{incomeRecordId}", async (string customerId, string incomeRecordId, int? revision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, IncomeRecordsApplication owner) =>
         {
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
-            return await owner.ReadAsync(tenant, customerId, incomeRecordId, http.RequestAborted).ConfigureAwait(false);
+            return await owner.ReadAsync(tenant, customerId, incomeRecordId, http.RequestAborted, revision).ConfigureAwait(false);
+        });
+        group.MapGet("/{incomeRecordId}/history", async (string customerId, string incomeRecordId, int? beforeRevision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, IncomeRecordsApplication owner) =>
+        {
+            var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
+            return await owner.HistoryAsync(tenant, customerId, incomeRecordId, beforeRevision, http.RequestAborted).ConfigureAwait(false);
+        });
+        group.MapPost("/{incomeRecordId}/corrections", async (string customerId, string incomeRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, IncomeRecordsApplication owner) =>
+        {
+            var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);
+            http.Request.EnableBuffering(32768, 32768);
+            using var json = await JsonDocument.ParseAsync(http.Request.Body, cancellationToken: http.RequestAborted).ConfigureAwait(false);
+            RejectDuplicates(json.RootElement);
+            var input = json.RootElement.Deserialize<ReviseIncomeRecord>(Json) ?? throw new TenantBoundaryException("INCOME_RECORD_INVALID", 400);
+            return await owner.ReviseAsync(tenant, customerId, actor, incomeRecordId, input, http.RequestAborted).ConfigureAwait(false);
         });
         group.MapPost("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, IncomeRecordsApplication owner) =>
         {
