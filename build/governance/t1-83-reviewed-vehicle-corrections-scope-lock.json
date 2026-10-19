@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-83",
+  "applicationBase": "0f321e9b22c47fd983c7fe8d61d6ff44f5227407",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections13/14/20",
+    "COV-022",
+    "MON-FIN-010/011/012/014",
+    "M2-WS04-E02-F02",
+    "Original P1-15 Assets / P1-22 asset-position foundation"
+  ],
+  "scope": "Version-checked vehicle corrections,exact saved-version reads and paged immutable history. Correct name,type,optional nullable registration reference,separate purchase/current values and value date while preserving original exact VEHICLE source,currency and evidence/provenance. Replay-safe creation/correction receipts,current Self/document/update authority,fresh exact saved readback,source-bound history and stale-response guards. No registration/ownership/valuation verification,liability links,asset snapshot,totals/net worth or arithmetic.",
+  "migrations": [
+    "services/financial-profile/migrations/0016_reviewed_vehicle_corrections.sql"
+  ],
+  "remaining": "Vehicle registration/ownership/valuation verification,lifecycle,broader assets,liability links,complete asset position,reconciliation,Financial Rules totals/net worth,Search/Reports record integration,central audit and physical/full UAT."
+}

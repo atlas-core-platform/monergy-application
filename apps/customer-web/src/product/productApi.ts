@@ -576,9 +576,15 @@ export interface ProductVehicleDraft {
 }
 export interface ProductVehicleRecord {
   vehicleRecordId: string; operationId: string; customerId: string; vehicle: ProductVehicleDraft; currency: string;
-  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
 }
 export interface ProductVehicleRecordList { items: ProductVehicleRecord[]; hasMore: boolean; dataDurability: string }
 export const getVehicleRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductVehicleRecordList>('v1/vehicle-records', 'GET', undefined, signal);
 export const createVehicleRecord = (api: AccessApi, input: { operationId: string; vehicle: ProductVehicleDraft }, signal?: AbortSignal) =>
   api.product<ProductVehicleRecord>('v1/vehicle-records', 'POST', input, signal);
+
+export interface ProductVehicleRecordHistory { items: ProductVehicleRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const reviseVehicleRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; vehicle: ProductVehicleDraft }) =>
+  api.product<ProductVehicleRecord>('v1/vehicle-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getVehicleRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductVehicleRecordHistory>('v1/vehicle-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);

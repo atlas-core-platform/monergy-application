@@ -608,18 +608,28 @@ public sealed class PersistentFoundationTests
         await using var financial=new PostgresFinancialProfileRepository(configuration);
         var normalized=await financial.NormalizeAsync(FinancialNormalizationIdentity.From(request),request,new(now,request.CorrelationId,request.RequestId),default);
         var source=Assert.Single(normalized.Facts);
-        var input=new CreateVehicleRecord(suffix,new("Family car","TS 09 AB 1234","Car",500000m,400000m,new(2026,10,1),source.FinancialFactId,1));
+        var input=new CreateVehicleRecord(suffix,new("Family car","Example registrationNumber","Car",500000m,400000m,new(2026,10,1),source.FinancialFactId,1));
         ReviewedVehicleRecord saved;
+        ReviewedVehicleRecord corrected;
+        ReviseVehicleRecord correction;
         await using(var records=new PostgresVehicleRecords(configuration))
         {
             var app=new VehicleRecordsApplication(financial,records,TimeProvider.System);
             saved=await app.CreateAsync("T001",customer,"actor-vehicle",input,default);
             Assert.Equal(saved,await app.CreateAsync("T001",customer,"actor-vehicle",input,default));
             Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>app.CreateAsync("T001",customer,"actor-vehicle",input with {Vehicle=input.Vehicle with {CurrentValue=390000}},default))).Status);
+            correction = new(Guid.NewGuid().ToString("N"),1,input.Vehicle with {CurrentValue=390000m});
+            corrected = await app.ReviseAsync("T001",customer,"actor-vehicle",saved.VehicleRecordId,correction,default);
+            Assert.Equal(2,corrected.Revision);
         }
         await using(var reconstructed=new PostgresVehicleRecords(configuration))
         {
-            Assert.Equal(saved,await reconstructed.ReadAsync("T001",customer,saved.VehicleRecordId,default));
+            Assert.Equal(corrected,await reconstructed.ReadAsync("T001",customer,saved.VehicleRecordId,default));
+            Assert.Equal(saved,await reconstructed.ReadAsync("T001",customer,saved.VehicleRecordId,default,1));
+            var owner = new VehicleRecordsApplication(financial,reconstructed,TimeProvider.System);
+            Assert.Equal(corrected,await owner.ReviseAsync("T001",customer,"actor-vehicle",saved.VehicleRecordId,correction,default));
+            Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>owner.ReviseAsync("T001",customer,"actor-vehicle",saved.VehicleRecordId,correction with {OperationId=Guid.NewGuid().ToString("N")},default))).Status);
+            Assert.Equal([corrected,saved],(await owner.HistoryAsync("T001",customer,saved.VehicleRecordId,null,default)).Items);
             Assert.Equal(saved,await new VehicleRecordsApplication(financial,reconstructed,TimeProvider.System).CreateAsync("T001",customer,"actor-vehicle",input,default));
             Assert.Null(await reconstructed.ReadAsync("T002",customer,saved.VehicleRecordId,default));
             Assert.Single((await reconstructed.ListAsync("T001",customer,default)).Items);
@@ -627,10 +637,10 @@ public sealed class PersistentFoundationTests
         await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
         var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.vehicle_records SET payload=payload WHERE vehicle_record_id=@Id;",new {Id=saved.VehicleRecordId}));
         Assert.Equal("42501",denied.SqlState);
+        var correctionDenied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.vehicle_record_revisions SET payload=payload WHERE vehicle_record_id=@Id;",new {Id=saved.VehicleRecordId}));
+        Assert.Equal("42501",correctionDenied.SqlState);
         Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.vehicle_records WHERE tenant_id='T001' AND customer_id=@Customer;",new {Customer=customer}));
     }
-
-
 
     [Fact]
     public async Task ReviewedIncomeRecordRetainsPeriodAndReviewStatusAcrossRestartAndRuntimeCannotRewriteIt()
