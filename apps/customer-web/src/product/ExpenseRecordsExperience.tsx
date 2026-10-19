@@ -1,3 +1,4 @@
+import ExpensePeriodComparisonExperience from './ExpensePeriodComparisonExperience';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Drawer, Input, Select, Space, Tag } from 'antd';
 import type { AccessApi} from '../access/accessApi';
@@ -111,6 +112,7 @@ export default function ExpenseRecordsExperience({ api, facts, canRead, canCreat
     {loading && <p role="status">Loading expense records…</p>}
     {list?.items.length === 0 && <p>No expense records added yet. Review an expense source figure in Documents, then add its expense details and reporting period here.</p>}
     {list?.hasMore && <Alert type="info" title="Showing the 200 most recently added expense records." />}
+    {list && <ExpensePeriodComparisonExperience api={api} records={list.items} hasMore={list.hasMore} />}
     {list?.items.map((record) => <Card key={record.expenseRecordId} size="small" style={{ marginBlock: 12 }}>
       <Space wrap><strong>{record.expense.name}</strong><Tag>Customer reviewed</Tag><span>{record.expense.category}</span></Space>
       <p>Period total: {money(record.expense.amount, record.currency)} · {record.expense.periodStart} to {record.expense.periodEnd}</p>

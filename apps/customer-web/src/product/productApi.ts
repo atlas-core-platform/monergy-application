@@ -522,3 +522,7 @@ export const getExpenseRecordHistory = (api: AccessApi, id: string, beforeRevisi
 export interface ProductIncomePeriodComparison { earlier: ProductIncomeRecord; later: ProductIncomeRecord; periodDays: number }
 export const compareIncomePeriods = (api: AccessApi, input: { earlierIncomeRecordId: string; earlierRevision: number; laterIncomeRecordId: string; laterRevision: number }, signal?: AbortSignal) =>
   api.product<ProductIncomePeriodComparison>('v1/income-records/comparison', 'POST', input, signal);
+
+export interface ProductExpensePeriodComparison { earlier: ProductExpenseRecord; later: ProductExpenseRecord; periodDays: number }
+export const compareExpensePeriods = (api: AccessApi, input: { earlierExpenseRecordId: string; earlierRevision: number; laterExpenseRecordId: string; laterRevision: number }, signal?: AbortSignal) =>
+  api.product<ProductExpensePeriodComparison>('v1/expense-records/comparison', 'POST', input, signal);

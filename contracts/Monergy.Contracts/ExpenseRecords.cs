@@ -13,3 +13,7 @@ public sealed record ExpenseRecordList(IReadOnlyList<ReviewedExpenseRecord> Item
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ReviseExpenseRecord(string OperationId, int ExpectedRevision, ExpenseRecordDraft Expense);
 public sealed record ExpenseRecordHistory(IReadOnlyList<ReviewedExpenseRecord> Items, bool HasMore, int? NextBeforeRevision);
+
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record CompareExpensePeriods(string EarlierExpenseRecordId, int EarlierRevision, string LaterExpenseRecordId, int LaterRevision);
+public sealed record ExpensePeriodComparison(ReviewedExpenseRecord Earlier, ReviewedExpenseRecord Later, int PeriodDays);

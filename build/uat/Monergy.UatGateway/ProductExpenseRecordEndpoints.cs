@@ -56,6 +56,28 @@ public static class ProductExpenseRecordEndpoints
             await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
             return saved;
         });
+        group.MapPost("/comparison", async (HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductExpenseRecordClient client) =>
+        {
+            var (session, customer) = await ResolveAsync(http,owners,access,false).ConfigureAwait(false);
+            var input = await ReadInputAsync<CompareExpensePeriods>(http).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(input.EarlierExpenseRecordId,80) || !TenantAccessClient.Identifier(input.LaterExpenseRecordId,80) ||
+                input.EarlierRevision < 1 || input.LaterRevision < 1 || input.EarlierExpenseRecordId == input.LaterExpenseRecordId)
+                throw new TenantBoundaryException("EXPENSE_COMPARISON_INVALID",400);
+            var value = await client.CompareAsync(session,customer.CustomerId,input,http.RequestAborted).ConfigureAwait(false);
+            if (!Bound(value.Earlier,customer.CustomerId) || !Bound(value.Later,customer.CustomerId) ||
+                value.Earlier.ExpenseRecordId != input.EarlierExpenseRecordId || value.Earlier.Revision != input.EarlierRevision ||
+                value.Later.ExpenseRecordId != input.LaterExpenseRecordId || value.Later.Revision != input.LaterRevision ||
+                value.Earlier.Expense.SourceFinancialFactId == value.Later.Expense.SourceFinancialFactId || value.Earlier.Currency != value.Later.Currency ||
+                !string.Equals(value.Earlier.Expense.Category,value.Later.Expense.Category,StringComparison.OrdinalIgnoreCase) ||
+                value.PeriodDays < 1 || value.PeriodDays != value.Earlier.Expense.PeriodEnd.DayNumber - value.Earlier.Expense.PeriodStart.DayNumber + 1 ||
+                value.PeriodDays != value.Later.Expense.PeriodEnd.DayNumber - value.Later.Expense.PeriodStart.DayNumber + 1 || value.Earlier.Expense.PeriodEnd >= value.Later.Expense.PeriodStart)
+                throw new TenantBoundaryException("EXPENSE_RECORD_RESPONSE_INVALID",503);
+            var earlier = await client.ReadAsync(session,customer.CustomerId,input.EarlierExpenseRecordId,http.RequestAborted,input.EarlierRevision).ConfigureAwait(false);
+            var later = await client.ReadAsync(session,customer.CustomerId,input.LaterExpenseRecordId,http.RequestAborted,input.LaterRevision).ConfigureAwait(false);
+            if (earlier != value.Earlier || later != value.Later) throw new TenantBoundaryException("EXPENSE_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http,owners,access,session,customer,false).ConfigureAwait(false);
+            return value;
+        });
         group.MapGet("/{expenseRecordId}/history", async (string expenseRecordId, int? beforeRevision, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductExpenseRecordClient client) =>
         {
             var (session, customer) = await ResolveAsync(http, owners, access, false).ConfigureAwait(false);
@@ -178,6 +200,8 @@ public sealed class ProductExpenseRecordClient : IDisposable
         SendAsync<ReviewedExpenseRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
     public Task<ExpenseRecordHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
         SendAsync<ExpenseRecordHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
+    public Task<ExpensePeriodComparison> CompareAsync(CustomerOwnerSession session, string customer, CompareExpensePeriods input, CancellationToken ct) =>
+        SendAsync<ExpensePeriodComparison>(session,customer,"/comparison",input,ct);
     private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, object? input, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(input is null ? HttpMethod.Get : HttpMethod.Post,
