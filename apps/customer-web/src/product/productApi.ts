@@ -506,9 +506,15 @@ export interface ProductExpenseDraft {
 export interface ProductExpenseRecord {
   expenseRecordId: string; operationId: string; customerId: string; expense: ProductExpenseDraft; currency: string;
   sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
-  verificationStatus: string;
+  verificationStatus: string; revision: number;
 }
 export interface ProductExpenseRecordList { items: ProductExpenseRecord[]; hasMore: boolean; dataDurability: string }
 export const getExpenseRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductExpenseRecordList>('v1/expense-records', 'GET', undefined, signal);
 export const createExpenseRecord = (api: AccessApi, input: { operationId: string; expense: ProductExpenseDraft }, signal?: AbortSignal) =>
   api.product<ProductExpenseRecord>('v1/expense-records', 'POST', input, signal);
+
+export interface ProductExpenseRecordHistory { items: ProductExpenseRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const reviseExpenseRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; expense: ProductExpenseDraft }) =>
+  api.product<ProductExpenseRecord>('v1/expense-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getExpenseRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductExpenseRecordHistory>('v1/expense-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
