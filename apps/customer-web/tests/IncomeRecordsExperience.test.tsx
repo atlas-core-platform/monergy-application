@@ -12,7 +12,7 @@ const source: ProductFinancialFact = { financialFactId: 'ff-income', factType: '
 const income: ProductIncomeDraft = {name:'September salary',incomeSource:'Example employer',incomeType:'Employment',amount:400000,
   frequency:'MONTHLY',financialYear:'2026-27',periodStart:'2026-09-01',periodEnd:'2026-09-30',sourceFinancialFactId:'ff-income',sourceRevision:2};
 const record: ProductIncomeRecord = {incomeRecordId:'income-saved',operationId:'a'.repeat(32),customerId:'reference-customer',income,currency:'USD',
-  sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-income',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',verificationStatus:'CUSTOMER_REVIEWED'};
+  sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-income',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',verificationStatus:'CUSTOMER_REVIEWED',revision:1};
 function mount(api: AccessApi, canCreate = true, canRead = true, facts: ProductFinancialFact[] = [source]) {
   return render(<FoundationProvider appearance="midnight"><IncomeRecordsExperience api={api} canCreate={canCreate} canRead={canRead} facts={facts} /></FoundationProvider>);
 }
@@ -162,4 +162,117 @@ it('keeps a non-customer-reviewed confirmation unconfirmed',async()=>{
 it('rejects unsupported review status in a returned list',async()=>{
   const api=new AccessApi(session);vi.spyOn(api,'product').mockResolvedValue({items:[{...record,verificationStatus:'VERIFIED'}],hasMore:false,dataDurability:'Temporary data'});mount(api,false);
   expect(await screen.findByText('Income records are unavailable. Try again.')).toBeVisible();expect(screen.queryByText('September salary')).not.toBeInTheDocument();
+});
+
+it('edits the saved terms explicitly using the exact record version and immutable historical source', async () => {
+  const api=new AccessApi(session);let current=record;
+  const corrected={...record,revision:2,income:{...income,amount:390000}};
+  const request=vi.spyOn(api,'product').mockImplementation((path,method,body)=>{
+    if(method==='GET') return Promise.resolve({items:[current],hasMore:false,dataDurability:'Temporary data'});
+    expect(path).toBe('v1/income-records/income-saved/corrections');
+    expect(body).toEqual({operationId:'a'.repeat(32),expectedRevision:1,income:corrected.income});current=corrected;return Promise.resolve(corrected);
+  });
+  vi.spyOn(crypto,'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');mount(api,true,true,[]);
+  const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit income record: September salary'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit income record'});
+  expect(within(drawer).getByText(/Editing version 1 · USD · Source revision 2/)).toBeVisible();
+  expect(within(drawer).queryByRole('combobox',{name:'Reviewed income source'})).not.toBeInTheDocument();
+  expect(within(drawer).getByLabelText('Amount received in this period')).toHaveValue(400000);
+  fireEvent.change(within(drawer).getByLabelText('Amount received in this period'),{target:{value:'390000'}});
+  expect(request.mock.calls.filter(([,method])=>method==='POST')).toHaveLength(0);
+  await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await screen.findByText('Income record saved: September salary');expect(screen.getByText(/Period total: \$390,000.00/)).toBeVisible();
+});
+
+it('blocks a stale correction and requires review of the refreshed version', async () => {
+  const api=new AccessApi(session);let current=record;
+  const request=vi.spyOn(api,'product').mockImplementation((_path,method)=>method==='GET'
+    ? Promise.resolve({items:[current],hasMore:false,dataDurability:'Temporary data'})
+    : Promise.reject(new AccessApiError(409,'INCOME_REVISION_CONFLICT')));
+  mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit income record: September salary'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit income record'});await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  expect(await within(drawer).findByText(/A newer version has been saved/)).toBeVisible();
+  expect(within(drawer).getByRole('button',{name:'Save reviewed corrections'})).toBeDisabled();expect(within(drawer).getByLabelText('Amount received in this period')).toBeDisabled();
+  await user.click(within(drawer).getByRole('button',{name:'Close'}));current={...record,revision:2,income:{...income,amount:380000}};
+  await user.click(screen.getByRole('button',{name:'Refresh income records'}));await screen.findByText(/Period total: \$380,000.00/);
+  await user.click(screen.getByRole('button',{name:'Edit income record: September salary'}));
+  expect(within(screen.getByRole('dialog',{name:'Edit income record'})).getByText(/Editing version 2/)).toBeVisible();
+  expect(request.mock.calls.filter(([,method])=>method==='POST')).toHaveLength(1);
+});
+
+it('retains an uncertain correction and its expected version after closing with no current source figures', async () => {
+  const api=new AccessApi(session);let attempts=0;
+  const request=vi.spyOn(api,'product').mockImplementation((_path,method)=>{
+    if(method==='GET')return Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'});
+    attempts++;return attempts===1?Promise.reject(new AccessApiError(503,'unavailable')):Promise.resolve({...record,revision:2});
+  });
+  vi.spyOn(crypto,'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');mount(api,true,true,[]);
+  const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit income record: September salary'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit income record'});await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await within(drawer).findByText(/The save has not been confirmed/);expect(within(drawer).getByLabelText('Income source (employer or payer)')).toBeDisabled();
+  await user.click(within(drawer).getByRole('button',{name:'Close'}));await user.click(screen.getByRole('button',{name:'Continue save confirmation'}));
+  const reopened=screen.getByRole('dialog',{name:'Edit income record'});await user.click(within(reopened).getByRole('button',{name:'Retry save confirmation'}));
+  await screen.findByText('Income record saved: September salary');const calls=request.mock.calls.filter(([,method])=>method==='POST');
+  expect(calls).toHaveLength(2);expect(calls[0]?.[2]).toEqual(calls[1]?.[2]);expect(calls[0]?.[2]).toMatchObject({expectedRevision:1});
+});
+
+it('allows correction after confirmed validation rejection and keeps uncertain conflicts frozen', async () => {
+  const api=new AccessApi(session);let conflict=false;
+  vi.spyOn(api,'product').mockImplementation((_path,method)=>method==='GET'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.reject(new AccessApiError(conflict?409:400,conflict?'INCOME_OPERATION_CONFLICT':'invalid')));
+  mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit income record: September salary'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit income record'});await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await within(drawer).findByText(/Check the amount, reporting period/);expect(within(drawer).getByLabelText('Income source (employer or payer)')).toBeEnabled();
+  conflict=true;await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await within(drawer).findByText(/The save has not been confirmed/);expect(within(drawer).getByLabelText('Income source (employer or payer)')).toBeDisabled();
+});
+
+it('reads original and corrected terms in bounded history pages without enabling edits for read-only access', async () => {
+  const api=new AccessApi(session);const latest={...record,revision:51,income:{...income,amount:300000}};
+  const request=vi.spyOn(api,'product').mockImplementation((path)=>{
+    if(path==='v1/income-records')return Promise.resolve({items:[latest],hasMore:false,dataDurability:'Temporary data'});
+    if(path==='v1/income-records/income-saved/history')return Promise.resolve({items:[latest],hasMore:true,nextBeforeRevision:2});
+    if(path==='v1/income-records/income-saved/history?beforeRevision=2')return Promise.resolve({items:[record],hasMore:false,nextBeforeRevision:null});
+    return Promise.reject(new Error('unexpected route'));
+  });mount(api,false);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View income history: September salary'}));
+  expect(screen.queryByRole('button',{name:'Edit income record: September salary'})).not.toBeInTheDocument();
+  const drawer=screen.getByRole('dialog',{name:'Income record history'});await user.click(await within(drawer).findByRole('button',{name:'Earlier versions'}));
+  await user.click(await within(drawer).findByRole('button',{name:'View version 1'}));
+  const version=within(drawer).getByRole('region',{name:'Saved income version 1'});expect(version).toHaveTextContent('$400,000.00');expect(version).toHaveTextContent('2026-09-01 to 2026-09-30');expect(version).toHaveTextContent('2026-27');expect(version).toHaveTextContent('Customer reviewed');
+  expect(within(version).getByRole('link',{name:'View exact income source history'})).toHaveAttribute('href','/finances?fact=ff-income');
+  await user.click(within(drawer).getByRole('button',{name:'Latest versions'}));await within(drawer).findByRole('button',{name:'View version 51'});
+  expect(request.mock.calls.every(([,method])=>method==='GET')).toBe(true);
+});
+
+it('shows history failure and hides prior history immediately after a session scope change', async () => {
+  const api=new AccessApi(session);vi.spyOn(api,'product').mockImplementation(path=>path==='v1/income-records'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'}):Promise.reject(new AccessApiError(403,'denied')));
+  const view=mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View income history: September salary'}));
+  await screen.findByText('Income history is unavailable.');expect(screen.queryByRole('button',{name:'View version 1'})).not.toBeInTheDocument();
+  const other=new AccessApi({...session,actorId:'A200'});vi.spyOn(other,'product').mockResolvedValue({items:[],hasMore:false,dataDurability:'Temporary data'});
+  view.rerender(<FoundationProvider appearance="midnight"><IncomeRecordsExperience api={other} facts={[]} canRead canCreate={false} /></FoundationProvider>);
+  expect(screen.queryByRole('dialog',{name:'Income record history'})).not.toBeInTheDocument();await screen.findByText(/No income records added yet/);
+});
+
+it('aborts pending history and rejects a late previous-session response',async()=>{
+  const api=new AccessApi(session);let complete:(value:unknown)=>void=()=>undefined;
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/income-records'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'})
+    :new Promise(resolve=>{complete=resolve;}));
+  const view=mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View income history: September salary'}));
+  await screen.findByText('Loading income history…');
+  const signal=request.mock.calls.find(([path])=>path.endsWith('/history'))?.[3];expect(signal).toBeDefined();
+  const next=new AccessApi({...session,actorId:'A200'});vi.spyOn(next,'product').mockResolvedValue({items:[],hasMore:false,dataDurability:'Temporary data'});
+  view.rerender(<FoundationProvider appearance="midnight"><IncomeRecordsExperience api={next} facts={[]} canRead canCreate={false} /></FoundationProvider>);
+  expect(signal?.aborted).toBe(true);complete({items:[record],hasMore:false,nextBeforeRevision:null});
+  await screen.findByText(/No income records added yet/);expect(screen.queryByRole('dialog',{name:'Income record history'})).not.toBeInTheDocument();
+});
+
+it('rejects a history page claiming independent income verification',async()=>{
+  const api=new AccessApi(session);vi.spyOn(api,'product').mockImplementation(path=>path==='v1/income-records'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({items:[{...record,verificationStatus:'VERIFIED'}],hasMore:false,nextBeforeRevision:null}));
+  mount(api,false);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View income history: September salary'}));
+  expect(await screen.findByText('Income history is unavailable.')).toBeVisible();expect(screen.queryByRole('button',{name:'View version 1'})).not.toBeInTheDocument();
 });

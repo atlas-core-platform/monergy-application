@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-72",
+  "applicationBase": "4863af4cce475b870f74321380a175f2a95e886c",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": ["Master section13 Income", "MON-FIN-003", "COV-017", "M2-WS04-E01-F01"],
+  "migrations": ["services/financial-profile/migrations/0008_reviewed_income_corrections.sql"]
+}
