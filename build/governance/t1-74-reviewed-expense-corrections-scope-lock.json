@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-74",
+  "applicationBase": "8d6e3b1dd315b69b5353e62f6dbe791d3fc03a14",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": ["Master section13 Expense", "MON-FIN-004", "COV-017", "M2-WS04-E01-F01"],
+  "migrations": ["services/financial-profile/migrations/0010_reviewed_expense_corrections.sql"]
+}
