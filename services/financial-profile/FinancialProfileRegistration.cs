@@ -64,7 +64,9 @@ public static class FinancialProfileRegistration
         services.AddSingleton<IIncomeRecordRepository, InMemoryIncomeRecords>();
         services.AddSingleton<IncomeRecordsApplication>();
         services.AddSingleton<IExpenseRecordRepository, InMemoryExpenseRecords>();
+        services.AddSingleton<ILiabilityRecordRepository, InMemoryLiabilityRecords>();
         services.AddSingleton<ExpenseRecordsApplication>();
+        services.AddSingleton<LiabilityRecordsApplication>();
         services.AddSingleton<InvestmentRecordsApplication>();
         services.AddSingleton<LoanRecordsApplication>();
         return services.AddAuditDelivery(configuration);
@@ -83,7 +85,9 @@ public static class FinancialProfileRegistration
         services.AddSingleton<IIncomeRecordRepository, PostgresIncomeRecords>();
         services.AddSingleton<IncomeRecordsApplication>();
         services.AddSingleton<IExpenseRecordRepository, PostgresExpenseRecords>();
+        services.AddSingleton<ILiabilityRecordRepository, PostgresLiabilityRecords>();
         services.AddSingleton<ExpenseRecordsApplication>();
+        services.AddSingleton<LiabilityRecordsApplication>();
         services.AddSingleton<InvestmentRecordsApplication>();
         services.AddSingleton<LoanRecordsApplication>();
         return services.AddAuditDelivery(configuration);

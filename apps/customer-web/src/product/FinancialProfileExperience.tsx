@@ -1,3 +1,4 @@
+import LiabilityRecordsExperience from './LiabilityRecordsExperience';
 import ExpenseRecordsExperience from './ExpenseRecordsExperience';
 import IncomeRecordsExperience from './IncomeRecordsExperience';
 import InvestmentRecordsExperience from './InvestmentRecordsExperience';
@@ -35,11 +36,11 @@ const assetTypeName = (value?: string) => value === 'PROPERTY' ? 'Property' : va
 const factTypeName = (value: string) =>
   ({ INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information', ASSET: 'Asset source figure', INVESTMENT: 'Investment source figure', INSURANCE: 'Insurance source figure', TAX: 'Tax source figure' })[value] ?? value;
 
-type FinancialCategory = 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT' | 'INSURANCE' | 'TAX';
+type FinancialCategory = 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT' | 'INSURANCE' | 'TAX';
 
 const categoryFromLocation = (): FinancialCategory | '' => {
   const value = new URLSearchParams(window.location.search).get('type')?.toUpperCase();
-  return value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' || value === 'ASSET' || value === 'INVESTMENT' || value === 'INSURANCE' || value === 'TAX' ? value : '';
+  return value === 'LIABILITY' || value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' || value === 'ASSET' || value === 'INVESTMENT' || value === 'INSURANCE' || value === 'TAX' ? value : '';
 };
 
 const initialFactId = () => new URLSearchParams(window.location.search).get('fact') ?? '';
@@ -193,6 +194,11 @@ export default function FinancialProfileExperience() {
         </div>
         <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
       </header>
+      {activeCategory === 'LIABILITY' && api && canRead && <LiabilityRecordsExperience
+        key={[product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
+        facts={profile?.facts.filter(fact=>fact.factType==='LOAN') ?? []}
+        canRead={product?.capabilities.includes('evidence.document.read') ?? false}
+        canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
       {activeCategory === 'INCOME' && api && canRead && <IncomeRecordsExperience
         key={[product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
         facts={profile?.facts.filter(fact=>fact.factType==='INCOME') ?? []}
@@ -262,6 +268,7 @@ export default function FinancialProfileExperience() {
           </section>
 
           <nav className="product-financial-category-filter" aria-label="Financial information categories">
+            <Button type={activeCategory === 'LIABILITY' ? 'primary' : 'default'} onClick={() => { selectCategory('LIABILITY'); }}>Liabilities</Button>
             <Button
               type={activeCategory === '' ? 'primary' : 'default'}
               onClick={() => { selectCategory(''); }}
