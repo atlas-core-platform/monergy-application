@@ -3,6 +3,7 @@ import ExpenseRecordsExperience from './ExpenseRecordsExperience';
 import IncomeRecordsExperience from './IncomeRecordsExperience';
 import InvestmentRecordsExperience from './InvestmentRecordsExperience';
 import PropertyRecordsExperience from './PropertyRecordsExperience';
+import VehicleRecordsExperience from './VehicleRecordsExperience';
 import LoanRecordsExperience from './LoanRecordsExperience';
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Collapse, Drawer, Skeleton, Spin, Tag } from 'antd';
@@ -210,8 +211,13 @@ export default function FinancialProfileExperience() {
         facts={profile?.facts.filter(fact=>fact.factType==='EXPENSE') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
+      {activeCategory === 'ASSET' && api && canRead && <VehicleRecordsExperience
+        key={['vehicle',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
+        facts={profile?.facts.filter(fact=>fact.factType==='ASSET' && fact.assetType==='VEHICLE') ?? []}
+        canRead={product?.capabilities.includes('evidence.document.read') ?? false}
+        canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
       {activeCategory === 'ASSET' && api && canRead && <PropertyRecordsExperience
-        key={[product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
+        key={['property',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
         facts={profile?.facts.filter(fact=>fact.factType==='ASSET' && fact.assetType==='PROPERTY') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}

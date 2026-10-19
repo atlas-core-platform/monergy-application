@@ -628,3 +628,19 @@ it('opens property records under Assets with only explicitly classified property
   await waitFor(()=>expect(screen.getByText(/Property source amount ·/,{selector:'.ant-select-item-option-content'})).toBeVisible());
   expect(screen.queryByText(/Vehicle source amount ·/,{selector:'.ant-select-item-option-content'})).not.toBeInTheDocument();
 });
+
+it('opens vehicle records under Assets with only explicitly classified vehicle sources',async()=>{
+  window.history.replaceState(null,'','/finances?type=ASSET');const api=new AccessApi(session);
+  const fact={financialFactId:'ff-vehicle',factType:'ASSET',assetType:'VEHICLE',label:'Vehicle source amount',value:120000,currency:'USD',effectiveDate:'2026-10-01',revision:1,
+    source:{sourceName:'vehicle.txt',documentVersion:'document-vehicle',recordedAt:'2026-10-19T00:00:00Z',technicalSourceFactId:'source-vehicle',technicalProvenanceId:'provenance-vehicle'}};
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/vehicle-records'||path==='v1/property-records'
+    ?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({financialProfileId:'profile',revision:1,updatedAt:'2026-10-19T00:00:00Z',dataDurability:'Temporary data',facts:[fact,{...fact,financialFactId:'ff-property',assetType:'PROPERTY',label:'Property source amount'}]}));
+  mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
+  expect(await screen.findByRole('heading',{name:'Vehicle records'})).toBeVisible();
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Add vehicle record'})).toBeEnabled());expect(request.mock.calls.some(([path])=>path==='v1/vehicle-records')).toBe(true);
+  const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Add vehicle record'}));const drawer=screen.getByRole('dialog',{name:'Add vehicle record'});
+  await user.click(within(drawer).getByRole('combobox',{name:'Reviewed vehicle source'}));
+  await waitFor(()=>expect(screen.getByText(/Vehicle source amount ·/,{selector:'.ant-select-item-option-content'})).toBeVisible());
+  expect(screen.queryByText(/Property source amount ·/,{selector:'.ant-select-item-option-content'})).not.toBeInTheDocument();
+});

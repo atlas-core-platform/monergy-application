@@ -62,6 +62,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<ILoanRecordRepository, InMemoryLoanRecords>();
         services.AddSingleton<IInvestmentRecordRepository, InMemoryInvestmentRecords>();
         services.AddSingleton<IPropertyRecordRepository, InMemoryPropertyRecords>();
+        services.AddSingleton<IVehicleRecordRepository, InMemoryVehicleRecords>();
         services.AddSingleton<IIncomeRecordRepository, InMemoryIncomeRecords>();
         services.AddSingleton<IncomeRecordsApplication>();
         services.AddSingleton<IExpenseRecordRepository, InMemoryExpenseRecords>();
@@ -70,6 +71,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<LiabilityRecordsApplication>();
         services.AddSingleton<InvestmentRecordsApplication>();
         services.AddSingleton<PropertyRecordsApplication>();
+        services.AddSingleton<VehicleRecordsApplication>();
         services.AddSingleton<LoanRecordsApplication>();
         return services.AddAuditDelivery(configuration);
     }
@@ -85,6 +87,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<ILoanRecordRepository, PostgresLoanRecords>();
         services.AddSingleton<IInvestmentRecordRepository, PostgresInvestmentRecords>();
         services.AddSingleton<IPropertyRecordRepository, PostgresPropertyRecords>();
+        services.AddSingleton<IVehicleRecordRepository, PostgresVehicleRecords>();
         services.AddSingleton<IIncomeRecordRepository, PostgresIncomeRecords>();
         services.AddSingleton<IncomeRecordsApplication>();
         services.AddSingleton<IExpenseRecordRepository, PostgresExpenseRecords>();
@@ -93,6 +96,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<LiabilityRecordsApplication>();
         services.AddSingleton<InvestmentRecordsApplication>();
         services.AddSingleton<PropertyRecordsApplication>();
+        services.AddSingleton<VehicleRecordsApplication>();
         services.AddSingleton<LoanRecordsApplication>();
         return services.AddAuditDelivery(configuration);
     }
