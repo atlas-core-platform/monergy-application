@@ -56,6 +56,29 @@ public static class ProductIncomeRecordEndpoints
             await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
             return saved;
         });
+        group.MapPost("/comparison", async (HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductIncomeRecordClient client) =>
+        {
+            var (session, customer) = await ResolveAsync(http,owners,access,false).ConfigureAwait(false);
+            var input = await ReadInputAsync<CompareIncomePeriods>(http).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(input.EarlierIncomeRecordId,80) || !TenantAccessClient.Identifier(input.LaterIncomeRecordId,80) ||
+                input.EarlierRevision < 1 || input.LaterRevision < 1 || input.EarlierIncomeRecordId == input.LaterIncomeRecordId)
+                throw new TenantBoundaryException("INCOME_COMPARISON_INVALID",400);
+            var value = await client.CompareAsync(session,customer.CustomerId,input,http.RequestAborted).ConfigureAwait(false);
+            if (!Bound(value.Earlier,customer.CustomerId) || !Bound(value.Later,customer.CustomerId) ||
+                value.Earlier.IncomeRecordId != input.EarlierIncomeRecordId || value.Earlier.Revision != input.EarlierRevision ||
+                value.Later.IncomeRecordId != input.LaterIncomeRecordId || value.Later.Revision != input.LaterRevision ||
+                value.Earlier.Income.SourceFinancialFactId == value.Later.Income.SourceFinancialFactId || value.Earlier.Currency != value.Later.Currency ||
+                !string.Equals(value.Earlier.Income.IncomeSource,value.Later.Income.IncomeSource,StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(value.Earlier.Income.IncomeType,value.Later.Income.IncomeType,StringComparison.OrdinalIgnoreCase) ||
+                value.PeriodDays < 1 || value.PeriodDays != value.Earlier.Income.PeriodEnd.DayNumber - value.Earlier.Income.PeriodStart.DayNumber + 1 ||
+                value.PeriodDays != value.Later.Income.PeriodEnd.DayNumber - value.Later.Income.PeriodStart.DayNumber + 1 || value.Earlier.Income.PeriodEnd >= value.Later.Income.PeriodStart)
+                throw new TenantBoundaryException("INCOME_RECORD_RESPONSE_INVALID",503);
+            var earlier = await client.ReadAsync(session,customer.CustomerId,input.EarlierIncomeRecordId,http.RequestAborted,input.EarlierRevision).ConfigureAwait(false);
+            var later = await client.ReadAsync(session,customer.CustomerId,input.LaterIncomeRecordId,http.RequestAborted,input.LaterRevision).ConfigureAwait(false);
+            if (earlier != value.Earlier || later != value.Later) throw new TenantBoundaryException("INCOME_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http,owners,access,session,customer,false).ConfigureAwait(false);
+            return value;
+        });
         group.MapGet("/{incomeRecordId}/history", async (string incomeRecordId, int? beforeRevision, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductIncomeRecordClient client) =>
         {
             var (session, customer) = await ResolveAsync(http, owners, access, false).ConfigureAwait(false);
@@ -179,6 +202,8 @@ public sealed class ProductIncomeRecordClient : IDisposable
         SendAsync<ReviewedIncomeRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
     public Task<IncomeRecordHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
         SendAsync<IncomeRecordHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
+    public Task<IncomePeriodComparison> CompareAsync(CustomerOwnerSession session, string customer, CompareIncomePeriods input, CancellationToken ct) =>
+        SendAsync<IncomePeriodComparison>(session,customer,"/comparison",input,ct);
     private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, object? input, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(input is null ? HttpMethod.Get : HttpMethod.Post,

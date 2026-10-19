@@ -1,3 +1,4 @@
+import IncomePeriodComparisonExperience from './IncomePeriodComparisonExperience';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Drawer, Input, Select, Space, Tag } from 'antd';
 import type { AccessApi} from '../access/accessApi';
@@ -113,6 +114,7 @@ export default function IncomeRecordsExperience({ api, facts, canRead, canCreate
     {loading && <p role="status">Loading income records…</p>}
     {list?.items.length === 0 && <p>No income records added yet. Review an income source figure in Documents, then add its income details and reporting period here.</p>}
     {list?.hasMore && <Alert type="info" title="Showing the 200 most recently added income records." />}
+    {list && <IncomePeriodComparisonExperience api={api} records={list.items} hasMore={list.hasMore} />}
     {list?.items.map((record) => <Card key={record.incomeRecordId} size="small" style={{ marginBlock: 12 }}>
       <Space wrap><strong>{record.income.name}</strong><Tag>Customer reviewed</Tag><span>{record.income.incomeSource} · {record.income.incomeType}</span></Space>
       <p>Period total: {money(record.income.amount, record.currency)} · {record.income.periodStart} to {record.income.periodEnd}</p>
