@@ -8,7 +8,10 @@ public sealed record LoanRecordDraft(string Name, string Lender, string LoanType
     string SourceFinancialFactId, int SourceRevision);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record CreateLoanRecord(string OperationId, LoanRecordDraft Loan);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ReviseLoanRecord(string OperationId, int ExpectedRevision, LoanRecordDraft Loan);
 public sealed record ReviewedLoanRecord(string LoanRecordId, string OperationId, string CustomerId,
     LoanRecordDraft Loan, string Currency, string SourceProvenanceId, string DocumentVersionId,
-    string EvidenceId, string RecordedBy, DateTimeOffset RecordedAt);
+    string EvidenceId, string RecordedBy, DateTimeOffset RecordedAt, int Revision = 1);
 public sealed record LoanRecordList(IReadOnlyList<ReviewedLoanRecord> Items, bool HasMore);
+public sealed record LoanRecordHistory(IReadOnlyList<ReviewedLoanRecord> Items, bool HasMore, int? NextBeforeRevision);

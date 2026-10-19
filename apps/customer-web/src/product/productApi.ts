@@ -443,8 +443,13 @@ export interface ProductLoanDraft {
 }
 export interface ProductLoanRecord {
   loanRecordId: string; operationId: string; customerId: string; loan: ProductLoanDraft; currency: string;
-  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
 }
 export interface ProductLoanRecordList { items: ProductLoanRecord[]; hasMore: boolean; dataDurability: string }
 export const getLoanRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductLoanRecordList>('v1/loan-records', 'GET', undefined, signal);
 export const createLoanRecord = (api: AccessApi, input: { operationId: string; loan: ProductLoanDraft }, signal?: AbortSignal) => api.product<ProductLoanRecord>('v1/loan-records', 'POST', input, signal);
+export interface ProductLoanRecordHistory { items: ProductLoanRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const reviseLoanRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; loan: ProductLoanDraft }) =>
+  api.product<ProductLoanRecord>('v1/loan-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getLoanRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductLoanRecordHistory>('v1/loan-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);

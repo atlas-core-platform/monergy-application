@@ -1,8 +1,18 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest bounded increment: T1-66 customer-reviewed loan records. Exact source-linked create/read covers the Master section13 terms. Original deliverables remain Partial/Pending; editing/lifecycle, centralized audit and integrated UAT remain open.
+Status: ACTIVE · Latest bounded increment: T1-67 reviewed loan corrections and history. Original deliverables remain Partial/Pending; closing/lifecycle, centralized audit and integrated UAT remain open.
 
-## Current T1-66 update — customer-reviewed loan records
+## Current T1-67 update — reviewed loan corrections and history
+
+Customers can explicitly correct previously reviewed loan terms using an expected record version. Financial Profile appends every correction, preserves original source/currency and creation receipts, and rejects stale concurrent edits. Exact operation replay returns its original version even after later changes. Current lists show the latest terms; read-only customers can inspect paged immutable history. Unconfirmed saves preserve the same body/operation/version across drawer close. Receipt: [t1-67-reviewed-loan-corrections.md](t1-67-reviewed-loan-corrections.md).
+
+Current Self/session/owned-customer/setup/read/document/update authority and fresh exact-version readback remain required. Migration0004 retains append-only storage and SELECT/INSERT-only runtime grants. Owner history does not close central Audit integration. Closing/lifecycle, multi-source reconciliation, full asset/liability truth and physical/integrated UAT remain open. No lender verification or total debt is inferred.
+
+816 backend (573 VS02,112 owner,40 reprocessing,64 Reporting,27 Search) and141 UI (111 Documents,14 Financial information,16 Loan records) checks pass. TypeScript, changed source/test ESLint, Vite and zero-warning Gateway/physical test-project builds pass. Paired Expert verification is recorded separately. Physical/full integrated UAT remains open.
+
+After paired merge:67 numbered units =66 implementations +1 governance closure. Original29 deliverables remain0 complete,17 partial,12 pending; Loans stays Partial. Workbook version9 reviewed before work. Original151 IDs/81 features/126 Phase1 memberships/source phases remain unchanged.
+
+## Previous T1-66 update — customer-reviewed loan records
 
 Financial information > Loan information now creates/reads a customer-reviewed loan record with meaningful name, lender/type, sanction amount, outstanding/as-of date, annual rate, EMI, tenure and start/end dates. Exact previously reviewed LOAN source/revision and owner currency are retained; no term is inferred from a source figure. Financial Profile owns append-only creation with tenant/customer/actor operation identity, conflict-safe replay and source provenance. Current session/owned-customer/setup and read/evidence/update authority are rechecked; uncertain UI submissions retry the same request. Receipt: [t1-66-reviewed-loan-records.md](t1-66-reviewed-loan-records.md).
 
@@ -100,7 +110,7 @@ This section supersedes the historical priority/verification labels below. Lates
 | P0 / implemented T1-63 | Vehicle purchase invoice OCR; explicitly stated purchase figure and invoice date with independent review/adoption | Receipt t1-63-vehicle-purchase-ocr.md. Canonical VEHICLE owner storage and ASSET source presentation; full records/current valuation/ownership and integrated UAT remain open |
 | P0 / implemented T1-64 | Insurance/Tax review/adoption, canonical owner types and customer source views | Receipt t1-64-financial-source-category-boundary.md. Owner HTTP/replay/provenance and canonical/legacy projection checks; generic untyped ASSET adoption, full records and integrated UAT remain open |
 | P0 / implemented T1-65 | Explicit generic asset Property/Vehicle review and canonical type readback | Receipt t1-65-reviewed-asset-source-types.md. Text/CSV/XLSX choices and historical source type immutability; other asset kinds, full records and live integrated UAT remain open |
-| P0 / implemented T1-66 | Customer-reviewed source-linked loan record create/read with Master section13 terms | Receipt t1-66-reviewed-loan-records.md. Exact source revision, scoped immutable operation receipts and owner readback; editing/lifecycle, centralized audit and physical/integrated UAT remain open |
+| P0 / implemented T1-66–67 | Customer-reviewed source-linked loan create/read and version-checked corrections/history | Receipts t1-66-reviewed-loan-records.md and t1-67-reviewed-loan-corrections.md. Original source/currency and every reviewed version retained; exact operation/version readback. Closing/lifecycle, centralized audit and physical/integrated UAT remain open |
 | P0 | Google Drive / OneDrive customer storage journey | Implement actual authorized provider import/status/refresh/disconnect, preserving exact folder/file/document identities; reference gateway is insufficient |
 | P0 | Full Loan account and financial truth | Seven source categories exist. Complete lender/type/sanction/outstanding/rate/EMI/tenure/dates and required asset/liability records; a typed source amount does not complete MON-FIN-006 |
 | P0 | Deterministic net worth | Assets minus Liabilities is already specified. Complete authoritative dated/currency/valuation inputs and customer calculation/provenance; scoring approval is a distinct gate |

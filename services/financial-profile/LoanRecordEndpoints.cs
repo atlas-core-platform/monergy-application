@@ -27,10 +27,24 @@ public static class LoanRecordEndpoints
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
             return await owner.ListAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
         });
-        group.MapGet("/{loanRecordId}", async (string customerId, string loanRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
+        group.MapGet("/{loanRecordId}", async (string customerId, string loanRecordId, int? revision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
         {
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
-            return await owner.ReadAsync(tenant, customerId, loanRecordId, http.RequestAborted).ConfigureAwait(false);
+            return await owner.ReadAsync(tenant, customerId, loanRecordId, http.RequestAborted, revision).ConfigureAwait(false);
+        });
+        group.MapGet("/{loanRecordId}/history", async (string customerId, string loanRecordId, int? beforeRevision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
+        {
+            var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
+            return await owner.HistoryAsync(tenant, customerId, loanRecordId, beforeRevision, http.RequestAborted).ConfigureAwait(false);
+        });
+        group.MapPost("/{loanRecordId}/corrections", async (string customerId, string loanRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
+        {
+            var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);
+            http.Request.EnableBuffering(32768, 32768);
+            using var json = await JsonDocument.ParseAsync(http.Request.Body, cancellationToken: http.RequestAborted).ConfigureAwait(false);
+            RejectDuplicates(json.RootElement);
+            var input = json.RootElement.Deserialize<ReviseLoanRecord>(Json) ?? throw new TenantBoundaryException("LOAN_RECORD_INVALID", 400);
+            return await owner.ReviseAsync(tenant, customerId, actor, loanRecordId, input, http.RequestAborted).ConfigureAwait(false);
         });
         group.MapPost("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
         {

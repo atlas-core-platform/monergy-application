@@ -19,8 +19,12 @@ public sealed class PostgresLoanRecords : ILoanRecordRepository, IAsyncDisposabl
     {
         await using var db = await source.OpenConnectionAsync(ct).ConfigureAwait(false);
         await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
-        await db.ExecuteAsync(new CommandDefinition("SELECT pg_advisory_xact_lock(hashtextextended(@Id, 0));",
-            new { Id = record.LoanRecordId }, tx, cancellationToken: ct)).ConfigureAwait(false);
+        await LockAsync(db, tx, tenant, customer, actor, record.OperationId, record.LoanRecordId, ct).ConfigureAwait(false);
+        if (await db.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            SELECT EXISTS(SELECT 1 FROM financial_profile.loan_record_revisions
+            WHERE tenant_id=@Tenant AND customer_id=@Customer AND actor_id=@Actor AND operation_id=@Operation);
+            """, new { Tenant = tenant, Customer = customer, Actor = actor, Operation = record.OperationId }, tx, cancellationToken: ct)).ConfigureAwait(false))
+            throw new TenantBoundaryException("LOAN_OPERATION_CONFLICT", 409);
         var prior = await db.QuerySingleOrDefaultAsync<Stored>(new CommandDefinition("""
             SELECT fingerprint AS Fingerprint, payload::text AS Payload FROM financial_profile.loan_records
             WHERE tenant_id=@Tenant AND customer_id=@Customer AND loan_record_id=@Id;
@@ -49,23 +53,94 @@ public sealed class PostgresLoanRecords : ILoanRecordRepository, IAsyncDisposabl
         await tx.CommitAsync(ct).ConfigureAwait(false);
         return record;
     }
-    public async Task<ReviewedLoanRecord?> ReadAsync(string tenant, string customer, string id, CancellationToken ct)
+    public async Task<ReviewedLoanRecord> ReviseAsync(string tenant, string customer, string actor,
+        string fingerprint, int expectedRevision, ReviewedLoanRecord record, CancellationToken ct)
+    {
+        await using var db = await source.OpenConnectionAsync(ct).ConfigureAwait(false);
+        await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await LockAsync(db, tx, tenant, customer, actor, record.OperationId, record.LoanRecordId, ct).ConfigureAwait(false);
+        var args = new { Tenant = tenant, Customer = customer, Actor = actor, Operation = record.OperationId, Id = record.LoanRecordId };
+        var prior = await db.QuerySingleOrDefaultAsync<Stored>(new CommandDefinition("""
+            SELECT fingerprint AS Fingerprint,payload::text AS Payload FROM financial_profile.loan_record_revisions
+            WHERE tenant_id=@Tenant AND customer_id=@Customer AND actor_id=@Actor AND operation_id=@Operation;
+            """, args, tx, cancellationToken: ct)).ConfigureAwait(false);
+        if (prior is not null)
+        {
+            var replay = Decode(prior.Payload);
+            if (prior.Fingerprint != fingerprint || replay.LoanRecordId != record.LoanRecordId)
+                throw new TenantBoundaryException("LOAN_OPERATION_CONFLICT", 409);
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return replay;
+        }
+        if (await db.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            SELECT EXISTS(SELECT 1 FROM financial_profile.loan_records
+            WHERE tenant_id=@Tenant AND customer_id=@Customer AND actor_id=@Actor AND operation_id=@Operation);
+            """, args, tx, cancellationToken: ct)).ConfigureAwait(false))
+            throw new TenantBoundaryException("LOAN_OPERATION_CONFLICT", 409);
+        var current = await db.QuerySingleOrDefaultAsync<int?>(new CommandDefinition("""
+            SELECT COALESCE((SELECT MAX(r.revision) FROM financial_profile.loan_record_revisions r
+              WHERE r.tenant_id=l.tenant_id AND r.customer_id=l.customer_id AND r.loan_record_id=l.loan_record_id),1)
+            FROM financial_profile.loan_records l WHERE l.tenant_id=@Tenant AND l.customer_id=@Customer AND l.loan_record_id=@Id;
+            """, args, tx, cancellationToken: ct)).ConfigureAwait(false);
+        if (current is null) throw new TenantBoundaryException("LOAN_RECORD_NOT_FOUND", 404);
+        if (current != expectedRevision) throw new TenantBoundaryException("LOAN_REVISION_CONFLICT", 409);
+        await db.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO financial_profile.loan_record_revisions
+              (tenant_id,customer_id,loan_record_id,revision,operation_id,actor_id,fingerprint,payload,recorded_at)
+            VALUES (@Tenant,@Customer,@LoanRecordId,@Revision,@OperationId,@Actor,@Fingerprint,CAST(@Payload AS jsonb),@RecordedAt);
+            """, new { Tenant = tenant, Customer = customer, record.LoanRecordId, record.Revision, record.OperationId, Actor = actor,
+                Fingerprint = fingerprint, Payload = JsonSerializer.Serialize(record, ContractJson.Options), record.RecordedAt }, tx, cancellationToken: ct)).ConfigureAwait(false);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return record;
+    }
+    public async Task<ReviewedLoanRecord?> ReadAsync(string tenant, string customer, string id, CancellationToken ct, int? revision = null)
     {
         await using var db = await source.OpenConnectionAsync(ct).ConfigureAwait(false);
         var payload = await db.QuerySingleOrDefaultAsync<string>(new CommandDefinition("""
-            SELECT payload::text FROM financial_profile.loan_records
-            WHERE tenant_id=@Tenant AND customer_id=@Customer AND loan_record_id=@Id;
-            """, new { Tenant = tenant, Customer = customer, Id = id }, cancellationToken: ct)).ConfigureAwait(false);
+            SELECT payload FROM (
+              SELECT 1 AS revision,payload::text AS payload FROM financial_profile.loan_records
+              WHERE tenant_id=@Tenant AND customer_id=@Customer AND loan_record_id=@Id
+              UNION ALL
+              SELECT revision,payload::text FROM financial_profile.loan_record_revisions
+              WHERE tenant_id=@Tenant AND customer_id=@Customer AND loan_record_id=@Id
+            ) versions WHERE (@Revision IS NULL OR revision=@Revision) ORDER BY revision DESC LIMIT 1;
+            """, new { Tenant = tenant, Customer = customer, Id = id, Revision = revision }, cancellationToken: ct)).ConfigureAwait(false);
         return payload is null ? null : Decode(payload);
     }
     public async Task<LoanRecordList> ListAsync(string tenant, string customer, CancellationToken ct)
     {
         await using var db = await source.OpenConnectionAsync(ct).ConfigureAwait(false);
         var rows = (await db.QueryAsync<string>(new CommandDefinition("""
-            SELECT payload::text FROM financial_profile.loan_records WHERE tenant_id=@Tenant AND customer_id=@Customer
-            ORDER BY recorded_at DESC,loan_record_id LIMIT 201;
+            SELECT COALESCE((SELECT r.payload::text FROM financial_profile.loan_record_revisions r
+              WHERE r.tenant_id=l.tenant_id AND r.customer_id=l.customer_id AND r.loan_record_id=l.loan_record_id
+              ORDER BY r.revision DESC LIMIT 1),l.payload::text)
+            FROM financial_profile.loan_records l WHERE l.tenant_id=@Tenant AND l.customer_id=@Customer
+            ORDER BY l.recorded_at DESC,l.loan_record_id LIMIT 201;
             """, new { Tenant = tenant, Customer = customer }, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
         return new(rows.Take(200).Select(Decode).ToArray(), rows.Length > 200);
+    }
+    public async Task<LoanRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct)
+    {
+        await using var db = await source.OpenConnectionAsync(ct).ConfigureAwait(false);
+        var rows = (await db.QueryAsync<string>(new CommandDefinition("""
+            SELECT payload FROM (
+              SELECT 1 AS revision,payload::text AS payload FROM financial_profile.loan_records
+              WHERE tenant_id=@Tenant AND customer_id=@Customer AND loan_record_id=@Id
+              UNION ALL
+              SELECT revision,payload::text FROM financial_profile.loan_record_revisions
+              WHERE tenant_id=@Tenant AND customer_id=@Customer AND loan_record_id=@Id
+            ) versions WHERE (@Before IS NULL OR revision<@Before) ORDER BY revision DESC LIMIT 51;
+            """, new { Tenant = tenant, Customer = customer, Id = id, Before = beforeRevision }, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
+        var items = rows.Take(50).Select(Decode).ToArray();
+        return new(items, rows.Length > 50, rows.Length > 50 ? items[^1].Revision : null);
+    }
+    private static async Task LockAsync(NpgsqlConnection db, NpgsqlTransaction tx, string tenant, string customer,
+        string actor, string operation, string id, CancellationToken ct)
+    {
+        foreach (var key in new[] { JsonSerializer.Serialize(new[] { "loan-operation", tenant, customer, actor, operation }),
+            JsonSerializer.Serialize(new[] { "loan-record", tenant, customer, id }) })
+            await db.ExecuteAsync(new CommandDefinition("SELECT pg_advisory_xact_lock(hashtextextended(@Key,0));",
+                new { Key = key }, tx, cancellationToken: ct)).ConfigureAwait(false);
     }
     private static ReviewedLoanRecord Decode(string value) => JsonSerializer.Deserialize<ReviewedLoanRecord>(value, ContractJson.Options)
         ?? throw new TenantBoundaryException("LOAN_RECORD_UNAVAILABLE", 503);
