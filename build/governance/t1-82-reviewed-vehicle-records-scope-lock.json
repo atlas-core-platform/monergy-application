@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-82",
+  "applicationBase": "d8da8dcc4150aae694c69df41eef3965f84ee96f",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections13/14/20",
+    "COV-022",
+    "MON-FIN-010/011/012/014",
+    "M2-WS04-E02-F02",
+    "Original P1-15 Assets / P1-22 asset-position foundation"
+  ],
+  "scope": "Create,list and read immutable customer-reviewed vehicle records with explicit name,type,optional nullable registration reference (40 trimmed characters),separate purchase/current values and value date. Exact owned canonical VEHICLE source;product ASSET/VEHICLE classification required. No inferred source values,registration/ownership/valuation verification,corrections/history,loan/liability links,asset snapshot,totals/net worth or calculations.",
+  "migrations": [
+    "services/financial-profile/migrations/0015_reviewed_vehicle_records.sql"
+  ],
+  "remaining": "Vehicle corrections/history,lifecycle,registration/ownership/valuation verification,broader assets,liability links,complete asset position,reconciliation,Financial Rules totals/net worth,Search/Reports record integration,central audit and physical/full UAT."
+}

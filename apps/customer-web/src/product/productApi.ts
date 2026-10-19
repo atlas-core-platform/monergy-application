@@ -569,3 +569,16 @@ export const revisePropertyRecord = (api: AccessApi, id: string, input: { operat
   api.product<ProductPropertyRecord>('v1/property-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
 export const getPropertyRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductPropertyRecordHistory>('v1/property-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
+export interface ProductVehicleDraft {
+  name: string; registrationNumber: string | null; vehicleType: string; purchaseValue: number; currentValue: number;
+  valueAsOfDate: string; sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductVehicleRecord {
+  vehicleRecordId: string; operationId: string; customerId: string; vehicle: ProductVehicleDraft; currency: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+}
+export interface ProductVehicleRecordList { items: ProductVehicleRecord[]; hasMore: boolean; dataDurability: string }
+export const getVehicleRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductVehicleRecordList>('v1/vehicle-records', 'GET', undefined, signal);
+export const createVehicleRecord = (api: AccessApi, input: { operationId: string; vehicle: ProductVehicleDraft }, signal?: AbortSignal) =>
+  api.product<ProductVehicleRecord>('v1/vehicle-records', 'POST', input, signal);
