@@ -665,6 +665,8 @@ public sealed class PersistentFoundationTests
             var owner=new LiabilityRecordsApplication(financial,reconstructed,TimeProvider.System);
             Assert.Equal(corrected,await owner.ReviseAsync("T001",customer,"actor-liability",saved.LiabilityRecordId,correction,default));
             Assert.Equal([corrected,saved],(await owner.HistoryAsync("T001",customer,saved.LiabilityRecordId,null,default)).Items);
+            Assert.Equal(corrected,Assert.Single((await owner.SnapshotAsync("T001",customer,corrected.Liability.BalanceAsOfDate,corrected.Currency,default)).Items));
+            Assert.Empty((await owner.SnapshotAsync("T002",customer,corrected.Liability.BalanceAsOfDate,corrected.Currency,default)).Items);
             Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>owner.ReviseAsync("T001",customer,"actor-liability",saved.LiabilityRecordId,correction with {OperationId=Guid.NewGuid().ToString("N")},default))).Status);
             Assert.Equal(saved,await new LiabilityRecordsApplication(financial,reconstructed,TimeProvider.System).CreateAsync("T001",customer,"actor-liability",input,default));
             Assert.Null(await reconstructed.ReadAsync("T002",customer,saved.LiabilityRecordId,default));Assert.Single((await reconstructed.ListAsync("T001",customer,default)).Items);

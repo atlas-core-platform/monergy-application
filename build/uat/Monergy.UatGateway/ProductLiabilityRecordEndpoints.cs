@@ -42,6 +42,18 @@ public static class ProductLiabilityRecordEndpoints
             await ConfirmAsync(http, owners, access, session, customer, false).ConfigureAwait(false);
             return new ProductLiabilityRecordList(list.Items, list.HasMore, "Temporary data");
         });
+        group.MapGet("/snapshot",async (HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductLiabilityRecordClient client)=>
+        {
+            var(session,customer)=await ResolveAsync(http,owners,access,false).ConfigureAwait(false);
+            var(date,currency)=SnapshotSelection(http.Request);
+            var value=await client.SnapshotAsync(session,customer.CustomerId,date,currency,http.RequestAborted).ConfigureAwait(false);
+            if(value.AsOfDate!=date || value.Currency!=currency || value.Items.Count>200 || value.HasMore && value.Items.Count!=200 ||
+                value.Items.Select(x=>x?.LiabilityRecordId).Distinct(StringComparer.Ordinal).Count()!=value.Items.Count ||
+                value.Items.Any(x=>!Bound(x,customer.CustomerId) || x.Liability.BalanceAsOfDate!=date || x.Currency!=currency))
+                throw new TenantBoundaryException("LIABILITY_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http,owners,access,session,customer,false).ConfigureAwait(false);
+            return value;
+        });
         group.MapPost("", async (HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductLiabilityRecordClient client) =>
         {
             var (session, customer) = await ResolveAsync(http, owners, access, true).ConfigureAwait(false);
@@ -89,6 +101,17 @@ public static class ProductLiabilityRecordEndpoints
             await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
             return saved;
         });
+    }
+    private static (DateOnly Date,string Currency) SnapshotSelection(HttpRequest request)
+    {
+        if (request.Query.Count!=2 || request.Query.Keys.Any(key=>key is not ("asOfDate" or "currency")) ||
+            request.Query["asOfDate"].Count!=1 || request.Query["currency"].Count!=1 ||
+            !DateOnly.TryParseExact(request.Query["asOfDate"].ToString(),"yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.None,out var date) ||
+            date.Year<1900 || date>DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime.AddHours(14)))
+            throw new TenantBoundaryException("LIABILITY_SNAPSHOT_INVALID",400);
+        var currency=request.Query["currency"].ToString();
+        if(currency.Length!=3 || !currency.All(char.IsAsciiLetterUpper)) throw new TenantBoundaryException("LIABILITY_SNAPSHOT_INVALID",400);
+        return(date,currency);
     }
     private static async Task<T> ReadInputAsync<T>(HttpContext http) where T : class
     {
@@ -178,6 +201,8 @@ public sealed class ProductLiabilityRecordClient : IDisposable
         SendAsync<ReviewedLiabilityRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
     public Task<LiabilityRecordHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
         SendAsync<LiabilityRecordHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
+    public Task<LiabilityRecordSnapshot> SnapshotAsync(CustomerOwnerSession session,string customer,DateOnly asOfDate,string currency,CancellationToken ct) =>
+        SendAsync<LiabilityRecordSnapshot>(session,customer,"/snapshot?asOfDate="+asOfDate.ToString("yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture)+"&currency="+Uri.EscapeDataString(currency),null,ct);
     private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, object? input, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(input is null ? HttpMethod.Get : HttpMethod.Post,

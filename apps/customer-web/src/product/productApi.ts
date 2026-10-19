@@ -546,3 +546,7 @@ export const reviseLiabilityRecord = (api: AccessApi, id: string, input: { opera
   api.product<ProductLiabilityRecord>('v1/liability-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
 export const getLiabilityRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductLiabilityRecordHistory>('v1/liability-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
+export interface ProductLiabilitySnapshot { asOfDate: string; currency: string; items: ProductLiabilityRecord[]; hasMore: boolean }
+export const getLiabilitySnapshot = (api: AccessApi, asOfDate: string, currency: string, signal?: AbortSignal) =>
+  api.product<ProductLiabilitySnapshot>('v1/liability-records/snapshot?asOfDate='+encodeURIComponent(asOfDate)+'&currency='+encodeURIComponent(currency),'GET',undefined,signal);
