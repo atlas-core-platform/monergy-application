@@ -10,8 +10,11 @@ public interface IInvestmentRecordRepository
 {
     Task<ReviewedInvestmentRecord> CreateAsync(string tenant, string customer, string actor,
         string fingerprint, ReviewedInvestmentRecord record, CancellationToken ct);
-    Task<ReviewedInvestmentRecord?> ReadAsync(string tenant, string customer, string id, CancellationToken ct);
+    Task<ReviewedInvestmentRecord?> ReadAsync(string tenant, string customer, string id, CancellationToken ct, int? revision = null);
     Task<InvestmentRecordList> ListAsync(string tenant, string customer, CancellationToken ct);
+    Task<ReviewedInvestmentRecord> ReviseAsync(string tenant, string customer, string actor, string fingerprint,
+        int expectedRevision, ReviewedInvestmentRecord record, CancellationToken ct);
+    Task<InvestmentRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct);
 }
 
 public sealed class InvestmentRecordsApplication(IFinancialProfileRepository financial,
@@ -38,7 +41,7 @@ public sealed class InvestmentRecordsApplication(IFinancialProfileRepository fin
         if (provenance is null || provenance.CustomerId != customer || provenance.FinancialFactId != source.FinancialFactId ||
             provenance.SourceFactId != source.SourceFactId || !Currency(source.Currency))
             throw new TenantBoundaryException("INVESTMENT_SOURCE_UNAVAILABLE", 503);
-        // Exact immutable source revision is a reference. Purchase and current values are explicitly reviewed separately.
+        // Exact immutable source revision is a reference. Values remain explicitly customer reviewed.
         var normalized = input with { Investment = input.Investment with { Name = input.Investment.Name.Trim(), Institution = input.Investment.Institution.Trim(), InvestmentType = input.Investment.InvestmentType.Trim() } };
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(normalized, ContractJson.Options)));
         var id = "investment-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
@@ -48,10 +51,38 @@ public sealed class InvestmentRecordsApplication(IFinancialProfileRepository fin
         return await repository.CreateAsync(tenant, customer, actor, fingerprint, record, ct).ConfigureAwait(false);
     }
     public Task<InvestmentRecordList> ListAsync(string tenant, string customer, CancellationToken ct) => repository.ListAsync(tenant, customer, ct);
-    public async Task<ReviewedInvestmentRecord> ReadAsync(string tenant, string customer, string id, CancellationToken ct)
+    public async Task<ReviewedInvestmentRecord> ReviseAsync(string tenant, string customer, string actor, string id,
+        ReviseInvestmentRecord input, CancellationToken ct)
     {
-        if (!TenantAccessClient.Identifier(id, 80)) throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID", 400);
-        return await repository.ReadAsync(tenant, customer, id, ct).ConfigureAwait(false)
+        if (input is null || input.ExpectedRevision is < 1 or int.MaxValue ||
+            !Valid(new(input.OperationId, input.Investment), clock.GetUtcNow()))
+            throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID", 400);
+        var original = await ReadAsync(tenant, customer, id, ct, 1).ConfigureAwait(false);
+        if (original.Investment.SourceFinancialFactId != input.Investment.SourceFinancialFactId || original.Investment.SourceRevision != input.Investment.SourceRevision)
+            throw new TenantBoundaryException("INVESTMENT_SOURCE_IMMUTABLE", 400);
+        var source = await financial.GetFactAsync(original.Investment.SourceFinancialFactId, original.Investment.SourceRevision, ct).ConfigureAwait(false);
+        var provenance = await financial.GetProvenanceAsync(original.SourceProvenanceId, ct).ConfigureAwait(false);
+        if (source is null || source.CustomerId != customer || source.FactType != FinancialObjectTypes.Investment ||
+            source.Currency != original.Currency || source.FinancialProvenanceId != original.SourceProvenanceId ||
+            provenance is null || provenance.CustomerId != customer || provenance.FinancialFactId != source.FinancialFactId ||
+            provenance.SourceFactId != source.SourceFactId || provenance.EvidenceId != original.EvidenceId || provenance.DocumentVersionId != original.DocumentVersionId)
+            throw new TenantBoundaryException("INVESTMENT_SOURCE_UNAVAILABLE", 503);
+        var normalized = input with { Investment = input.Investment with { Name = input.Investment.Name.Trim(), Institution = input.Investment.Institution.Trim(), InvestmentType = input.Investment.InvestmentType.Trim() } };
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(normalized, ContractJson.Options)));
+        var record = original with { OperationId = input.OperationId, Investment = normalized.Investment, RecordedBy = actor,
+            RecordedAt = clock.GetUtcNow(), Revision = input.ExpectedRevision + 1 };
+        return await repository.ReviseAsync(tenant, customer, actor, fingerprint, input.ExpectedRevision, record, ct).ConfigureAwait(false);
+    }
+    public async Task<InvestmentRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct)
+    {
+        if (beforeRevision is < 1) throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID", 400);
+        await ReadAsync(tenant, customer, id, ct, 1).ConfigureAwait(false);
+        return await repository.HistoryAsync(tenant, customer, id, beforeRevision, ct).ConfigureAwait(false);
+    }
+    public async Task<ReviewedInvestmentRecord> ReadAsync(string tenant, string customer, string id, CancellationToken ct, int? revision = null)
+    {
+        if (!TenantAccessClient.Identifier(id, 80) || revision is < 1) throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID", 400);
+        return await repository.ReadAsync(tenant, customer, id, ct, revision).ConfigureAwait(false)
             ?? throw new TenantBoundaryException("INVESTMENT_RECORD_NOT_FOUND", 404);
     }
     private static bool Text(string? value) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= 120 && !value.Any(char.IsControl);

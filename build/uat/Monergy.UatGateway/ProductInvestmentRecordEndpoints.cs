@@ -45,26 +45,59 @@ public static class ProductInvestmentRecordEndpoints
         group.MapPost("", async (HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductInvestmentRecordClient client) =>
         {
             var (session, customer) = await ResolveAsync(http, owners, access, true).ConfigureAwait(false);
-            var input = await ReadInputAsync(http).ConfigureAwait(false);
+            var input = await ReadInputAsync<CreateInvestmentRecord>(http).ConfigureAwait(false);
             if (input.Investment is null) throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID",400);
             var receipt = await client.CreateAsync(session, customer.CustomerId, input, http.RequestAborted).ConfigureAwait(false);
             if (!Bound(receipt, customer.CustomerId) || receipt.OperationId != input.OperationId || receipt.RecordedBy != session.ActorId ||
                 receipt.Investment != input.Investment with { Name = input.Investment.Name.Trim(), Institution = input.Investment.Institution.Trim(), InvestmentType = input.Investment.InvestmentType.Trim() })
                 throw new TenantBoundaryException("INVESTMENT_RECORD_RESPONSE_INVALID", 503);
-            var saved = await client.ReadAsync(session, customer.CustomerId, receipt.InvestmentRecordId, http.RequestAborted).ConfigureAwait(false);
+            var saved = await client.ReadAsync(session, customer.CustomerId, receipt.InvestmentRecordId, http.RequestAborted,1).ConfigureAwait(false);
             if (saved != receipt) throw new TenantBoundaryException("INVESTMENT_RECORD_RESPONSE_INVALID", 503);
             await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
             return saved;
         });
+        group.MapGet("/{investmentRecordId}/history", async (string investmentRecordId, int? beforeRevision, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductInvestmentRecordClient client) =>
+        {
+            var (session, customer) = await ResolveAsync(http, owners, access, false).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(investmentRecordId,80) || beforeRevision is < 1) throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID",400);
+            var history = await client.HistoryAsync(session, customer.CustomerId, investmentRecordId, beforeRevision, http.RequestAborted).ConfigureAwait(false);
+            if (history.Items.Count > 50 || history.Items.Any(x => !Bound(x,customer.CustomerId) || x.InvestmentRecordId != investmentRecordId || beforeRevision is not null && x.Revision >= beforeRevision) ||
+                history.Items.Zip(history.Items.Skip(1)).Any(pair => pair.First.Revision != pair.Second.Revision + 1) ||
+                history.HasMore && (history.Items.Count != 50 || history.NextBeforeRevision != history.Items[^1].Revision) || !history.HasMore && history.NextBeforeRevision is not null)
+                throw new TenantBoundaryException("INVESTMENT_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http, owners, access, session, customer, false).ConfigureAwait(false);
+            return history;
+        });
+        group.MapPost("/{investmentRecordId}/corrections", async (string investmentRecordId, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductInvestmentRecordClient client) =>
+        {
+            var (session, customer) = await ResolveAsync(http, owners, access, true).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(investmentRecordId,80)) throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID",400);
+            var input = await ReadInputAsync<ReviseInvestmentRecord>(http).ConfigureAwait(false);
+            if (input.Investment is null || input.ExpectedRevision is < 1 or int.MaxValue) throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID",400);
+            var original = await client.ReadAsync(session, customer.CustomerId, investmentRecordId, http.RequestAborted, 1).ConfigureAwait(false);
+            if (!Bound(original,customer.CustomerId) || original.Revision != 1 || original.InvestmentRecordId != investmentRecordId)
+                throw new TenantBoundaryException("INVESTMENT_RECORD_RESPONSE_INVALID",503);
+            var receipt = await client.ReviseAsync(session, customer.CustomerId, investmentRecordId, input, http.RequestAborted).ConfigureAwait(false);
+            if (!Bound(original,customer.CustomerId) || original.Revision != 1 || !Bound(receipt,customer.CustomerId) || original.InvestmentRecordId != investmentRecordId || receipt.InvestmentRecordId != investmentRecordId ||
+                receipt.OperationId != input.OperationId || receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision + 1 ||
+                receipt.Investment != input.Investment with { Name = input.Investment.Name.Trim(), Institution = input.Investment.Institution.Trim(), InvestmentType = input.Investment.InvestmentType.Trim() } ||
+                receipt.Currency != original.Currency || receipt.SourceProvenanceId != original.SourceProvenanceId || receipt.DocumentVersionId != original.DocumentVersionId || receipt.EvidenceId != original.EvidenceId ||
+                receipt.Investment.SourceFinancialFactId != original.Investment.SourceFinancialFactId || receipt.Investment.SourceRevision != original.Investment.SourceRevision)
+                throw new TenantBoundaryException("INVESTMENT_RECORD_RESPONSE_INVALID",503);
+            var saved = await client.ReadAsync(session, customer.CustomerId, investmentRecordId, http.RequestAborted, receipt.Revision).ConfigureAwait(false);
+            if (saved != receipt) throw new TenantBoundaryException("INVESTMENT_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
+            return saved;
+        });
     }
-    private static async Task<CreateInvestmentRecord> ReadInputAsync(HttpContext http)
+    private static async Task<T> ReadInputAsync<T>(HttpContext http) where T : class
     {
         try
         {
             http.Request.EnableBuffering(32768,32768);
             using var json = await JsonDocument.ParseAsync(http.Request.Body,cancellationToken:http.RequestAborted).ConfigureAwait(false);
             RejectDuplicates(json.RootElement);
-            return json.RootElement.Deserialize<CreateInvestmentRecord>(InputJson)
+            return json.RootElement.Deserialize<T>(InputJson)
                 ?? throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID",400);
         }
         catch (JsonException) { throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID",400); }
@@ -80,7 +113,7 @@ public static class ProductInvestmentRecordEndpoints
         else if(element.ValueKind == JsonValueKind.Array) foreach(var item in element.EnumerateArray()) RejectDuplicates(item);
     }
     private static bool Bound(ReviewedInvestmentRecord? value, string customer) => value is { Investment: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
-        TenantAccessClient.Identifier(value.InvestmentRecordId, 80) && Guid.TryParseExact(value.OperationId, "N", out _) &&
+        value.Revision > 0 && TenantAccessClient.Identifier(value.InvestmentRecordId, 80) && Guid.TryParseExact(value.OperationId, "N", out _) &&
         value.Currency.Length == 3 && value.Currency.All(char.IsAsciiLetterUpper) &&
         Text(value.Investment.Name) && Text(value.Investment.Institution) && Text(value.Investment.InvestmentType) &&
         Money(value.Investment.PurchaseValue) && Money(value.Investment.CurrentValue) && value.Investment.ValueAsOfDate.Year >= 1900 &&
@@ -136,11 +169,15 @@ public sealed class ProductInvestmentRecordClient : IDisposable
     }
     public Task<InvestmentRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct) =>
         SendAsync<InvestmentRecordList>(session, customer, "", null, ct);
-    public Task<ReviewedInvestmentRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct) =>
-        SendAsync<ReviewedInvestmentRecord>(session, customer, "/" + Uri.EscapeDataString(id), null, ct);
+    public Task<ReviewedInvestmentRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct, int? revision = null) =>
+        SendAsync<ReviewedInvestmentRecord>(session, customer, "/" + Uri.EscapeDataString(id) + (revision is null ? "" : "?revision=" + revision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
     public Task<ReviewedInvestmentRecord> CreateAsync(CustomerOwnerSession session, string customer, CreateInvestmentRecord input, CancellationToken ct) =>
         SendAsync<ReviewedInvestmentRecord>(session, customer, "", input, ct);
-    private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, CreateInvestmentRecord? input, CancellationToken ct)
+    public Task<ReviewedInvestmentRecord> ReviseAsync(CustomerOwnerSession session, string customer, string id, ReviseInvestmentRecord input, CancellationToken ct) =>
+        SendAsync<ReviewedInvestmentRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
+    public Task<InvestmentRecordHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
+        SendAsync<InvestmentRecordHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
+    private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, object? input, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(input is null ? HttpMethod.Get : HttpMethod.Post,
             new Uri(endpoint, "local/v1/customers/" + Uri.EscapeDataString(customer) + "/investment-records" + suffix));
@@ -150,8 +187,13 @@ public sealed class ProductInvestmentRecordClient : IDisposable
         if (!response.IsSuccessStatusCode)
         {
             var status = (int)response.StatusCode;
-            var code = status switch { 401 => "TENANT_SESSION_INVALID", 403 => "ACCESS_DENIED", 404 => "INVESTMENT_SOURCE_NOT_FOUND",
+            var code = status switch { 401 => "TENANT_SESSION_INVALID", 403 => "ACCESS_DENIED", 404 => "INVESTMENT_RECORD_NOT_FOUND",
                 409 => "INVESTMENT_OPERATION_CONFLICT", 400 => "INVESTMENT_RECORD_INVALID", 413 => "INVESTMENT_RECORD_TOO_LARGE", _ => "INVESTMENT_RECORD_UNAVAILABLE" };
+            if (status == 409)
+            {
+                var error=await response.Content.ReadFromJsonAsync<JsonElement>(ct).ConfigureAwait(false);
+                if(error.TryGetProperty("error",out var value) && value.GetString()=="INVESTMENT_REVISION_CONFLICT") code="INVESTMENT_REVISION_CONFLICT";
+            }
             throw new TenantBoundaryException(code, status is 400 or 401 or 403 or 404 or 409 or 413 ? status : 503);
         }
         return await response.Content.ReadFromJsonAsync<T>(Json, ct).ConfigureAwait(false)

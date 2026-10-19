@@ -9,5 +9,8 @@ public sealed record InvestmentRecordDraft(string Name, string Institution, stri
 public sealed record CreateInvestmentRecord(string OperationId, InvestmentRecordDraft Investment);
 public sealed record ReviewedInvestmentRecord(string InvestmentRecordId, string OperationId, string CustomerId,
     InvestmentRecordDraft Investment, string Currency, string SourceProvenanceId, string DocumentVersionId,
-    string EvidenceId, string RecordedBy, DateTimeOffset RecordedAt);
+    string EvidenceId, string RecordedBy, DateTimeOffset RecordedAt, int Revision = 1);
 public sealed record InvestmentRecordList(IReadOnlyList<ReviewedInvestmentRecord> Items, bool HasMore);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ReviseInvestmentRecord(string OperationId, int ExpectedRevision, InvestmentRecordDraft Investment);
+public sealed record InvestmentRecordHistory(IReadOnlyList<ReviewedInvestmentRecord> Items, bool HasMore, int? NextBeforeRevision);

@@ -465,9 +465,15 @@ export interface ProductInvestmentDraft {
 }
 export interface ProductInvestmentRecord {
   investmentRecordId: string; operationId: string; customerId: string; investment: ProductInvestmentDraft; currency: string;
-  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
 }
 export interface ProductInvestmentRecordList { items: ProductInvestmentRecord[]; hasMore: boolean; dataDurability: string }
 export const getInvestmentRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductInvestmentRecordList>('v1/investment-records', 'GET', undefined, signal);
 export const createInvestmentRecord = (api: AccessApi, input: { operationId: string; investment: ProductInvestmentDraft }, signal?: AbortSignal) =>
   api.product<ProductInvestmentRecord>('v1/investment-records', 'POST', input, signal);
+
+export interface ProductInvestmentRecordHistory { items: ProductInvestmentRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const reviseInvestmentRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; investment: ProductInvestmentDraft }) =>
+  api.product<ProductInvestmentRecord>('v1/investment-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getInvestmentRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductInvestmentRecordHistory>('v1/investment-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);

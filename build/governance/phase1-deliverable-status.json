@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-69",
-  "applicationBase": "4cc9c06ea377874f9032701d24618df2d96137d2",
+  "asOf": "T1-70",
+  "applicationBase": "70452af4dfa7b04c80bbd6f24a070368ed2f1126",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 11,
+    "libraryVersion": 12,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook version11 through T1-68 reviewed before T1-69. Explicit source-linked customer-reviewed investment create/list/read added. Full provider/asset truth, central audit and integrated UAT remain open; original phases/acceptance unchanged."
+    "reviewThrough": "Tracker version12 through T1-69 reviewed. T1-70 adds explicit expected-version investment corrections and immutable history with exact original source/currency/replay. Full portfolio truth, central audit and physical/integrated UAT remain open; original phases/acceptance unchanged."
   },
   "counts": {
     "originalDeliverables": 29,
@@ -14,8 +14,8 @@
     "partial": 17,
     "pendingBusinessJourneys": 12,
     "remainingOriginalDeliverables": 29,
-    "numberedUnitsAfterPairedMerge": 69,
-    "mergedImplementationUnitsAfterPairedMerge": 68,
+    "numberedUnitsAfterPairedMerge": 70,
+    "mergedImplementationUnitsAfterPairedMerge": 69,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -185,11 +185,11 @@
       "area": "Financial Data",
       "name": "Assets",
       "state": "Partial",
-      "existing": "ASSET source figures have customer review, Passport/source drill-down, Search, basic Reports and coverage. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified. T1-62 adds supported property registration document OCR for one explicitly stated purchase value dated by Registration Date, with original provenance and explicit review. Registration date is not purchase date; ownership, authenticity and current valuation remain unverified. T1-63 adds vehicle purchase invoice OCR for an explicitly stated purchase value/currency/invoice date, with independent customer review and canonical VEHICLE adoption. Invoice date is not substituted by registration date; ownership/authenticity/current value and full vehicle records remain unverified/open. T1-65 enables explicit customer Property/Vehicle classification of generic ASSET text/CSV/XLSX source figures before adoption, with canonical owner storage, type readback and immutable source classification across operation IDs/history. T1-69 adds customer-reviewed investment create/list/read with institution/type, separately entered purchase/current values and valuation date, exact reviewed source/currency and immutable creation receipts.",
-      "remaining": "Create authoritative asset records with ownership, type, dated value/valuation and liability relationships required for a meaningful asset position. Other asset kinds, complete property/vehicle records, ownership and current value verification remain open. Generic asset figures require an explicit supported type before adoption; review does not verify a financial position. Investment corrections/lifecycle, institution verification, securities/quantity/pricing/tax lots, reconciliation and portfolio valuation remain open.",
-      "units": "T1-27\u201329, T1-33, T1-42; T1-61; T1-62; T1-63; T1-65; T1-69",
+      "existing": "ASSET source figures have customer review, Passport/source drill-down, Search, basic Reports and coverage. T1-61 adds supported property sale deed OCR for the dated stated purchase value, with original provenance and explicit review; ownership, authenticity and current value are not verified. T1-62 adds supported property registration document OCR for one explicitly stated purchase value dated by Registration Date, with original provenance and explicit review. Registration date is not purchase date; ownership, authenticity and current valuation remain unverified. T1-63 adds vehicle purchase invoice OCR for an explicitly stated purchase value/currency/invoice date, with independent customer review and canonical VEHICLE adoption. Invoice date is not substituted by registration date; ownership/authenticity/current value and full vehicle records remain unverified/open. T1-65 enables explicit customer Property/Vehicle classification of generic ASSET text/CSV/XLSX source figures before adoption, with canonical owner storage, type readback and immutable source classification across operation IDs/history. T1-69 adds customer-reviewed investment create/list/read with institution/type, separately entered purchase/current values and valuation date, exact reviewed source/currency and immutable creation receipts. T1-70 adds version-checked investment corrections and paged immutable history, preserving original source/currency and replaying exact earlier receipts after newer changes.",
+      "remaining": "Create authoritative asset records with ownership, type, dated value/valuation and liability relationships required for a meaningful asset position. Other asset kinds, complete property/vehicle records, ownership and current value verification remain open. Generic asset figures require an explicit supported type before adoption; review does not verify a financial position. Investment lifecycle, institution verification, securities/quantity/pricing/tax lots, reconciliation and portfolio valuation remain open.",
+      "units": "T1-27\u201329, T1-33, T1-42; T1-61; T1-62; T1-63; T1-65; T1-69; T1-70",
       "requirements": "MON-FIN-001/011/014; MON-DAS-001",
-      "receipt": "build/governance/t1-69-reviewed-investment-records.md"
+      "receipt": "build/governance/t1-70-reviewed-investment-corrections.md"
     },
     {
       "id": "P1-16",
