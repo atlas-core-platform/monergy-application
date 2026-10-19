@@ -27,10 +27,24 @@ public static class InvestmentRecordEndpoints
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
             return await owner.ListAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
         });
-        group.MapGet("/{investmentRecordId}", async (string customerId, string investmentRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, InvestmentRecordsApplication owner) =>
+        group.MapGet("/{investmentRecordId}", async (string customerId, string investmentRecordId, int? revision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, InvestmentRecordsApplication owner) =>
         {
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
-            return await owner.ReadAsync(tenant, customerId, investmentRecordId, http.RequestAborted).ConfigureAwait(false);
+            return await owner.ReadAsync(tenant, customerId, investmentRecordId, http.RequestAborted, revision).ConfigureAwait(false);
+        });
+        group.MapGet("/{investmentRecordId}/history", async (string customerId, string investmentRecordId, int? beforeRevision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, InvestmentRecordsApplication owner) =>
+        {
+            var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
+            return await owner.HistoryAsync(tenant, customerId, investmentRecordId, beforeRevision, http.RequestAborted).ConfigureAwait(false);
+        });
+        group.MapPost("/{investmentRecordId}/corrections", async (string customerId, string investmentRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, InvestmentRecordsApplication owner) =>
+        {
+            var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);
+            http.Request.EnableBuffering(32768, 32768);
+            using var json = await JsonDocument.ParseAsync(http.Request.Body, cancellationToken: http.RequestAborted).ConfigureAwait(false);
+            RejectDuplicates(json.RootElement);
+            var input = json.RootElement.Deserialize<ReviseInvestmentRecord>(Json) ?? throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID", 400);
+            return await owner.ReviseAsync(tenant, customerId, actor, investmentRecordId, input, http.RequestAborted).ConfigureAwait(false);
         });
         group.MapPost("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, InvestmentRecordsApplication owner) =>
         {

@@ -518,16 +518,26 @@ public sealed class PersistentFoundationTests
         var source=Assert.Single(normalized.Facts);
         var input=new CreateInvestmentRecord(suffix,new("Retirement holding","Example institution","Mutual fund",500000m,400000m,new(2026,10,1),source.FinancialFactId,1));
         ReviewedInvestmentRecord saved;
+        ReviewedInvestmentRecord corrected;
+        ReviseInvestmentRecord correction;
         await using(var records=new PostgresInvestmentRecords(configuration))
         {
             var app=new InvestmentRecordsApplication(financial,records,TimeProvider.System);
             saved=await app.CreateAsync("T001",customer,"actor-investment",input,default);
             Assert.Equal(saved,await app.CreateAsync("T001",customer,"actor-investment",input,default));
             Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>app.CreateAsync("T001",customer,"actor-investment",input with {Investment=input.Investment with {CurrentValue=390000}},default))).Status);
+            correction = new(Guid.NewGuid().ToString("N"),1,input.Investment with {CurrentValue=390000m});
+            corrected = await app.ReviseAsync("T001",customer,"actor-investment",saved.InvestmentRecordId,correction,default);
+            Assert.Equal(2,corrected.Revision);
         }
         await using(var reconstructed=new PostgresInvestmentRecords(configuration))
         {
-            Assert.Equal(saved,await reconstructed.ReadAsync("T001",customer,saved.InvestmentRecordId,default));
+            Assert.Equal(corrected,await reconstructed.ReadAsync("T001",customer,saved.InvestmentRecordId,default));
+            Assert.Equal(saved,await reconstructed.ReadAsync("T001",customer,saved.InvestmentRecordId,default,1));
+            var owner = new InvestmentRecordsApplication(financial,reconstructed,TimeProvider.System);
+            Assert.Equal(corrected,await owner.ReviseAsync("T001",customer,"actor-investment",saved.InvestmentRecordId,correction,default));
+            Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>owner.ReviseAsync("T001",customer,"actor-investment",saved.InvestmentRecordId,correction with {OperationId=Guid.NewGuid().ToString("N")},default))).Status);
+            Assert.Equal([corrected,saved],(await owner.HistoryAsync("T001",customer,saved.InvestmentRecordId,null,default)).Items);
             Assert.Equal(saved,await new InvestmentRecordsApplication(financial,reconstructed,TimeProvider.System).CreateAsync("T001",customer,"actor-investment",input,default));
             Assert.Null(await reconstructed.ReadAsync("T002",customer,saved.InvestmentRecordId,default));
             Assert.Single((await reconstructed.ListAsync("T001",customer,default)).Items);
@@ -535,6 +545,8 @@ public sealed class PersistentFoundationTests
         await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
         var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.investment_records SET payload=payload WHERE investment_record_id=@Id;",new {Id=saved.InvestmentRecordId}));
         Assert.Equal("42501",denied.SqlState);
+        var correctionDenied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.investment_record_revisions SET payload=payload WHERE investment_record_id=@Id;",new {Id=saved.InvestmentRecordId}));
+        Assert.Equal("42501",correctionDenied.SqlState);
         Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.investment_records WHERE tenant_id='T001' AND customer_id=@Customer;",new {Customer=customer}));
     }
 
