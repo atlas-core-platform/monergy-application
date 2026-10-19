@@ -150,3 +150,7 @@ Run owner bootstrap migrations through0004 before using the physical loan adapte
 ## T1-68 reviewed loan status
 
 Review loan status records a customer-reported Active or Closed state with an explicit date; Active can reopen a previously Closed record. Existing records remain Status not reviewed until explicit review. Existing append-only migrations0003/0004 retain status/history; no new migration is required. Closing does not clear a balance/EMI, change contractual dates or verify lender repayment. Corrections preserve status/date; stale or uncertain requests follow the existing exact-version retry/refresh rules. [Receipt](../governance/t1-68-reviewed-loan-lifecycle.md). Central Audit, broader lender/financial truth and physical/integrated UAT remain open.
+
+## T1-69 reviewed investment records
+
+Financial information > Investment source figures includes customer-reviewed holding records with explicit name/institution/type, purchase/current values and value-as-of date. Both values use an exact reviewed investment source's currency; source figures are not autofilled. Run owner bootstrap migrations through0005 for the physical adapter. Current Self read/document/update authority, ready owned customer and fresh owner readback are required. Unconfirmed saves retain their exact request across close/reopen and missing current source. [Receipt](../governance/t1-69-reviewed-investment-records.md). Corrections/lifecycle, institution verification, portfolio/quantity/pricing/net worth, central Audit and physical/integrated UAT remain open.

@@ -14,7 +14,7 @@ const session = {
   expiresAt: '2027-01-01T00:00:00Z',
 };
 
-function mount(api: AccessApi) {
+function mount(api: AccessApi, capabilities = ['financial-profile.profile.read']) {
   render(
     <FoundationProvider appearance="midnight">
       <Context
@@ -30,7 +30,7 @@ function mount(api: AccessApi) {
               customerId: 'reference-customer',
               customerName: 'Reference Customer',
               customerDetail: 'Primary UAT customer',
-              capabilities: ['financial-profile.profile.read'],
+              capabilities,
               environment: 'Test environment',
               dataDurability: 'Temporary data',
               productionAccepted: false,
@@ -553,4 +553,15 @@ it.each(['PROPERTY', 'VEHICLE'])('retains the reviewed %s type in exact source h
   expect(await within(drawer).findByText('Stated asset figure', { selector: 'h2' })).toBeVisible();
   expect(drawer).toHaveTextContent('1 revision');
   expect(within(drawer).getAllByText('Asset type: ' + (assetType === 'PROPERTY' ? 'Property' : 'Vehicle'))).toHaveLength(2);
+});
+
+it('opens reviewed investment records alongside source figures under the existing investment category',async()=>{
+  window.history.replaceState(null,'','/finances?type=INVESTMENT');const api=new AccessApi(session);
+  const request=vi.spyOn(api,'product').mockImplementation((path)=>path==='v1/investment-records'
+    ?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({financialProfileId:'profile',revision:1,updatedAt:'2026-10-19T00:00:00Z',dataDurability:'Temporary data',facts:[]}));
+  mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
+  expect(await screen.findByRole('heading',{name:'Investment records'})).toBeVisible();
+  expect(screen.getByRole('button',{name:'Add investment record'})).toBeDisabled();
+  expect(request.mock.calls.some(([path])=>path==='v1/investment-records')).toBe(true);
 });

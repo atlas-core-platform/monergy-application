@@ -1,8 +1,16 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest bounded increment: T1-68 reviewed loan status and reopen history. Original deliverables remain Partial/Pending; central audit, multi-source/full financial truth and integrated UAT remain open.
+Status: ACTIVE · Latest bounded increment: T1-69 customer-reviewed investment records. Original deliverables remain Partial/Pending; central audit, full financial truth and integrated UAT remain open.
 
-## Current T1-68 update — reviewed loan status and reopen history
+## Current T1-69 update — customer-reviewed investment records
+
+Master§13 / MON-FIN-007 / COV-020 / M2-WS04-E02-F01 now has an explicit reviewed holding record beyond numeric source figures. Customers enter name, institution, type, purchase/current values and value-as-of date, linked to one exact reviewed INVESTMENT revision and its owner currency/provenance. No amount is autofilled or source figure changed. Financial Profile owns append-only records, scoped operation replay/conflict, bounded list and readback. Migration0005 retains SELECT/INSERT-only runtime grants. Receipt: [t1-69-reviewed-investment-records.md](t1-69-reviewed-investment-records.md).
+
+Current Self session/owned-customer/setup/read/document/update controls and fresh owner readback remain. Unconfirmed saves preserve the same operation/body across close and missing current source; API/session/access changes hide prior data.903 backend checks pass. 161 UI checks pass:111 Documents,15 Financial information,22 Loan records and13 Investment records. TypeScript/changed ESLint/Vite and zero-warning Gateway/physical test-project builds pass. Native HTTP uses explicit authority doubles/in-memory storage. Physical PostgreSQL regression is compiled, NOT RUN.
+
+Investment corrections/lifecycle, institution verification, quantity/pricing/tax lots, multi-source reconciliation, portfolio allocation/net worth, central Audit and physical/integrated UAT remain open. After paired merge:69 numbered units =68 implementations +1 governance closure. Original29 journeys remain0 complete,17 partial,12 pending; Assets stays Partial. Workbook version11 reviewed before work. Original151 IDs/81 features/126 Phase1 memberships/source phases and acceptance remain unchanged.
+
+## Previous T1-68 update — reviewed loan status and reopen history
 
 Customers explicitly review a loan record as Active or Closed with a date; a Closed record can be reopened as customer reported. Existing records remain Status not reviewed until an explicit review. Financial Profile appends status versions, retains source/currency/terms and rejects stale competing term/status writes. Closing does not clear balances/EMI, change end dates or verify lender repayment. Exact operation replay returns its original status version after later reopen/corrections. Receipt: [t1-68-reviewed-loan-lifecycle.md](t1-68-reviewed-loan-lifecycle.md).
 
@@ -120,6 +128,7 @@ This section supersedes the historical priority/verification labels below. Lates
 | P0 / implemented T1-65 | Explicit generic asset Property/Vehicle review and canonical type readback | Receipt t1-65-reviewed-asset-source-types.md. Text/CSV/XLSX choices and historical source type immutability; other asset kinds, full records and live integrated UAT remain open |
 | P0 / implemented T1-66–68 | Reviewed source-linked loan create/read, corrections/history and dated Active/Closed/reopen review | Receipts t1-66-reviewed-loan-records.md through t1-68-reviewed-loan-lifecycle.md. Original source/currency/amounts and all prior versions retained; exact operation/version confirmation. Lender/current-debt truth, multi-source reconciliation, broader lifecycle, central audit and physical/integrated UAT remain open |
 | P0 | Google Drive / OneDrive customer storage journey | Implement actual authorized provider import/status/refresh/disconnect, preserving exact folder/file/document identities; reference gateway is insufficient |
+| P0 / implemented T1-69 | Customer-reviewed investment holding create/list/read | Explicit institution/type/purchase/current/as-of fields with exact reviewed source/currency. Corrections/lifecycle, provider verification, security/quantity/pricing, portfolio calculations and integrated UAT remain open |
 | P0 | Full Loan account and financial truth | Seven source categories exist. Complete lender/type/sanction/outstanding/rate/EMI/tenure/dates and required asset/liability records; a typed source amount does not complete MON-FIN-006 |
 | P0 | Deterministic net worth | Assets minus Liabilities is already specified. Complete authoritative dated/currency/valuation inputs and customer calculation/provenance; scoring approval is a distinct gate |
 | P0 | Basic authorized financial Q&A | Seven-category lexical Search/basic Reports exist; complete grounded Q&A, source citations and insufficient-data behavior under the approved model/privacy boundary |

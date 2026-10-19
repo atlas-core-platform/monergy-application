@@ -1,3 +1,4 @@
+import InvestmentRecordsExperience from './InvestmentRecordsExperience';
 import LoanRecordsExperience from './LoanRecordsExperience';
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Collapse, Drawer, Skeleton, Spin, Tag } from 'antd';
@@ -190,6 +191,11 @@ export default function FinancialProfileExperience() {
         </div>
         <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
       </header>
+      {activeCategory === 'INVESTMENT' && api && canRead && <InvestmentRecordsExperience
+        key={[product?.tenantId, product?.actorId, product?.customerId].join(':')}
+        api={api} facts={profile?.facts.filter((fact) => fact.factType === 'INVESTMENT') ?? []}
+        canRead={product?.capabilities.includes('evidence.document.read') ?? false}
+        canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
       {activeCategory === 'LOAN' && api && canRead && <LoanRecordsExperience
         key={[product?.tenantId, product?.actorId, product?.customerId].join(':')}
         api={api} facts={profile?.facts.filter((fact) => fact.factType === 'LOAN') ?? []}
