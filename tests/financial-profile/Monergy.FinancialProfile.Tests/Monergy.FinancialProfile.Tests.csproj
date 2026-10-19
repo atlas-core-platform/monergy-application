@@ -9,6 +9,7 @@
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductLoanRecordEndpoints.cs" Link="ProductLoanRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductInvestmentRecordEndpoints.cs" Link="ProductInvestmentRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductIncomeRecordEndpoints.cs" Link="ProductIncomeRecordEndpoints.cs" />
+    <Compile Include="../../../build/uat/Monergy.UatGateway/ProductExpenseRecordEndpoints.cs" Link="ProductExpenseRecordEndpoints.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

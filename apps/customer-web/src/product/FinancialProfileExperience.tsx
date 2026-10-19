@@ -1,3 +1,4 @@
+import ExpenseRecordsExperience from './ExpenseRecordsExperience';
 import IncomeRecordsExperience from './IncomeRecordsExperience';
 import InvestmentRecordsExperience from './InvestmentRecordsExperience';
 import LoanRecordsExperience from './LoanRecordsExperience';
@@ -195,6 +196,11 @@ export default function FinancialProfileExperience() {
       {activeCategory === 'INCOME' && api && canRead && <IncomeRecordsExperience
         key={[product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
         facts={profile?.facts.filter(fact=>fact.factType==='INCOME') ?? []}
+        canRead={product?.capabilities.includes('evidence.document.read') ?? false}
+        canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
+      {activeCategory === 'EXPENSE' && api && canRead && <ExpenseRecordsExperience
+        key={[product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
+        facts={profile?.facts.filter(fact=>fact.factType==='EXPENSE') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
       {activeCategory === 'INVESTMENT' && api && canRead && <InvestmentRecordsExperience

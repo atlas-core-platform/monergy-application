@@ -498,3 +498,17 @@ export const reviseIncomeRecord = (api: AccessApi, id: string, input: { operatio
   api.product<ProductIncomeRecord>('v1/income-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
 export const getIncomeRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductIncomeRecordHistory>('v1/income-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
+export interface ProductExpenseDraft {
+  name: string; category: string; amount: number;
+  periodStart: string; periodEnd: string; sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductExpenseRecord {
+  expenseRecordId: string; operationId: string; customerId: string; expense: ProductExpenseDraft; currency: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+  verificationStatus: string;
+}
+export interface ProductExpenseRecordList { items: ProductExpenseRecord[]; hasMore: boolean; dataDurability: string }
+export const getExpenseRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductExpenseRecordList>('v1/expense-records', 'GET', undefined, signal);
+export const createExpenseRecord = (api: AccessApi, input: { operationId: string; expense: ProductExpenseDraft }, signal?: AbortSignal) =>
+  api.product<ProductExpenseRecord>('v1/expense-records', 'POST', input, signal);
