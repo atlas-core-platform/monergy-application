@@ -634,6 +634,36 @@ public sealed class PersistentFoundationTests
         Assert.Equal("42501",correctionDenied.SqlState);Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.expense_records WHERE tenant_id='T001' AND customer_id=@Customer;",new {Customer=customer}));
     }
 
+    [Fact]
+    public async Task ReviewedLiabilityRecordRetainsPeriodAndReviewStatusAcrossRestartAndRuntimeCannotRewriteIt()
+    {
+        var configuration=Configuration("FinancialProfile");var suffix=Guid.NewGuid().ToString("N");var customer="customer-liability-"+suffix;var now=DateTimeOffset.UtcNow;
+        var security=new TrustedSecurityContext(new("actor-liability","CUSTOMER",now,"authn-liability"),new("financial-profile","workload-liability"),new("D09_TEST",null,"authorization-liability",customer));
+        var request=new ContractRequest<NormalizeSourceFacts>(Vs02ContractNames.NormalizeSourceFacts,ContractGuard.CurrentVersion,"request-"+suffix,"correlation-"+suffix,null,security,"source-"+suffix,
+            new("profile-"+suffix,customer,"processing-"+suffix,[new("source-"+suffix,customer,"LOAN","Liability stated in source",100000m,"USD",new(2026,1,1),"line 1",1m,"evidence-"+suffix,"document-"+suffix,"extract/1","validate/1")],"normalize/1",now));
+        await using var financial=new PostgresFinancialProfileRepository(configuration);
+        var normalized=await financial.NormalizeAsync(FinancialNormalizationIdentity.From(request),request,new(now,request.CorrelationId,request.RequestId),default);
+        var source=Assert.Single(normalized.Facts);
+        var input=new CreateLiabilityRecord(suffix,new("September groceries","Groceries",400000m,new(2026,9,30),source.FinancialFactId,1));
+        ReviewedLiabilityRecord saved;
+        await using(var records=new PostgresLiabilityRecords(configuration))
+        {
+            var owner=new LiabilityRecordsApplication(financial,records,TimeProvider.System);saved=await owner.CreateAsync("T001",customer,"actor-liability",input,default);
+            Assert.Equal("CUSTOMER_REVIEWED",saved.VerificationStatus);Assert.Equal(input.Liability,saved.Liability);
+            Assert.Equal(saved,await owner.CreateAsync("T001",customer,"actor-liability",input,default));
+            Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>owner.CreateAsync("T001",customer,"actor-liability",input with {Liability=input.Liability with {OutstandingAmount=1}},default))).Status);
+        }
+        await using(var reconstructed=new PostgresLiabilityRecords(configuration))
+        {
+            Assert.Equal(saved,await reconstructed.ReadAsync("T001",customer,saved.LiabilityRecordId,default));
+            Assert.Equal(saved,await new LiabilityRecordsApplication(financial,reconstructed,TimeProvider.System).CreateAsync("T001",customer,"actor-liability",input,default));
+            Assert.Null(await reconstructed.ReadAsync("T002",customer,saved.LiabilityRecordId,default));Assert.Single((await reconstructed.ListAsync("T001",customer,default)).Items);
+        }
+        await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
+        var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile.liability_records SET payload=payload WHERE liability_record_id=@Id;",new {Id=saved.LiabilityRecordId}));
+        Assert.Equal("42501",denied.SqlState);Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.liability_records WHERE tenant_id='T001' AND customer_id=@Customer;",new {Customer=customer}));
+    }
+
     private static readonly string[] Services = ["evidence", "financial-profile", "financial-rules", "reporting", "audit"];
     private static IConfiguration Configuration(string service)
     {

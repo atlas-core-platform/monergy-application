@@ -526,3 +526,17 @@ export const compareIncomePeriods = (api: AccessApi, input: { earlierIncomeRecor
 export interface ProductExpensePeriodComparison { earlier: ProductExpenseRecord; later: ProductExpenseRecord; periodDays: number }
 export const compareExpensePeriods = (api: AccessApi, input: { earlierExpenseRecordId: string; earlierRevision: number; laterExpenseRecordId: string; laterRevision: number }, signal?: AbortSignal) =>
   api.product<ProductExpensePeriodComparison>('v1/expense-records/comparison', 'POST', input, signal);
+
+export interface ProductLiabilityDraft {
+  name: string; creditor: string; outstandingAmount: number;
+  balanceAsOfDate: string; sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductLiabilityRecord {
+  liabilityRecordId: string; operationId: string; customerId: string; liability: ProductLiabilityDraft; currency: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+  verificationStatus: string;
+}
+export interface ProductLiabilityRecordList { items: ProductLiabilityRecord[]; hasMore: boolean; dataDurability: string }
+export const getLiabilityRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductLiabilityRecordList>('v1/liability-records', 'GET', undefined, signal);
+export const createLiabilityRecord = (api: AccessApi, input: { operationId: string; liability: ProductLiabilityDraft }, signal?: AbortSignal) =>
+  api.product<ProductLiabilityRecord>('v1/liability-records', 'POST', input, signal);

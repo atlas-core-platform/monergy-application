@@ -585,3 +585,28 @@ it('opens reviewed expense records alongside expense source figures',async()=>{
   expect(await screen.findByRole('heading',{name:'Expense records'})).toBeVisible();expect(screen.getByRole('button',{name:'Add expense record'})).toBeDisabled();
   expect(request.mock.calls.some(([path])=>path==='v1/expense-records')).toBe(true);
 });
+
+it.each([true,false])('guards the liability records route with current document access (%s)',async documentAccess=>{
+  window.history.replaceState(null,'','/finances?type=LIABILITY');const api=new AccessApi(session);
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/liability-records'
+    ?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({financialProfileId:'profile',revision:1,updatedAt:'2026-10-19T00:00:00Z',dataDurability:'Temporary data',facts:[]}));
+  mount(api,['financial-profile.profile.read',...(documentAccess?['evidence.document.read','financial-profile.profile.update']:[])]);
+  if(documentAccess){expect(await screen.findByRole('heading',{name:'Liability records'})).toBeVisible();expect(screen.getByRole('button',{name:'Add liability record'})).toBeDisabled();}
+  else expect(await screen.findByText('Document access is required to view liability records and their sources.')).toBeVisible();
+  expect(request.mock.calls.some(([path])=>path==='v1/liability-records')).toBe(documentAccess);
+});
+
+it('opens liabilities from the financial navigation using reviewed loan sources without creating or totaling debt',async()=>{
+  const api=new AccessApi(session);const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/liability-records'
+    ?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({financialProfileId:'profile',revision:1,updatedAt:'2026-10-19T00:00:00Z',dataDurability:'Temporary data',facts:[{
+      financialFactId:'loan-source',factType:'LOAN',label:'Reviewed debt figure',value:100,currency:'USD',effectiveDate:'2026-09-30',revision:1,
+      source:{sourceName:'loan.txt',documentVersion:'document-v1',recordedAt:'2026-10-19T00:00:00Z',technicalSourceFactId:'source',technicalProvenanceId:'provenance'}
+    }]}));
+  mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);const user=userEvent.setup();
+  await user.click(await screen.findByRole('button',{name:'Liabilities'}));
+  expect(await screen.findByRole('heading',{name:'Liability records'})).toBeVisible();expect(screen.getByRole('button',{name:'Add liability record'})).toBeEnabled();
+  expect(window.location.search).toBe('?type=LIABILITY');expect(request.mock.calls.every(([,method])=>method==='GET')).toBe(true);
+  expect(screen.getByText(/do not establish total debt/)).toBeVisible();
+});
