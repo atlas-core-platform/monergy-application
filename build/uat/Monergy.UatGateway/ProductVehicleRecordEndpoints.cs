@@ -45,26 +45,65 @@ public static class ProductVehicleRecordEndpoints
         group.MapPost("", async (HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductVehicleRecordClient client) =>
         {
             var (session, customer) = await ResolveAsync(http, owners, access, true).ConfigureAwait(false);
-            var input = await ReadInputAsync(http).ConfigureAwait(false);
+            var input = await ReadInputAsync<CreateVehicleRecord>(http).ConfigureAwait(false);
             if (input.Vehicle is null) throw new TenantBoundaryException("VEHICLE_RECORD_INVALID",400);
             var receipt = await client.CreateAsync(session, customer.CustomerId, input, http.RequestAborted).ConfigureAwait(false);
             if (!Bound(receipt, customer.CustomerId) || receipt.OperationId != input.OperationId || receipt.RecordedBy != session.ActorId ||
                 receipt.Vehicle != input.Vehicle with { Name = input.Vehicle.Name.Trim(), RegistrationNumber = string.IsNullOrWhiteSpace(input.Vehicle.RegistrationNumber) ? null : input.Vehicle.RegistrationNumber.Trim(), VehicleType = input.Vehicle.VehicleType.Trim() })
                 throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID", 503);
-            var saved = await client.ReadAsync(session, customer.CustomerId, receipt.VehicleRecordId, http.RequestAborted).ConfigureAwait(false);
+            var saved = await client.ReadAsync(session, customer.CustomerId, receipt.VehicleRecordId, http.RequestAborted,1).ConfigureAwait(false);
             if (saved != receipt) throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID", 503);
             await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
             return saved;
         });
+        group.MapGet("/{vehicleRecordId}/history", async (string vehicleRecordId, int? beforeRevision, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductVehicleRecordClient client) =>
+        {
+            var (session, customer) = await ResolveAsync(http, owners, access, false).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(vehicleRecordId,80) || beforeRevision is < 1) throw new TenantBoundaryException("VEHICLE_RECORD_INVALID",400);
+            var original = await client.ReadAsync(session, customer.CustomerId, vehicleRecordId, http.RequestAborted, 1).ConfigureAwait(false);
+            if (!Bound(original,customer.CustomerId) || original.VehicleRecordId != vehicleRecordId || original.Revision != 1)
+                throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID",503);
+            var history = await client.HistoryAsync(session, customer.CustomerId, vehicleRecordId, beforeRevision, http.RequestAborted).ConfigureAwait(false);
+            if (history.Items is null || history.Items.Count > 50 || history.Items.Any(x => !Bound(x,customer.CustomerId) || x.VehicleRecordId != vehicleRecordId || beforeRevision is not null && x.Revision >= beforeRevision ||
+                x.Currency != original.Currency || x.SourceProvenanceId != original.SourceProvenanceId || x.DocumentVersionId != original.DocumentVersionId || x.EvidenceId != original.EvidenceId ||
+                x.Vehicle.SourceFinancialFactId != original.Vehicle.SourceFinancialFactId || x.Vehicle.SourceRevision != original.Vehicle.SourceRevision) ||
+                history.Items.Zip(history.Items.Skip(1)).Any(pair => pair.First.Revision != pair.Second.Revision + 1) ||
+                history.HasMore && (history.Items.Count != 50 || history.NextBeforeRevision != history.Items[^1].Revision) || !history.HasMore && (history.NextBeforeRevision is not null || history.Items.Count > 0 && history.Items[^1].Revision != 1) ||
+                history.Items.Count == 0 && beforeRevision != 1)
+                throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http, owners, access, session, customer, false).ConfigureAwait(false);
+            return history;
+        });
+        group.MapPost("/{vehicleRecordId}/corrections", async (string vehicleRecordId, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductVehicleRecordClient client) =>
+        {
+            var (session, customer) = await ResolveAsync(http, owners, access, true).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(vehicleRecordId,80)) throw new TenantBoundaryException("VEHICLE_RECORD_INVALID",400);
+            var input = await ReadInputAsync<ReviseVehicleRecord>(http).ConfigureAwait(false);
+            if (input.Vehicle is null || input.ExpectedRevision is < 1 or int.MaxValue) throw new TenantBoundaryException("VEHICLE_RECORD_INVALID",400);
+            var original = await client.ReadAsync(session, customer.CustomerId, vehicleRecordId, http.RequestAborted, 1).ConfigureAwait(false);
+            if (!Bound(original,customer.CustomerId) || original.Revision != 1 || original.VehicleRecordId != vehicleRecordId)
+                throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID",503);
+            var receipt = await client.ReviseAsync(session, customer.CustomerId, vehicleRecordId, input, http.RequestAborted).ConfigureAwait(false);
+            if (!Bound(original,customer.CustomerId) || original.Revision != 1 || !Bound(receipt,customer.CustomerId) || original.VehicleRecordId != vehicleRecordId || receipt.VehicleRecordId != vehicleRecordId ||
+                receipt.OperationId != input.OperationId || receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision + 1 ||
+                receipt.Vehicle != input.Vehicle with { Name = input.Vehicle.Name.Trim(), RegistrationNumber = string.IsNullOrWhiteSpace(input.Vehicle.RegistrationNumber) ? null : input.Vehicle.RegistrationNumber.Trim(), VehicleType = input.Vehicle.VehicleType.Trim() } ||
+                receipt.Currency != original.Currency || receipt.SourceProvenanceId != original.SourceProvenanceId || receipt.DocumentVersionId != original.DocumentVersionId || receipt.EvidenceId != original.EvidenceId ||
+                receipt.Vehicle.SourceFinancialFactId != original.Vehicle.SourceFinancialFactId || receipt.Vehicle.SourceRevision != original.Vehicle.SourceRevision)
+                throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID",503);
+            var saved = await client.ReadAsync(session, customer.CustomerId, vehicleRecordId, http.RequestAborted, receipt.Revision).ConfigureAwait(false);
+            if (saved != receipt) throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
+            return saved;
+        });
     }
-    private static async Task<CreateVehicleRecord> ReadInputAsync(HttpContext http)
+    private static async Task<T> ReadInputAsync<T>(HttpContext http) where T : class
     {
         try
         {
             http.Request.EnableBuffering(32768,32768);
             using var json = await JsonDocument.ParseAsync(http.Request.Body,cancellationToken:http.RequestAborted).ConfigureAwait(false);
             RejectDuplicates(json.RootElement);
-            return json.RootElement.Deserialize<CreateVehicleRecord>(InputJson)
+            return json.RootElement.Deserialize<T>(InputJson)
                 ?? throw new TenantBoundaryException("VEHICLE_RECORD_INVALID",400);
         }
         catch (JsonException) { throw new TenantBoundaryException("VEHICLE_RECORD_INVALID",400); }
@@ -80,7 +119,7 @@ public static class ProductVehicleRecordEndpoints
         else if(element.ValueKind == JsonValueKind.Array) foreach(var item in element.EnumerateArray()) RejectDuplicates(item);
     }
     private static bool Bound(ReviewedVehicleRecord? value, string customer) => value is { Vehicle: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
-        TenantAccessClient.Identifier(value.VehicleRecordId, 80) && Guid.TryParseExact(value.OperationId, "N", out _) &&
+        value.Revision > 0 && TenantAccessClient.Identifier(value.VehicleRecordId, 80) && Guid.TryParseExact(value.OperationId, "N", out _) &&
         value.Currency.Length == 3 && value.Currency.All(char.IsAsciiLetterUpper) &&
         Text(value.Vehicle.Name) && OptionalRegistration(value.Vehicle.RegistrationNumber) && Text(value.Vehicle.VehicleType) &&
         Money(value.Vehicle.PurchaseValue) && Money(value.Vehicle.CurrentValue) && value.Vehicle.ValueAsOfDate.Year >= 1900 &&
@@ -137,11 +176,15 @@ public sealed class ProductVehicleRecordClient : IDisposable
     }
     public Task<VehicleRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct) =>
         SendAsync<VehicleRecordList>(session, customer, "", null, ct);
-    public Task<ReviewedVehicleRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct) =>
-        SendAsync<ReviewedVehicleRecord>(session, customer, "/" + Uri.EscapeDataString(id), null, ct);
+    public Task<ReviewedVehicleRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct, int? revision = null) =>
+        SendAsync<ReviewedVehicleRecord>(session, customer, "/" + Uri.EscapeDataString(id) + (revision is null ? "" : "?revision=" + revision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
     public Task<ReviewedVehicleRecord> CreateAsync(CustomerOwnerSession session, string customer, CreateVehicleRecord input, CancellationToken ct) =>
         SendAsync<ReviewedVehicleRecord>(session, customer, "", input, ct);
-    private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, CreateVehicleRecord? input, CancellationToken ct)
+    public Task<ReviewedVehicleRecord> ReviseAsync(CustomerOwnerSession session, string customer, string id, ReviseVehicleRecord input, CancellationToken ct) =>
+        SendAsync<ReviewedVehicleRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
+    public Task<VehicleRecordHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
+        SendAsync<VehicleRecordHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
+    private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, object? input, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(input is null ? HttpMethod.Get : HttpMethod.Post,
             new Uri(endpoint, "local/v1/customers/" + Uri.EscapeDataString(customer) + "/vehicle-records" + suffix));
@@ -151,8 +194,13 @@ public sealed class ProductVehicleRecordClient : IDisposable
         if (!response.IsSuccessStatusCode)
         {
             var status = (int)response.StatusCode;
-            var code = status switch { 401 => "TENANT_SESSION_INVALID", 403 => "ACCESS_DENIED", 404 => "VEHICLE_SOURCE_NOT_FOUND",
+            var code = status switch { 401 => "TENANT_SESSION_INVALID", 403 => "ACCESS_DENIED", 404 => "VEHICLE_RECORD_NOT_FOUND",
                 409 => "VEHICLE_OPERATION_CONFLICT", 400 => "VEHICLE_RECORD_INVALID", 413 => "VEHICLE_RECORD_TOO_LARGE", _ => "VEHICLE_RECORD_UNAVAILABLE" };
+            if (status == 409)
+            {
+                var error=await response.Content.ReadFromJsonAsync<JsonElement>(ct).ConfigureAwait(false);
+                if(error.TryGetProperty("error",out var value) && value.GetString()=="VEHICLE_REVISION_CONFLICT") code="VEHICLE_REVISION_CONFLICT";
+            }
             throw new TenantBoundaryException(code, status is 400 or 401 or 403 or 404 or 409 or 413 ? status : 503);
         }
         return await response.Content.ReadFromJsonAsync<T>(Json, ct).ConfigureAwait(false)
