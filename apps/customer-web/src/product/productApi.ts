@@ -534,9 +534,15 @@ export interface ProductLiabilityDraft {
 export interface ProductLiabilityRecord {
   liabilityRecordId: string; operationId: string; customerId: string; liability: ProductLiabilityDraft; currency: string;
   sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
-  verificationStatus: string;
+  verificationStatus: string; revision: number;
 }
 export interface ProductLiabilityRecordList { items: ProductLiabilityRecord[]; hasMore: boolean; dataDurability: string }
 export const getLiabilityRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductLiabilityRecordList>('v1/liability-records', 'GET', undefined, signal);
 export const createLiabilityRecord = (api: AccessApi, input: { operationId: string; liability: ProductLiabilityDraft }, signal?: AbortSignal) =>
   api.product<ProductLiabilityRecord>('v1/liability-records', 'POST', input, signal);
+
+export interface ProductLiabilityRecordHistory { items: ProductLiabilityRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const reviseLiabilityRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; liability: ProductLiabilityDraft }) =>
+  api.product<ProductLiabilityRecord>('v1/liability-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getLiabilityRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductLiabilityRecordHistory>('v1/liability-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);

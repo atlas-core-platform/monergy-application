@@ -12,7 +12,7 @@ const source: ProductFinancialFact = { financialFactId: 'ff-liability', factType
 const liability: ProductLiabilityDraft = {name:'September debt',creditor:'Example lender',outstandingAmount:400000,
   balanceAsOfDate:'2026-09-30',sourceFinancialFactId:'ff-liability',sourceRevision:2};
 const record: ProductLiabilityRecord = {liabilityRecordId:'liability-saved',operationId:'a'.repeat(32),customerId:'reference-customer',liability,currency:'USD',
-  sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-liability',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',verificationStatus:'CUSTOMER_REVIEWED'};
+  sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-liability',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',verificationStatus:'CUSTOMER_REVIEWED',revision:1};
 function mount(api: AccessApi, canCreate = true, canRead = true, facts: ProductFinancialFact[] = [source]) {
   return render(<FoundationProvider appearance="midnight"><LiabilityRecordsExperience api={api} canCreate={canCreate} canRead={canRead} facts={facts} /></FoundationProvider>);
 }
@@ -161,4 +161,117 @@ it('keeps a non-customer-reviewed confirmation unconfirmed',async()=>{
 it('rejects unsupported review status in a returned list',async()=>{
   const api=new AccessApi(session);vi.spyOn(api,'product').mockResolvedValue({items:[{...record,verificationStatus:'VERIFIED'}],hasMore:false,dataDurability:'Temporary data'});mount(api,false);
   expect(await screen.findByText('Liability records are unavailable. Try again.')).toBeVisible();expect(screen.queryByText('September debt')).not.toBeInTheDocument();
+});
+
+it('edits the saved terms explicitly using the exact record version and immutable historical source', async () => {
+  const api=new AccessApi(session);let current=record;
+  const corrected={...record,revision:2,liability:{...liability,outstandingAmount:390000}};
+  const request=vi.spyOn(api,'product').mockImplementation((path,method,body)=>{
+    if(method==='GET') return Promise.resolve({items:[current],hasMore:false,dataDurability:'Temporary data'});
+    expect(path).toBe('v1/liability-records/liability-saved/corrections');
+    expect(body).toEqual({operationId:'a'.repeat(32),expectedRevision:1,liability:corrected.liability});current=corrected;return Promise.resolve(corrected);
+  });
+  vi.spyOn(crypto,'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');mount(api,true,true,[]);
+  const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit liability record: September debt'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit liability record'});
+  expect(within(drawer).getByText(/Editing version 1 · USD · Source revision 2/)).toBeVisible();
+  expect(within(drawer).queryByRole('combobox',{name:'Reviewed debt source'})).not.toBeInTheDocument();
+  expect(within(drawer).getByLabelText('Outstanding balance')).toHaveValue(400000);
+  fireEvent.change(within(drawer).getByLabelText('Outstanding balance'),{target:{value:'390000'}});
+  expect(request.mock.calls.filter(([,method])=>method==='POST')).toHaveLength(0);
+  await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await screen.findByText('Liability record saved: September debt');expect(screen.getByText(/Outstanding balance: \$390,000.00/)).toBeVisible();
+});
+
+it('blocks a stale correction and requires review of the refreshed version', async () => {
+  const api=new AccessApi(session);let current=record;
+  const request=vi.spyOn(api,'product').mockImplementation((_path,method)=>method==='GET'
+    ? Promise.resolve({items:[current],hasMore:false,dataDurability:'Temporary data'})
+    : Promise.reject(new AccessApiError(409,'LIABILITY_REVISION_CONFLICT')));
+  mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit liability record: September debt'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit liability record'});await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  expect(await within(drawer).findByText(/A newer version has been saved/)).toBeVisible();
+  expect(within(drawer).getByRole('button',{name:'Save reviewed corrections'})).toBeDisabled();expect(within(drawer).getByLabelText('Outstanding balance')).toBeDisabled();
+  await user.click(within(drawer).getByRole('button',{name:'Close'}));current={...record,revision:2,liability:{...liability,outstandingAmount:380000}};
+  await user.click(screen.getByRole('button',{name:'Refresh liability records'}));await screen.findByText(/Outstanding balance: \$380,000.00/);
+  await user.click(screen.getByRole('button',{name:'Edit liability record: September debt'}));
+  expect(within(screen.getByRole('dialog',{name:'Edit liability record'})).getByText(/Editing version 2/)).toBeVisible();
+  expect(request.mock.calls.filter(([,method])=>method==='POST')).toHaveLength(1);
+});
+
+it('retains an uncertain correction and its expected version after closing with no current source figures', async () => {
+  const api=new AccessApi(session);let attempts=0;
+  const request=vi.spyOn(api,'product').mockImplementation((_path,method)=>{
+    if(method==='GET')return Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'});
+    attempts++;return attempts===1?Promise.reject(new AccessApiError(503,'unavailable')):Promise.resolve({...record,revision:2});
+  });
+  vi.spyOn(crypto,'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');mount(api,true,true,[]);
+  const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit liability record: September debt'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit liability record'});await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await within(drawer).findByText(/The save has not been confirmed/);expect(within(drawer).getByLabelText('Creditor')).toBeDisabled();
+  await user.click(within(drawer).getByRole('button',{name:'Close'}));await user.click(screen.getByRole('button',{name:'Continue save confirmation'}));
+  const reopened=screen.getByRole('dialog',{name:'Edit liability record'});await user.click(within(reopened).getByRole('button',{name:'Retry save confirmation'}));
+  await screen.findByText('Liability record saved: September debt');const calls=request.mock.calls.filter(([,method])=>method==='POST');
+  expect(calls).toHaveLength(2);expect(calls[0]?.[2]).toEqual(calls[1]?.[2]);expect(calls[0]?.[2]).toMatchObject({expectedRevision:1});
+});
+
+it('allows correction after confirmed validation rejection and keeps uncertain conflicts frozen', async () => {
+  const api=new AccessApi(session);let conflict=false;
+  vi.spyOn(api,'product').mockImplementation((_path,method)=>method==='GET'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.reject(new AccessApiError(conflict?409:400,conflict?'LIABILITY_OPERATION_CONFLICT':'invalid')));
+  mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'Edit liability record: September debt'}));
+  const drawer=screen.getByRole('dialog',{name:'Edit liability record'});await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await within(drawer).findByText(/Check the balance, as-of date/);expect(within(drawer).getByLabelText('Creditor')).toBeEnabled();
+  conflict=true;await user.click(within(drawer).getByRole('button',{name:'Save reviewed corrections'}));
+  await within(drawer).findByText(/The save has not been confirmed/);expect(within(drawer).getByLabelText('Creditor')).toBeDisabled();
+});
+
+it('reads original and corrected terms in bounded history pages without enabling edits for read-only access', async () => {
+  const api=new AccessApi(session);const latest={...record,revision:51,liability:{...liability,outstandingAmount:300000}};
+  const request=vi.spyOn(api,'product').mockImplementation((path)=>{
+    if(path==='v1/liability-records')return Promise.resolve({items:[latest],hasMore:false,dataDurability:'Temporary data'});
+    if(path==='v1/liability-records/liability-saved/history')return Promise.resolve({items:[latest],hasMore:true,nextBeforeRevision:2});
+    if(path==='v1/liability-records/liability-saved/history?beforeRevision=2')return Promise.resolve({items:[record],hasMore:false,nextBeforeRevision:null});
+    return Promise.reject(new Error('unexpected route'));
+  });mount(api,false);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View liability history: September debt'}));
+  expect(screen.queryByRole('button',{name:'Edit liability record: September debt'})).not.toBeInTheDocument();
+  const drawer=screen.getByRole('dialog',{name:'Liability record history'});await user.click(await within(drawer).findByRole('button',{name:'Earlier versions'}));
+  await user.click(await within(drawer).findByRole('button',{name:'View version 1'}));
+  const version=within(drawer).getByRole('region',{name:'Saved liability version 1'});expect(version).toHaveTextContent('$400,000.00');expect(version).toHaveTextContent('2026-09-30');expect(version).toHaveTextContent('Customer reviewed');
+  expect(within(version).getByRole('link',{name:'View exact liability source history'})).toHaveAttribute('href','/finances?fact=ff-liability');
+  await user.click(within(drawer).getByRole('button',{name:'Latest versions'}));await within(drawer).findByRole('button',{name:'View version 51'});
+  expect(request.mock.calls.every(([,method])=>method==='GET')).toBe(true);
+});
+
+it('shows history failure and hides prior history immediately after a session scope change', async () => {
+  const api=new AccessApi(session);vi.spyOn(api,'product').mockImplementation(path=>path==='v1/liability-records'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'}):Promise.reject(new AccessApiError(403,'denied')));
+  const view=mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View liability history: September debt'}));
+  await screen.findByText('Liability history is unavailable.');expect(screen.queryByRole('button',{name:'View version 1'})).not.toBeInTheDocument();
+  const other=new AccessApi({...session,actorId:'A200'});vi.spyOn(other,'product').mockResolvedValue({items:[],hasMore:false,dataDurability:'Temporary data'});
+  view.rerender(<FoundationProvider appearance="midnight"><LiabilityRecordsExperience api={other} facts={[]} canRead canCreate={false} /></FoundationProvider>);
+  expect(screen.queryByRole('dialog',{name:'Liability record history'})).not.toBeInTheDocument();await screen.findByText(/No liability records added yet/);
+});
+
+it('aborts pending history and rejects a late previous-session response',async()=>{
+  const api=new AccessApi(session);let complete:(value:unknown)=>void=()=>undefined;
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/liability-records'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'})
+    :new Promise(resolve=>{complete=resolve;}));
+  const view=mount(api);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View liability history: September debt'}));
+  await screen.findByText('Loading liability history…');
+  const signal=request.mock.calls.find(([path])=>path.endsWith('/history'))?.[3];expect(signal).toBeDefined();
+  const next=new AccessApi({...session,actorId:'A200'});vi.spyOn(next,'product').mockResolvedValue({items:[],hasMore:false,dataDurability:'Temporary data'});
+  view.rerender(<FoundationProvider appearance="midnight"><LiabilityRecordsExperience api={next} facts={[]} canRead canCreate={false} /></FoundationProvider>);
+  expect(signal?.aborted).toBe(true);complete({items:[record],hasMore:false,nextBeforeRevision:null});
+  await screen.findByText(/No liability records added yet/);expect(screen.queryByRole('dialog',{name:'Liability record history'})).not.toBeInTheDocument();
+});
+
+it('rejects a history page claiming independent liability verification',async()=>{
+  const api=new AccessApi(session);vi.spyOn(api,'product').mockImplementation(path=>path==='v1/liability-records'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({items:[{...record,verificationStatus:'VERIFIED'}],hasMore:false,nextBeforeRevision:null}));
+  mount(api,false);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View liability history: September debt'}));
+  expect(await screen.findByText('Liability history is unavailable.')).toBeVisible();expect(screen.queryByRole('button',{name:'View version 1'})).not.toBeInTheDocument();
 });

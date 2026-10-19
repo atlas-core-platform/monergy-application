@@ -16,7 +16,7 @@ using Monergy.UatGateway;
 using Xunit;
 namespace Monergy.FinancialProfile.Tests;
 
-public sealed class ReviewedLiabilityRecordTests
+public sealed partial class ReviewedLiabilityRecordTests
 {
     private const string Customer = FinancialProfileTestContext.CustomerId;
     private static CreateLiabilityRecord Input(string source,int revision=1) => new(new string('a',32),
@@ -161,7 +161,7 @@ public sealed class ReviewedLiabilityRecordTests
         Assert.Empty((await h.Records.ListAsync("T002",Customer,default)).Items);
         Assert.Single((await h.Records.ListAsync("T001",Customer,default)).Items);
     }
-    [Theory, InlineData("customerId"),InlineData("recordedBy"),InlineData("currency"),InlineData("operationId"),InlineData("source"),InlineData("outstandingAmount"),InlineData("verificationStatus"),InlineData("null"),InlineData("readback")]
+    [Theory, InlineData("customerId"),InlineData("recordedBy"),InlineData("currency"),InlineData("operationId"),InlineData("source"),InlineData("outstandingAmount"),InlineData("verificationStatus"),InlineData("revision"),InlineData("null"),InlineData("readback")]
     public async Task GatewayRejectsUnboundOrUnconfirmedOwnerReceiptsAfterARealWrite(string tamper)
     {
         await using var h=await Harness.Create(tamper); using var client=h.Client();
@@ -207,11 +207,19 @@ public sealed class ReviewedLiabilityRecordTests
         for(var i=0;i<199;i++) await app.CreateAsync("T001",Customer,"actor-001",input with {OperationId=Guid.NewGuid().ToString("N")},default);
         var list=await app.ListAsync("T001",Customer,default);Assert.Equal(200,list.Items.Count);Assert.True(list.HasMore);
     }
-    private sealed class TamperHandler(string variation) : DelegatingHandler(new SocketsHttpHandler {AllowAutoRedirect=false,UseProxy=false})
+    private sealed class TamperHandler(string scenario) : DelegatingHandler(new SocketsHttpHandler {AllowAutoRedirect=false,UseProxy=false})
     {
+        private bool corrected;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)
         {
+            var variation=scenario;
             var response=await base.SendAsync(request,ct);
+            if(scenario.StartsWith("correction-",StringComparison.Ordinal))
+            {
+                variation=scenario[11..];
+                if(request.Method==HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/corrections",StringComparison.Ordinal)) corrected=true;
+                else if(!corrected || variation!="readback") return response;
+            }
             if(!response.IsSuccessStatusCode || (variation=="readback") != (request.Method==HttpMethod.Get)) return response;
             var json=JsonNode.Parse(await response.Content.ReadAsStringAsync(ct))!.AsObject();
             switch(variation) {
@@ -219,6 +227,7 @@ public sealed class ReviewedLiabilityRecordTests
                 case "recordedBy":json["recordedBy"]="foreign";break;
                 case "currency":json["currency"]="INR";break;
                 case "verificationStatus":json["verificationStatus"]="VERIFIED";break;
+                case "revision":json["revision"]=99;break;
                 case "operationId":json["operationId"]=new string('b',32);break;
                 case "source":json["liability"]!["sourceRevision"]=99;break;
                 case "null":json["liability"]=null;break;
