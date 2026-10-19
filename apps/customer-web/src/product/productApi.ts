@@ -477,3 +477,18 @@ export const reviseInvestmentRecord = (api: AccessApi, id: string, input: { oper
   api.product<ProductInvestmentRecord>('v1/investment-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
 export const getInvestmentRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductInvestmentRecordHistory>('v1/investment-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
+
+export interface ProductIncomeDraft {
+  name: string; incomeSource: string; incomeType: string; amount: number; frequency: string; financialYear: string;
+  periodStart: string; periodEnd: string; sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductIncomeRecord {
+  incomeRecordId: string; operationId: string; customerId: string; income: ProductIncomeDraft; currency: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+  verificationStatus: string;
+}
+export interface ProductIncomeRecordList { items: ProductIncomeRecord[]; hasMore: boolean; dataDurability: string }
+export const getIncomeRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductIncomeRecordList>('v1/income-records', 'GET', undefined, signal);
+export const createIncomeRecord = (api: AccessApi, input: { operationId: string; income: ProductIncomeDraft }, signal?: AbortSignal) =>
+  api.product<ProductIncomeRecord>('v1/income-records', 'POST', input, signal);

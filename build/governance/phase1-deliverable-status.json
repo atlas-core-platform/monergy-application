@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-70",
-  "applicationBase": "70452af4dfa7b04c80bbd6f24a070368ed2f1126",
+  "asOf": "T1-71",
+  "applicationBase": "fbed93d79b683d94fc8f91ea18172a66fd203d71",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 12,
+    "libraryVersion": 13,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Tracker version12 through T1-69 reviewed. T1-70 adds explicit expected-version investment corrections and immutable history with exact original source/currency/replay. Full portfolio truth, central audit and physical/integrated UAT remain open; original phases/acceptance unchanged."
+    "reviewThrough": "Tracker version13 through T1-70 reviewed. T1-71 adds explicit period-aware income create/list/details with payer/type/frequency/reported-year/amount and owner CUSTOMER_REVIEWED status, exact source/currency. Full income truth, central audit and physical/integrated UAT remain open; phases/acceptance unchanged."
   },
   "counts": {
     "originalDeliverables": 29,
@@ -14,8 +14,8 @@
     "partial": 17,
     "pendingBusinessJourneys": 12,
     "remainingOriginalDeliverables": 29,
-    "numberedUnitsAfterPairedMerge": 70,
-    "mergedImplementationUnitsAfterPairedMerge": 69,
+    "numberedUnitsAfterPairedMerge": 71,
+    "mergedImplementationUnitsAfterPairedMerge": 70,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -163,11 +163,11 @@
       "area": "Financial Data",
       "name": "Income",
       "state": "Partial",
-      "existing": "Reviewed income source figures, source history, lexical Search, basic Reports and salary net-pay OCR are available.",
-      "remaining": "Complete \u00a713 source/type/frequency/financial-year/verification fields and period-aware records. A dated net-pay amount is not a full income model.",
-      "units": "T1-05\u201311, T1-42, T1-49\u201351",
+      "existing": "Reviewed income source figures, source history, lexical Search, basic Reports and salary net-pay OCR are available. T1-71 adds reviewed income records with payer/source, type, explicit period total, payment frequency, reported financial-year label and reporting dates, exact original source/currency and owner customer-review status.",
+      "remaining": "Income corrections/history, multi-source/duplicate/overlap reconciliation, payer verification, fiscal-calendar validation and meaningful comparable-period snapshots/dashboard remain open. Customer review does not establish verified income or totals.",
+      "units": "T1-05\u201311, T1-42, T1-49\u201351; T1-71",
       "requirements": "MON-FIN-003/011/014",
-      "receipt": "build/governance/t1-51-salary-slip-jpeg-ocr.md"
+      "receipt": "build/governance/t1-71-reviewed-income-records.md"
     },
     {
       "id": "P1-14",

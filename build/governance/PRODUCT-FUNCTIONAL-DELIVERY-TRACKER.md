@@ -1,8 +1,18 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest bounded increment: T1-70 reviewed investment corrections and history. Original journeys remain Partial/Pending; full financial truth, central audit and integrated UAT remain open.
+Status: ACTIVE · Latest bounded increment: T1-71 reviewed income records. Original journeys remain Partial/Pending; full financial truth, central audit and integrated UAT remain open.
 
-## Current T1-70 update — reviewed investment corrections and history
+## Current T1-71 update — reviewed income records
+
+Master§13 / MON-FIN-003 / COV-017 / M2-WS04-E01-F01 now has explicit reviewed income create/list/details beyond source figures. Customers enter payer/source, type, period total, payment frequency, reported financial-year label and past reporting period. Exact reviewed INCOME source revision/currency/provenance remain; no autofill, annualisation, calendar inference, deduplication or aggregation. Owner status is CUSTOMER_REVIEWED, not externally verified. Receipt: [t1-71-reviewed-income-records.md](t1-71-reviewed-income-records.md).
+
+Financial Profile migration0007 adds immutable scoped creation/replay with SELECT/INSERT-only runtime grants. Current Self/tenant binding/owned-customer/setup/read/document/update authority, strict JSON and fresh owner readback remain. Unconfirmed saves freeze body/operation across close and missing current source; scope changes hide old data.
+
+305 owner and31 affected UI checks pass (67 new owner;15 Income/16 Financial information UI). TypeScript/changed ESLint/Vite and zero-warning Gateway/physical test-project builds pass. Unchanged source/document and Loan/Investment UI evidence is carried forward, not rerun/counting as new passes. Native HTTP uses authority doubles/in-memory persistence. Physical PostgreSQL regression compiled, NOT RUN.
+
+After paired merge:71 numbered units =70 implementations +1 governance closure. Original29 journeys remain0 complete,17 partial,12 pending; Income stays Partial. Corrections/history, reconciliation, payer verification, fiscal-calendar validation, comparable-period income/dashboard truth, central audit and physical/integrated UAT remain open. Tracker version13 reviewed; original151 IDs/81 features/126 Phase1 memberships/source phases/acceptance unchanged.
+
+## Previous T1-70 update — reviewed investment corrections and history
 
 Master§13 / MON-FIN-007 / COV-020 / M2-WS04-E02-F01 now supports explicit correction of reviewed investment records with an expected version. Financial Profile appends every correction, preserves original source/currency/creation receipt and rejects stale competing edits. Latest lists show the newest version; exact saved versions and paged read-only history remain available. Replaying an old operation after newer writes returns its original receipt. Receipt: [t1-70-reviewed-investment-corrections.md](t1-70-reviewed-investment-corrections.md).
 
@@ -139,6 +149,7 @@ This section supersedes the historical priority/verification labels below. Lates
 | P0 / implemented T1-66–68 | Reviewed source-linked loan create/read, corrections/history and dated Active/Closed/reopen review | Receipts t1-66-reviewed-loan-records.md through t1-68-reviewed-loan-lifecycle.md. Original source/currency/amounts and all prior versions retained; exact operation/version confirmation. Lender/current-debt truth, multi-source reconciliation, broader lifecycle, central audit and physical/integrated UAT remain open |
 | P0 | Google Drive / OneDrive customer storage journey | Implement actual authorized provider import/status/refresh/disconnect, preserving exact folder/file/document identities; reference gateway is insufficient |
 | P0 / implemented T1-69–70 | Customer-reviewed investment create/list/read/corrections/history | Explicit fields, version checks, exact original source/currency and immutable replay/history. Lifecycle, provider verification, security/quantity/pricing, portfolio calculations and integrated UAT remain open |
+| P0 / implemented T1-71 | Reviewed income records with payer/type/frequency/year/period total and owner review status | Exact reviewed INCOME source/currency retained. Corrections/history, reconciliation, verification and comparable snapshots remain open |
 | P0 | Full Loan account and financial truth | Seven source categories exist. Complete lender/type/sanction/outstanding/rate/EMI/tenure/dates and required asset/liability records; a typed source amount does not complete MON-FIN-006 |
 | P0 | Deterministic net worth | Assets minus Liabilities is already specified. Complete authoritative dated/currency/valuation inputs and customer calculation/provenance; scoring approval is a distinct gate |
 | P0 | Basic authorized financial Q&A | Seven-category lexical Search/basic Reports exist; complete grounded Q&A, source citations and insufficient-data behavior under the approved model/privacy boundary |

@@ -565,3 +565,13 @@ it('opens reviewed investment records alongside source figures under the existin
   expect(screen.getByRole('button',{name:'Add investment record'})).toBeDisabled();
   expect(request.mock.calls.some(([path])=>path==='v1/investment-records')).toBe(true);
 });
+
+it('opens reviewed income records alongside income source figures',async()=>{
+  window.history.replaceState(null,'','/finances?type=INCOME');const api=new AccessApi(session);
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/income-records'
+    ?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({financialProfileId:'profile',revision:1,updatedAt:'2026-10-19T00:00:00Z',dataDurability:'Temporary data',facts:[]}));
+  mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
+  expect(await screen.findByRole('heading',{name:'Income records'})).toBeVisible();expect(screen.getByRole('button',{name:'Add income record'})).toBeDisabled();
+  expect(request.mock.calls.some(([path])=>path==='v1/income-records')).toBe(true);
+});
