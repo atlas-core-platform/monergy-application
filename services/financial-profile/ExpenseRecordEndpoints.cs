@@ -37,6 +37,15 @@ public static class ExpenseRecordEndpoints
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
             return await owner.HistoryAsync(tenant, customerId, expenseRecordId, beforeRevision, http.RequestAborted).ConfigureAwait(false);
         });
+        group.MapPost("/comparison", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, ExpenseRecordsApplication owner) =>
+        {
+            var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
+            http.Request.EnableBuffering(32768,32768);
+            using var json = await JsonDocument.ParseAsync(http.Request.Body,cancellationToken:http.RequestAborted).ConfigureAwait(false);
+            RejectDuplicates(json.RootElement);
+            var input = json.RootElement.Deserialize<CompareExpensePeriods>(Json) ?? throw new TenantBoundaryException("EXPENSE_COMPARISON_INVALID",400);
+            return await owner.CompareAsync(tenant,customerId,input,http.RequestAborted).ConfigureAwait(false);
+        });
         group.MapPost("/{expenseRecordId}/corrections", async (string customerId, string expenseRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, ExpenseRecordsApplication owner) =>
         {
             var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);

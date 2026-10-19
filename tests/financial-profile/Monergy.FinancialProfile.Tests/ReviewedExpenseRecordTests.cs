@@ -209,11 +209,35 @@ public sealed partial class ReviewedExpenseRecordTests
     }
     private sealed class TamperHandler(string scenario) : DelegatingHandler(new SocketsHttpHandler {AllowAutoRedirect=false,UseProxy=false})
     {
+        private bool compared;
         private bool corrected;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)
         {
             var variation=scenario;
             var response=await base.SendAsync(request,ct);
+            if(scenario.StartsWith("comparison-",StringComparison.Ordinal))
+            {
+                variation=scenario[11..];
+                if(request.Method==HttpMethod.Post && request.RequestUri!.AbsolutePath.EndsWith("/comparison",StringComparison.Ordinal))
+                {
+                    compared=true;if(!response.IsSuccessStatusCode || variation=="readback") return response;
+                    var value=JsonNode.Parse(await response.Content.ReadAsStringAsync(ct))!.AsObject();
+                    switch(variation) {
+                        case "customer":value["earlier"]!["customerId"]="foreign";break;
+                        case "revision":value["earlier"]!["revision"]=99;break;
+                        case "days":value["periodDays"]=999;break;
+                        case "status":value["later"]!["verificationStatus"]="VERIFIED";break;
+                        case "currency":value["later"]!["currency"]="INR";break;
+                        case "category":value["later"]!["expense"]!["category"]="foreign";break;
+                        case "source":value["later"]!["expense"]!["sourceFinancialFactId"]=value["earlier"]!["expense"]!["sourceFinancialFactId"]!.DeepClone();break;
+                        case "null":value["earlier"]=null;break;
+                        case "swapped":var old=value["earlier"]!.DeepClone();value["earlier"]=value["later"]!.DeepClone();value["later"]=old;break;
+                        default:value["earlier"]!["expense"]!["amount"]=1;break;
+                    }
+                    response.Content.Dispose();response.Content=new StringContent(value.ToJsonString(),Encoding.UTF8,"application/json");return response;
+                }
+                if(!compared || variation!="readback" || request.Method!=HttpMethod.Get) return response;
+            }
             if(scenario.StartsWith("correction-",StringComparison.Ordinal))
             {
                 variation=scenario[11..];
@@ -300,8 +324,9 @@ public sealed partial class ReviewedExpenseRecordTests
         }
         private static HttpResponseMessage Response<T>(T value) => new(HttpStatusCode.OK) { Content = JsonContent.Create(value) };
     }
-    private sealed class Harness(WebApplication owner, WebApplication gateway, Authority authority, InMemoryExpenseRecords records, AuthoritativeFinancialFact source) : IAsyncDisposable
+    private sealed class Harness(WebApplication owner, WebApplication gateway, Authority authority, InMemoryExpenseRecords records, AuthoritativeFinancialFact source, InMemoryFinancialProfileRepository financial) : IAsyncDisposable
     {
+        public InMemoryFinancialProfileRepository Financial => financial;
         public Authority Authority => authority; public InMemoryExpenseRecords Records => records; public AuthoritativeFinancialFact Source => source;
         public static async Task<Harness> Create(string? tamper=null)
         {
@@ -318,7 +343,7 @@ public sealed partial class ReviewedExpenseRecordTests
             gb.Services.AddSingleton(new CustomerOwnerClient(gb.Configuration,new HttpClient(authority,false)));
             gb.Services.AddSingleton(new TenantAccessClient(gb.Configuration,new HttpClient(authority,false))); gb.AddProductExpenseRecords();
             if(tamper is not null) gb.Services.AddSingleton(new ProductExpenseRecordClient(gb.Configuration,new HttpClient(new TamperHandler(tamper))));
-            var gateway=gb.Build(); gateway.MapProductExpenseRecords(); await gateway.StartAsync(); return new(owner,gateway,authority,records,source);
+            var gateway=gb.Build(); gateway.MapProductExpenseRecords(); await gateway.StartAsync(); return new(owner,gateway,authority,records,source,financial);
         }
         public HttpClient Client(string? tenant="T001") => ClientFor(gateway,tenant);
         public HttpClient OwnerClient(string tenant="T001") => ClientFor(owner,tenant);

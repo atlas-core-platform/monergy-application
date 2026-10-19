@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-76",
+  "applicationBase": "66be12a8a7a1054e351418c5651bef0d1945c047",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections13/20/41",
+    "MON-FIN-004",
+    "MON-DAS-001",
+    "MON-DAS-004",
+    "COV-017",
+    "M2-WS04-E01-F01",
+    "M2-WS08-E01-F02"
+  ],
+  "migrations": []
+}

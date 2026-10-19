@@ -85,6 +85,28 @@ public sealed class ExpenseRecordsApplication(IFinancialProfileRepository financ
         return await repository.ReadAsync(tenant, customer, id, ct, revision).ConfigureAwait(false)
             ?? throw new TenantBoundaryException("EXPENSE_RECORD_NOT_FOUND", 404);
     }
+    public async Task<ExpensePeriodComparison> CompareAsync(string tenant, string customer, CompareExpensePeriods input, CancellationToken ct)
+    {
+        if (input is null || !TenantAccessClient.Identifier(input.EarlierExpenseRecordId,80) || !TenantAccessClient.Identifier(input.LaterExpenseRecordId,80) || input.EarlierRevision < 1 || input.LaterRevision < 1)
+            throw new TenantBoundaryException("EXPENSE_COMPARISON_INVALID",400);
+        if (input.EarlierExpenseRecordId == input.LaterExpenseRecordId)
+            throw new TenantBoundaryException("EXPENSE_COMPARISON_DISTINCT_RECORDS_REQUIRED",400);
+        // Read the exact immutable versions the customer selected; later corrections do not change this view.
+        var earlier = await ReadAsync(tenant,customer,input.EarlierExpenseRecordId,ct,input.EarlierRevision).ConfigureAwait(false);
+        var later = await ReadAsync(tenant,customer,input.LaterExpenseRecordId,ct,input.LaterRevision).ConfigureAwait(false);
+        if (earlier.VerificationStatus != "CUSTOMER_REVIEWED" || later.VerificationStatus != "CUSTOMER_REVIEWED")
+            throw new TenantBoundaryException("EXPENSE_RECORD_UNAVAILABLE",503);
+        if (earlier.Expense.SourceFinancialFactId == later.Expense.SourceFinancialFactId)
+            throw new TenantBoundaryException("EXPENSE_COMPARISON_DISTINCT_SOURCES_REQUIRED",400);
+        if (earlier.Currency != later.Currency) throw new TenantBoundaryException("EXPENSE_COMPARISON_CURRENCY_MISMATCH",400);
+        if (!string.Equals(earlier.Expense.Category,later.Expense.Category,StringComparison.OrdinalIgnoreCase))
+            throw new TenantBoundaryException("EXPENSE_COMPARISON_CATEGORY_MISMATCH",400);
+        var days = earlier.Expense.PeriodEnd.DayNumber - earlier.Expense.PeriodStart.DayNumber + 1;
+        if (days < 1 || days != later.Expense.PeriodEnd.DayNumber - later.Expense.PeriodStart.DayNumber + 1 || earlier.Expense.PeriodEnd >= later.Expense.PeriodStart)
+            throw new TenantBoundaryException("EXPENSE_COMPARISON_PERIODS_NOT_COMPARABLE",400);
+        // Date eligibility only. Financial arithmetic/aggregation remains owned by Financial Rules.
+        return new(earlier,later,days);
+    }
     private static bool Text(string? value, int maxLength=120) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= maxLength && !value.Any(char.IsControl);
     private static bool Money(decimal value) => value is >= 0 and <= 999999999999.99m && decimal.Round(value, 2) == value;
     private static bool Currency(string value) => value.Length == 3 && value.All(char.IsAsciiLetterUpper);
