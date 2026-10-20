@@ -17,6 +17,13 @@ public static class CustomerAdministrationEndpoints
    foreach(var row in page.Items)Bound(row,admin.TenantId,row.CustomerId);
    await Confirm(http,access,admin);return page;
   });
+  group.MapPost("/labels",async(HttpContext http,TenantAccessClient access,ICustomerAdministrationRepository repo)=>{
+   var admin=await access.RequireAdministratorAsync(http);Query(http.Request);var input=await Read<CustomerLabelRequest>(http);
+   if(input.CustomerIds.Count is <1 or >50||input.CustomerIds.Any(x=>!TenantAccessClient.Identifier(x,128))||input.CustomerIds.Distinct(StringComparer.Ordinal).Count()!=input.CustomerIds.Count)throw new TenantBoundaryException("CUSTOMER_LABELS_INVALID",400);
+   var rows=await repo.ReadManyAsync(admin.TenantId,input.CustomerIds,http.RequestAborted);if(rows.Count>input.CustomerIds.Count||rows.Select(x=>x.CustomerId).Distinct().Count()!=rows.Count)throw Invalid();
+   foreach(var row in rows){Bound(row,admin.TenantId,row.CustomerId);if(!input.CustomerIds.Contains(row.CustomerId,StringComparer.Ordinal))throw Invalid();}
+   await Confirm(http,access,admin);return new CustomerAdministrationLabels(admin.TenantId,rows.Select(x=>new CustomerAdministrationLabel(x.CustomerId,x.DisplayName,x.SecondaryLabel)).ToArray(),input.CustomerIds.Where(x=>rows.All(row=>row.CustomerId!=x)).ToArray());
+  });
   group.MapGet("/{customerId}",async(string customerId,HttpContext http,TenantAccessClient access,ICustomerAdministrationRepository repo)=>{
    var admin=await access.RequireAdministratorAsync(http);Id(customerId);Query(http.Request);var row=await repo.ReadAsync(admin.TenantId,customerId,http.RequestAborted)??throw new TenantBoundaryException("CUSTOMER_NOT_FOUND",404);Bound(row,admin.TenantId,customerId);await Confirm(http,access,admin);return row;
   });
@@ -30,7 +37,7 @@ public static class CustomerAdministrationEndpoints
    var admin=await access.RequireAdministratorAsync(http);Id(customerId);Operation(operationId);Query(http.Request);var r=await repo.ReceiptAsync(admin.TenantId,customerId,operationId,http.RequestAborted)??throw new TenantBoundaryException("CUSTOMER_CHANGE_NOT_FOUND",404);Bound(r,admin.TenantId,customerId);if(r.OperationId!=operationId)throw Invalid();await Confirm(http,access,admin);return r;
   });
   group.MapPost("/{customerId}/status",async(string customerId,HttpContext http,TenantAccessClient access,ICustomerAdministrationRepository repo)=>{
-   var admin=await access.RequireAdministratorAsync(http);Id(customerId);Query(http.Request);var change=await Read(http);CustomerAdministration.Change(change);await Confirm(http,access,admin);
+   var admin=await access.RequireAdministratorAsync(http);Id(customerId);Query(http.Request);var change=await Read<CustomerStatusChange>(http);CustomerAdministration.Change(change);await Confirm(http,access,admin);
    var r=await repo.ChangeAsync(admin.TenantId,admin.ActorId,customerId,change,DateTimeOffset.UtcNow,http.RequestAborted);CustomerAdministration.Receipt(r,admin.TenantId,admin.ActorId,customerId,change);Bound(r,admin.TenantId,customerId);
    var saved=await repo.ReceiptAsync(admin.TenantId,customerId,change.OperationId,http.RequestAborted);if(saved!=r)throw Invalid();await Confirm(http,access,admin);return r;
   });
@@ -46,10 +53,10 @@ public static class CustomerAdministrationEndpoints
  {Bound(r.Before,tenant,id);Bound(r.After,tenant,id);var c=new CustomerStatusChange(r.OperationId,r.Before.Version,r.After.Active,r.Reason);CustomerAdministration.Change(c);CustomerAdministration.Receipt(r,tenant,r.RecordedBy,id,c);if(!TenantAccessClient.Identifier(r.RecordedBy,128)||string.IsNullOrWhiteSpace(r.RecordedByLabel)||r.RecordedByLabel.Length>320||r.RecordedByLabel.Any(char.IsControl)||r.RecordedAt<DateTimeOffset.UnixEpoch)throw Invalid();}
  private static Dictionary<string,string> Query(HttpRequest request,params string[] names)
  {var q=new Dictionary<string,string>();foreach(var pair in request.Query){if(!names.Contains(pair.Key,StringComparer.Ordinal)||pair.Value.Count!=1||string.IsNullOrEmpty(pair.Value[0]))throw new TenantBoundaryException("CUSTOMER_QUERY_INVALID",400);q.Add(pair.Key,pair.Value[0]!);}return q;}
- private static async Task<CustomerStatusChange> Read(HttpContext http)
+ private static async Task<T> Read<T>(HttpContext http) where T:class
  {
   if(http.Request.ContentType?.Split(';')[0].Trim()!="application/json")throw new TenantBoundaryException("CUSTOMER_CHANGE_INVALID",400);
-  http.Request.EnableBuffering(4096,16384);using var doc=await JsonDocument.ParseAsync(http.Request.Body,cancellationToken:http.RequestAborted);if(doc.RootElement.ValueKind!=JsonValueKind.Object||doc.RootElement.EnumerateObject().Select(x=>x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=doc.RootElement.EnumerateObject().Count())throw new JsonException();return doc.RootElement.Deserialize<CustomerStatusChange>(Json)??throw new JsonException();
+  http.Request.EnableBuffering(4096,16384);using var doc=await JsonDocument.ParseAsync(http.Request.Body,cancellationToken:http.RequestAborted);if(doc.RootElement.ValueKind!=JsonValueKind.Object||doc.RootElement.EnumerateObject().Select(x=>x.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=doc.RootElement.EnumerateObject().Count())throw new JsonException();return doc.RootElement.Deserialize<T>(Json)??throw new JsonException();
  }
  private static async ValueTask<object?> Filter(EndpointFilterInvocationContext context,EndpointFilterDelegate next)
  {

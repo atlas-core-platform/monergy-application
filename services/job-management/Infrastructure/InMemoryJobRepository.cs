@@ -3,7 +3,7 @@ using Monergy.Services.JobManagement.Application;
 
 namespace Monergy.Services.JobManagement.Infrastructure;
 
-public sealed class InMemoryJobRepository : IJobRepository
+public sealed partial class InMemoryJobRepository : IJobRepository
 {
     private sealed record OutboxEntry(AuditableEvent Event, DateTimeOffset CreatedAt);
 

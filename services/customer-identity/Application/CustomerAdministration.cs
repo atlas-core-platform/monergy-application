@@ -7,10 +7,16 @@ public sealed record AdminCustomerQuery(string Search="",string Status="all",str
 public sealed record CustomerStatusChange(string OperationId,long ExpectedVersion,bool Active,string Reason);
 public sealed record CustomerStatusReceipt(string TenantId,string CustomerId,string OperationId,AdminCustomer Before,AdminCustomer After,string Reason,string RecordedBy,string RecordedByLabel,DateTimeOffset RecordedAt);
 public sealed record CustomerStatusHistory(string TenantId,string CustomerId,IReadOnlyList<CustomerStatusReceipt> Items,long? NextBeforeVersion);
+public sealed record CustomerLabelRequest(IReadOnlyList<string> CustomerIds);
+public sealed record CustomerAdministrationLabel(string CustomerId,string DisplayName,string? SecondaryLabel);
+public sealed record CustomerAdministrationLabels(string TenantId,IReadOnlyList<CustomerAdministrationLabel> Items,IReadOnlyList<string> Unavailable);
 public interface ICustomerAdministrationRepository
 {
  Task<AdminCustomerPage> ListAsync(string tenant,AdminCustomerQuery query,CancellationToken ct);
  Task<AdminCustomer?> ReadAsync(string tenant,string customer,CancellationToken ct);
+ async Task<IReadOnlyList<AdminCustomer>> ReadManyAsync(string tenant,IReadOnlyList<string> customers,CancellationToken ct)
+ {var result=new List<AdminCustomer>();foreach(var customer in customers){var row=await ReadAsync(tenant,customer,ct);if(row is not null)result.Add(row);}return result;}
+
  Task<CustomerStatusReceipt> ChangeAsync(string tenant,string actor,string customer,CustomerStatusChange change,DateTimeOffset now,CancellationToken ct);
  Task<CustomerStatusReceipt?> ReceiptAsync(string tenant,string customer,string operation,CancellationToken ct);
  Task<CustomerStatusHistory> HistoryAsync(string tenant,string customer,long? before,CancellationToken ct);

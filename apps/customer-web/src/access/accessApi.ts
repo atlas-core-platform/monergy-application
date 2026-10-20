@@ -178,6 +178,12 @@ export class AccessApi {
       throw failure;
     }
   }
+  processingAdministration<T>(path = '', method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/jobs-api/local/v1/administration/processing' + path, {
+      method, headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
+      body: body === undefined ? undefined : JSON.stringify(body), signal,
+    });
+  }
   customerAdministration<T>(path = '', method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
     return this.guarded<T>('/identity-api/local/v1/administration/customers' + path, {
       method, headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
