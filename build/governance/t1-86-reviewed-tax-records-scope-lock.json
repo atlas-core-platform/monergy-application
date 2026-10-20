@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-86",
+  "applicationBase": "b463da8cd19098217fa1f738b23af0f6de98c4b4",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections13/14/20",
+    "COV-023",
+    "MON-FIN-010/011/012/014",
+    "M2-WS04-E02-F03",
+    "Original extraction/financial-data foundation"
+  ],
+  "scope": "Create,list,read,correct and inspect immutable tax record history with explicit jurisdiction,type,PAID/DUE/WITHHELD meaning,amount,tax-year label and period. Exact owned canonical TAX_RECORD source/currency/evidence retained. No amount/period inference,tax calculation,payment/filing/compliance/refund verification,certification or tax advice.",
+  "migrations": [
+    "services/financial-profile/migrations/0019_reviewed_tax_records.sql",
+    "services/financial-profile/migrations/0020_reviewed_tax_corrections.sql"
+  ],
+  "remaining": "Tax verification,filing/compliance/refund/provider workflows,professional findings/certification,broader financial records,reconciliation,Financial Rules calculations,Search/Reports record integration,central audit and physical/full UAT. MON-FIN-010 phase2+ retained."
+}

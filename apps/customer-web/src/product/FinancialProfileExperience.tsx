@@ -1,3 +1,4 @@
+import TaxRecordsExperience from './TaxRecordsExperience';
 import InsuranceRecordsExperience from './InsuranceRecordsExperience';
 import AssetSnapshotExperience from './AssetSnapshotExperience';
 import LiabilityRecordsExperience from './LiabilityRecordsExperience';
@@ -230,6 +231,11 @@ export default function FinancialProfileExperience() {
       {activeCategory === 'INVESTMENT' && api && canRead && <InvestmentRecordsExperience onRecordsChanged={assetRecordsChanged}
         key={[product?.tenantId, product?.actorId, product?.customerId].join(':')}
         api={api} facts={profile?.facts.filter((fact) => fact.factType === 'INVESTMENT') ?? []}
+        canRead={product?.capabilities.includes('evidence.document.read') ?? false}
+        canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
+      {activeCategory === 'TAX' && api && canRead && <TaxRecordsExperience
+        key={['tax',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
+        facts={profile?.facts.filter(fact=>fact.factType==='TAX') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
       {activeCategory === 'INSURANCE' && api && canRead && <InsuranceRecordsExperience
