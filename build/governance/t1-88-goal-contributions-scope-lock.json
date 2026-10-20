@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-88",
+  "applicationBase": "216d226e67d139dca5253c5faae5ff3ba170c037",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections2/4.1/20",
+    "BO-19",
+    "COV-024",
+    "MON-FIN-010 original phase2+ retained",
+    "M2-WS04-E02-F03 READY authoritative goal records"
+  ],
+  "scope": "Customer-reported positive contribution amount/date against an owned exact goal version;create/list/read/corrections/history,immutable original goal/currency snapshot and exact receipts. No bank transfer,payment verification,allocation,progress/required-contribution calculation,aggregation,FX or achievement inference.",
+  "migrations": [
+    "services/financial-profile/migrations/0022_goal_contributions.sql"
+  ],
+  "remaining": "Progress,required-contribution calculation,allocation/reconciliation,cancellation/reversal,achievement lifecycle,Financial Rules methodology/OD-08/C-10,Search/Reports,central Audit and physical/full UAT."
+}

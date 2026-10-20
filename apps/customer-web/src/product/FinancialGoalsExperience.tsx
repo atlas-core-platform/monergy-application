@@ -1,3 +1,4 @@
+import GoalContributionsExperience from './GoalContributionsExperience';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Drawer, Input, Space, Tag } from 'antd';
 import { AccessApiError, type AccessApi } from '../access/accessApi';
@@ -28,6 +29,7 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
   const [saveError, setSaveError] = useState<{ context: typeof context; text: string } | null>(null);
   const [saved, setSaved] = useState<{ context: typeof context; record: ProductFinancialGoal } | null>(null);
   const [history, setHistory] = useState<{ context: typeof context; record: ProductFinancialGoal } | null>(null);
+  const [contributions,setContributions]=useState<{context:typeof context;record:ProductFinancialGoal}|null>(null);
   const [selected, setSelected] = useState<{ context: typeof context; record: ProductFinancialGoal } | null>(null);
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!canRead) return;
@@ -87,6 +89,7 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
       <p>Goal amount: {money(record.goal)} · Target date: {record.goal.targetDate}</p>
       <Button onClick={() => { setSelected({ context, record }); }}>View goal: {record.goal.name}</Button>
       {canCreate && <Button disabled={isSaving || Boolean(current?.submission)} onClick={() => { open(record); }}>Edit goal: {record.goal.name}</Button>}
+      <Button onClick={() => {setContributions({context,record});}}>View contributions: {record.goal.name}</Button>
       <Button onClick={() => { setHistory({ context, record }); }}>View goal history: {record.goal.name}</Button></Card>)}
     <Drawer title={current?.original ? 'Edit goal' : 'Add goal'} open={Boolean(current?.open && canCreate)} onClose={() => { if (current) setEditor({ ...current, open: false }); }} size={520} closable={!isSaving} mask={{ closable: !isSaving }} destroyOnHidden>
       {current?.original && <p>Editing version {current.original.revision}. Earlier versions remain available in history.</p>}
@@ -102,6 +105,9 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
     </Drawer>
     <Drawer title="Goal details" open={Boolean(visible)} onClose={() => { setSelected(null); }} size={520} destroyOnHidden>
       {visible && <GoalDetails record={visible} />}
+    </Drawer>
+    <Drawer title="Goal contributions" open={contributions?.context === context} onClose={() => {setContributions(null);}} size={620} destroyOnHidden>
+      {contributions?.context === context && <GoalContributionsExperience key={contributions.record.financialGoalId} api={api} goal={list?.items.find(item=>item.financialGoalId===contributions.record.financialGoalId) ?? contributions.record} canRead={canRead} canCreate={canCreate} />}
     </Drawer>
     <Drawer title="Goal history" open={history?.context === context} onClose={() => { setHistory(null); }} size={520} destroyOnHidden>
       {history?.context === context && <GoalHistory key={history.record.financialGoalId} api={api} record={history.record} />}
