@@ -898,6 +898,35 @@ public sealed class PersistentFoundationTests
         }
     }
 
+    [Fact]
+    public async Task GoalContributionsKeepExactHistoricalTargetsAfterRestartAndRuntimeCannotRewriteReports()
+    {
+        var configuration=Configuration("FinancialProfile");var customer="contribution-"+Guid.NewGuid().ToString("N");
+        await using var goals=new PostgresFinancialGoals(configuration);var goalOwner=new FinancialGoalsApplication(goals,TimeProvider.System);
+        var goal=await goalOwner.CreateAsync("T001",customer,"actor-goal",new(Guid.NewGuid().ToString("N"),new("Education fund",100000m,"INR",new(2030,1,1))),default);
+        var input=new CreateGoalContribution(Guid.NewGuid().ToString("N"),new(goal.FinancialGoalId,1,1000m,new(2026,10,1)));
+        ReportedGoalContribution first;ReportedGoalContribution second;ReviseGoalContribution change;
+        await using(var records=new PostgresGoalContributions(configuration))
+        {
+            var owner=new GoalContributionsApplication(goals,records,TimeProvider.System);first=await owner.CreateAsync("T001",customer,"actor-goal",input,default);
+            await goalOwner.ReviseAsync("T001",customer,"actor-goal",goal.FinancialGoalId,new(Guid.NewGuid().ToString("N"),1,goal.Goal with {Currency="USD",TargetAmount=200000}),default);
+            change=new(Guid.NewGuid().ToString("N"),1,input.Contribution with {Amount=1250,ContributionDate=new(2026,10,2)});second=await owner.ReviseAsync("T001",customer,"actor-goal",first.GoalContributionId,change,default);
+            Assert.Equal(goal.Goal,second.SourceGoal);Assert.Equal("CUSTOMER_REPORTED",second.DeclarationStatus);
+            Assert.Equal(404,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>owner.CreateAsync("T002",customer,"actor-goal",input,default))).Status);
+        }
+        await using(var records=new PostgresGoalContributions(configuration))
+        {
+            var owner=new GoalContributionsApplication(goals,records,TimeProvider.System);Assert.Equal(first,await owner.CreateAsync("T001",customer,"actor-goal",input,default));Assert.Equal(second,await owner.ReviseAsync("T001",customer,"actor-goal",first.GoalContributionId,change,default));Assert.Equal([second,first],(await owner.HistoryAsync("T001",customer,first.GoalContributionId,null,default)).Items);Assert.Equal(second,Assert.Single((await owner.ListAsync("T001",customer,goal.FinancialGoalId,default)).Items));Assert.Equal(first,await owner.ReadAsync("T001",customer,first.GoalContributionId,default,1));Assert.Null(await records.ReadAsync("T002",customer,first.GoalContributionId,default));
+            Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>owner.ReviseAsync("T001",customer,"actor-goal",first.GoalContributionId,change with {OperationId=Guid.NewGuid().ToString("N")},default))).Status);
+        }
+        await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
+        foreach(var table in new[]{"goal_contributions","goal_contribution_revisions"})
+        {
+            var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("UPDATE financial_profile."+table+" SET payload=payload WHERE goal_contribution_id=@Id;",new {Id=first.GoalContributionId}));Assert.Equal("42501",denied.SqlState);
+            var deleted=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync("DELETE FROM financial_profile."+table+" WHERE goal_contribution_id=@Id;",new {Id=first.GoalContributionId}));Assert.Equal("42501",deleted.SqlState);
+        }
+    }
+
     private static readonly string[] Services = ["evidence", "financial-profile", "financial-rules", "reporting", "audit"];
     private static IConfiguration Configuration(string service)
     {

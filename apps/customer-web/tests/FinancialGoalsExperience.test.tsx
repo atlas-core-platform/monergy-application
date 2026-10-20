@@ -62,3 +62,12 @@ it.each(['customer', 'goal', 'gap', 'tail', 'cursor', 'status'])('rejects substi
   const api = new AccessApi(session); const second = { ...record, revision: 2 }; const first = structuredClone(second); const items = [first, structuredClone(record)]; let cursor: number | null = null; if (kind === 'customer') first.customerId = 'foreign'; if (kind === 'goal') first.financialGoalId = 'foreign'; if (kind === 'gap') first.revision = 9; if (kind === 'tail') items.pop(); if (kind === 'cursor') cursor = 1; if (kind === 'status') Object.assign(first, { declarationStatus: 'ACHIEVED' }); vi.spyOn(api, 'product').mockImplementation(path => Promise.resolve(path.endsWith('/history') ? { items, hasMore: false, nextBeforeRevision: cursor } : list([second]))); mount(api, false); const user = userEvent.setup(); await user.click(await screen.findByRole('button', { name: 'View goal history: Education fund' })); expect(await screen.findByText('Goal history is unavailable.')).toBeVisible(); expect(screen.queryByRole('button', { name: 'View version 2' })).not.toBeInTheDocument();
 });
 it('rejects duplicate goal rows', async () => { const api = new AccessApi(session); vi.spyOn(api, 'product').mockResolvedValue(list([record, record])); mount(api); await screen.findByText('Financial goals are unavailable. Try again.'); expect(screen.queryByText('Education fund')).not.toBeInTheDocument(); });
+
+it('opens contribution records for the selected goal before any document source exists', async () => {
+  const api = new AccessApi(session); const request = vi.spyOn(api, 'product').mockImplementation(path => Promise.resolve(path === 'v1/financial-goals' ? list([record]) : list()));
+  mount(api); const user = userEvent.setup(); await user.click(await screen.findByRole('button', { name: 'View contributions: Education fund' }));
+  const drawer = screen.getByRole('dialog', { name: 'Goal contributions' }); expect(await within(drawer).findByText(/No contributions reported/)).toBeVisible();
+  expect(request.mock.calls.some(([path]) => path === 'v1/goal-contributions?financialGoalId=goal-saved')).toBe(true);
+  await user.click(within(drawer).getByRole('button', { name: 'Record contribution' }));
+  expect(await screen.findByLabelText('Contribution amount')).toHaveValue(null); expect(screen.getByText(/Goal: Education fund · Goal version 1 · Currency: INR/u)).toBeVisible();
+});

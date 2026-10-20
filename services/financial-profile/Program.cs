@@ -32,7 +32,8 @@ if (referenceAdapters || physicalPersistence)
     app.MapFinancialProfileContracts();
     if (TenantBoundaryOptions.Selected(builder.Configuration)) { app.MapLoanRecords(); app.MapInvestmentRecords(); app.MapPropertyRecords(); app.MapVehicleRecords(); app.MapInsuranceRecords();
 app.MapTaxRecords();
-app.MapFinancialGoals(); app.MapAssetSnapshot(); app.MapIncomeRecords(); app.MapExpenseRecords(); app.MapLiabilityRecords(); }
+app.MapFinancialGoals();
+app.MapGoalContributions(); app.MapAssetSnapshot(); app.MapIncomeRecords(); app.MapExpenseRecords(); app.MapLiabilityRecords(); }
 }
 if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Profile"], "persisted-reporting", StringComparison.Ordinal))
 {
