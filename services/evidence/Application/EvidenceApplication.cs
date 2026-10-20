@@ -28,7 +28,8 @@ public sealed record EvidenceVersionRecord(
     DateTimeOffset CreatedAt,
     long ContentLength = 0,
     string? ContentStorageKey = null,
-    string? ContentStorageVersionId = null);
+    string? ContentStorageVersionId = null,
+    string? TenantId = null, EvidenceMalwareCheck? MalwareCheck = null);
 
 public sealed record EvidenceSaveResult(EvidenceVersionRecord Version, bool Created, bool FirstVersion);
 
@@ -69,6 +70,12 @@ public sealed class EvidenceApplication(
     ILifecycleTelemetry telemetry,
     TimeProvider timeProvider)
 {
+    private static string? WorkloadTenant(TrustedSecurityContext security)
+    {
+        const string prefix="local-uat-workspace:";
+        var value=security.Workload.WorkloadIdentityId;
+        return value.StartsWith(prefix,StringComparison.Ordinal)&&TenantAccessClient.Identifier(value[prefix.Length..],64)?value[prefix.Length..]:null;
+    }
     private static readonly Regex Sha256Pattern = new("^[A-Fa-f0-9]{64}$", RegexOptions.CultureInvariant);
     private static readonly HashSet<string> SupportedContentTypes =
         new(StringComparer.OrdinalIgnoreCase) { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
@@ -137,7 +144,8 @@ public sealed class EvidenceApplication(
             now,
             content.ContentLength,
             content.StorageKey,
-            content.StorageVersionId);
+            content.StorageVersionId,
+            WorkloadTenant(request.Security), content.MalwareCheck);
 
         try
         {

@@ -80,7 +80,7 @@ public sealed record ProcessingRecord(
     string? ActiveAttemptId,
     string? TerminalEventId,
     DateTimeOffset UpdatedAt,
-    IReadOnlyList<ValidatedSourceFact> Facts);
+    IReadOnlyList<ValidatedSourceFact> Facts, string? TenantId = null);
 
 public interface IDocumentProcessingRepository
 {
@@ -124,6 +124,8 @@ public sealed class DocumentProcessingApplication(
     ILifecycleTelemetry telemetry,
     TimeProvider timeProvider)
 {
+    private static string? WorkloadTenant(TrustedSecurityContext security)
+    {const string prefix="local-uat-workspace:";var value=security.Workload.WorkloadIdentityId;return value.StartsWith(prefix,StringComparison.Ordinal)&&TenantAccessClient.Identifier(value[prefix.Length..],64)?value[prefix.Length..]:null;}
     public async Task<ContractResult<ProcessingStatus>> ProcessDocumentAsync(
         ContractRequest<ProcessDocument> request,
         CancellationToken cancellationToken = default)
@@ -182,7 +184,7 @@ public sealed class DocumentProcessingApplication(
             null,
             null,
             now,
-            []);
+            [], WorkloadTenant(request.Security));
 
         try
         {
@@ -339,7 +341,7 @@ public sealed class DocumentProcessingApplication(
             null,
             null,
             now,
-            []);
+            [], WorkloadTenant(request.Security));
 
         try
         {

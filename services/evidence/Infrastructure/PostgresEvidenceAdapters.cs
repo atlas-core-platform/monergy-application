@@ -13,7 +13,7 @@ using Npgsql;
 
 namespace Monergy.Services.Evidence.Infrastructure;
 
-public sealed class PostgresEvidenceRepository : IEvidenceRepository, IAsyncDisposable
+public sealed partial class PostgresEvidenceRepository : IEvidenceRepository, IAsyncDisposable
 {
     private const string VersionColumns = """
         document_id AS DocumentId, document_version_id AS DocumentVersionId,
@@ -22,7 +22,7 @@ public sealed class PostgresEvidenceRepository : IEvidenceRepository, IAsyncDisp
         content_type AS ContentType, content_reference AS ContentReference,
         content_sha256 AS ContentSha256, received_at AS ReceivedAt, created_at AS CreatedAt,
         content_length AS ContentLength, content_storage_key AS ContentStorageKey,
-        content_storage_version_id AS ContentStorageVersionId
+        content_storage_version_id AS ContentStorageVersionId, tenant_id AS TenantId, malware_check::text AS MalwareJson
         """;
 
     private readonly NpgsqlDataSource dataSource;
@@ -77,6 +77,8 @@ public sealed class PostgresEvidenceRepository : IEvidenceRepository, IAsyncDisp
             throw new InvalidOperationException("Document identity belongs to another customer.");
         }
 
+        if(await connection.ExecuteScalarAsync<bool>(new CommandDefinition("SELECT EXISTS(SELECT 1 FROM evidence.document_versions WHERE document_id=@DocumentId AND tenant_id IS NOT NULL AND tenant_id IS DISTINCT FROM @TenantId);",new{candidate.DocumentId,candidate.TenantId},transaction,cancellationToken:cancellationToken)))throw new InvalidOperationException("Document source tenant conflict.");
+
         var nextVersion = await connection.ExecuteScalarAsync<int>(new CommandDefinition("""
             SELECT COALESCE(MAX(version), 0) + 1 FROM evidence.document_versions WHERE document_id=@DocumentId;
             """, new { candidate.DocumentId }, transaction, cancellationToken: cancellationToken));
@@ -85,12 +87,12 @@ public sealed class PostgresEvidenceRepository : IEvidenceRepository, IAsyncDisp
             INSERT INTO evidence.document_versions
                 (document_version_id, document_id, evidence_id, customer_id, version, source_name,
                  original_file_name, content_type, content_reference, content_storage_key,
-                 content_storage_version_id, content_length, content_sha256, received_at, created_at)
+                 content_storage_version_id, content_length, content_sha256, received_at, created_at, tenant_id, malware_check, intake_scan_verified)
             VALUES
                 (@DocumentVersionId, @DocumentId, @EvidenceId, @CustomerId, @Version, @SourceName,
                  @OriginalFileName, @ContentType, @ContentReference, @ContentStorageKey,
-                 @ContentStorageVersionId, @ContentLength, @ContentSha256, @ReceivedAt, @CreatedAt);
-            """, saved, transaction, cancellationToken: cancellationToken));
+                 @ContentStorageVersionId, @ContentLength, @ContentSha256, @ReceivedAt, @CreatedAt, @TenantId, CAST(@MalwareJson AS jsonb), @ScanVerified);
+            """, new { saved.DocumentVersionId,saved.DocumentId,saved.EvidenceId,saved.CustomerId,saved.Version,saved.SourceName,saved.OriginalFileName,saved.ContentType,saved.ContentReference,saved.ContentStorageKey,saved.ContentStorageVersionId,saved.ContentLength,saved.ContentSha256,saved.ReceivedAt,saved.CreatedAt,saved.TenantId,ScanVerified=DocumentMonitoring.Scanned(saved),MalwareJson=saved.MalwareCheck is null?null:JsonSerializer.Serialize(saved.MalwareCheck,ContractJson.Options) }, transaction, cancellationToken: cancellationToken));
         await connection.ExecuteAsync(new CommandDefinition("""
             INSERT INTO evidence.idempotency_operations
                 (contract_name, contract_version, customer_id, idempotency_key, payload_fingerprint,
@@ -194,6 +196,7 @@ public sealed class PostgresEvidenceRepository : IEvidenceRepository, IAsyncDisp
     {
         var material = string.Join('|', value.DocumentId, value.DocumentVersionId, value.EvidenceId,
             value.CustomerId, value.ContentReference, value.ContentSha256);
+        if(value.TenantId is not null)material+="|tenant="+value.TenantId;
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material))).ToLowerInvariant();
     }
 
@@ -215,6 +218,8 @@ public sealed class PostgresEvidenceRepository : IEvidenceRepository, IAsyncDisp
         public long ContentLength { get; set; }
         public string ContentStorageKey { get; set; } = string.Empty;
         public string ContentStorageVersionId { get; set; } = string.Empty;
+        public string? TenantId { get; set; }
+        public string? MalwareJson { get; set; }
     }
 
     private static EvidenceVersionRecord ToRecord(VersionRow row) => new(row.DocumentId,
@@ -222,7 +227,7 @@ public sealed class PostgresEvidenceRepository : IEvidenceRepository, IAsyncDisp
         row.OriginalFileName, row.ContentType, row.ContentReference, row.ContentSha256,
         new DateTimeOffset(DateTime.SpecifyKind(row.ReceivedAt, DateTimeKind.Utc)),
         new DateTimeOffset(DateTime.SpecifyKind(row.CreatedAt, DateTimeKind.Utc)),
-        row.ContentLength, row.ContentStorageKey, row.ContentStorageVersionId);
+        row.ContentLength, row.ContentStorageKey, row.ContentStorageVersionId,row.TenantId, row.MalwareJson is null?null:JsonSerializer.Deserialize<EvidenceMalwareCheck>(row.MalwareJson,ContractJson.Options));
 }
 
 public sealed record S3StoredContent(

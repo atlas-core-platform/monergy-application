@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-92 complete Processing Status (P1-28). Original29:3 Complete,19 Partial,7 Pending. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-93 complete Document Monitoring (P1-27). Original29:4 Complete,19 Partial,6 Pending. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-92 update — complete Processing Status
+## Current T1-93 update — complete Document Monitoring
+
+Organization Settings > Document Monitoring delivers named tenant document inventory,version history,literal name/reference search,customer/scan/document filters,counts/pages,metadata details,historical scan evidence and detected categories/processing history. Exact document/customer links reuse reviewed Processing Status recovery;no scan/content/financial authorization bypass. Receipt: [t1-93-document-monitoring.md](t1-93-document-monitoring.md).
+
+957 backend checks pass,including39 new cases;6 actual Gateway HTTP route/SPA checks and static/build verification pass. UI verification PENDING_FULL_UI. Physical database/query/grant/restart,live ClamAV and full live UAT NOT RUN. After paired merges:93 numbered units=92 implementations+1 governance closure;original29:4 Complete,19 Partial,6 Pending. All29 repo statuses synchronized from workbook version35 before applying T1-93. Original IDs/source phases/business acceptance unchanged. Product-wide Audit remains Pending.
+
+## Previous T1-92 update — complete Processing Status
 
 Organization Settings > Processing Status delivers tenant queues, all six required states/counts, literal job search, customer/state filters,pages,named customers,details,attempt/failure visibility and immutable recovery history. Explicit reviewed cancellation and current original-customer authorization/Consent-checked retry preserve the owner context. Running cancellation stays Processing;unknown outcomes require owner review. Exact immutable receipts recover uncertain requests without duplicate scheduling. Receipt: [t1-92-processing-status.md](t1-92-processing-status.md).
 

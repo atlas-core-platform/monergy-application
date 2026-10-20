@@ -6,7 +6,7 @@ using Monergy.Services.DocumentIntelligence.Application;
 
 namespace Monergy.Services.DocumentIntelligence.Infrastructure;
 
-public sealed class InMemoryDocumentProcessingRepository : IDocumentProcessingRepository
+public sealed partial class InMemoryDocumentProcessingRepository : IDocumentProcessingRepository
 {
     private readonly object sync = new();
     private readonly Dictionary<string, ProcessingRecord> records = new(StringComparer.Ordinal);

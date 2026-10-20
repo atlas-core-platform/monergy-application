@@ -12,6 +12,7 @@ import { useWorkspaceSession } from './workspaceSession';
 import { WorkspaceSessionProvider } from './WorkspaceSessionProvider';
 import { WorkspaceEntry } from './WorkspaceEntry';
 import { AccessOverview } from './AccessOverview';
+import { DocumentMonitoring } from './DocumentMonitoring';
 import { ProcessingStatus } from './ProcessingStatus';
 import { CustomerManagement } from './CustomerManagement';
 import { CustomerRelationships } from './CustomerRelationships';
@@ -132,7 +133,7 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
           onExpired={fail}
         />
       )}
-      {path === '/access/processing' ? (<ProcessingStatus key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access/customers' ? (<CustomerManagement key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access' ? (
+      {path === '/access/documents' ? (<DocumentMonitoring key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access/processing' ? (<ProcessingStatus key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access/customers' ? (<CustomerManagement key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access' ? (
         <AccessOverview api={api} onExpired={fail} />
       ) : area === 'resource-grants' ? (
         <CustomerRelationships

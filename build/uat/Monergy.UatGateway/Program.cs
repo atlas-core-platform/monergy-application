@@ -138,7 +138,7 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     // Static files are handled earlier; only known SPA destinations get the shell.
     if (path is not ("/" or "/actions" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
         "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
-        "/access/activity" or "/access/sessions" or "/operations" or
+        "/access/activity" or "/access/sessions" or "/access/customers" or "/access/processing" or "/access/documents" or "/operations" or
         "/search" or "/reports" or "/finances" or "/consent" or "/profile" or "/settings/sessions" or "/settings/agreements" or "/vs02" or "/foundation"))
     { http.Response.StatusCode = 404; return; }
     http.Response.ContentType = "text/html; charset=utf-8";
@@ -153,6 +153,9 @@ static string? Route(string path, string method)
     if ((path is "/identity-api/local/v1/tenant-sessions" or "/identity-api/local/v1/tenant-sessions/revoke") && method == "POST" ||
         path == "/identity-api/local/v1/administration/sessions" && method == "GET")
         return "http://127.0.0.1:5101" + path[13..];
+    const string documents="/evidence-api/local/v1/administration/documents";
+    if(method=="GET"&&(path==documents||path.StartsWith(documents+"/",StringComparison.Ordinal)&&TenantAccessClient.Identifier(path[(documents.Length+1)..],160)))return "http://127.0.0.1:5111"+path[13..];
+    if(method=="GET"&&path=="/classification-api/local/v1/administration/document-classifications")return "http://127.0.0.1:5112"+path[19..];
     const string processing="/jobs-api/local/v1/administration/processing";
     if(path==processing&&method=="GET")return "http://127.0.0.1:5118"+path[9..];
     if(path.StartsWith(processing+"/",StringComparison.Ordinal))

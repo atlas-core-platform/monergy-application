@@ -1,21 +1,21 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-92",
-  "applicationBase": "fd27580730f3ca9a79a5544ac2e7996bcd9a89f4",
+  "asOf": "T1-93",
+  "applicationBase": "3831c102da4e31c18fe1db8d2f6147044419528e",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 34,
+    "libraryVersion": 35,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Tracker version34 through T1-91 reviewed before T1-92. All29 deliverables synchronized before marking P1-28 Processing Status functionality Complete. Physical/live UAT and business acceptance remain separate and unchanged."
+    "reviewThrough": "Tracker version35 through T1-92 reviewed before T1-93. All29 deliverables synchronized before marking P1-27 Document Monitoring functionality Complete. Physical/live UAT and business acceptance remain separate and unchanged."
   },
   "counts": {
     "originalDeliverables": 29,
-    "fullyImplemented": 3,
+    "fullyImplemented": 4,
     "partial": 19,
-    "pendingBusinessJourneys": 7,
-    "remainingOriginalDeliverables": 26,
-    "numberedUnitsAfterPairedMerge": 92,
-    "mergedImplementationUnitsAfterPairedMerge": 91,
+    "pendingBusinessJourneys": 6,
+    "remainingOriginalDeliverables": 25,
+    "numberedUnitsAfterPairedMerge": 93,
+    "mergedImplementationUnitsAfterPairedMerge": 92,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -316,20 +316,20 @@
       "id": "P1-27",
       "area": "Admin",
       "name": "Document monitoring",
-      "state": "Pending",
-      "existing": "The customer Documents activity view and service metadata exist; the administrator operating journey is not delivered.",
-      "remaining": "Implement authorized document/classification/scan/processing monitoring and the explicitly scoped recovery actions.",
-      "units": "T1-14/16 customer foundations only",
+      "state": "Complete",
+      "existing": "Organization administrator accepted-document inventory with exact tenant provenance,version history,customer/scan/document filters,literal name/reference search,counts and bounded pages. Historical hash-bound scan evidence,unrecorded/legacy coverage guidance and metadata-only detected categories,processing/failure/attempt history. Exact document/customer recovery links to the existing reviewed Processing Status workflow;no scan,classification or financial authorization bypass.",
+      "remaining": "Physical PostgreSQL/migration/query/grant/restart and full authenticated live UAT remain separate verification/acceptance. Blocked uploads never register as documents;legacy versions without organization provenance are excluded and missing scan proof stays unverified. No content/financial values,manual classification catalogue,forced rescan,reconciliation override,provider producer or product-wide Audit completion.",
+      "units": "T1-93",
       "requirements": "MON-ADM-002/003/004",
-      "receipt": "apps/customer-web/src/product/EvidenceExperience.tsx"
+      "receipt": "build/governance/t1-93-document-monitoring.md"
     },
     {
       "id": "P1-28",
       "area": "Admin",
       "name": "Processing status",
       "state": "Complete",
-      "existing": "Organization administrator processing console: tenant-bound queue, all six required states and counts, literal reference search, customer/state filters, bounded pages, named customer labels, detail, attempt/failure history, explicit reason/review cancellation and permission-checked retry, immutable recovery history and exact uncertain-request confirmation. Running cancellation remains processing until the owner confirms its outcome; unknown outcomes require owner review.",
-      "remaining": "Physical PostgreSQL/query/grant/restart and full authenticated live UAT remain separate verification/acceptance. Current product jobs are document-processing; this console does not create future producers, expose customer documents/finance, override reconciliation or complete Document Monitoring/Audit.",
+      "existing": "Complete administrator tenant queues with six states/counts,literal reference search,customer/state filters,pages,named customers,details,attempt/failure visibility,reviewed cancellation,current original-customer permission/Consent-checked retry,immutable recovery history and exact uncertain-request confirmation.",
+      "remaining": "Physical PostgreSQL/query/grant/restart and full live UAT remain separate verification/acceptance. Running cancellation retains owner outcome;unknown outcomes require owner review. Document Monitoring/product-wide Audit and future producers remain separate.",
       "units": "T1-92",
       "requirements": "MON-ADM-002/004; MON-JOB-003",
       "receipt": "build/governance/t1-92-processing-status.md"

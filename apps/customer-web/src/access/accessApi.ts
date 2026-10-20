@@ -178,6 +178,12 @@ export class AccessApi {
       throw failure;
     }
   }
+  documentMonitoring<T>(path = '', signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/evidence-api/local/v1/administration/documents' + path, { headers: { 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId }, signal });
+  }
+  classificationMonitoring<T>(path: string, signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/classification-api/local/v1/administration/document-classifications' + path, { headers: { 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId }, signal });
+  }
   processingAdministration<T>(path = '', method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
     return this.guarded<T>('/jobs-api/local/v1/administration/processing' + path, {
       method, headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
