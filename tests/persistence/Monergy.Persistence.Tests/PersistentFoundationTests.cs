@@ -19,7 +19,7 @@ using Xunit;
 
 namespace Monergy.Persistence.Tests;
 
-public sealed class PersistentFoundationTests
+public sealed partial class PersistentFoundationTests
 {
     [Fact]
     public async Task FiveServiceSchemasAndMigrationJournalsExist()

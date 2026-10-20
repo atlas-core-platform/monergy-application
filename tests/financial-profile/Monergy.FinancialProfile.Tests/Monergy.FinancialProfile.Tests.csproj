@@ -6,6 +6,7 @@
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../../build/uat/Monergy.UatGateway/ProductNetWorthEndpoints.cs" Link="ProductNetWorthEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductLoanRecordEndpoints.cs" Link="ProductLoanRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductInvestmentRecordEndpoints.cs" Link="ProductInvestmentRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductPropertyRecordEndpoints.cs" Link="ProductPropertyRecordEndpoints.cs" />
@@ -32,5 +33,6 @@
     <ProjectReference Include="../../../services/audit/Monergy.Services.Audit.csproj" />
     <ProjectReference Include="../../../services/financial-profile/Monergy.Services.FinancialProfile.csproj" />
     <ProjectReference Include="../../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+    <ProjectReference Include="../../../services/financial-rules/Monergy.Services.FinancialRules.csproj" />
   </ItemGroup>
 </Project>

@@ -24,6 +24,7 @@ app.MapHealthChecks("/health/ready");
 if (referenceAdapters || physicalPersistence)
 {
     app.MapFinancialRulesContracts();
+    if(TenantBoundaryOptions.Selected(builder.Configuration)&&builder.Configuration.GetValue<bool>("Monergy:NetWorth:Enabled"))app.MapNetWorthCalculations();
 }
 if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Profile"], "persisted-reporting", StringComparison.Ordinal))
 {

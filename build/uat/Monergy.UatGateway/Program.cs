@@ -15,6 +15,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.AddTenantSetup();
 builder.AddProductWorkspace();
 builder.AddProductFinancialProfile();
+builder.AddProductNetWorth();
 builder.AddProductLoanRecords();
 builder.AddProductInvestmentRecords();
 builder.AddProductPropertyRecords();
@@ -52,6 +53,7 @@ app.UseRouting();
 app.MapTenantSetup();
 app.MapProductWorkspace();
 app.MapProductFinancialProfile();
+app.MapProductNetWorth();
 app.MapProductLoanRecords();
 app.MapProductInvestmentRecords();
 app.MapProductPropertyRecords();

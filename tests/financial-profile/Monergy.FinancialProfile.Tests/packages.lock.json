@@ -399,6 +399,15 @@
           "Npgsql": "[10.0.3, )"
         }
       },
+      "monergy.services.financialrules": {
+        "type": "Project",
+        "dependencies": {
+          "Dapper": "[2.1.89, )",
+          "Monergy.Contracts": "[1.0.0, )",
+          "Monergy.Platform": "[1.0.0, )",
+          "Npgsql": "[10.0.3, )"
+        }
+      },
       "Dapper": {
         "type": "CentralTransitive",
         "requested": "[2.1.89, )",

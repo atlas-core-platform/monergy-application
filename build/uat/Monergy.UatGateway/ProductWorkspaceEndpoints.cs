@@ -106,6 +106,7 @@ public static class ProductWorkspaceEndpoints
         "job-management.job.read",
         "financial-profile.profile.read",
         "financial-profile.profile.update",
+        "financial-rules.calculation.execute",
         "search.query.execute",
         "reporting.report.generate",
         "reporting.report.read",
