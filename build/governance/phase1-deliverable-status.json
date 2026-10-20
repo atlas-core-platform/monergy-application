@@ -1,21 +1,21 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-90",
-  "applicationBase": "d53c2e64d4ec3cdad497c0bb978091aa28ca9212",
+  "asOf": "T1-91",
+  "applicationBase": "f589957d62248f1a65fba0301ded4806d18a3b31",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 32,
+    "libraryVersion": 33,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Tracker version32 through T1-89 reviewed before T1-90. All29 deliverables synchronized to the current workbook. P1-18 Net Worth functionality is complete; business acceptance and physical/live UAT remain separate and unchanged."
+    "reviewThrough": "Tracker version33 through T1-90 reviewed before T1-91. All29 deliverables synchronized to the current workbook before marking P1-26 customer management functionality Complete. Business acceptance and physical/live UAT remain separate and unchanged."
   },
   "counts": {
     "originalDeliverables": 29,
-    "fullyImplemented": 1,
+    "fullyImplemented": 2,
     "partial": 19,
-    "pendingBusinessJourneys": 9,
-    "remainingOriginalDeliverables": 28,
-    "numberedUnitsAfterPairedMerge": 90,
-    "mergedImplementationUnitsAfterPairedMerge": 89,
+    "pendingBusinessJourneys": 8,
+    "remainingOriginalDeliverables": 27,
+    "numberedUnitsAfterPairedMerge": 91,
+    "mergedImplementationUnitsAfterPairedMerge": 90,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -218,8 +218,8 @@
       "area": "Dashboard",
       "name": "Net worth",
       "state": "Complete",
-      "existing": "Complete reviewed Net Worth journey: explicit dated single-currency asset/liability inventory across all kinds, exact saved-record imports/source lineage, completeness review, Financial Rules Assets minus Liabilities, actionable insufficient-data states, exact cents, saved immutable results/history, new reviews and dashboard drill-down. Customer declarations remain unverified.",
-      "remaining": "Physical PostgreSQL/grant/restart execution and full authenticated live integration/UAT remain open as separate verification/acceptance work. Broader asset/liability records, valuation/ownership verification, FX and central Audit remain separate original journeys.",
+      "existing": "Complete reviewed Net Worth journey: full dated single-currency asset/debt inventory,exact saved-record imports,coverage review,Assets minus Liabilities,data-gap guidance,saved results/source lineage,history,new reviews and dashboard. Customer declarations remain unverified.",
+      "remaining": "Physical PostgreSQL/grant/restart execution and full authenticated live integration/UAT remain open as separate verification/acceptance. Broader records,external valuation/ownership verification,FX and central Audit remain separate journeys.",
       "units": "T1-90",
       "requirements": "MON-RUL-002; MON-DAS-001",
       "receipt": "build/governance/t1-90-complete-net-worth.md"
@@ -252,7 +252,7 @@
       "name": "Liabilities",
       "state": "Partial",
       "existing": "Explicit date and currency show latest saved balances as separate source-linked records. Complete owned set is filtered before200 bound. Correction history remains. Empty, overlap and coverage warnings; no totals.",
-      "remaining": "Complete liability position, broader sources and duplicate/loan reconciliation remain open. Totals/net worth require Financial Rules and valuation/date/currency meaning. Physical query and full UAT remain open.",
+      "remaining": "Broader complete comparable domain position,external ownership/valuation/creditor verification and reconciliation remain open. T1-90 separately delivers reviewed Net Worth inventory/calculation and saved dashboard results. Physical/full live UAT remains open.",
       "units": "T1-79 dated snapshot; T1-77\u201378 records/history",
       "requirements": "MON-DAS-001/004; MR \u00a741",
       "receipt": "build/governance/t1-79-dated-liability-snapshot.md"
@@ -263,7 +263,7 @@
       "name": "Assets",
       "state": "Partial",
       "existing": "Dated asset snapshot shows latest reviewed Investment,Property and Vehicle versions matching exact date/currency. Separate values,source links,review versions,per-kind bounds and overlap/coverage are visible;independent reads.",
-      "remaining": "Full comparable asset position requires broader kinds,ownership/valuation context,coverage and reconciliation. No carry-forward,currency conversion,totals/net worth or atomic historical snapshot. Financial Rules and physical/full UAT remain open.",
+      "remaining": "Broader complete comparable domain position,external ownership/valuation/creditor verification and reconciliation remain open. T1-90 separately delivers reviewed Net Worth inventory/calculation and saved dashboard results. Physical/full live UAT remains open.",
       "units": "T1-27/33; T1-69\u201370; T1-80\u201384 bounded view",
       "requirements": "MON-DAS-001/004",
       "receipt": "build/governance/t1-84-dated-asset-snapshot.md"
@@ -305,12 +305,12 @@
       "id": "P1-26",
       "area": "Admin",
       "name": "Customer management",
-      "state": "Pending",
-      "existing": "Organization onboarding, imported people and RBAC exist. These do not deliver the administrator customer lifecycle workspace.",
-      "remaining": "Implement authorized customer list/detail/lifecycle operations with meaningful customer identities, audit and tenant boundaries.",
-      "units": "Onboarding/access foundations only",
+      "state": "Complete",
+      "existing": "Complete organization administrator customer list/search/status-filter/pagination,counts,metadata detail,suspension/reactivation review,exact version/replay confirmation and immutable named status history. Availability is separate from read-only customer ownership;current owner reads respect suspension. No financial/protected identity access or ownership creation.",
+      "remaining": "Physical database/view/grant/restart execution and full authenticated live integration/UAT remain open as separate verification/acceptance. Public registration,KYC,professional assignments/Consent,other administrator journeys and central product-wide Audit remain separate scope.",
+      "units": "T1-91",
       "requirements": "MON-ADM-001/004",
-      "receipt": "apps/customer-web/src/access/AccessExperience.tsx"
+      "receipt": "build/governance/t1-91-customer-management.md"
     },
     {
       "id": "P1-27",

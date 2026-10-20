@@ -10,6 +10,7 @@ using Xunit;
 namespace Monergy.AccessIntegration.Tests;
 
 [Trait("Category", "Physical")]
+[Collection("CustomerIdentityPhysicalOwners")]
 public sealed class PostgresOwnerTests : IAsyncLifetime
 {
     public async Task InitializeAsync()

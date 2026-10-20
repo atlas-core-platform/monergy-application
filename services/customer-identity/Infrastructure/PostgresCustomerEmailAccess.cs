@@ -17,7 +17,7 @@ public sealed class PostgresCustomerEmailAccess(PostgresTenantSessions sessions)
             SELECT p.normalized_email,@ChallengeHash,@CodeHash,@ProtectedCode,p.actor_id,
                 max(c.customer_id),max(c.version),@Now,@Now+interval '5 minutes',@Now,1
             FROM customer_identity.tenant_principals p
-            JOIN customer_identity.customers c ON c.owner_actor_id=p.actor_id AND c.active
+            JOIN customer_identity.current_customers c ON c.owner_actor_id=p.actor_id AND c.active
             WHERE p.normalized_email=@Email
             GROUP BY p.normalized_email,p.actor_id HAVING count(*)=1
             ON CONFLICT(normalized_email) DO UPDATE SET
@@ -61,9 +61,9 @@ public sealed class PostgresCustomerEmailAccess(PostgresTenantSessions sessions)
     {
         await using var connection = await OpenAsync(tenant, ct).ConfigureAwait(false);
         return await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
-            SELECT EXISTS(SELECT 1 FROM customer_identity.customers WHERE customer_id=@CustomerId
+            SELECT EXISTS(SELECT 1 FROM customer_identity.current_customers WHERE customer_id=@CustomerId
                 AND owner_actor_id=@ActorId AND version=@CustomerVersion AND active)
-                AND (SELECT count(*) FROM customer_identity.customers WHERE owner_actor_id=@ActorId AND active)=1;
+                AND (SELECT count(*) FROM customer_identity.current_customers WHERE owner_actor_id=@ActorId AND active)=1;
             """, customer, cancellationToken: ct)).ConfigureAwait(false);
     }
 

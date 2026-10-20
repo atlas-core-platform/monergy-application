@@ -29,6 +29,7 @@ if (tenantIntegration)
         builder.Services.AddCustomerAccountAgreements(builder.Configuration);
         builder.Services.AddCustomerPan(builder.Configuration);
         builder.Services.AddSingleton<CustomerWorkspaceSetupApplication>();
+        builder.Services.AddSingleton<ICustomerAdministrationRepository, Monergy.Services.CustomerIdentity.Infrastructure.PostgresCustomerAdministration>();
     }
 }
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);
@@ -54,6 +55,7 @@ if (tenantIntegration)
     if (app.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
     {
         app.MapSelfCustomerProfile();
+        app.MapCustomerAdministration();
         app.MapCustomerAccountAgreements();
         app.MapCustomerPan();
     }

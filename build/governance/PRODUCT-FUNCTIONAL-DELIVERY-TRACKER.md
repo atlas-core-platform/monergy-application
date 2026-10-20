@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-90 complete Net Worth (P1-18). Original29:1 Complete,19 Partial,9 Pending. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-91 complete Customer Management (P1-26). Original29:2 Complete,19 Partial,8 Pending. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-90 update — complete Net Worth
+## Current T1-91 update — complete Customer Management
+
+Organization Settings > Customers delivers the complete organization administrator customer directory, literal search, availability filters/counts, bounded pagination, metadata details, explicit version-checked suspension/reactivation, immutable named status history and exact uncertain-save recovery. Availability is separate from read-only verified ownership. Current owner reads honor suspension; administrator authority does not grant financial/protected identity access, ownership or Consent. Receipt: [t1-91-customer-management.md](t1-91-customer-management.md).
+
+366 backend checks pass, including45 new Customer Management cases; all760 UI checks and static/build verification pass, as recorded in the receipt. Physical view/query/grant/restart and full live UAT remain NOT RUN. After paired merges:91 numbered units=90 implementations+1 governance closure;original29:2 Complete,19 Partial,8 Pending. All29 repo statuses were synchronized from workbook version33 before applying T1-91. Original IDs/source phases/business acceptance are unchanged.
+
+## Previous T1-90 update — complete Net Worth
 
 The entire P1-18 journey is implemented as one unit: complete customer-reviewed asset/debt inventory, exact saved-record imports, current/date/currency/coverage review, Financial Rules Assets minus Liabilities, insufficient-data guidance, immutable saved calculations and source drill-down, history/new reviews and dashboard summary. Receipt: [t1-90-complete-net-worth.md](t1-90-complete-net-worth.md).
 
