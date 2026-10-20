@@ -86,6 +86,16 @@ public sealed class PostgresGoalContributions : IGoalContributionRepository, IAs
             """, args, tx, cancellationToken: ct)).ConfigureAwait(false);
         if (current is null) throw new TenantBoundaryException("GOAL_CONTRIBUTION_NOT_FOUND", 404);
         if (current != expectedRevision) throw new TenantBoundaryException("GOAL_CONTRIBUTION_REVISION_CONFLICT", 409);
+        var currentPayload=await db.QuerySingleAsync<string>(new CommandDefinition("""
+            SELECT payload FROM (
+              SELECT 1 AS revision,payload::text AS payload FROM financial_profile.goal_contributions
+              WHERE tenant_id=@Tenant AND customer_id=@Customer AND goal_contribution_id=@Id
+              UNION ALL
+              SELECT revision,payload::text FROM financial_profile.goal_contribution_revisions
+              WHERE tenant_id=@Tenant AND customer_id=@Customer AND goal_contribution_id=@Id
+            ) versions ORDER BY revision DESC LIMIT 1;
+            """,args,tx,cancellationToken:ct)).ConfigureAwait(false);
+        if(Decode(currentPayload).DeclarationStatus!="CUSTOMER_REPORTED")throw new TenantBoundaryException("GOAL_CONTRIBUTION_WITHDRAWN",409);
         await db.ExecuteAsync(new CommandDefinition("""
             INSERT INTO financial_profile.goal_contribution_revisions
               (tenant_id,customer_id,goal_contribution_id,revision,operation_id,actor_id,fingerprint,payload,recorded_at)

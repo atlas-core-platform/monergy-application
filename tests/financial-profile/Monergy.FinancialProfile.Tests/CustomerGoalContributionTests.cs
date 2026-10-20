@@ -16,7 +16,7 @@ using Monergy.UatGateway;
 using Xunit;
 namespace Monergy.FinancialProfile.Tests;
 
-public sealed class CustomerGoalContributionTests
+public sealed partial class CustomerGoalContributionTests
 {
     private const string Customer=FinancialProfileTestContext.CustomerId;
     private static readonly string GoalId="goal-"+Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes("T001|"+Customer+"|actor-001|"+new string('c',32)))).ToLowerInvariant();
@@ -144,9 +144,9 @@ public sealed class CustomerGoalContributionTests
             }
             else
             {
-                if(scenario.StartsWith("correction-",StringComparison.Ordinal)){if(request.Method==HttpMethod.Post&&path.EndsWith("/corrections",StringComparison.Ordinal))corrected=true;else if(!corrected||kind!="readback")return response;}
+                if(scenario.StartsWith("correction-",StringComparison.Ordinal)||scenario.StartsWith("withdrawal-",StringComparison.Ordinal)){if(request.Method==HttpMethod.Post&&path.EndsWith(scenario.StartsWith("withdrawal-",StringComparison.Ordinal)?"/withdrawals":"/corrections",StringComparison.Ordinal))corrected=true;else if(!corrected||kind!="readback")return response;}
                 if((kind=="readback")!=(request.Method==HttpMethod.Get))return response;
-                switch(kind){case "source":json["sourceGoal"]!["currency"]="USD";break;case "goal-version":json["contribution"]!["goalRevision"]=99;break;case "date":json["contribution"]!["contributionDate"]="2026-09-01";break;case "actor":json["recordedBy"]="foreign";break;case "customer":json["customerId"]="foreign";break;case "operation":json["operationId"]=new string('b',32);break;case "status":json["declarationStatus"]="VERIFIED";break;case "revision":json["revision"]=99;break;case "null":json["contribution"]=null;break;default:json["contribution"]!["amount"]=1;break;}
+                switch(kind){case "reason":json["withdrawalReason"]="Substituted reason";break;case "source":json["sourceGoal"]!["currency"]="USD";break;case "goal-version":json["contribution"]!["goalRevision"]=99;break;case "date":json["contribution"]!["contributionDate"]="2026-09-01";break;case "actor":json["recordedBy"]="foreign";break;case "customer":json["customerId"]="foreign";break;case "operation":json["operationId"]=new string('b',32);break;case "status":json["declarationStatus"]="VERIFIED";break;case "revision":json["revision"]=99;break;case "null":json["contribution"]=null;break;default:json["contribution"]!["amount"]=1;break;}
             }
             response.Content.Dispose();response.Content=new StringContent(json.ToJsonString(),Encoding.UTF8,"application/json");return response;
         }

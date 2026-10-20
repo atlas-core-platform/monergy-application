@@ -65,3 +65,47 @@ it('pages the source-bound history and retains the version-one tail', async () =
   mount(api, false); const user = userEvent.setup(); await user.click(await screen.findByRole('button', { name: 'View contribution history: 2026-10-01' }));
   await user.click(await screen.findByRole('button', { name: 'Earlier versions' })); expect(await screen.findByRole('button', { name: 'View version 1' })).toBeVisible(); expect(request.mock.calls.some(([path]) => path.endsWith('/history?beforeRevision=2'))).toBe(true);
 });
+
+const withdrawn: ProductGoalContribution = { ...record, operationId: 'b'.repeat(32), declarationStatus: 'CUSTOMER_WITHDRAWN', withdrawalReason: 'Reported twice', revision: 2 };
+async function withdrawForm(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(await screen.findByRole('button', { name: 'Withdraw contribution report: 2026-10-01' }));
+  const drawer = screen.getByRole('dialog', { name: 'Withdraw contribution report' });
+  expect(within(drawer).getByRole('button', { name: 'Confirm withdrawal' })).toBeDisabled();
+  await user.type(within(drawer).getByLabelText('Withdrawal reason'), 'Reported twice'); return drawer;
+}
+it('withdraws only after an explicit reason and preserves amounts and history', async () => {
+  const api = new AccessApi(session); let current = record; vi.spyOn(crypto, 'randomUUID').mockReturnValue('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+  const request = vi.spyOn(api, 'product').mockImplementation((path, method, input) => {
+    if (method === 'GET') return Promise.resolve(path.endsWith('/history') ? { items: [withdrawn, record], hasMore: false, nextBeforeRevision: null } : list([current]));
+    expect(path).toBe('v1/goal-contributions/contribution-saved/withdrawals'); expect(input).toEqual({ operationId: withdrawn.operationId, expectedRevision: 1, reason: 'Reported twice' }); current = withdrawn; return Promise.resolve(withdrawn);
+  });
+  mount(api); const user = userEvent.setup(); const drawer = await withdrawForm(user); expect(drawer).toHaveTextContent('This does not reverse a payment or move money.'); expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(0);
+  await user.click(within(drawer).getByRole('button', { name: 'Confirm withdrawal' })); await screen.findByText('Contribution report withdrawn');
+  expect(screen.queryByRole('button', { name: 'Edit contribution: 2026-10-01' })).not.toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Withdraw contribution report: 2026-10-01' })).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button', { name: 'View contribution history: 2026-10-01' })); await user.click(await screen.findByRole('button', { name: 'View version 2' })); expect(screen.getByRole('region', { name: 'Saved contribution version 2' })).toHaveTextContent('Reported twice');
+  await user.click(screen.getByRole('button', { name: 'View version 1' })); expect(screen.getByRole('region', { name: 'Saved contribution version 1' })).toHaveTextContent('Customer reported');
+});
+it('keeps an uncertain withdrawal identical through closing, reopening and changed goal currency', async () => {
+  const api = new AccessApi(session); let count = 0; vi.spyOn(crypto, 'randomUUID').mockReturnValue('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+  const request = vi.spyOn(api, 'product').mockImplementation((_path, method) => method === 'GET' ? Promise.resolve(list([record])) : ++count === 1 ? Promise.reject(new AccessApiError(503, 'unavailable')) : Promise.resolve(withdrawn));
+  const view = mount(api); const user = userEvent.setup(); const drawer = await withdrawForm(user); await user.click(within(drawer).getByRole('button', { name: 'Confirm withdrawal' })); await within(drawer).findByText(/Withdrawal has not been confirmed/); expect(within(drawer).getByLabelText('Withdrawal reason')).toBeDisabled();
+  await user.click(within(drawer).getByRole('button', { name: 'Close' })); view.rerender(element(api, true, true, { ...goal, revision: 2, goal: { ...goal.goal, currency: 'USD' } })); await user.click(screen.getByRole('button', { name: 'Continue withdrawal confirmation' }));
+  expect(screen.getByRole('dialog', { name: 'Withdraw contribution report' })).toHaveTextContent('Education fund'); await user.click(screen.getByRole('button', { name: 'Retry withdrawal confirmation' })); await screen.findByText('Contribution report withdrawn'); const writes = request.mock.calls.filter(([, method]) => method === 'POST'); expect(writes).toHaveLength(2); expect(writes[0]?.[2]).toEqual(writes[1]?.[2]);
+});
+it.each([400, 409])('handles withdrawal rejection %s with renewed review', async status => {
+  const api = new AccessApi(session); vi.spyOn(api, 'product').mockImplementation((_path, method) => method === 'GET' ? Promise.resolve(list([record])) : Promise.reject(new AccessApiError(status, 'rejected'))); mount(api); const user = userEvent.setup(); const drawer = await withdrawForm(user); await user.click(within(drawer).getByRole('button', { name: 'Confirm withdrawal' })); await within(drawer).findByText(status === 409 ? /The report changed/ : /Review the withdrawal reason/); expect(within(drawer).getByLabelText('Withdrawal reason'))[status === 409 ? 'toBeDisabled' : 'toBeEnabled'](); expect(screen.queryByText('Contribution report withdrawn')).not.toBeInTheDocument();
+});
+it.each(['amount', 'source', 'status', 'reason', 'revision', 'goal', 'customer'])('rejects forged withdrawal %s confirmation', async kind => {
+  const api = new AccessApi(session); const changed = structuredClone(withdrawn); if (kind === 'amount') changed.contribution.amount = 7; if (kind === 'source') changed.sourceGoal.currency = 'USD'; if (kind === 'status') changed.declarationStatus = 'CUSTOMER_REPORTED'; if (kind === 'reason') changed.withdrawalReason = 'Substituted'; if (kind === 'revision') changed.revision = 3; if (kind === 'goal') changed.contribution.financialGoalId = 'foreign'; if (kind === 'customer') changed.customerId = 'foreign'; vi.spyOn(crypto, 'randomUUID').mockReturnValue('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+  vi.spyOn(api, 'product').mockImplementation((_path, method) => Promise.resolve(method === 'GET' ? list([record]) : changed)); mount(api); const user = userEvent.setup(); const drawer = await withdrawForm(user); await user.click(within(drawer).getByRole('button', { name: 'Confirm withdrawal' })); await within(drawer).findByText(/Withdrawal has not been confirmed/); expect(screen.queryByText('Contribution report withdrawn')).not.toBeInTheDocument();
+});
+it('discards late withdrawal confirmation after customer scope changes', async () => {
+  const api = new AccessApi(session); let finish: (value: unknown) => void = () => undefined; vi.spyOn(api, 'product').mockImplementation((_path, method) => method === 'GET' ? Promise.resolve(list([record])) : new Promise(resolve => { finish = resolve; })); const view = mount(api); const user = userEvent.setup(); const drawer = await withdrawForm(user); await user.click(within(drawer).getByRole('button', { name: 'Confirm withdrawal' })); view.rerender(element(api, true, true, { ...goal, customerId: 'different-customer' })); await act(async () => { finish(withdrawn); await Promise.resolve(); }); expect(screen.queryByText('Contribution report withdrawn')).not.toBeInTheDocument(); expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+it('hides withdrawal controls for read-only customers and when access is removed', async () => {
+  const api = new AccessApi(session); vi.spyOn(api, 'product').mockResolvedValue(list([record])); const view = mount(api, false); await screen.findByRole('button', { name: 'View contribution: 2026-10-01' }); expect(screen.queryByRole('button', { name: 'Withdraw contribution report: 2026-10-01' })).not.toBeInTheDocument(); view.rerender(element(api)); const user = userEvent.setup(); await withdrawForm(user); view.rerender(element(api, false, false)); expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+it.each(['amount', 'earlier-withdrawn'])('rejects impossible withdrawal history %s', async kind => {
+  const api = new AccessApi(session); const earlier = structuredClone(record); if (kind === 'amount') earlier.contribution.amount = 2; else { earlier.declarationStatus = 'CUSTOMER_WITHDRAWN'; earlier.withdrawalReason = 'Invalid'; }
+  vi.spyOn(api, 'product').mockImplementation(path => Promise.resolve(path.endsWith('/history') ? { items: [withdrawn, earlier], hasMore: false, nextBeforeRevision: null } : list([withdrawn]))); mount(api, false); const user = userEvent.setup(); await user.click(await screen.findByRole('button', { name: 'View contribution history: 2026-10-01' })); await screen.findByText('Contribution history is unavailable.');
+});
