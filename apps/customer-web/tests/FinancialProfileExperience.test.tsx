@@ -458,7 +458,7 @@ it('shows a reviewed Insurance source figure linked to exact Evidence history, n
 it('shows a reviewed Tax source figure without claiming assessed tax or refund', async () => {
   window.history.replaceState(null, '', '/finances?type=TAX');
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue({
+  vi.spyOn(api, 'product').mockImplementation(path=>path==='v1/tax-records'?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'}):Promise.resolve({
     financialProfileId: 'financial-profile-reference-customer',
     revision: 7,
     updatedAt: '2026-10-17T07:00:00Z',
@@ -479,19 +479,24 @@ it('shows a reviewed Tax source figure without claiming assessed tax or refund',
         technicalProvenanceId: 'provenance-tax',
       },
     }],
-  });
-  mount(api);
+  }));
+  mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
   expect(await screen.findByText('Tax figure from document')).toBeVisible();
   expect(screen.getByRole('heading', {name:'Tax source figures'})).toBeVisible();
   expect(screen.getByText('Source: tax-statement.txt')).toBeVisible();
   expect(window.location.pathname + window.location.search).toBe('/finances?type=TAX');
   expect(screen.queryByText(/Assessed tax liability|Refund payable/i)).not.toBeInTheDocument();
+  expect(screen.getByRole('heading',{name:'Tax records'})).toBeVisible();
+  await waitFor(()=>expect(screen.getByRole('button',{name:'Add tax record'})).toBeEnabled());
+  const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Add tax record'}));const drawer=screen.getByRole('dialog',{name:'Add tax record'});
+  await user.click(within(drawer).getByRole('combobox',{name:'Reviewed tax source'}));await waitFor(()=>expect(screen.getByText(/Tax figure from document ·/,{selector:'.ant-select-item-option-content'})).toBeVisible());
+  expect(within(drawer).getByLabelText('Tax amount for this record')).toHaveValue(null);
 });
 
 it.each(['PROPERTY', 'VEHICLE'])('shows the reviewed %s type on Asset source readback', async (assetType) => {
   window.history.replaceState(null, '', '/finances?type=ASSET');
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue({
+  vi.spyOn(api, 'product').mockImplementation(path=>path==='v1/tax-records'?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'}):Promise.resolve({
     financialProfileId: 'financial-profile-reference-customer',
     revision: 4,
     updatedAt: '2026-10-17T06:30:00Z',
@@ -512,8 +517,8 @@ it.each(['PROPERTY', 'VEHICLE'])('shows the reviewed %s type on Asset source rea
         technicalProvenanceId: 'provenance-asset',
       },
     }],
-  });
-  mount(api);
+  }));
+  mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
   expect(await screen.findByText('Property value stated in document')).toBeVisible();
   expect(screen.getByText('Asset type: ' + (assetType === 'PROPERTY' ? 'Property' : 'Vehicle'))).toBeVisible();
   expect(screen.getByRole('heading', { name: 'Asset source figures' })).toBeVisible();

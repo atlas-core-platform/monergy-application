@@ -13,6 +13,7 @@
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductVehicleRecordEndpoints.cs" Link="ProductVehicleRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductAssetSnapshotEndpoints.cs" Link="ProductAssetSnapshotEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductIncomeRecordEndpoints.cs" Link="ProductIncomeRecordEndpoints.cs" />
+    <Compile Include="../../../build/uat/Monergy.UatGateway/ProductTaxRecordEndpoints.cs" Link="ProductTaxRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductExpenseRecordEndpoints.cs" Link="ProductExpenseRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductLiabilityRecordEndpoints.cs" Link="ProductLiabilityRecordEndpoints.cs" />
   </ItemGroup>

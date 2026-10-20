@@ -611,3 +611,23 @@ export const reviseInsuranceRecord = (api: AccessApi, id: string, input: { opera
   api.product<ProductInsuranceRecord>('v1/insurance-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
 export const getInsuranceRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductInsuranceRecordHistory>('v1/insurance-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
+export interface ProductTaxDraft {
+  name: string; jurisdiction: string; taxType: string; amount: number; amountKind: string; taxYearLabel: string;
+  periodStart: string; periodEnd: string; sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductTaxRecord {
+  taxRecordId: string; operationId: string; customerId: string; tax: ProductTaxDraft; currency: string;
+  sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string;
+  verificationStatus: string; revision: number;
+}
+export interface ProductTaxRecordList { items: ProductTaxRecord[]; hasMore: boolean; dataDurability: string }
+export const getTaxRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductTaxRecordList>('v1/tax-records', 'GET', undefined, signal);
+export const createTaxRecord = (api: AccessApi, input: { operationId: string; tax: ProductTaxDraft }, signal?: AbortSignal) =>
+  api.product<ProductTaxRecord>('v1/tax-records', 'POST', input, signal);
+
+export interface ProductTaxRecordHistory { items: ProductTaxRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const reviseTaxRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; tax: ProductTaxDraft }) =>
+  api.product<ProductTaxRecord>('v1/tax-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getTaxRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductTaxRecordHistory>('v1/tax-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
