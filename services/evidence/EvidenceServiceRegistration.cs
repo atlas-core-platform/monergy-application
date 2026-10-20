@@ -15,6 +15,7 @@ public static class EvidenceServiceRegistration
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<InMemoryEvidenceRepository>();
         services.AddSingleton<IEvidenceRepository>(provider => provider.GetRequiredService<InMemoryEvidenceRepository>());
+        services.AddSingleton<IDocumentMonitoringRepository>(provider=>provider.GetRequiredService<InMemoryEvidenceRepository>());
         services.AddSingleton(_ =>
         {
             var store = new ReferenceEvidenceContentStore();
@@ -39,7 +40,9 @@ public static class EvidenceServiceRegistration
     {
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
         services.AddSingleton(TimeProvider.System);
-        services.AddSingleton<IEvidenceRepository, PostgresEvidenceRepository>();
+        services.AddSingleton<PostgresEvidenceRepository>();
+        services.AddSingleton<IEvidenceRepository>(provider=>provider.GetRequiredService<PostgresEvidenceRepository>());
+        services.AddSingleton<IDocumentMonitoringRepository>(provider=>provider.GetRequiredService<PostgresEvidenceRepository>());
         services.AddSingleton<S3EvidenceContentStore>();
         services.AddSingleton<IEvidenceContentStore>(provider => provider.GetRequiredService<S3EvidenceContentStore>());
         services.AddSingleton<EvidenceApplication>();

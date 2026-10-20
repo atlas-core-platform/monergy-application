@@ -14,6 +14,7 @@ public static class DocumentIntelligenceRegistration
         ReferenceAdapterGuard.EnsureAllowed(configuration);
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<InMemoryDocumentProcessingRepository>();
+        services.AddSingleton<IClassificationMonitoringRepository>(provider=>provider.GetRequiredService<InMemoryDocumentProcessingRepository>());
         services.AddSingleton<IDocumentProcessingRepository>(provider => provider.GetRequiredService<InMemoryDocumentProcessingRepository>());
         services.AddSingleton<IImageTextRecognizer, TesseractImageTextRecognizer>();
         services.AddSingleton<SalarySlipPngExtractor>();

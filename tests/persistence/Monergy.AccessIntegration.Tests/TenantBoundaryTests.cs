@@ -114,6 +114,21 @@ public sealed class TenantBoundaryTests
     }
 
     [Theory]
+    [InlineData("T001",200)]
+    [InlineData("T002",403)]
+    public async Task RecordedWorkspaceTenantMustMatchTheAuthenticatedTransport(string workloadTenant,int expected)
+    {
+        var invoked=false;
+        var middleware=new TenantBoundaryMiddleware(_=>{invoked=true;return Task.CompletedTask;},Options());
+        var http=Http();http.Request.Path="/contracts/cid-021/v1";
+        http.Request.Body=new MemoryStream(Encoding.UTF8.GetBytes($$$"""
+            {"contractName":"GetDocument","security":{"actor":{"actorId":"A100","authenticationContextId":"token"},"workload":{"workloadIdentityId":"local-uat-workspace:{{{workloadTenant}}}"},"access":{"customerId":"C001"}},"payload":{"customerId":"C001","documentId":"D001"}}
+            """));
+        using var client=Client(Decision());await middleware.InvokeAsync(http,client);
+        Assert.Equal(expected,http.Response.StatusCode);Assert.Equal(expected==200,invoked);
+    }
+
+    [Theory]
     [InlineData("/contracts/cid-022/v1", "{}", 503)]
     [InlineData("/local/v1/tenant-access/check", "{\"capabilityId\":\"audit.evidence.read\",\"resourceType\":null,\"resourceId\":null}", 400)]
     [InlineData("/local/v1/tenant-access/check", "{\"capabilityId\":\"evidence.document.read\",\"capabilityId\":\"evidence.document.read\",\"resourceType\":\"document\",\"resourceId\":\"D001\"}", 400)]

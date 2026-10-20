@@ -5,7 +5,7 @@ using Monergy.Services.Evidence.Application;
 
 namespace Monergy.Services.Evidence.Infrastructure;
 
-public sealed class InMemoryEvidenceRepository : IEvidenceRepository
+public sealed partial class InMemoryEvidenceRepository : IEvidenceRepository
 {
     private readonly object sync = new();
     private readonly Dictionary<string, EvidenceVersionRecord> versions = new(StringComparer.Ordinal);
@@ -43,7 +43,7 @@ public sealed class InMemoryEvidenceRepository : IEvidenceRepository
                 .Where(version => string.Equals(version.DocumentId, candidate.DocumentId, StringComparison.Ordinal))
                 .OrderBy(version => version.Version)
                 .ToArray();
-            if (documentVersions.Any(version => !string.Equals(version.CustomerId, candidate.CustomerId, StringComparison.Ordinal)))
+            if (documentVersions.Any(version => !string.Equals(version.CustomerId, candidate.CustomerId, StringComparison.Ordinal) || version.TenantId is not null && version.TenantId != candidate.TenantId))
             {
                 throw new InvalidOperationException("Document identity belongs to another customer.");
             }
@@ -110,6 +110,7 @@ public sealed class InMemoryEvidenceRepository : IEvidenceRepository
     }
 
     private static bool Equivalent(EvidenceVersionRecord prior, EvidenceVersionRecord candidate) =>
+        prior.TenantId == candidate.TenantId &&
         string.Equals(prior.DocumentId, candidate.DocumentId, StringComparison.Ordinal) &&
         string.Equals(prior.DocumentVersionId, candidate.DocumentVersionId, StringComparison.Ordinal) &&
         string.Equals(prior.EvidenceId, candidate.EvidenceId, StringComparison.Ordinal) &&

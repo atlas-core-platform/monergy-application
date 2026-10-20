@@ -2,6 +2,7 @@ import type { WorkspaceDestination } from '@monergy/ui-foundation';
 
 export const accessDestinations: WorkspaceDestination[] = [
   { id: 'overview', label: 'Overview', icon: 'home', href: '/access', group: 'Organization' },
+  { id: 'documents', label: 'Document Monitoring', icon: 'changes', href: '/access/documents', group: 'Operations' },
   { id: 'processing', label: 'Processing Status', icon: 'changes', href: '/access/processing', group: 'Operations' },
   { id: 'customers', label: 'Customers', icon: 'users', href: '/access/customers' },
   { id: 'users', label: 'People', icon: 'users', href: '/access/users' },

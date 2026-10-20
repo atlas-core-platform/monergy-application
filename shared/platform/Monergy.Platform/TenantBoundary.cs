@@ -99,6 +99,12 @@ public sealed class TenantBoundaryMiddleware(RequestDelegate next, TenantBoundar
                 rule = ("evidence.document.read", "document", "documentVersionId");
             if (rule is null) throw new TenantBoundaryException("CONTRACT_TENANT_ADAPTER_REQUIRED", 503);
             var security = body.RootElement.GetProperty("security");
+            if(security.TryGetProperty("workload",out var workload)&&workload.TryGetProperty("workloadIdentityId",out var identity))
+            {
+                var workloadIdentity=identity.GetString()??"";
+                if(workloadIdentity.StartsWith("local-uat-workspace:",StringComparison.Ordinal)&&workloadIdentity!="local-uat-workspace:"+tenant)
+                    throw new TenantBoundaryException("WORKLOAD_TENANT_MISMATCH",403);
+            }
             var actor = security.GetProperty("actor");
             var customer = Text(security.GetProperty("access"), "customerId");
             if (!options.CustomerTenants.TryGetValue(customer, out var owner) || owner != tenant)

@@ -14,6 +14,7 @@ function ProcessingStatusView({ api, tenantId, actorId }: { api: AccessApi; tena
  useEffect(() => { current.current = { api, scope }; }, [api, scope]);
  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
  const same = () => mounted.current && current.current.api === api && current.current.scope === scope;
+ const [documentVersionId, setDocumentVersionId] = useState(() => new URLSearchParams(window.location.search).get('documentVersionId'));
  const [customerId, setCustomerId] = useState(() => new URLSearchParams(window.location.search).get('customerId'));
  const [page, setPage] = useState<QueuePage | null>(null); const [labels, setLabels] = useState<Record<string, CustomerLabel>>({});
  const [search, setSearch] = useState(''); const [query, setQuery] = useState({ search: '', state: 'all' }); const [after, setAfter] = useState<string | null>(null);
@@ -26,19 +27,19 @@ function ProcessingStatusView({ api, tenantId, actorId }: { api: AccessApi; tena
  const [reason, setReason] = useState(''); const [reviewed, setReviewed] = useState(false);
  const [pending, setPending] = useState(processingPending.get(scope) ?? null); const pendingRef = useRef(pending);
  useEffect(() => {
-  if (customerId !== null && !identifier(customerId)) return;
+  if (customerId !== null && !identifier(customerId) || documentVersionId !== null && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(documentVersionId)) return;
   const controller = new AbortController(); loading.current = true;
-  const params = new URLSearchParams(); if (query.search) params.set('search', query.search); if (query.state !== 'all') params.set('state', query.state); if (customerId) params.set('customerId', customerId); if (after) params.set('after', after);
+  const params = new URLSearchParams(); if (query.search) params.set('search', query.search); if (query.state !== 'all') params.set('state', query.state); if (customerId) params.set('customerId', customerId); if (after) params.set('after', after); if (documentVersionId) params.set('documentVersionId', documentVersionId);
   void (async () => {
    const value = await api.processingAdministration<QueuePage>(params.size ? '?' + params.toString() : '', 'GET', undefined, controller.signal);
-   controller.signal.throwIfAborted(); if (!validQueue(value, tenantId) || value.items.some(row => customerId !== null && row.customerId !== customerId || query.state !== 'all' && row.state !== query.state || !row.jobId.toLowerCase().includes(query.search.toLowerCase()))) invalidProcessingResponse();
+   controller.signal.throwIfAborted(); if (!validQueue(value, tenantId) || value.items.some(row => documentVersionId !== null && row.documentVersionId !== documentVersionId || customerId !== null && row.customerId !== customerId || query.state !== 'all' && row.state !== query.state || !row.jobId.toLowerCase().includes(query.search.toLowerCase()))) invalidProcessingResponse();
    const ids = [...new Set([...value.items.map(row => row.customerId), ...(customerId ? [customerId] : [])])];
    const names = ids.length ? await api.customerAdministration<CustomerLabels>('/labels', 'POST', { customerIds: ids }, controller.signal) : { tenantId, items: [], unavailable: [] };
    controller.signal.throwIfAborted(); if (!validLabels(names, tenantId, ids)) invalidProcessingResponse();
    setLabels(Object.fromEntries(names.items.map(row => [row.customerId, row]))); setPage(value); setCheckedAt(new Date().toISOString()); setError('');
   })().catch((e: unknown) => { if (!controller.signal.aborted) { setPage(null); setLabels({}); setError(displayError(e)); } }).finally(() => { if (!controller.signal.aborted) loading.current = false; });
   return () => { controller.abort(); loading.current = false; };
- }, [api, tenantId, customerId, query, after, revision]);
+ }, [api, tenantId, customerId, documentVersionId, query, after, revision]);
  useEffect(() => {
   if (!detailId) return; const controller = new AbortController(); const root = '/' + encodeURIComponent(detailId);
   void Promise.all([
@@ -82,12 +83,13 @@ function ProcessingStatusView({ api, tenantId, actorId }: { api: AccessApi; tena
  const review = pending ? { job: pending.job, customerName: pending.customerName, action: pending.change.action } : draft;
  const when = (value: string | null) => value ? new Date(value).toLocaleString() : 'Not recorded';
  const currentName = (id: string) => labels[id]?.displayName ?? 'Customer unavailable';
- if (customerId !== null && !identifier(customerId)) return <Alert type="error" title="Invalid customer selection. Open Processing Status from Customers or clear the selection." action={<Button onClick={() => { setCustomerId(null); }}>All customers</Button>} />;
+ if (customerId !== null && !identifier(customerId) || documentVersionId !== null && !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(documentVersionId)) return <Alert type="error" title="Invalid customer selection. Open Processing Status from Customers or clear the selection." action={<Button onClick={() => { setCustomerId(null); setDocumentVersionId(null); }}>All customers</Button>} />;
  return <section className="access-page" aria-labelledby="processing-title">
   <h1 id="processing-title">Processing Status</h1><p>Review jobs recorded for your organization, inspect failures and manage permitted recovery.</p>
   <p>Refreshes every 15 seconds while this page is visible. Retry uses the original customer permission. Jobs with an uncertain outcome require owner review.</p>
   {error && <Alert type="error" showIcon title={error} />}{notice && <Alert type="success" showIcon title={notice} />}
   {pending && <Alert type="warning" showIcon title="Confirm the pending processing change" description={`The request for ${pending.customerName} has not been confirmed. Retry the same request before another recovery action.`} action={<Button disabled={busy} onClick={() => { setDraft({ job: pending.job, customerName: pending.customerName, action: pending.change.action }); }}>Review pending request</Button>} />}
+  {documentVersionId && <Space><Tag>Selected document version: {documentVersionId}</Tag><Button onClick={() => { setDocumentVersionId(null); setAfter(null); window.history.replaceState(null, '', '/access/processing'); }}>All document versions</Button></Space>}
   {customerId && <Space><Tag>Customer: {currentName(customerId)}</Tag><Button onClick={() => { window.history.replaceState(null, '', '/access/processing'); setCustomerId(null); setAfter(null); setPage(null); }}>All customers</Button></Space>}
   <Space wrap><Input.Search aria-label="Find job reference" placeholder="Job reference" value={search} maxLength={128} onChange={e => { setSearch(e.target.value); }} onSearch={() => { setAfter(null); setPage(null); setQuery(q => ({ ...q, search: search.trim() })); }} enterButton="Search jobs" />
    <Select aria-label="Processing state filter" value={query.state} options={[{ value: 'all', label: 'All states' }, ...processingStates.map(state => ({ value: state, label: stateLabel(state) }))]} onChange={state => { setAfter(null); setPage(null); setQuery(q => ({ ...q, state })); }} />

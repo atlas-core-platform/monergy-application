@@ -43,6 +43,7 @@ public sealed class DocumentIntelligenceHttpAdapterWorker(
         {
             builder.Services.AddSingleton(ownerServices.GetRequiredService<DocumentProcessingApplication>());
             builder.Services.AddSingleton(ownerServices.GetRequiredService<IDocumentProcessingRepository>());
+            builder.Services.AddSingleton(ownerServices.GetRequiredService<IClassificationMonitoringRepository>());
         }
 
         await using var app = builder.Build();
@@ -52,6 +53,7 @@ public sealed class DocumentIntelligenceHttpAdapterWorker(
         app.MapHealthChecks("/health/ready");
         if (documentProcessing)
             app.MapDocumentProcessing(configuration);
+        if(documentProcessing && tenantBoundary) app.MapClassificationMonitoring();
 
         await app.StartAsync(stoppingToken).ConfigureAwait(false);
         try
