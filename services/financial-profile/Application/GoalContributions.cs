@@ -50,6 +50,20 @@ public sealed class GoalContributionsApplication(IFinancialGoalRepository goals,
         var record=original with {OperationId=input.OperationId,Contribution=input.Contribution,RecordedBy=actor,RecordedAt=clock.GetUtcNow(),Revision=input.ExpectedRevision+1};
         return await repository.ReviseAsync(tenant,customer,actor,fingerprint,input.ExpectedRevision,record,ct).ConfigureAwait(false);
     }
+    public static bool ValidWithdrawal(WithdrawGoalContribution? input)=>input is not null &&
+        Guid.TryParseExact(input.OperationId,"N",out _) && !input.OperationId.Any(char.IsAsciiLetterUpper) &&
+        input.ExpectedRevision is >0 and <int.MaxValue && !string.IsNullOrWhiteSpace(input.Reason) &&
+        input.Reason.Length<=500 && input.Reason==input.Reason.Trim() && !input.Reason.Any(char.IsControl);
+    public async Task<ReportedGoalContribution> WithdrawAsync(string tenant,string customer,string actor,string id,WithdrawGoalContribution input,CancellationToken ct)
+    {
+        if(!ValidWithdrawal(input))throw new TenantBoundaryException("GOAL_CONTRIBUTION_INVALID",400);
+        var prior=await ReadAsync(tenant,customer,id,ct,input.ExpectedRevision).ConfigureAwait(false);
+        if(prior.DeclarationStatus!="CUSTOMER_REPORTED")throw new TenantBoundaryException("GOAL_CONTRIBUTION_WITHDRAWN",409);
+        var fingerprint=Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(input,ContractJson.Options)));
+        var record=prior with {OperationId=input.OperationId,RecordedBy=actor,RecordedAt=clock.GetUtcNow(),
+            Revision=input.ExpectedRevision+1,DeclarationStatus="CUSTOMER_WITHDRAWN",WithdrawalReason=input.Reason};
+        return await repository.ReviseAsync(tenant,customer,actor,fingerprint,input.ExpectedRevision,record,ct).ConfigureAwait(false);
+    }
     public async Task<ReportedGoalContribution> ReadAsync(string tenant,string customer,string id,CancellationToken ct,int? revision=null)
     {
         if(!TenantAccessClient.Identifier(id,80)||revision is <1)throw new TenantBoundaryException("GOAL_CONTRIBUTION_INVALID",400);

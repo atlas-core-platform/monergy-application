@@ -37,6 +37,15 @@ public static class GoalContributionEndpoints
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
             return await owner.HistoryAsync(tenant, customerId, goalContributionId, beforeRevision, http.RequestAborted).ConfigureAwait(false);
         });
+        group.MapPost("/{goalContributionId}/withdrawals", async (string customerId,string goalContributionId,HttpContext http,TenantAccessClient access,TenantBoundaryOptions bindings,GoalContributionsApplication owner)=>
+        {
+            var (tenant,actor)=await AuthorizeAsync(http,customerId,access,bindings,true).ConfigureAwait(false);
+            http.Request.EnableBuffering(32768,32768);
+            using var json=await JsonDocument.ParseAsync(http.Request.Body,cancellationToken:http.RequestAborted).ConfigureAwait(false);
+            RejectDuplicates(json.RootElement);
+            var input=json.RootElement.Deserialize<WithdrawGoalContribution>(Json)??throw new TenantBoundaryException("GOAL_CONTRIBUTION_INVALID",400);
+            return await owner.WithdrawAsync(tenant,customerId,actor,goalContributionId,input,http.RequestAborted).ConfigureAwait(false);
+        });
         group.MapPost("/{goalContributionId}/corrections", async (string customerId, string goalContributionId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, GoalContributionsApplication owner) =>
         {
             var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);

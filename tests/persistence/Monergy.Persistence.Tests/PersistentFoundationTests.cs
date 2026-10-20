@@ -919,6 +919,18 @@ public sealed class PersistentFoundationTests
             var owner=new GoalContributionsApplication(goals,records,TimeProvider.System);Assert.Equal(first,await owner.CreateAsync("T001",customer,"actor-goal",input,default));Assert.Equal(second,await owner.ReviseAsync("T001",customer,"actor-goal",first.GoalContributionId,change,default));Assert.Equal([second,first],(await owner.HistoryAsync("T001",customer,first.GoalContributionId,null,default)).Items);Assert.Equal(second,Assert.Single((await owner.ListAsync("T001",customer,goal.FinancialGoalId,default)).Items));Assert.Equal(first,await owner.ReadAsync("T001",customer,first.GoalContributionId,default,1));Assert.Null(await records.ReadAsync("T002",customer,first.GoalContributionId,default));
             Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>owner.ReviseAsync("T001",customer,"actor-goal",first.GoalContributionId,change with {OperationId=Guid.NewGuid().ToString("N")},default))).Status);
         }
+        var withdrawal=new WithdrawGoalContribution(Guid.NewGuid().ToString("N"),2,"Duplicate customer report");
+        ReportedGoalContribution withdrawn;
+        await using(var records=new PostgresGoalContributions(configuration))
+            withdrawn=await new GoalContributionsApplication(goals,records,TimeProvider.System).WithdrawAsync("T001",customer,"actor-goal",first.GoalContributionId,withdrawal,default);
+        await using(var records=new PostgresGoalContributions(configuration))
+        {
+            var owner=new GoalContributionsApplication(goals,records,TimeProvider.System);
+            Assert.Equal(withdrawn,await owner.WithdrawAsync("T001",customer,"actor-goal",first.GoalContributionId,withdrawal,default));
+            Assert.Equal([withdrawn,second,first],(await owner.HistoryAsync("T001",customer,first.GoalContributionId,null,default)).Items);
+            Assert.Equal(second.Contribution,withdrawn.Contribution);Assert.Equal("CUSTOMER_WITHDRAWN",withdrawn.DeclarationStatus);
+            Assert.Equal(409,(await Assert.ThrowsAsync<Monergy.Platform.TenantBoundaryException>(()=>owner.ReviseAsync("T001",customer,"actor-goal",first.GoalContributionId,new(Guid.NewGuid().ToString("N"),3,first.Contribution),default))).Status);
+        }
         await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
         foreach(var table in new[]{"goal_contributions","goal_contribution_revisions"})
         {

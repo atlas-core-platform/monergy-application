@@ -46,8 +46,10 @@ public sealed class InMemoryGoalContributions : IGoalContributionRepository
             if (records.Any(x => x.Key.Tenant == tenant && x.Key.Customer == customer && x.Value.Record.RecordedBy == actor && x.Value.Record.OperationId == record.OperationId))
                 throw new TenantBoundaryException("GOAL_CONTRIBUTION_OPERATION_CONFLICT", 409);
             var history = revisions.GetValueOrDefault(key);
-            if ((history?.LastOrDefault() ?? original.Record).Revision != expectedRevision)
+            var current=history?.LastOrDefault() ?? original.Record;
+            if (current.Revision != expectedRevision)
                 throw new TenantBoundaryException("GOAL_CONTRIBUTION_REVISION_CONFLICT", 409);
+            if(current.DeclarationStatus!="CUSTOMER_REPORTED") throw new TenantBoundaryException("GOAL_CONTRIBUTION_WITHDRAWN",409);
             if (history is null) revisions.Add(key, history = []);
             history.Add(record); operations.Add(operation, (fingerprint, record));
             return Task.FromResult(record);
