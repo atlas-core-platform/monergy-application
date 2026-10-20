@@ -73,8 +73,8 @@ public sealed class PostgresCustomerPan(PostgresTenantSessions sessions, Custome
     private static async Task OwnerAsync(NpgsqlConnection connection, NpgsqlTransaction tx, string actor, string customer, CancellationToken ct)
     {
         var owns = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
-            SELECT EXISTS(SELECT 1 FROM customer_identity.customers WHERE customer_id=@Customer AND owner_actor_id=@Actor AND active)
-                AND (SELECT count(*) FROM customer_identity.customers WHERE owner_actor_id=@Actor AND active)=1;
+            SELECT EXISTS(SELECT 1 FROM customer_identity.current_customers WHERE customer_id=@Customer AND owner_actor_id=@Actor AND active)
+                AND (SELECT count(*) FROM customer_identity.current_customers WHERE owner_actor_id=@Actor AND active)=1;
             """, new { Customer = customer, Actor = actor }, tx, cancellationToken: ct)).ConfigureAwait(false);
         if (!owns) throw new TenantAccessException("OWNED_CUSTOMER_REQUIRED", 403);
     }

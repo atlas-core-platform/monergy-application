@@ -27,6 +27,8 @@ SELECT format('GRANT INSERT,UPDATE ON customer_identity.email_access_challenges 
 SELECT format('GRANT INSERT ON customer_identity.email_access_events TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT,UPDATE ON customer_identity.customer_profiles TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT ON customer_identity.customer_profile_receipts TO %I', :'runtime') \gexec
+SELECT format('GRANT INSERT,UPDATE ON customer_identity.customer_availability TO %I', :'runtime') \gexec
+SELECT format('GRANT INSERT ON customer_identity.customer_status_changes TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT ON customer_identity.self_session_receipts TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT ON customer_identity.account_agreement_publications,customer_identity.account_agreement_acceptances TO %I', :'runtime') \gexec
 SQL

@@ -12,6 +12,7 @@ import { useWorkspaceSession } from './workspaceSession';
 import { WorkspaceSessionProvider } from './WorkspaceSessionProvider';
 import { WorkspaceEntry } from './WorkspaceEntry';
 import { AccessOverview } from './AccessOverview';
+import { CustomerManagement } from './CustomerManagement';
 import { CustomerRelationships } from './CustomerRelationships';
 import './access.css';
 
@@ -130,7 +131,7 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
           onExpired={fail}
         />
       )}
-      {path === '/access' ? (
+      {path === '/access/customers' ? (<CustomerManagement key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access' ? (
         <AccessOverview api={api} onExpired={fail} />
       ) : area === 'resource-grants' ? (
         <CustomerRelationships

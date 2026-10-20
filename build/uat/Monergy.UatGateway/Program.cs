@@ -153,6 +153,15 @@ static string? Route(string path, string method)
     if ((path is "/identity-api/local/v1/tenant-sessions" or "/identity-api/local/v1/tenant-sessions/revoke") && method == "POST" ||
         path == "/identity-api/local/v1/administration/sessions" && method == "GET")
         return "http://127.0.0.1:5101" + path[13..];
+    const string customers="/identity-api/local/v1/administration/customers";
+    if(path==customers&&method=="GET")return "http://127.0.0.1:5101"+path[13..];
+    if(path.StartsWith(customers+"/",StringComparison.Ordinal))
+    {
+        var parts=path[(customers.Length+1)..].Split('/');
+        if(parts.Length>0&&TenantAccessClient.Identifier(parts[0],128)&&
+           (method=="GET"&&(parts.Length==1||parts.Length==2&&parts[1]=="history"||parts.Length==3&&parts[1]=="changes"&&Guid.TryParseExact(parts[2],"N",out _))||
+            method=="POST"&&parts.Length==2&&parts[1]=="status"))return "http://127.0.0.1:5101"+path[13..];
+    }
     if (path == "/identity-api/local/v1/customer-email-access" && method == "GET" ||
         path is "/identity-api/local/v1/customer-email-access/request" or "/identity-api/local/v1/customer-email-access/confirm" && method == "POST")
         return "http://127.0.0.1:5101" + path[13..];

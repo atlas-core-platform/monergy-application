@@ -15,8 +15,8 @@ public sealed class PostgresSelfCustomerProfile(PostgresTenantSessions sessions)
     {
         await using var connection = await OpenAsync(tenant, ct).ConfigureAwait(false);
         return await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
-            SELECT EXISTS(SELECT 1 FROM customer_identity.customers WHERE customer_id=@Customer AND owner_actor_id=@Actor AND active)
-                AND (SELECT count(*) FROM customer_identity.customers WHERE owner_actor_id=@Actor AND active)=1;
+            SELECT EXISTS(SELECT 1 FROM customer_identity.current_customers WHERE customer_id=@Customer AND owner_actor_id=@Actor AND active)
+                AND (SELECT count(*) FROM customer_identity.current_customers WHERE owner_actor_id=@Actor AND active)=1;
             """, new { Customer = customer, Actor = actor }, cancellationToken: ct)).ConfigureAwait(false);
     }
     public async Task<SelfCustomerProfile?> ReadAsync(string tenant, string actor, CancellationToken ct)
@@ -27,7 +27,7 @@ public sealed class PostgresSelfCustomerProfile(PostgresTenantSessions sessions)
                 i.normalized_email AS Email,p.mobile AS Mobile,p.date_of_birth AS DateOfBirth,coalesce(p.version,0) AS Version,p.updated_at AS UpdatedAt,
                 (SELECT max(recorded_at) FROM customer_identity.email_access_events
                     WHERE actor_id=@Actor AND customer_id=c.customer_id AND outcome='CODE_VERIFIED') AS EmailVerifiedAt
-            FROM customer_identity.customers c
+            FROM customer_identity.current_customers c
             JOIN customer_identity.tenant_principals i ON i.actor_id=c.owner_actor_id
             LEFT JOIN customer_identity.customer_profiles p ON p.customer_id=c.customer_id
             WHERE c.owner_actor_id=@Actor AND c.active ORDER BY c.customer_id LIMIT 2;
@@ -49,7 +49,7 @@ public sealed class PostgresSelfCustomerProfile(PostgresTenantSessions sessions)
             "SELECT pg_advisory_xact_lock(hashtextextended(@Customer, 44));",
             new { Customer = customer }, transaction, cancellationToken: ct)).ConfigureAwait(false);
         var customers = (await connection.QueryAsync<string>(new CommandDefinition("""
-            SELECT customer_id FROM customer_identity.customers WHERE owner_actor_id=@Actor AND active
+            SELECT customer_id FROM customer_identity.current_customers WHERE owner_actor_id=@Actor AND active
             ORDER BY customer_id LIMIT 2;
             """, new { Actor = actor }, transaction, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
         if (customers.Length != 1) throw new TenantAccessException("OWNED_CUSTOMER_REQUIRED", 403);
@@ -86,8 +86,8 @@ public sealed class PostgresSelfCustomerProfile(PostgresTenantSessions sessions)
             """, new { Customer = customer, change.DisplayName, change.Mobile, change.DateOfBirth, change.HasDateOfBirth, Version = version, Now = now,
                 Operation = operation, Actor = actor, Fingerprint = fingerprint }, transaction, cancellationToken: ct)).ConfigureAwait(false);
         var stillOwned = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
-            SELECT EXISTS(SELECT 1 FROM customer_identity.customers WHERE customer_id=@Customer AND owner_actor_id=@Actor AND active)
-                AND (SELECT count(*) FROM customer_identity.customers WHERE owner_actor_id=@Actor AND active)=1;
+            SELECT EXISTS(SELECT 1 FROM customer_identity.current_customers WHERE customer_id=@Customer AND owner_actor_id=@Actor AND active)
+                AND (SELECT count(*) FROM customer_identity.current_customers WHERE owner_actor_id=@Actor AND active)=1;
             """, new { Customer = customer, Actor = actor }, transaction, cancellationToken: ct)).ConfigureAwait(false);
         if (!stillOwned) throw new TenantAccessException("PROFILE_CUSTOMER_CHANGED", 409);
         await transaction.CommitAsync(ct).ConfigureAwait(false);
