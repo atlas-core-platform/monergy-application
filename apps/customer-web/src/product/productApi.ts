@@ -631,3 +631,12 @@ export const reviseTaxRecord = (api: AccessApi, id: string, input: { operationId
   api.product<ProductTaxRecord>('v1/tax-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
 export const getTaxRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductTaxRecordHistory>('v1/tax-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
+export interface ProductFinancialGoalDraft { name: string; targetAmount: number; currency: string; targetDate: string }
+export interface ProductFinancialGoal { financialGoalId: string; operationId: string; customerId: string; goal: ProductFinancialGoalDraft; recordedBy: string; recordedAt: string; declarationStatus: string; revision: number }
+export interface ProductFinancialGoalList { items: ProductFinancialGoal[]; hasMore: boolean; dataDurability: string }
+export interface ProductFinancialGoalHistory { items: ProductFinancialGoal[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const getFinancialGoals = (api: AccessApi, signal?: AbortSignal) => api.product<ProductFinancialGoalList>('v1/financial-goals', 'GET', undefined, signal);
+export const createFinancialGoal = (api: AccessApi, input: { operationId: string; goal: ProductFinancialGoalDraft }) => api.product<ProductFinancialGoal>('v1/financial-goals', 'POST', input);
+export const reviseFinancialGoal = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; goal: ProductFinancialGoalDraft }) => api.product<ProductFinancialGoal>('v1/financial-goals/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getFinancialGoalHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) => api.product<ProductFinancialGoalHistory>('v1/financial-goals/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);

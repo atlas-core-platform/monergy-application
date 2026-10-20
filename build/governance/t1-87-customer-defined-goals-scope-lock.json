@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "increment": "T1-87",
+  "applicationBase": "234a9d4394f9690c433c33189027dd57b4ce56d2",
+  "status": "IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+  "stageGateAdvancement": false,
+  "productionDeployment": false,
+  "requirements": [
+    "Master sections2/4.1/20 Goals:Goal Amount/Target Date",
+    "BO-19 customer-defined objective",
+    "COV-024",
+    "MON-FIN-010 original phase2+ retained",
+    "M2-WS04-E02-F03 READY authoritative goal records"
+  ],
+  "scope": "Current Self customer creates,lists,reads and changes named financial goals with explicit positive target amount,three-letter currency and target date. Append-only version history,exact receipts and replay. No source document required or fabricated. Goals are objectives,not actual financial positions.",
+  "migrations": [
+    "services/financial-profile/migrations/0021_customer_financial_goals.sql"
+  ],
+  "remaining": "Current progress,contribution/allocation tracking,required-contribution calculations,achievement/lifecycle,planning/advice,Financial Rules methodology and OD-08/C-10 where applicable,source/calculation lineage,Search/Reports goal integration,central Audit and physical/full integrated UAT. No business-acceptance or source-phase changes."
+}
