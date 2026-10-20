@@ -228,6 +228,8 @@ if ($Action -in @('Prepare','Start')) {
                 $config.Monergy.AuditDelivery=@{
                     Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.financialAuditEvent
                 }
+            } elseif ($onboarding -and $service -eq 'financial-rules') {
+                $config.Monergy.NetWorth=@{ Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'; RuleVersion='1.0.0'; Formula='TOTAL_ASSETS_MINUS_TOTAL_LIABILITIES' }
             } elseif ($onboarding -and $service -eq 'reporting') {
                 $config.Monergy.ProductReporting=@{
                     Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'
@@ -271,6 +273,7 @@ if ($Action -in @('Prepare','Start')) {
             Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake
             JobManagementUrl='http://127.0.0.1:5118/'; JobManagementToken=$state.tokens.jobControl
             FinancialProfileUrl='http://127.0.0.1:5113/'
+            FinancialRulesUrl='http://127.0.0.1:5114/'
             SearchRetrievalUrl='http://127.0.0.1:5115/'
             ReportingUrl='http://127.0.0.1:5116/'
         }

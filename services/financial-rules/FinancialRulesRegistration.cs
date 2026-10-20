@@ -45,6 +45,7 @@ public static class FinancialRulesRegistration
             client.Timeout = TimeSpan.FromSeconds(10); // LOCAL/CI engineering timeout; not a client target.
         });
         services.AddTransient<FinancialRulesApplication>();
+        AddNetWorth(services,configuration,false);
         return services;
     }
 
@@ -53,9 +54,19 @@ public static class FinancialRulesRegistration
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
         AddCommon(services, configuration);
         services.AddSingleton<ICalculationRepository, PostgresCalculationRepository>();
+        AddNetWorth(services,configuration,true);
         return services;
     }
 
+    private static void AddNetWorth(IServiceCollection services,IConfiguration configuration,bool physical)
+    {
+        if(!configuration.GetValue<bool>("Monergy:NetWorth:Enabled"))return;
+        services.AddSingleton(new NetWorthRule(configuration));
+        services.AddSingleton<INetWorthPositionReader,NetWorthPositionClient>();
+        if(physical)services.AddSingleton<INetWorthCalculationRepository,PostgresNetWorthCalculations>();
+        else services.AddSingleton<INetWorthCalculationRepository,InMemoryNetWorthCalculations>();
+        services.AddSingleton<NetWorthCalculationsApplication>();
+    }
     private static void AddCommon(IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton(TimeProvider.System);

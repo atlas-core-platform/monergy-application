@@ -205,7 +205,7 @@ export default function FinancialProfileExperience() {
         </div>
         <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
       </header>
-      {canRead && <nav className="product-financial-category-filter" aria-label="Financial goals navigation"><Button type={activeCategory === 'GOAL' ? 'primary' : 'default'} onClick={() => { selectCategory(activeCategory === 'GOAL' ? '' : 'GOAL'); }}>{activeCategory === 'GOAL' ? 'Back to financial information' : 'Financial goals'}</Button></nav>}
+      {canRead && <nav className="product-financial-category-filter" aria-label="Financial goals navigation"><Button href="/net-worth">Net Worth</Button><Button type={activeCategory === 'GOAL' ? 'primary' : 'default'} onClick={() => { selectCategory(activeCategory === 'GOAL' ? '' : 'GOAL'); }}>{activeCategory === 'GOAL' ? 'Back to financial information' : 'Financial goals'}</Button></nav>}
       {activeCategory === 'GOAL' && api && canRead && <FinancialGoalsExperience
         key={['goal',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api} canRead={canRead}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}

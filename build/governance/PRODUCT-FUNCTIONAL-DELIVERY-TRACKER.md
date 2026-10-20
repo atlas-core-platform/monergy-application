@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Latest bounded increment: T1-71 reviewed income records. Original journeys remain Partial/Pending; full financial truth, central audit and integrated UAT remain open.
+Status: ACTIVE · Current implementation: T1-90 complete Net Worth (P1-18). Original29:1 Complete,19 Partial,9 Pending. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-71 update — reviewed income records
+## Current T1-90 update — complete Net Worth
+
+The entire P1-18 journey is implemented as one unit: complete customer-reviewed asset/debt inventory, exact saved-record imports, current/date/currency/coverage review, Financial Rules Assets minus Liabilities, insufficient-data guidance, immutable saved calculations and source drill-down, history/new reviews and dashboard summary. Receipt: [t1-90-complete-net-worth.md](t1-90-complete-net-worth.md).
+
+1558 backend and737 unique UI checks pass. TypeScript/changed ESLint/Vite and zero-warning Gateway/physical test-project builds pass. Physical persistence/grants and full authenticated live UAT remain NOT RUN; completion is source functionality, not business acceptance. No new package/service/provider/Actions/deployment. After paired merges:90 numbered units=89 implementations+1 governance closure;original29:1 Complete,19 Partial,9 Pending. The JSON status tracker is also synchronized with workbook version32 through T1-89 before applying T1-90. Original IDs/phases/business acceptance remain unchanged.
+
+## Previous T1-71 update — reviewed income records
 
 Master§13 / MON-FIN-003 / COV-017 / M2-WS04-E01-F01 now has explicit reviewed income create/list/details beyond source figures. Customers enter payer/source, type, period total, payment frequency, reported financial-year label and past reporting period. Exact reviewed INCOME source revision/currency/provenance remain; no autofill, annualisation, calendar inference, deduplication or aggregation. Owner status is CUSTOMER_REVIEWED, not externally verified. Receipt: [t1-71-reviewed-income-records.md](t1-71-reviewed-income-records.md).
 

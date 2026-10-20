@@ -1,3 +1,4 @@
+import NetWorthSummary from '../product/NetWorthSummary';
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import type { WorkspaceIconName } from '@monergy/ui-foundation';
 import { Alert, Skeleton, Tag } from 'antd';
@@ -28,6 +29,14 @@ const journeys: {
     icon: 'changes',
     capability: 'financial-profile.profile.read',
     action: 'Open Action Centre',
+  },
+  {
+    title: 'Review net worth',
+    description: 'Review a complete dated inventory, calculate assets minus liabilities and follow saved sources.',
+    href: '/net-worth',
+    icon: 'reports',
+    capability: 'financial-rules.calculation.execute',
+    action: 'Review net worth',
   },
   {
     title: 'Review financial information',
@@ -80,13 +89,15 @@ export default function WorkspaceHome() {
   useEffect(() => {
     if (!api || (!canReadFinancial && !canReadDocuments)) return;
     const controller = new AbortController();
-    setSnapshotBusy(true);
-    setSnapshotError('');
+    void Promise.resolve().then(() => {
+      if (!controller.signal.aborted) { setSnapshotBusy(true); setSnapshotError(''); }
+    });
     void Promise.all([
       canReadFinancial ? getFinancialProfile(api, controller.signal) : Promise.resolve(null),
       canReadDocuments ? listEvidence(api, controller.signal) : Promise.resolve(null),
     ])
       .then(([financial, documents]) => {
+        if (controller.signal.aborted) return;
         setProfile(financial);
         setDocumentCount(documents?.items.length ?? null);
       })
@@ -97,7 +108,7 @@ export default function WorkspaceHome() {
       .finally(() => {
         if (!controller.signal.aborted) setSnapshotBusy(false);
       });
-    return () => controller.abort();
+    return () => { controller.abort(); };
   }, [api, canReadDocuments, canReadFinancial]);
 
   const snapshot = useMemo(() => {
@@ -215,6 +226,8 @@ export default function WorkspaceHome() {
         </div>
       </section>
 
+      {api && context && canReadFinancial && capabilities.has('financial-rules.calculation.execute') && <NetWorthSummary api={api} customerId={context.customerId} />}
+
       {(canReadFinancial || canReadDocuments) && (
         <section className="workspace-passport" aria-labelledby="workspace-passport-title">
           <div className="workspace-section-heading">
@@ -289,7 +302,7 @@ export default function WorkspaceHome() {
                           <strong>{item.label}</strong>
                           <small>
                             {item.count > 0
-                              ? `${item.count} trusted ${item.count === 1 ? 'item' : 'items'}`
+                              ? `${String(item.count)} trusted ${item.count === 1 ? 'item' : 'items'}`
                               : 'No trusted items yet'}
                           </small>
                         </span>
