@@ -657,3 +657,18 @@ it('opens vehicle records under Assets with only explicitly classified vehicle s
   await waitFor(()=>expect(screen.getByText(/Vehicle source amount ·/,{selector:'.ant-select-item-option-content'})).toBeVisible());
   expect(screen.queryByText(/Property source amount ·/,{selector:'.ant-select-item-option-content'})).not.toBeInTheDocument();
 });
+
+
+it('opens customer-defined goals without documents or source-profile access',async()=>{
+  window.history.replaceState(null,'','/finances?type=GOAL');const api=new AccessApi(session);
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/financial-goals'?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'}):Promise.reject(new Error('Source profile must not be requested')));
+  mount(api,['financial-profile.profile.read','financial-profile.profile.update']);
+  expect(await screen.findByText(/No financial goals added/)).toBeVisible();expect(screen.getByRole('button',{name:'Add goal'})).toBeEnabled();
+  expect(request.mock.calls.every(([path])=>path==='v1/financial-goals')).toBe(true);expect(screen.queryByText(/Review documents/)).not.toBeInTheDocument();
+});
+it('makes financial goals reachable before any source figures are added',async()=>{
+  const api=new AccessApi(session);vi.spyOn(api,'product').mockImplementation(path=>Promise.resolve(path==='v1/financial-goals'?{items:[],hasMore:false,dataDurability:'Temporary data'}:{financialProfileId:'profile',revision:0,updatedAt:null,dataDurability:'Temporary data',facts:[]}));
+  mount(api,['financial-profile.profile.read']);const user=userEvent.setup();await user.click(screen.getByRole('button',{name:'Financial goals'}));
+  expect(await screen.findByText(/No financial goals added/)).toBeVisible();expect(window.location.search).toBe('?type=GOAL');expect(screen.queryByRole('button',{name:'Add goal'})).not.toBeInTheDocument();
+  await user.click(screen.getByRole('button',{name:'Back to financial information'}));expect(window.location.search).toBe('');expect(await screen.findByText('Your financial information will appear here after you review it.')).toBeVisible();
+});

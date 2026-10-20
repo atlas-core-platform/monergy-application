@@ -1,3 +1,4 @@
+import FinancialGoalsExperience from './FinancialGoalsExperience';
 import TaxRecordsExperience from './TaxRecordsExperience';
 import InsuranceRecordsExperience from './InsuranceRecordsExperience';
 import AssetSnapshotExperience from './AssetSnapshotExperience';
@@ -41,14 +42,14 @@ const assetTypeName = (value?: string) => value === 'PROPERTY' ? 'Property' : va
 const factTypeName = (value: string) =>
   ({ INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information', ASSET: 'Asset source figure', INVESTMENT: 'Investment source figure', INSURANCE: 'Insurance source figure', TAX: 'Tax source figure' })[value] ?? value;
 
-type FinancialCategory = 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT' | 'INSURANCE' | 'TAX';
+type FinancialCategory = 'GOAL' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'INVESTMENT' | 'INSURANCE' | 'TAX';
 
 const categoryFromLocation = (): FinancialCategory | '' => {
   const value = new URLSearchParams(window.location.search).get('type')?.toUpperCase();
-  return value === 'LIABILITY' || value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' || value === 'ASSET' || value === 'INVESTMENT' || value === 'INSURANCE' || value === 'TAX' ? value : '';
+  return value === 'GOAL' || value === 'LIABILITY' || value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' || value === 'ASSET' || value === 'INVESTMENT' || value === 'INSURANCE' || value === 'TAX' ? value : '';
 };
 
-const initialFactId = () => new URLSearchParams(window.location.search).get('fact') ?? '';
+const initialFactId = () => categoryFromLocation() === 'GOAL' ? '' : new URLSearchParams(window.location.search).get('fact') ?? '';
 
 export default function FinancialProfileExperience() {
   const { api, authorization } = useWorkspaceSession();
@@ -61,6 +62,7 @@ export default function FinancialProfileExperience() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [activeCategory, setActiveCategory] = useState<FinancialCategory | ''>(categoryFromLocation);
+  const goalOnly = activeCategory === 'GOAL';
   const [selectedFactId, setSelectedFactId] = useState(initialFactId);
   const [detail, setDetail] = useState<ProductFinancialFactDetail | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
@@ -68,8 +70,10 @@ export default function FinancialProfileExperience() {
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
-      if (!api || !canRead) {
+      if (!api || !canRead || goalOnly) {
         setProfile(null);
+        setError('');
+        setBusy(false);
         return;
       }
       setBusy(true);
@@ -88,7 +92,7 @@ export default function FinancialProfileExperience() {
         if (!signal?.aborted) setBusy(false);
       }
     },
-    [api, canRead],
+    [api, canRead, goalOnly],
   );
 
   useEffect(() => {
@@ -104,7 +108,7 @@ export default function FinancialProfileExperience() {
 
   useEffect(() => {
     const syncFromLocation = () => {
-      setSelectedFactId(new URLSearchParams(window.location.search).get('fact') ?? '');
+      setSelectedFactId(categoryFromLocation() === 'GOAL' ? '' : new URLSearchParams(window.location.search).get('fact') ?? '');
       setActiveCategory(categoryFromLocation());
     };
     window.addEventListener('popstate', syncFromLocation);
@@ -194,14 +198,17 @@ export default function FinancialProfileExperience() {
       <header className="product-heading">
         <div>
           <p className="workspace-eyebrow">FINANCIAL INFORMATION</p>
-          <h1>Your trusted financial information.</h1>
+          <h1>{goalOnly ? 'Your financial goals.' : 'Your trusted financial information.'}</h1>
           <p>
-            Review the income and expense information you have added from your documents, together
-            with the source behind each item.
+            {goalOnly ? 'Define your own goal amount and target date, and review saved changes.' : 'Review the income and expense information you have added from your documents, together with the source behind each item.'}
           </p>
         </div>
         <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
       </header>
+      {canRead && <nav className="product-financial-category-filter" aria-label="Financial goals navigation"><Button type={activeCategory === 'GOAL' ? 'primary' : 'default'} onClick={() => { selectCategory(activeCategory === 'GOAL' ? '' : 'GOAL'); }}>{activeCategory === 'GOAL' ? 'Back to financial information' : 'Financial goals'}</Button></nav>}
+      {activeCategory === 'GOAL' && api && canRead && <FinancialGoalsExperience
+        key={['goal',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api} canRead={canRead}
+        canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
       {activeCategory === 'LIABILITY' && api && canRead && <LiabilityRecordsExperience
         key={[product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
         facts={profile?.facts.filter(fact=>fact.factType==='LOAN') ?? []}
@@ -260,7 +267,7 @@ export default function FinancialProfileExperience() {
       )}
       {error && <Alert showIcon type="error" title={error} />}
 
-      {busy && !profile ? (
+      {activeCategory !== 'GOAL' && (busy && !profile ? (
         <section className="product-panel">
           <Skeleton active paragraph={{ rows: 5 }} />
         </section>
@@ -446,7 +453,7 @@ export default function FinancialProfileExperience() {
             Review documents
           </Button>
         </section>
-      ) : null}
+      ) : null)}
 
       <Drawer
         title="Financial information details"
