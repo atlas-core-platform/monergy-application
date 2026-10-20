@@ -28,6 +28,8 @@ public sealed class PostgresCustomerAdministration(PostgresTenantSessions sessio
   var rows=(await db.QueryAsync<AdminCustomer>(new CommandDefinition(Projection+filter+" AND change.customer_id COLLATE \"C\">@After COLLATE \"C\" ORDER BY change.customer_id COLLATE \"C\" LIMIT 51;",args,tx,cancellationToken:ct))).ToArray();
   await tx.CommitAsync(ct);return new(tenant,rows.Take(50).ToArray(),rows.Length>50?rows[49].CustomerId:null,all.Total,all.Active,all.Inactive,matching);
  }
+ public async Task<IReadOnlyList<AdminCustomer>> ReadManyAsync(string tenant,IReadOnlyList<string> customers,CancellationToken ct)
+ {await using var db=await sessions.OpenAsync(tenant,ct);return (await db.QueryAsync<AdminCustomer>(new CommandDefinition(Projection+" WHERE change.customer_id=ANY(@Customers);",new{Tenant=tenant,Customers=customers.ToArray()},cancellationToken:ct))).ToArray();}
  public async Task<AdminCustomer?> ReadAsync(string tenant,string customer,CancellationToken ct)
  {await using var db=await sessions.OpenAsync(tenant,ct);return await Read(db,null,tenant,customer,ct);}
  private static Task<AdminCustomer?> Read(NpgsqlConnection db,NpgsqlTransaction? tx,string tenant,string customer,CancellationToken ct)=>db.QuerySingleOrDefaultAsync<AdminCustomer>(new CommandDefinition(Projection+" WHERE change.customer_id=@Id;",new{Tenant=tenant,Id=customer},tx,cancellationToken:ct));

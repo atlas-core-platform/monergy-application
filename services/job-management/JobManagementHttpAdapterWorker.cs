@@ -46,18 +46,34 @@ public sealed class JobManagementHttpAdapterWorker(
             builder.Services.AddSingleton(ownerServices.GetRequiredService<JobManagementApplication>());
             builder.Services.AddSingleton(ownerServices.GetRequiredService<DocumentProcessingJobRegistry>());
             builder.Services.AddSingleton(ownerServices.GetRequiredService<IJobRepository>());
+
             builder.Services.AddSingleton(ownerServices.GetRequiredService<IJobAuthorizationPolicy>());
             builder.Services.AddSingleton(ownerServices.GetRequiredService<HttpDocumentProcessingTarget>());
         }
 
+        var administration=tenantBoundary&&ownerServices.GetService<IJobAdministrationRepository>() is not null;
+        if(administration&&!documentProcessing)
+        {
+            builder.Services.AddSingleton(ownerServices.GetRequiredService<IJobRepository>());
+            builder.Services.AddSingleton(ownerServices.GetRequiredService<IJobAuthorizationPolicy>());
+        }
+        if(administration)
+        {
+            builder.Services.AddSingleton(ownerServices.GetRequiredService<IJobAdministrationRepository>());
+            builder.Services.AddSingleton(ownerServices.GetRequiredService<IJobConsentDecisionPort>());
+        }
         await using var app = builder.Build();
         if (tenantBoundary)
             app.UseMiddleware<TenantBoundaryMiddleware>();
         app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
         app.MapHealthChecks("/health/ready");
         if (documentProcessing)
+        {
             app.MapDocumentProcessingJobs(configuration);
 
+        }
+
+        if(administration)app.MapJobAdministration(documentProcessing);
         await app.StartAsync(stoppingToken).ConfigureAwait(false);
         try
         {

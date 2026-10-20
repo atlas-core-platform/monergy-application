@@ -40,7 +40,9 @@ public static class JobManagementRegistration
     {
         ReferenceAdapterGuard.EnsureAllowed(configuration);
         services.AddSingleton(TimeProvider.System);
-        services.AddSingleton<IJobRepository, InMemoryJobRepository>();
+        services.AddSingleton<InMemoryJobRepository>();
+        services.AddSingleton<IJobRepository>(provider=>provider.GetRequiredService<InMemoryJobRepository>());
+        services.AddSingleton<IJobAdministrationRepository>(provider=>provider.GetRequiredService<InMemoryJobRepository>());
         if (configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled"))
         {
             services.AddSingleton<TenantAccessClient>();
@@ -67,7 +69,9 @@ public static class JobManagementRegistration
     {
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
         services.AddSingleton(TimeProvider.System);
-        services.AddSingleton<IJobRepository, PostgresJobRepository>();
+        services.AddSingleton<PostgresJobRepository>();
+        services.AddSingleton<IJobRepository>(provider=>provider.GetRequiredService<PostgresJobRepository>());
+        services.AddSingleton<IJobAdministrationRepository>(provider=>provider.GetRequiredService<PostgresJobRepository>());
         services.AddSingleton<ReferenceJobExecutionPolicy>();
         services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
         services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());

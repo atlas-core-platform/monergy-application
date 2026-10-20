@@ -8,7 +8,7 @@ using Npgsql;
 
 namespace Monergy.Services.JobManagement.Infrastructure;
 
-public sealed class PostgresJobRepository : IJobRepository, IAsyncDisposable
+public sealed partial class PostgresJobRepository : IJobRepository, IAsyncDisposable
 {
     private readonly NpgsqlDataSource dataSource;
 

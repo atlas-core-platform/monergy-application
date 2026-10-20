@@ -19,9 +19,11 @@ namespace Monergy.CustomerIdentity.Tests;
 public sealed class CustomerManagementTests
 {
  private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web);
+ private static readonly string[] LabelCustomers=["client-one","foreign-only","missing"];
+ private static readonly string[] OneLabelCustomer=["client-one"];
  private const string Op="11111111111111111111111111111111";
  private static AdminCustomer Row(string tenant="T001",string id="client-one",bool active=true)=>new(tenant,id,"Aisha Khan","aisha@example.test","Household",active,1,true,true);
- private static InMemoryCustomerAdministration Repo()=>new([Row(),Row("T002"),Row(id:"client-two")]);
+ private static InMemoryCustomerAdministration Repo()=>new([Row(),Row("T002"),Row("T002",id:"foreign-only"),Row(id:"client-two")]);
  private static CustomerStatusChange Change(long version=1,bool active=false,string operation=Op)=>new(operation,version,active,"Requested account suspension");
  [Fact]public async Task GoldenJourneyListsDetailsSuspendsReactivatesAndRetainsExactReceipts()
  {
@@ -60,6 +62,10 @@ public sealed class CustomerManagementTests
  [Theory][InlineData("mutation")][InlineData("readback")][InlineData("list")][InlineData("metadata")]
  public async Task ForgedOwnerSnapshotsOrReceiptsAreRejected(string mode){await using var h=await Host.Start(mode);var response=mode=="list"?await h.Client.GetAsync(""):await h.Client.PostAsJsonAsync("client-one/status",Change());Assert.Equal(HttpStatusCode.ServiceUnavailable,response.StatusCode);}
  [Fact]public async Task UnknownCustomerReturnsNotFoundAndCannotFabricateOwnership(){await using var h=await Host.Start();Assert.Equal(HttpStatusCode.NotFound,(await h.Client.GetAsync("unknown")).StatusCode);Assert.Equal(HttpStatusCode.NotFound,(await h.Client.PostAsJsonAsync("unknown/status",Change())).StatusCode);Assert.Equal(HttpStatusCode.NotFound,(await h.Client.GetAsync("unknown/history")).StatusCode);}
+ [Fact]public async Task BoundedLabelsReturnOnlyCurrentTenantNamesWithoutProtectedFields(){await using var h=await Host.Start();var response=await h.Client.PostAsJsonAsync("labels",new{customerIds=LabelCustomers});Assert.Equal(HttpStatusCode.OK,response.StatusCode);var labels=await response.Content.ReadFromJsonAsync<CustomerAdministrationLabels>();Assert.Equal("T001",labels!.TenantId);Assert.Equal("Aisha Khan",Assert.Single(labels.Items).DisplayName);Assert.Equal(["foreign-only","missing"],labels.Unavailable);var body=await response.Content.ReadAsStringAsync();Assert.DoesNotContain("email",body,StringComparison.OrdinalIgnoreCase);Assert.DoesNotContain("ownerActorId",body);Assert.DoesNotContain("pan",body);}
+ [Theory][InlineData("{}")][InlineData("{\"customerIds\":null}")][InlineData("{\"customerIds\":[]}")][InlineData("{\"customerIds\":[null]}")][InlineData("{\"customerIds\":[\"bad id\"]}")][InlineData("{\"customerIds\":[\"client-one\",\"client-one\"]}")][InlineData("{\"customerIds\":[\"client-one\"],\"tenantId\":\"T002\"}")]
+ public async Task LabelsRejectUnboundedInvalidOrCallerSelectedScope(string body){await using var h=await Host.Start();Assert.Equal(HttpStatusCode.BadRequest,(await h.Client.PostAsync("labels",new StringContent(body,Encoding.UTF8,"application/json"))).StatusCode);}
+ [Fact]public async Task LabelsRejectMoreThanFiftyAndRequireCurrentAdministrator(){await using var h=await Host.Start();Assert.Equal(HttpStatusCode.BadRequest,(await h.Client.PostAsJsonAsync("labels",new{customerIds=Enumerable.Range(0,51).Select(x=>"client-"+x)})).StatusCode);h.Authority.Status=403;Assert.Equal(HttpStatusCode.Forbidden,(await h.Client.PostAsJsonAsync("labels",new{customerIds=OneLabelCustomer})).StatusCode);}
  private sealed class Authority:HttpMessageHandler
  {public int Status=200,Calls,DenyAfter=int.MaxValue,ChangeAfter=int.MaxValue;protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){Calls++;var status=Calls>DenyAfter?403:Status;var tenant=request.Headers.GetValues("X-Monergy-Tenant").Single();return Task.FromResult(new HttpResponseMessage((HttpStatusCode)status){Content=JsonContent.Create(status==200?(object)new TenantAdminContext(tenant,Calls>ChangeAfter?"A901":"A900",1,"TenantAdmin"):new{error="ADMINISTRATOR_REQUIRED"})});}}
  private sealed class Corrupt(ICustomerAdministrationRepository inner,string mode):ICustomerAdministrationRepository

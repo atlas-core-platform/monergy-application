@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-91 complete Customer Management (P1-26). Original29:2 Complete,19 Partial,8 Pending. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-92 complete Processing Status (P1-28). Original29:3 Complete,19 Partial,7 Pending. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-91 update — complete Customer Management
+## Current T1-92 update — complete Processing Status
+
+Organization Settings > Processing Status delivers tenant queues, all six required states/counts, literal job search, customer/state filters,pages,named customers,details,attempt/failure visibility and immutable recovery history. Explicit reviewed cancellation and current original-customer authorization/Consent-checked retry preserve the owner context. Running cancellation stays Processing;unknown outcomes require owner review. Exact immutable receipts recover uncertain requests without duplicate scheduling. Receipt: [t1-92-processing-status.md](t1-92-processing-status.md).
+
+194 backend checks pass,including59 new owner/labels cases. All793 full UI checks pass,including33 new Processing Status cases;static/build checks pass. Physical database/query/grant/restart and full live UAT NOT RUN. After paired merges:92 numbered units=91 implementations+1 governance closure;original29:3 Complete,19 Partial,7 Pending. All29 repo statuses synchronized from workbook version34 before applying T1-92. Original IDs/source phases/business acceptance unchanged. Document Monitoring and product-wide Audit remain Pending.
+
+## Previous T1-91 update — complete Customer Management
 
 Organization Settings > Customers delivers the complete organization administrator customer directory, literal search, availability filters/counts, bounded pagination, metadata details, explicit version-checked suspension/reactivation, immutable named status history and exact uncertain-save recovery. Availability is separate from read-only verified ownership. Current owner reads honor suspension; administrator authority does not grant financial/protected identity access, ownership or Consent. Receipt: [t1-91-customer-management.md](t1-91-customer-management.md).
 
