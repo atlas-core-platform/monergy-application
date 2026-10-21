@@ -48,6 +48,16 @@ export function NetWorthExperience({ api, customerId, canRead, canWrite, canCalc
     finally { if (active()) setLoading(null); }
   }, [api, canRead, canCalculate, context, customerId]);
   useEffect(() => { const timer = window.setTimeout(() => { void load(); }, 0); return () => { window.clearTimeout(timer); reading.current?.abort(); }; }, [load]);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('calculation');
+    if (!id || !canRead || !canCalculate) return;
+    const controller = new AbortController();
+    void getNetWorthResult(api, id, controller.signal).then(result => {
+      if (!validNetWorthResult(result, customerId) || result.calculationId !== id) throw new Error('Invalid calculation');
+      if (scope.current === context && !controller.signal.aborted) setSelected({ context, result });
+    }).catch(() => { if (scope.current === context && !controller.signal.aborted) setHistoryError({ context, text: 'The linked calculation is unavailable under your current access.' }); });
+    return () => { controller.abort(); };
+  }, [api, canRead, canCalculate, context, customerId]);
   const edit = (value: NetWorthDraft) => { if (!canWrite || busy || frozen) return; setDraft({ context, value, open: true }); setError(null); setConflict(null); };
   const change = (value: NetWorthDraft) => { if (current && !frozen && !busy && conflict !== context) setDraft({ ...current, value }); };
   const lineChange = (index: number, value: NetWorthLine) => { if (current) change({ ...current.value, lines: current.value.lines.map((line, i) => i === index ? value : line), assetsComplete: false, liabilitiesComplete: false }); };

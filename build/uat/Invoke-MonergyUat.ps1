@@ -333,7 +333,7 @@ if ($Action -in @('Prepare','Start')) {
             $config.Monergy.AccessIntegration=@{ Enabled='true'; CustomerRelationships='true';
                 AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
                 CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
-            $config.Monergy.FinancialQa=@{ Enabled='true'; IntegrationGatewayUrl='http://127.0.0.1:5117/';
+            $config.Monergy.FinancialQa=@{ Enabled='true'; DocumentIntelligenceUrl='http://127.0.0.1:5112/'; FinancialRulesUrl='http://127.0.0.1:5114/'; IntegrationGatewayUrl='http://127.0.0.1:5117/';
                 FinancialProfileUrl='http://127.0.0.1:5113/'; EvidenceUrl='http://127.0.0.1:5111/'; SearchRetrievalUrl='http://127.0.0.1:5115/';
                 InternalToken=$state.tokens.aiModelInternal; StoreDirectory='/var/lib/monergy-drive/financial-qa';
                 EncryptionKey=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.financialQaProtection)) }
