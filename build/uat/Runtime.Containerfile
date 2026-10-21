@@ -20,7 +20,7 @@ RUN mkdir -p /runtime-data/monergy-onboarding /runtime-data/monergy-drive && chm
 
 # LOCAL OCR toolchain is isolated from the production service images.
 FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d AS ocr
-RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr=5.3.4-1build5 libtesseract5=5.3.4-1build5 liblept5=1.82.0-3build4 tesseract-ocr-eng=1:4.1.0-2 poppler-utils=24.02.0-1ubuntu9.9 libpoppler134=24.02.0-1ubuntu9.9 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr=5.3.4-1build5 libtesseract5=5.3.4-1build5 liblept5=1.82.0-3build4 tesseract-ocr-eng=1:4.1.0-2 poppler-utils=24.02.0-1ubuntu9.10 libpoppler134=24.02.0-1ubuntu9.10 && rm -rf /var/lib/apt/lists/*
 COPY build/uat/prepare-ocr.sh /prepare-ocr.sh
 RUN sh /prepare-ocr.sh
 
