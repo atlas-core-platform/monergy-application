@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-97 complete OneDrive integration (P1-12). Original29:8 Complete,19 Partial,2 Pending. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-102 Assets dashboard (P1-22). Original29:11 Complete,17 Partial,1 Pending after paired merges. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-97 update — complete OneDrive integration
+## Current T1-102 update — Assets dashboard
+
+The customer dashboard presents the complete saved reviewed asset inventory across Cash, Bank accounts, Investments, Property, Vehicles and Other assets, using the authoritative Financial Rules total. Category filtering, review date/currency, coverage gaps, fresh exact-result confirmation, paged history and exact source links preserve the existing owner boundaries. Update uses the existing Net Worth review journey. Receipt: [t1-102-assets-dashboard.md](t1-102-assets-dashboard.md).
+
+80 focused UI checks, TypeScript, changed-source/test ESLint and production Vite build pass. No backend/schema/package changes. External verified ownership/valuation, physical PostgreSQL and full authenticated UAT remain open. T1-102 = 101 implementation units plus one governance closure. The current workbook supersedes historical counts below: T1-99 Financial Q&A, T1-100 Login and T1-101 Document Vault are implemented. Basic KYC remains the only Pending journey; external inputs remain onboarding configuration. Acceptance stays T1-06.
+
+## Previous T1-97 update — complete OneDrive integration
 
 Connections delivers configurable Microsoft OAuth with PKCE, explicit read/offline and folder permission, encrypted server tokens, account/nested folder selection, exact provider-version import through scanned Evidence, refresh/status/history and local disconnect with manual Microsoft permission removal guidance. Fresh ownership/capability/Consent/configuration checks guard imports. Receipt: [t1-97-onedrive.md](t1-97-onedrive.md).
 
