@@ -5,6 +5,8 @@ using Monergy.UatGateway;
 var builder = WebApplication.CreateBuilder(args);
 if (!builder.Environment.IsDevelopment() || builder.Configuration["Monergy:ExecutionZone"] is not ("LOCAL" or "CI_EPHEMERAL"))
     throw new InvalidOperationException("The Docker UAT workspace requires Development LOCAL/CI.");
+// OAuth callback queries must not enter request-start diagnostics.
+builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 1_500_000);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -143,7 +145,7 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     if (path is not ("/" or "/actions" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
         "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
         "/access/activity" or "/access/audit" or "/access/sessions" or "/access/customers" or "/access/processing" or "/access/documents" or "/operations" or
-        "/search" or "/reports" or "/finances" or "/consent" or "/connections" or "/profile" or "/settings/sessions" or "/settings/agreements" or "/vs02" or "/foundation"))
+        "/search" or "/reports" or "/finances" or "/consent" or "/connections" or "/connections/onedrive" or "/profile" or "/settings/sessions" or "/settings/agreements" or "/vs02" or "/foundation"))
     { http.Response.StatusCode = 404; return; }
     http.Response.ContentType = "text/html; charset=utf-8";
     await http.Response.SendFileAsync(Path.Combine(environment.WebRootPath, "index.html"), http.RequestAborted).ConfigureAwait(false);
@@ -202,6 +204,10 @@ static string? Route(string path, string method)
     const string drive = "/connections-api/local/v1/google-drive";
     if (method == "GET" && (path == drive || path == drive + "/folders" || path == drive + "/files" || path == drive + "/callback") ||
         method == "POST" && (path == drive + "/authorize" || path == drive + "/folder" || path == drive + "/import" || path == drive + "/disconnect"))
+        return "http://127.0.0.1:5117" + path[16..];
+    const string oneDrive = "/connections-api/local/v1/onedrive";
+    if (method == "GET" && (path == oneDrive || path == oneDrive + "/folders" || path == oneDrive + "/files" || path == oneDrive + "/callback") ||
+        method == "POST" && (path == oneDrive + "/authorize" || path == oneDrive + "/folder" || path == oneDrive + "/import" || path == oneDrive + "/disconnect"))
         return "http://127.0.0.1:5117" + path[16..];
     if (path.StartsWith("/consent-api/local/v1/consents/customers/", StringComparison.Ordinal) && method is "GET" or "POST" or "DELETE")
         return "http://127.0.0.1:5110" + path[12..];

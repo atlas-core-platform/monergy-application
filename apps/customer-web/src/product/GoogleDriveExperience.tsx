@@ -86,7 +86,7 @@ export default function GoogleDriveExperience() {
     return { page: result, folders };
   }); };
   return <main className="product-page" aria-busy={busy}>
-    <h1>Connections</h1><h2>Google Drive</h2>
+    <h1>Connections</h1><p>Google Drive · <a href="/connections/onedrive">OneDrive</a></p><h2>Google Drive</h2>
     <p>Choose an existing folder to use as your Monergy document source. Import supported files when you need them; nothing is imported automatically.</p>
     {current?.error && <Alert type="warning" title={current.error} showIcon />}
     {current?.notice && <Alert type="success" title={current.notice} showIcon />}

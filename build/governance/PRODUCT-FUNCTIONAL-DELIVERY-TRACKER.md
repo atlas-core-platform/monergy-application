@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-96 complete Google Drive integration (P1-11). Original29:7 Complete,19 Partial,3 Pending. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-97 complete OneDrive integration (P1-12). Original29:8 Complete,19 Partial,2 Pending. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-96 update — complete Google Drive integration
+## Current T1-97 update — complete OneDrive integration
+
+Connections delivers configurable Microsoft OAuth with PKCE, explicit read/offline and folder permission, encrypted server tokens, account/nested folder selection, exact provider-version import through scanned Evidence, refresh/status/history and local disconnect with manual Microsoft permission removal guidance. Fresh ownership/capability/Consent/configuration checks guard imports. Receipt: [t1-97-onedrive.md](t1-97-onedrive.md).
+
+426 backend and35 focused UI checks pass. TypeScript/ESLint/Vite and owner/Gateway builds pass. Live Microsoft, physical Consent migration/grants/restart, PowerShell/Docker/ClamAV and full UAT NOT RUN. After paired merges:97 numbered units=96 implementations+1 governance closure. Pending: P1-04 Basic KYC and P1-24 Basic Financial Q&A. Original IDs/source phases/acceptance remain unchanged.
+
+## Previous T1-96 update — complete Google Drive integration
 
 Connections delivers configurable tenant Google OAuth, explicit customer permission, server-held encrypted tokens, named account/folder selection, exact provider-version import through scanned Evidence intake, refresh/status, retained import history and disconnect. Fresh customer ownership/capability/Consent/configuration checks guard provider work and registration. Access Pack 2.5 uses the reviewed upgrade flow. Receipt: [t1-96-google-drive.md](t1-96-google-drive.md).
 

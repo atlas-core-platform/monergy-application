@@ -14,7 +14,7 @@ public static class DriveConnectionEndpoints
         // and request-start diagnostics rather than depending on redaction defaults.
         builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
         builder.Services.Configure<OpenTelemetry.Instrumentation.AspNetCore.AspNetCoreTraceInstrumentationOptions>(options =>
-            options.Filter = http => http.Request.Path != "/local/v1/google-drive/callback");
+            options.Filter = http => http.Request.Path != "/local/v1/google-drive/callback" && http.Request.Path != "/local/v1/onedrive/callback");
         builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 16_384);
         builder.Services.ConfigureHttpJsonOptions(options =>
         {

@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddMonergyPlatform(serviceName);
 builder.Services.AddHealthChecks();
 builder.AddGoogleDrive();
+Monergy.Services.IntegrationGateway.OneDrive.DriveConnectionEndpoints.AddOneDrive(builder);
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);
 if (referenceAdapters)
 {
@@ -17,6 +18,7 @@ if (referenceAdapters)
 
 var app = builder.Build();
 app.MapGoogleDrive();
+Monergy.Services.IntegrationGateway.OneDrive.DriveConnectionEndpoints.MapOneDrive(app);
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
 app.MapHealthChecks("/health/ready");
 if (referenceAdapters)
