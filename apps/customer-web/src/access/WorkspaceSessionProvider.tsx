@@ -179,7 +179,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     [leave],
   );
   const connectUsing = useCallback(
-    async (tenant: string, issue: (signal: AbortSignal) => Promise<TenantSession>, email = false) => {
+    async (tenant: string, issue: (signal: AbortSignal) => Promise<TenantSession>, method: 'local' | 'email' | 'password' = 'local') => {
       const id = stop();
       const controller = new AbortController();
       request.current = controller;
@@ -205,7 +205,9 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
                 ? 'Organization Administrator access is required.'
                 : 'A customer workspace and product role are required.'
               : failure instanceof AccessApiError && failure.status === 401
-                ? email
+                ? method === 'password'
+                  ? 'Unable to sign in. Check your organization, email and password, or use Forgot password.'
+                  : method === 'email'
                   ? 'The verification code is invalid, expired or already used. Request a new code if needed.'
                   : 'Unable to connect. Check your organization and local access key, then try again.'
                 : failure instanceof AccessApiError && failure.status === 429
@@ -226,9 +228,9 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
   );
   const connect = useCallback((tenant: string, key: string) =>
     connectUsing(tenant, (signal) => establishSession(tenant, key, signal)), [connectUsing]);
-  const connectPassword = useCallback((tenant: string, email: string, password: string) => connectUsing(tenant, signal => registrationRequest<TenantSession>('/sign-in', { tenantId: tenant, email, password }, signal), true), [connectUsing]);
+  const connectPassword = useCallback((tenant: string, email: string, password: string) => connectUsing(tenant, signal => registrationRequest<TenantSession>('/sign-in', { tenantId: tenant, email, password }, signal), 'password'), [connectUsing]);
   const connectEmail = useCallback((tenant: string, challengeId: string, code: string) =>
-    connectUsing(tenant, (signal) => confirmCustomerEmailCode(tenant, challengeId, code, signal), true), [connectUsing]);
+    connectUsing(tenant, (signal) => confirmCustomerEmailCode(tenant, challengeId, code, signal), 'email'), [connectUsing]);
   const refreshContext = useCallback(async () => {
     const current = candidate.current;
     const signal = request.current?.signal;

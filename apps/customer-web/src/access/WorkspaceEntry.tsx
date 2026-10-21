@@ -17,10 +17,12 @@ export function WorkspaceEntry({
   const { status, session, message, connect, connectEmail, connectPassword, retry, cancel } = useWorkspaceSession();
   const [form] = Form.useForm<{ tenantId: string; key: string }>();
   const [emailAvailable, setEmailAvailable] = useState(false);
-  const [emailEntry, setEmailEntry] = useState(false);
-  const [registrationAvailable, setRegistrationAvailable] = useState(false);
-  const [registrationEntry, setRegistrationEntry] = useState(false);
-  useEffect(() => { if (area !== 'product' || !connectPassword) return; const controller = new AbortController(); void fetch('/identity-api/local/v1/customer-registration', { cache: 'no-store', redirect: 'error', signal: controller.signal }).then(async r => { const v: unknown = r.ok ? await r.json() : null; if (!controller.signal.aborted && v && typeof v === 'object' && 'enabled' in v) setRegistrationAvailable(v.enabled === true); }).catch(() => undefined); return () => { controller.abort(); }; }, [area, connectPassword]);
+  const [method, setMethod] = useState<'auto' | 'password' | 'email' | 'local'>('auto');
+  const [registrationAvailable, setRegistrationAvailable] = useState<boolean | null>(null);
+  const registrationEntry = method === 'password' || method === 'auto' && registrationAvailable === true;
+  const emailEntry = method === 'email';
+  const loadingMethods = area === 'product' && !!connectPassword && method === 'auto' && registrationAvailable === null;
+  useEffect(() => { if (area !== 'product' || !connectPassword) return; const controller = new AbortController(); void fetch('/identity-api/local/v1/customer-registration', { cache: 'no-store', redirect: 'error', signal: controller.signal }).then(async r => { const v: unknown = r.ok ? await r.json() : null; if (!controller.signal.aborted) setRegistrationAvailable(!!v && typeof v === 'object' && 'enabled' in v && v.enabled === true); }).catch(() => { if (!controller.signal.aborted) setRegistrationAvailable(false); }); return () => { controller.abort(); }; }, [area, connectPassword]);
   useEffect(() => {
     if (area !== 'product' || !connectEmail) return;
     const controller = new AbortController();
@@ -75,7 +77,7 @@ export function WorkspaceEntry({
             <WorkspaceIcon name="shield" size={20} />
           </span>
           <h2 id="access-connect-title">Connect to your workspace</h2>
-          {!registrationEntry && !emailEntry && <p>Enter the organization and local key provided by your administrator.</p>}
+          {!loadingMethods && !registrationEntry && !emailEntry && <p>Enter the organization and local key provided by your administrator.</p>}
           {message && (
             <Alert
               showIcon
@@ -103,10 +105,12 @@ export function WorkspaceEntry({
                 Use another connection
               </Button>
             </>
+          ) : loadingMethods ? (
+            <p role="status">Checking available sign-in methods…</p>
           ) : registrationEntry && connectPassword ? (
-            <CustomerRegistrationEntry busy={busy} onSignIn={connectPassword} onCancel={() => { cancel(); setRegistrationEntry(false); }} />
+            <CustomerRegistrationEntry busy={busy} onSignIn={connectPassword} onCancel={() => { cancel(); setMethod('local'); }} />
           ) : emailEntry && connectEmail ? (
-            <CustomerEmailEntry busy={busy} onVerify={connectEmail} onCancel={() => { cancel(); setEmailEntry(false); }} />
+            <CustomerEmailEntry busy={busy} onVerify={connectEmail} onCancel={() => { cancel(); setMethod('local'); }} />
           ) : (
             <Form
               form={form}
@@ -170,9 +174,10 @@ export function WorkspaceEntry({
               )}
             </Form>
           )}
-          {!registrationEntry && !emailEntry && registrationAvailable && <Button block type="link" disabled={busy} onClick={() => { cancel(); setRegistrationEntry(true); }}>Sign in or create an account</Button>}
-          {!registrationEntry && !emailEntry && emailAvailable && status !== 'disconnected' && <Button block type="link" disabled={busy} onClick={() => { cancel(); setEmailEntry(true); }}>Use an email code</Button>}
-          {!registrationEntry && !emailEntry && <p className="access-connect-footnote">
+          {!registrationEntry && !emailEntry && registrationAvailable === true && status !== 'disconnected' && <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('password'); }}>Sign in or create an account</Button>}
+          {!registrationEntry && !emailEntry && emailAvailable && status !== 'disconnected' && <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('email'); }}>Use an email code</Button>}
+          {area === 'product' && (loadingMethods || registrationEntry || emailEntry) && status !== 'disconnected' && <Button block type="link" onClick={() => { cancel(); setMethod('local'); }}>Use a local test key</Button>}
+          {!loadingMethods && !registrationEntry && !emailEntry && <p className="access-connect-footnote">
             Your key is cleared after use. Test-environment keys do not configure production
             sign-in.
           </p>}

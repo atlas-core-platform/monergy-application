@@ -27,3 +27,9 @@ it('clears credentials before sign-in without persistence', async () => {
 it('fails closed on missing publications and conceals server details', async () => {
  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ error: 'secret server detail' }, 503))); mount(); await userEvent.click(screen.getByRole('button', { name: 'Create account' })); fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.test' } }); await userEvent.click(screen.getByRole('button', { name: 'Send verification code' })); expect(await screen.findByText(/Unable to complete this step/)).toBeVisible(); expect(screen.queryByText(/secret server detail/)).not.toBeInTheDocument(); expect(screen.queryByLabelText('Verification code')).not.toBeInTheDocument();
 });
+
+it('does not announce password recovery from a malformed owner receipt', async () => {
+ const fetch = owner(); const fallback = fetch.getMockImplementation(); if (!fallback) throw new Error('Missing mock'); fetch.mockImplementation((url, options) => url.endsWith('/recovery/confirm') ? Promise.resolve(json({ recovered: false })) : fallback(url, options));
+ mount(); const code = await request('Forgot password'); fireEvent.change(code, { target: { value: '123456' } }); fireEvent.change(screen.getByLabelText('Create a password (15–128 characters)'), { target: { value: 'another long password' } });
+ await userEvent.click(screen.getByRole('button', { name: 'Verify and reset password' })); expect(await screen.findByText(/Unable to complete this step/)).toBeVisible(); expect(screen.queryByText(/previous sessions have ended/)).not.toBeInTheDocument();
+});
