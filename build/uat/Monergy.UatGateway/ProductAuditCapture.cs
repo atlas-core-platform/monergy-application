@@ -25,6 +25,7 @@ public static class ProductAuditCapture
   if(path.EndsWith("/customer-registration/sign-in",StringComparison.Ordinal)||path.Contains("tenant-sessions",StringComparison.Ordinal)||path.Contains("customer-email-access",StringComparison.Ordinal))return "LOGIN";
   if(path.Contains("/export",StringComparison.Ordinal))return "DATA_EXPORT";
   if(path.StartsWith("/consent-api/",StringComparison.Ordinal)&&method!="GET")return method=="DELETE"?"CONSENT_REVOKE":"CONSENT_GRANT";
+  if(path.StartsWith("/product-api/v1/document-vault",StringComparison.Ordinal))return method=="GET"?"DOCUMENT_VIEW":"DOCUMENT_UPDATE";
   if(path.StartsWith("/product-api/v1/evidence",StringComparison.Ordinal))return method=="GET"?"DOCUMENT_VIEW":method=="POST"&&!path.Contains("/processing",StringComparison.Ordinal)?"DOCUMENT_UPLOAD":"DOCUMENT_UPDATE";
   if(path.StartsWith("/connections-api/",StringComparison.Ordinal))return path.EndsWith("/import",StringComparison.Ordinal)?"DOCUMENT_UPLOAD":"API_ACCESS";
   if(path.Contains("/reports",StringComparison.Ordinal)&&method=="POST")return "REPORT_GENERATION";

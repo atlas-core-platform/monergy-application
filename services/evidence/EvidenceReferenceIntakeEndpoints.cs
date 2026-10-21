@@ -5,7 +5,7 @@ using System.Text;
 
 namespace Monergy.Services.Evidence;
 
-public sealed record ReferenceEvidenceContentRequest(string OperationId, string ContentBase64, string ContentType);
+public sealed record ReferenceEvidenceContentRequest(string OperationId, string ContentBase64, string ContentType, EvidenceSourceLocation? SourceLocation = null);
 public sealed record ReferenceEvidenceReadRequest(string DocumentVersionId, string CustomerId);
 public sealed record ReferenceEvidenceReadResult(
     string EvidenceId,
@@ -49,6 +49,9 @@ public static class EvidenceReferenceIntakeEndpoints
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             if (!SupportedContentTypes.Contains(input.ContentType))
                 return Results.BadRequest(new { error = "EVIDENCE_CONTENT_TYPE_UNSUPPORTED" });
+            if (input.SourceLocation is { } location && (location.Provider is not ("google-drive" or "onedrive") ||
+                new[] { location.FolderId, location.FileId, location.FileVersion }.Any(x => string.IsNullOrWhiteSpace(x) || x.Length > 512 || x.Any(char.IsControl))))
+                return Results.BadRequest(new { error = "EVIDENCE_SOURCE_LOCATION_INVALID" });
             if (input.OperationId is null || input.OperationId.Length != 32 || input.OperationId.Any(character =>
                 !char.IsAsciiHexDigit(character) || char.IsAsciiLetterUpper(character)))
                 return Results.BadRequest(new { error = "EVIDENCE_OPERATION_INVALID" });
@@ -63,7 +66,7 @@ public static class EvidenceReferenceIntakeEndpoints
             {
                 var check = await scanner.CheckAsync(value, ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
-                return Results.Ok(content.StageScanned(input.OperationId, value, input.ContentType, check));
+                return Results.Ok(content.StageScanned(input.OperationId, value, input.ContentType, check, input.SourceLocation));
             }
             catch (EvidenceScanRejectedException)
             { return Results.Json(new { error = "EVIDENCE_SCAN_REJECTED" }, statusCode: 422); }

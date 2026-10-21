@@ -202,7 +202,9 @@ public sealed class SalarySlipOcrTests
         Assert.Equal(bytes, source?.BinaryContent); Assert.Equal("", source?.Content);
         var exposed = await store.ReadBytesAsync(descriptor.Reference, default); exposed![0] = 0;
         Assert.Equal(bytes, await store.ReadBytesAsync(descriptor.Reference, default));
-        await Assert.ThrowsAsync<EvidenceDependencyException>(() => reader.ReadAsync("document-version-001", "customer-other", security, "correlation-ocr", default));
+        // Unknown customers are resolved against immutable evidence ownership;
+        // a mismatched owner is hidden as not-found (registered customers need no fixture binding).
+        Assert.Null(await reader.ReadAsync("document-version-001", "customer-other", security, "correlation-ocr", default));
         Assert.Null(await reader.ReadAsync("missing-version", "customer-001", security, "correlation-ocr", default));
         await Assert.ThrowsAsync<EvidenceDependencyException>(() => reader.ReadAsync("document-version-001", "customer-001",
             security with { Workload = new WorkloadContext("job-management", "job-management:T002") }, "wrong-tenant", default));

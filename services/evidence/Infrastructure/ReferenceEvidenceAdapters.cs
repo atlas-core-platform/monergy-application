@@ -48,6 +48,7 @@ public sealed partial class InMemoryEvidenceRepository : IEvidenceRepository
                 throw new InvalidOperationException("Document identity belongs to another customer.");
             }
 
+            DocumentVault.Replacement(candidate, documentVersions.LastOrDefault());
             var saved = candidate with { Version = documentVersions.Length + 1 };
             versions.Add(saved.DocumentVersionId, saved);
             idempotency.Add(identity, saved.DocumentVersionId);
@@ -110,6 +111,9 @@ public sealed partial class InMemoryEvidenceRepository : IEvidenceRepository
     }
 
     private static bool Equivalent(EvidenceVersionRecord prior, EvidenceVersionRecord candidate) =>
+        prior.SourceLocation == candidate.SourceLocation &&
+        prior.ExpectedPreviousVersionId == candidate.ExpectedPreviousVersionId &&
+        (candidate.ExpectedPreviousVersionId is null || prior.OriginalFileName == candidate.OriginalFileName && prior.ContentType == candidate.ContentType) &&
         prior.TenantId == candidate.TenantId &&
         string.Equals(prior.DocumentId, candidate.DocumentId, StringComparison.Ordinal) &&
         string.Equals(prior.DocumentVersionId, candidate.DocumentVersionId, StringComparison.Ordinal) &&
@@ -145,15 +149,15 @@ public sealed class ReferenceEvidenceContentStore : IEvidenceContentStore
         return descriptor;
     }
 
-    public EvidenceContentDescriptor StageScanned(string operationId, byte[] value, string contentType, EvidenceMalwareCheck check)
+    public EvidenceContentDescriptor StageScanned(string operationId, byte[] value, string contentType, EvidenceMalwareCheck check, EvidenceSourceLocation? sourceLocation = null)
     {
         var hash = Convert.ToHexStringLower(SHA256.HashData(value));
         if (!EvidenceMalwarePolicy.Verified(check, hash, DateTimeOffset.UtcNow)) throw new EvidenceScanUnavailableException();
         var reference = "reference://customer-intake/" + operationId;
-        var descriptor = new EvidenceContentDescriptor(reference, hash, contentType, value.LongLength, MalwareCheck: check);
+        var descriptor = new EvidenceContentDescriptor(reference, hash, contentType, value.LongLength, MalwareCheck: check, SourceLocation: sourceLocation);
         return content.AddOrUpdate(reference, _ => (descriptor, value.ToArray()), (_, current) =>
         {
-            if (current.Descriptor.Sha256 != hash || current.Descriptor.ContentType != contentType || current.Descriptor.ContentLength != value.LongLength)
+            if (current.Descriptor.SourceLocation != sourceLocation || current.Descriptor.Sha256 != hash || current.Descriptor.ContentType != contentType || current.Descriptor.ContentLength != value.LongLength)
                 throw new InvalidOperationException("Reference evidence operation identifies different content.");
             return (descriptor, current.Content);
         }).Descriptor;

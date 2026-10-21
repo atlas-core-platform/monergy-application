@@ -332,6 +332,40 @@
 .product-review dt {
   color: var(--mw-muted);
 }
+.product-vault-detail {
+  text-align: left;
+}
+.product-vault-detail dl {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) minmax(0, 2fr);
+  gap: 14px;
+  padding-top: 18px;
+  font-size: var(--monergy-text-small);
+}
+.product-vault-detail dd {
+  overflow-wrap: anywhere;
+}
+.product-vault-detail fieldset {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.product-vault-detail label {
+  display: grid;
+  gap: 6px;
+  color: var(--mw-muted);
+}
+.product-vault-detail .ant-select {
+  width: 100%;
+}
+.product-vault-detail h4 {
+  margin: 20px 0 0;
+}
+.product-vault-detail input[type='file'] {
+  max-width: 100%;
+}
 .product-review dd {
   margin: 0;
   color: var(--mw-ink);

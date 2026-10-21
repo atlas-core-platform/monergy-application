@@ -48,7 +48,11 @@ if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Prof
     app.MapD11LocalShutdown(builder.Configuration);
 }
 
-if (TenantBoundaryOptions.Selected(builder.Configuration) && (referenceAdapters || physicalPersistence)) app.MapDocumentMonitoring();
+if (TenantBoundaryOptions.Selected(builder.Configuration) && (referenceAdapters || physicalPersistence))
+{
+    app.MapDocumentMonitoring();
+    app.MapDocumentVault();
+}
 
 await app.RunAsync();
 
