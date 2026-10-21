@@ -98,7 +98,7 @@ export default function CustomerProfileExperience() {
   };
   if (!api || !customer) return <Alert type="warning" showIcon title="Connect to your own customer workspace to open My Profile." />;
   return <section className="product-page" aria-labelledby="customer-profile-title">
-    <header className="product-page-header"><div><p className="workspace-eyebrow">YOUR ACCOUNT</p><h1 id="customer-profile-title">My Profile</h1><p>Keep your name and contact details up to date.</p></div>
+    <header className="product-page-header"><div><p className="workspace-eyebrow">YOUR ACCOUNT</p><h1 id="customer-profile-title">My Profile</h1><a href="/kyc">Basic KYC status and review</a><p>Keep your name and contact details up to date.</p></div>
       <Button disabled={current?.saving} loading={!current && !!api} onClick={() => { setView(null); void load(); }}>{current?.dirty ? 'Discard changes and reload' : 'Reload profile'}</Button>
     </header>
     {current?.error && <Alert type="error" showIcon title={current.error} />}

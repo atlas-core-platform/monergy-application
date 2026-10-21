@@ -128,6 +128,24 @@ public sealed class DocumentVaultTests
         host.Authority.DenyAfter = int.MaxValue;
         Assert.Equal(HttpStatusCode.OK, (await host.Client.PutAsJsonAsync("/local/v1/customers/customer-one/document-vault/version-one/metadata", Change())).StatusCode);
     }
+    [Fact] public async Task KycEvidenceRequiresCurrentDelegatedAuthorityImmutableHashAndOriginalTenant()
+    {
+        await using var host = await Host.Start();
+        var bytes = "%PDF-1.7 fixture"u8.ToArray();var check=FixtureMalwareScanner.Check(bytes);
+        var staged=host.Content.StageScanned("kyc-content",bytes,"application/pdf",check);
+        await Save(host.Repo,Row("kyc-version","kyc-document") with {ContentReference=staged.Reference,ContentSha256=staged.Sha256,MalwareCheck=check});
+        host.Authority.Basis="Advisor";
+        var response=await host.Client.GetAsync("/local/v1/customers/customer-one/kyc-evidence/kyc-version");Assert.Equal(HttpStatusCode.OK,response.StatusCode);
+        var data=await response.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();Assert.Equal(Convert.ToBase64String(bytes),data.GetProperty("contentBase64").GetString());Assert.False(data.TryGetProperty("contentReference",out _));
+        host.Authority.DenyAfter=host.Authority.Calls+1;
+        Assert.Equal(HttpStatusCode.Forbidden,(await host.Client.GetAsync("/local/v1/customers/customer-one/kyc-evidence/kyc-version")).StatusCode);
+        host.Authority.DenyAfter=int.MaxValue;
+        Assert.Equal(HttpStatusCode.Forbidden,(await host.Client.GetAsync("/local/v1/customers/foreign-customer/kyc-evidence/kyc-version")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,(await host.Client.GetAsync("/local/v1/customers/customer-one/kyc-evidence/missing")).StatusCode);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,(await host.Client.GetAsync("/local/v1/customers/customer-one/kyc-evidence/version-one")).StatusCode);
+        await Save(host.Repo,Row("wrong-hash","hash-document") with {ContentReference=staged.Reference,MalwareCheck=check});
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,(await host.Client.GetAsync("/local/v1/customers/customer-one/kyc-evidence/wrong-hash")).StatusCode);
+    }
     private sealed class Authority : HttpMessageHandler
     {
         public string Basis = "Self"; public int Calls, DenyAfter = int.MaxValue;
@@ -137,9 +155,9 @@ public sealed class DocumentVaultTests
             return new(HttpStatusCode.OK) { Content = JsonContent.Create(new CustomerAccessDecision("decision-one", Calls > DenyAfter ? "Deny" : "Allow", "T001", "A100", body.CustomerId, body.CapabilityId, "customer-advice", "Granted", Basis, 1, 1, 1, 1, DateTimeOffset.UtcNow)) };
         }
     }
-    private sealed class Host(WebApplication app, HttpClient client, Authority authority, InMemoryEvidenceRepository repo) : IAsyncDisposable
+    private sealed class Host(WebApplication app, HttpClient client, Authority authority, InMemoryEvidenceRepository repo, ReferenceEvidenceContentStore content) : IAsyncDisposable
     {
-        public HttpClient Client => client; public Authority Authority => authority; public InMemoryEvidenceRepository Repo => repo;
+        public ReferenceEvidenceContentStore Content => content; public HttpClient Client => client; public Authority Authority => authority; public InMemoryEvidenceRepository Repo => repo;
         public static async Task<Host> Start()
         {
             var repo = new InMemoryEvidenceRepository(); await Save(repo, Row()); var authority = new Authority();
@@ -148,10 +166,11 @@ public sealed class DocumentVaultTests
             builder.Services.AddSingleton(new TenantAccessClient(config, new HttpClient(authority)));
             builder.Services.AddSingleton(new TenantBoundaryOptions { Service = "evidence", CapabilityPrefix = "evidence.", ProbeUrl = "http://127.0.0.1:5111/", CustomerTenants = new Dictionary<string, string> { ["customer-one"] = "T001", ["foreign-customer"] = "T002" } });
             builder.Services.AddSingleton<IDocumentVaultRepository>(repo); builder.Services.AddSingleton<IEvidenceRepository>(repo);
-            builder.Services.AddSingleton(new EvidenceApplication(repo, new ReferenceEvidenceContentStore(), new CapturingTelemetry(), TimeProvider.System));
-            var app = builder.Build(); app.MapDocumentVault(); await app.StartAsync();
+            var content = new ReferenceEvidenceContentStore(); builder.Services.AddSingleton(content);
+            builder.Services.AddSingleton(new EvidenceApplication(repo, content, new CapturingTelemetry(), TimeProvider.System));
+            var app = builder.Build(); app.MapDocumentVault(); app.MapKycEvidence(); await app.StartAsync();
             var url = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single(); var client = new HttpClient { BaseAddress = new Uri(url) };
-            client.DefaultRequestHeaders.Add("X-Monergy-Tenant", "T001"); client.DefaultRequestHeaders.Add("X-Monergy-Session", "session-one"); return new(app, client, authority, repo);
+            client.DefaultRequestHeaders.Add("X-Monergy-Tenant", "T001"); client.DefaultRequestHeaders.Add("X-Monergy-Session", "session-one"); return new(app, client, authority, repo, content);
         }
         public async ValueTask DisposeAsync() { client.Dispose(); await app.DisposeAsync(); }
     }

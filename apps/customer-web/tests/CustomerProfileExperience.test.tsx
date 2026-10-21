@@ -123,6 +123,7 @@ it('refreshes the real session owner context after save while keeping the profil
 it('keeps anonymous direct profile entry behind the workspace gate', () => {
   window.history.replaceState({}, '', '/profile');
   render(<FoundationProvider appearance="midnight"><WorkspaceSessionProvider area="product"><WorkspaceEntry area="product"><CustomerProfileExperience /></WorkspaceEntry></WorkspaceSessionProvider></FoundationProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Use a local test key' }));
   expect(screen.getByLabelText('Local access key')).toBeVisible(); expect(screen.queryByRole('heading', { name: 'My Profile' })).not.toBeInTheDocument();
 });
 

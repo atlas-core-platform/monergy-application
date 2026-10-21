@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-102 Assets dashboard (P1-22). Original29:11 Complete,17 Partial,1 Pending after paired merges. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-103 Basic KYC (P1-04). Original29:12 Complete,17 Partial,0 Pending after paired merges. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-102 update — Assets dashboard
+## Current T1-103 update — Basic KYC
+
+Customer submission, exact scanned identity/address evidence, operator-published notice and assigned manual reviewer, review decisions, withdrawal/resubmission and immutable history complete the configured manual Basic KYC journey. Reviewer assignment does not grant document access: existing Advisor document authorization and current customer-advice Consent remain required. Acceptance is labelled Manual review accepted, never government/provider verified. Receipt: [t1-103-basic-kyc.md](t1-103-basic-kyc.md). Onboarding configuration: [BASIC-KYC.md](../uat/BASIC-KYC.md).
+
+111 focused backend and 28 UI checks pass, alongside TypeScript, ESLint, Vite, owner/Gateway/migrator builds, actual Gateway startup and mocked legacy UAT-profile checks. Physical PostgreSQL, live Windows/Docker UAT and regulated identity providers remain unverified. T1-103 = 102 implementation units plus one governance closure. All29 have implementation started;17 Partial journeys remain unfinished. Original IDs/phases and acceptance T1-06 remain unchanged.
+
+## Previous T1-102 update — Assets dashboard
 
 The customer dashboard presents the complete saved reviewed asset inventory across Cash, Bank accounts, Investments, Property, Vehicles and Other assets, using the authoritative Financial Rules total. Category filtering, review date/currency, coverage gaps, fresh exact-result confirmation, paged history and exact source links preserve the existing owner boundaries. Update uses the existing Net Worth review journey. Receipt: [t1-102-assets-dashboard.md](t1-102-assets-dashboard.md).
 

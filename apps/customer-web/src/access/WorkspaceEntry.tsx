@@ -12,7 +12,7 @@ export function WorkspaceEntry({
   area = 'administration',
 }: {
   children: ReactNode;
-  area?: 'administration' | 'product';
+  area?: 'administration' | 'product' | 'kyc-review';
 }) {
   const { status, session, message, connect, connectEmail, connectPassword, retry, cancel } = useWorkspaceSession();
   const [form] = Form.useForm<{ tenantId: string; key: string }>();

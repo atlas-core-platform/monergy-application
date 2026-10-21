@@ -18,6 +18,7 @@ export interface ProductWorkspaceContext {
   setup?: CustomerWorkspaceSetup;
 }
 export type WorkspaceAuthorization =
+  | { area: 'kyc-review'; authority: 'KycReviewer' }
   | { area: 'administration'; authority: 'TenantAdmin'; policyVersion: number }
   | { area: 'product'; context: ProductWorkspaceContext };
 export interface WorkspaceSessionState {

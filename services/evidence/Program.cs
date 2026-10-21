@@ -52,6 +52,7 @@ if (TenantBoundaryOptions.Selected(builder.Configuration) && (referenceAdapters 
 {
     app.MapDocumentMonitoring();
     app.MapDocumentVault();
+    app.MapKycEvidence();
 }
 
 await app.RunAsync();
