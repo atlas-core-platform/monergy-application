@@ -13,6 +13,7 @@ public static class ProductDocumentVaultEndpoints
 {
     public static void MapProductDocumentVault(this WebApplication app)
     {
+        if (!app.Configuration.GetValue<bool>("Monergy:Product:Enabled")) return;
         var group = app.MapGroup("/product-api/v1/document-vault");
         group.MapGet("", async (HttpContext http, CustomerOwnerClient owners, ProductEvidenceClient evidence) =>
         {
