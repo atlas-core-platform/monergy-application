@@ -12,6 +12,7 @@ export const destinations: WorkspaceDestination[] = [
   { id: 'connections', label: 'Connections', icon: 'evidence', href: '/connections' },
   { id: 'consent', label: 'Consent & privacy', icon: 'check', href: '/consent' },
   { id: 'profile', label: 'My Profile', icon: 'shield', href: '/profile', group: 'Your account' },
+  { id: 'kyc', label: 'Basic KYC', icon: 'shield', href: '/kyc' },
   { id: 'agreements', label: 'Account agreements', icon: 'check', href: '/settings/agreements' },
   { id: 'sessions', label: 'Sessions', icon: 'shield', href: '/settings/sessions' },
 ];

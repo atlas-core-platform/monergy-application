@@ -38,6 +38,11 @@ $onboard | ConvertTo-Json -Depth 30 | Set-Content $onboardPath
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
 $config=Get-Content (Join-Path (Split-Path $onboardPath) 'integration-gateway.json') -Raw | ConvertFrom-Json
 if ([Convert]::FromBase64String($config.Monergy.GoogleDrive.EncryptionKey).Length -ne 32) { throw 'Bad conversion' }
-'PASS: syntax; fresh/default/legacy/onboarding configuration; all non-destructive actions with mocked Docker/readiness; credential preservation; repeat-run stability; encryption conversion.'
+$kycPath=Join-Path $testRoot 'kyc-fixture.json'
+@{ T001=@{ Notice='Test-only published review notice; no legal approval claimed.'; Reviewers=@(@{ActorId='A300';Name='Test reviewer'}) } } | ConvertTo-Json -Depth 10 | Set-Content $kycPath
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -KycConfigurationFile $kycPath
+$identity=Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
+if ($identity.Monergy.BasicKyc.Tenants.T001.Reviewers[0].ActorId -ne 'A300' -or $identity.Monergy.BasicKyc.EvidenceBaseUrl -ne 'http://127.0.0.1:5111/') { throw 'KYC configuration was not preserved.' }
+'PASS: Basic KYC onboarding configuration; syntax; fresh/default/legacy/onboarding configuration; all non-destructive actions with mocked Docker/readiness; credential preservation; repeat-run stability; encryption conversion.'
 
 } finally { Remove-Item -LiteralPath $testRoot -Recurse -Force }

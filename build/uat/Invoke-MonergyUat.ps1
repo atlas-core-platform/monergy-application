@@ -14,6 +14,7 @@ param(
     [string]$GoogleDriveConfigurationFile,
     [string]$OneDriveConfigurationFile,
     [string]$AiModelConfigurationFile,
+    [string]$KycConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
 )
@@ -155,6 +156,19 @@ if ($EnableEmailAccess -and $Action -in @('Prepare','Start')) {
         $emailConfiguration = [pscustomobject]@{ SmtpHost=$env:MONERGY_EMAIL_SMTP_HOST; SmtpUser=$env:MONERGY_EMAIL_SMTP_USER; SmtpPassword=$env:MONERGY_EMAIL_SMTP_PASSWORD; From=$env:MONERGY_EMAIL_FROM; SmtpPort=$env:MONERGY_EMAIL_SMTP_PORT }
     }
 }
+$kycTenants = @{}
+if (-not [string]::IsNullOrWhiteSpace($KycConfigurationFile)) {
+    if (-not $onboarding) { throw 'Basic KYC configuration requires an onboarding profile.' }
+    $kycFile = Get-Item -LiteralPath $KycConfigurationFile -ErrorAction Stop
+    if ($kycFile.PSIsContainer -or $kycFile.Length -gt 65536) { throw 'Invalid Basic KYC configuration file.' }
+    $suppliedKyc = Get-Content -LiteralPath $kycFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+    foreach ($entry in $suppliedKyc.PSObject.Properties) {
+        if ($entry.Name -notin @('T001','T002')) { throw 'Basic KYC has an unsupported tenant binding.' }
+        $value = $entry.Value
+        if ($null -eq $value.PSObject.Properties['Notice'] -or $null -eq $value.PSObject.Properties['Reviewers']) { throw 'Basic KYC requires published notice and named reviewer configuration.' }
+        $kycTenants[$entry.Name] = @{ Enabled='true'; Notice=[string]$value.Notice; Reviewers=@($value.Reviewers) }
+    }
+}
 $googleDriveTenants = @{}
 if (-not [string]::IsNullOrWhiteSpace($GoogleDriveConfigurationFile)) {
     if (-not $onboarding) { throw 'Google Drive configuration requires an onboarding profile.' }
@@ -274,6 +288,7 @@ if ($Action -in @('Prepare','Start')) {
                     $config.Monergy.CustomerPan.Keys = @{ 'local-v1'=(Convert-HexToBase64 ([string]$state.tokens.panProtection)) }
                 }
                 $config.Monergy.CustomerWorkspaceSetup = @{ Required=[bool]$RequireCustomerSetup }
+                $config.Monergy.BasicKyc = @{ EvidenceBaseUrl='http://127.0.0.1:5111/'; Tenants=$kycTenants }
                 if (-not [string]::IsNullOrWhiteSpace($AccountAgreementFile)) {
                     $publicationFile = Get-Item -LiteralPath $AccountAgreementFile -ErrorAction Stop
                     if ($publicationFile.PSIsContainer -or $publicationFile.Length -gt 1048576) { throw 'Invalid account-agreement publication file.' }

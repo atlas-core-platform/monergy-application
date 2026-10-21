@@ -51,6 +51,8 @@ for enabled in (False, True):
                     raise AssertionError('Gateway did not listen')
                 assert status == 200, (enabled, status, body[:200])
                 assert get(base + '/access') == (200, b'gateway-shell-probe')
+                assert get(base + '/kyc') == (200, b'gateway-shell-probe')
+                assert get(base + '/kyc/reviews') == (200, b'gateway-shell-probe')
                 # Owners are intentionally absent: readiness must fail cleanly, not crash routing.
                 assert get(base + '/health/ready')[0] == 503
                 if not enabled:

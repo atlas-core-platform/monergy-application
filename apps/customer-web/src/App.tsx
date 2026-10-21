@@ -22,6 +22,7 @@ const GoogleDriveExperience = lazy(() => import('./product/GoogleDriveExperience
 const ConsentExperience = lazy(() => import('./product/ConsentExperience'));
 const CustomerWorkspaceSetupExperience = lazy(() => import('./product/CustomerWorkspaceSetupExperience'));
 const CustomerAccountAgreementsExperience = lazy(() => import('./product/CustomerAccountAgreementsExperience'));
+const BasicKycExperience = lazy(() => import('./product/BasicKycExperience'));
 const CustomerProfileExperience = lazy(() => import('./product/CustomerProfileExperience'));
 const SelfSessionsExperience = lazy(() => import('./product/SelfSessionsExperience'));
 const ProductReportsExperience = lazy(() => import('./product/ProductReportsExperience'));
@@ -198,6 +199,7 @@ function RouteContent() {
   if (window.location.pathname === '/settings/agreements') {
     return <Suspense fallback={<main className="access-loading" aria-busy="true">Loading account agreements…</main>}><CustomerAccountAgreementsExperience /></Suspense>;
   }
+  if (window.location.pathname === '/kyc' || window.location.pathname === '/kyc/reviews') return <Suspense fallback={<main aria-busy="true">Loading KYC…</main>}><BasicKycExperience /></Suspense>;
   if (window.location.pathname === '/profile') {
     return <Suspense fallback={<main className="access-loading" aria-busy="true">Loading your profile…</main>}><CustomerProfileExperience /></Suspense>;
   }
@@ -246,7 +248,7 @@ function RouteContent() {
 }
 
 export function App() {
-  const area =
+  const area = window.location.pathname === '/kyc/reviews' ? 'kyc-review' :
     window.location.pathname === '/access' ||
     window.location.pathname.startsWith('/access/') ||
     window.location.pathname === '/operations'
@@ -337,7 +339,7 @@ function WorkspaceApplication() {
   }, []);
   const inAdministration =
     path === '/access' || path.startsWith('/access/') || path === '/operations';
-  const navigation = inAdministration ? accessDestinations : destinations;
+  const navigation = path==='/kyc/reviews' ? [{id:'kyc-reviews',label:'KYC reviews',icon:'shield' as const,href:'/kyc/reviews'}] : inAdministration ? accessDestinations : destinations;
   const current =
     navigation.find(
       (destination) =>
@@ -349,7 +351,7 @@ function WorkspaceApplication() {
       ? `${current?.label ?? 'Overview'} · Organization Settings · Monergy`
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
-  const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/financial-qa', '/search', '/reports', '/consent', '/connections', '/profile', '/settings/sessions', '/settings/agreements'].includes(path);
+  const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/financial-qa', '/search', '/reports', '/consent', '/connections', '/profile', '/kyc', '/kyc/reviews', '/settings/sessions', '/settings/agreements'].includes(path);
   const gated = inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';
@@ -383,7 +385,7 @@ function WorkspaceApplication() {
   return (
     <FoundationProvider appearance="midnight">
       {gated ? (
-        <WorkspaceEntry area={inAdministration ? 'administration' : 'product'}>
+        <WorkspaceEntry area={path==='/kyc/reviews'?'kyc-review':inAdministration ? 'administration' : 'product'}>
           {inAdministration ? (
             <Suspense
               fallback={

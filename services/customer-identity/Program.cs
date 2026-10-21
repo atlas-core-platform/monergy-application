@@ -26,6 +26,7 @@ if (tenantIntegration)
     if (builder.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
     {
         builder.Services.AddSelfCustomerProfiles();
+        builder.Services.AddBasicKyc();
         builder.Services.AddCustomerAccountAgreements(builder.Configuration);
         builder.Services.AddCustomerPan(builder.Configuration);
         builder.Services.AddSingleton<CustomerWorkspaceSetupApplication>();
@@ -57,6 +58,7 @@ if (tenantIntegration)
     if (app.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
     {
         app.MapSelfCustomerProfile();
+        app.MapBasicKyc();
         app.MapCustomerAdministration();
         app.MapCustomerAccountAgreements();
         app.MapCustomerPan();
