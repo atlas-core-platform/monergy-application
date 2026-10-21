@@ -2,6 +2,7 @@ using Monergy.Contracts;
 using Monergy.Platform;
 using Monergy.Services.Audit.Application;
 using Monergy.Services.Audit.Infrastructure;
+using Monergy.Services.Audit;
 
 var builder = WebApplication.CreateBuilder(args);
 if (!builder.Environment.IsDevelopment()) throw new InvalidOperationException("Access Audit ingress is Development-only.");
@@ -18,6 +19,7 @@ builder.Services.AddSingleton<PostgresTenantAccessAudit>();
 builder.Services.AddSingleton<ITenantAccessAuditRepository>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
 builder.Services.AddSingleton<ITenantJobAuditRepository>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
 builder.Services.AddSingleton<ITenantFinancialAuditRepository>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
+builder.Services.AddSingleton<IProductAuditLog>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
 builder.Services.AddSingleton<TenantAccessAudit>();
 builder.Services.AddSingleton<TenantJobAudit>();
 builder.Services.AddSingleton<TenantFinancialAudit>();
@@ -28,10 +30,20 @@ var jobToken = TenantAccessIntegration.Required(builder.Configuration, "Monergy:
 TenantAccessIntegration.ValidateToken(jobToken);
 var financialToken = TenantAccessIntegration.Required(builder.Configuration, "Monergy:AccessIntegration:FinancialAuditEventToken");
 TenantAccessIntegration.ValidateToken(financialToken);
-if (new[] { token, jobToken, financialToken }.Distinct(StringComparer.Ordinal).Count() != 3)
+var productToken=TenantAccessIntegration.Required(builder.Configuration,"Monergy:AccessIntegration:ProductAuditEventToken");
+TenantAccessIntegration.ValidateToken(productToken);
+if (new[] { token, jobToken, financialToken,productToken }.Distinct(StringComparer.Ordinal).Count() != 4)
     throw new InvalidOperationException("Audit event producers require separate workload credentials.");
 var loseReceipt = builder.Configuration["Monergy:AccessIntegration:VerificationLoseReceiptOnce"] == "true" ? 1 : 0;
 var app = builder.Build();
+app.MapProductAuditLog();
+app.MapPost("/reference/events/product-activity",async(ProductAuditRecord record,HttpContext http,IProductAuditLog ledger)=>{
+ if(!TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Reference-Transport"].ToString(),productToken)||http.Request.Headers["X-Monergy-Reference-Tenant"].Count!=1||http.Request.Headers["X-Monergy-Reference-Tenant"].ToString()!=record.TenantId)return (IResult)Results.StatusCode(403);
+ try{return Results.Ok(await ledger.AppendActivityAsync(record,http.RequestAborted));}
+ catch(TenantBoundaryException e){return Results.Json(new{error=e.Code},statusCode:e.Status);}
+ catch(TenantAccessException e){return Results.Json(new{error=e.Code},statusCode:e.StatusCode);}
+ catch(System.Data.Common.DbException){return Results.StatusCode(503);}
+});
 app.MapGet("/local/v1/administration/access-events", async (HttpContext http, string? after,
     TenantAccessClient access, PostgresTenantAccessAudit repository) =>
 {
