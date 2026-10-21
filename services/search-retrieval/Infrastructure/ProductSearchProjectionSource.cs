@@ -18,8 +18,6 @@ public sealed class ProductSearchProjectionSource(
     public const string FinancialProfileClient = "product-search-financial-profile";
     private static readonly HashSet<string> SupportedFactTypes = new(StringComparer.Ordinal)
     { "INCOME", "EXPENSE", "LOAN", "ASSET", "INVESTMENT", "INSURANCE", "TAX" };
-    private readonly object sync = new();
-    private ImmutableArray<DerivedSearchRecord> records = [];
     private readonly Uri evidenceEndpoint = TenantAccessIntegration.LoopbackRoot(
         TenantAccessIntegration.Required(configuration, "Monergy:ProductSearch:EvidenceUrl"));
     private readonly Uri financialEndpoint = TenantAccessIntegration.LoopbackRoot(
@@ -28,17 +26,11 @@ public sealed class ProductSearchProjectionSource(
     public static bool Selected(IConfiguration configuration) =>
         configuration.GetValue<bool>("Monergy:ProductSearch:Enabled");
 
-    public ImmutableArray<DerivedSearchRecord> ReadAll()
-    {
-        lock (sync) return records;
-    }
+    // Product projections exist only inside the authorized request that read them.
+    public ImmutableArray<DerivedSearchRecord> ReadAll() => throw new InvalidOperationException("A current owner read is required.");
+    public ImmutableArray<DerivedSearchRecord> ReadForCustomer(string customerId) => throw new InvalidOperationException("A current owner read is required.");
 
-    public ImmutableArray<DerivedSearchRecord> ReadForCustomer(string customerId)
-    {
-        lock (sync) return records.Where(item => item.CustomerId == customerId).ToImmutableArray();
-    }
-
-    public async Task PrepareCustomerAsync(
+    public async Task<ImmutableArray<DerivedSearchRecord>> ReadCurrentCustomerAsync(
         string customerId,
         string authorizationContextId,
         TrustedSecurityContext security,
@@ -64,7 +56,7 @@ public sealed class ProductSearchProjectionSource(
             Workload = new WorkloadContext("search-retrieval", "local-uat-search-retrieval:" + proof.TenantId),
         };
 
-        var refreshed = operation switch
+        return operation switch
         {
             SearchContractNames.SearchDocuments => await ReadDocumentsAsync(
                 proof, customerId, authorizationContextId, sourceSecurity, correlationId, cancellationToken)
@@ -72,21 +64,13 @@ public sealed class ProductSearchProjectionSource(
             SearchContractNames.SearchFinancialData => await ReadFinancialAsync(
                 proof, customerId, authorizationContextId, sourceSecurity, correlationId, cancellationToken)
                 .ConfigureAwait(false),
+            SearchContractNames.BuildRetrievalContext or SearchContractNames.IndexRefreshRequested =>
+                (await ReadDocumentsAsync(proof, customerId, authorizationContextId, sourceSecurity, correlationId, cancellationToken).ConfigureAwait(false))
+                .AddRange(await ReadFinancialAsync(proof, customerId, authorizationContextId, sourceSecurity, correlationId, cancellationToken).ConfigureAwait(false)),
             _ => throw Failure("search.source.operation-invalid", ContractErrorCategory.UnsupportedOperation,
                 "The product search source does not support this operation.", correlationId),
         };
 
-        var refreshedType = operation == SearchContractNames.SearchDocuments
-            ? SearchResultType.Document
-            : SearchResultType.Financial;
-        lock (sync)
-        {
-            records = records.Where(item =>
-                    item.CustomerId != customerId || item.ResultType != refreshedType)
-                .Concat(refreshed)
-                .OrderBy(item => item.SearchRecordId, StringComparer.Ordinal)
-                .ToImmutableArray();
-        }
     }
 
     private async Task<ImmutableArray<DerivedSearchRecord>> ReadDocumentsAsync(

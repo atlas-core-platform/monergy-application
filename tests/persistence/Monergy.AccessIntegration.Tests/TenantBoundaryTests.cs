@@ -95,6 +95,32 @@ public sealed class TenantBoundaryTests
         Assert.Equal("C001", proof.CustomerId);
     }
 
+    [Theory]
+    [InlineData("/contracts/cid-044/v1", "Allow", 200)]
+    [InlineData("/contracts/cid-044/v1", "Deny", 403)]
+    [InlineData("/contracts/cid-046/v1", "Allow", 200)]
+    [InlineData("/contracts/cid-046/v1", "Deny", 403)]
+    public async Task SearchRetrievalAndRefreshRequireCurrentSearchAuthority(string path, string outcome, int status)
+    {
+        TenantBoundaryProof? proof = null;
+        var options = Options();
+        var middleware = new TenantBoundaryMiddleware(http => { proof = http.Features.Get<TenantBoundaryProof>(); return Task.CompletedTask; }, new()
+        {
+            Service = "search-retrieval", CapabilityPrefix = "search", ProbeUrl = options.ProbeUrl,
+            CustomerTenants = options.CustomerTenants, CustomerRelationships = true,
+        });
+        var http = Http(); http.Request.Path = path;
+        http.Request.Body = new MemoryStream(Encoding.UTF8.GetBytes("""
+            {"contractName":"IndexRefreshRequested","security":{"actor":{"actorId":"A100","authenticationContextId":"token"},"access":{"customerId":"C001"}},"payload":{"customerId":"C001"}}
+            """));
+        using var client = Client(new CustomerAccessDecision("decision-search", outcome, "T001", "A100", "C001", "search.query.execute",
+            "customer-advice", "Granted", "Self", 3, 2, 1, 0, DateTimeOffset.UtcNow));
+        await middleware.InvokeAsync(http, client);
+        Assert.Equal(status, http.Response.StatusCode);
+        if (status == 200) Assert.Equal("search.query.execute", proof!.CapabilityId);
+        else Assert.Null(proof);
+    }
+
     [Fact]
     public async Task AdministratorContextRejectsAnotherTenantAndMissingHeaders()
     {

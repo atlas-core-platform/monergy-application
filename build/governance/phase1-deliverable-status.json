@@ -1,22 +1,22 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-97",
-  "applicationBase": "3b008c650890bb207b521d72b6eadbd0fb2acbc4",
+  "asOf": "T1-106",
+  "applicationBase": "bd2789d5525fbb55a7bf4f913ed0eeb365f64e15",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 4,
+    "libraryVersion": 13,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "T1-96 delivered baseline; T1-97 complete OneDrive source journey with configurable external credentials. Physical/live verification and business acceptance remain separate.",
+    "reviewThrough": "Workbook through T1-105 reconciled; T1-106 request-local current-owner indexing freshness. P1-10 remains Partial; acceptance unchanged.",
     "libraryFileId": "libfile_7747823175948191ad6e56244bee8cf2"
   },
   "counts": {
     "originalDeliverables": 29,
-    "fullyImplemented": 8,
-    "partial": 19,
-    "pendingBusinessJourneys": 2,
-    "remainingOriginalDeliverables": 21,
-    "numberedUnitsAfterPairedMerge": 97,
-    "mergedImplementationUnitsAfterPairedMerge": 96,
+    "fullyImplemented": 14,
+    "partial": 15,
+    "pendingBusinessJourneys": 0,
+    "remainingOriginalDeliverables": 15,
+    "numberedUnitsAfterPairedMerge": 106,
+    "mergedImplementationUnitsAfterPairedMerge": 105,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -32,44 +32,44 @@
       "area": "Customer",
       "name": "Registration",
       "state": "Complete",
-      "existing": "Email OTP registration, salted password sign-in/recovery, tenant-owned customer creation, explicit current terms/privacy/consent acceptance and resumable Customer-role enrollment. External mail and publications supplied through operator onboarding configuration.",
-      "remaining": "Physical PostgreSQL/migration/grants/restart, real SMTP and full live UAT remain unverified. Production identity infrastructure and broader OD-10 remain open; no browser credential-management screen claimed.",
-      "units": "T1-95",
+      "existing": "Email OTP registration,password sign-in/recovery,tenant-owned identity/customer creation,exact legal acceptance and resumable Customer-role enrollment. Operator supplies email settings and publications during onboarding.",
+      "remaining": "Physical PostgreSQL/migrations/grants/restart,real SMTP and full live UAT remain unverified. Broader OD-10 and production identity remain open. Browser credential-management UI is not claimed.",
+      "units": "T1-95; T1-43; T1-53\u201354",
       "requirements": "MON-ID-001\u2013004",
-      "receipt": "build/governance/t1-95-customer-registration.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-95-customer-registration.md"
     },
     {
       "id": "P1-02",
       "area": "Customer",
       "name": "Login",
-      "state": "Partial",
-      "existing": "Existing imported customers can enter with an email verification code. Session activity and selected session termination are implemented.",
-      "remaining": "Complete the agreed customer authentication policy and activation coverage. Prove actual SMTP delivery and PostgreSQL session issuance/revocation.",
-      "units": "T1-43, T1-45",
+      "state": "Complete",
+      "existing": "Approved customer login journey: configured email/password entry, email-verified recovery, generic credential errors, resumed activation, current tenant/customer/access checks, cancellable issuance, expiry/reconnect, sign-out and own-session controls. Existing email-code access retained.",
+      "remaining": "Physical PostgreSQL/migration/grant/restart, real SMTP and full authenticated live UAT remain separate verification/acceptance. Production IdP/MFA, device management, broader OD-10 and account-closure/security Settings remain outside this bounded Login completion.",
+      "units": "T1-45; T1-95; T1-100",
       "requirements": "MON-ID-002/003/006/010",
-      "receipt": "build/governance/t1-43-customer-email-access.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/dbed1467d19f52278a7abc1357e1c55727674f11/build/governance/t1-100-customer-login.md"
     },
     {
       "id": "P1-03",
       "area": "Customer",
       "name": "Profile",
-      "state": "Partial",
-      "existing": "My Profile reads the registered email and edits display name and an optional unverified contact number, with versioned owner writes. T1-55 adds optional self-declared date of birth, exact calendar-date validation and owner receipt/readback. T1-56 adds optional self-declared PAN with authenticated encryption, masked owner readback, explicit replacement/removal and C&I audit metadata.",
-      "remaining": "Complete authoritative KYC status and remaining profile/Settings requirements under approved privacy rules. Self-declared PAN is not identity/KYC verification. Prove physical PostgreSQL persistence/replay/concurrency/grants and integrated UAT; production key custody/transport remain separate.",
-      "units": "T1-44, T1-55, T1-56",
+      "state": "Complete",
+      "existing": "T1-104 completes supported My Profile: owner-scoped name/contact/DOB/protected PAN, registered email, current KYC state/reviewer/note/date and history action. Exact save readback and existing account-control links.",
+      "remaining": "Broader Settings requirements MON-ID-006/012 and MON-CON-010 remain open: devices/MFA, full login history, account closure and retention choices. Profile/PAN self-declared; manual KYC is not external verification. Physical/live UAT unverified.",
+      "units": "T1-44; T1-55; T1-56; T1-103; T1-104",
       "requirements": "MON-ID-005/012; MON-FIN-002",
-      "receipt": "build/governance/t1-56-protected-customer-pan.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/95ca9fe29b487fc8c28dbca4b3ba6fe709d0fbbd/build/governance/t1-104-customer-profile.md"
     },
     {
       "id": "P1-04",
       "area": "Customer",
       "name": "Basic KYC",
-      "state": "Pending",
-      "existing": "Customer identity and a RecordKycResult service-contract foundation exist. There is no completed customer KYC journey.",
-      "remaining": "Deliver the approved basic KYC evidence, status, review and customer experience. Enable any regulated route only under its existing approval.",
-      "units": "Foundation only",
+      "state": "Complete",
+      "existing": "T1-103 completes configured manual Basic KYC: exact scanned identity/address evidence, published notice acceptance, named reviewer, decisions, withdrawal/resubmission and immutable status history.",
+      "remaining": "Manual review accepted is not government/provider verified. Reviewer assignment does not grant document access; existing Advisor authority and Consent remain required. Physical PostgreSQL and live UAT unverified.",
+      "units": "T1-103",
       "requirements": "MON-ID-005; MON-FIN-002",
-      "receipt": "services/customer-identity/CustomerIdentityEndpoints.cs"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/adf588a0af08988ca2eb497c181330a6ebda2fe7/build/governance/t1-103-basic-kyc.md"
     },
     {
       "id": "P1-05",
@@ -80,18 +80,18 @@
       "remaining": "Complete remaining required file-type/layout coverage, including legacy/arbitrary Excel only under an explicit scope. Verify live Docker/ClamAV benign and EICAR intake and durable original-byte storage.",
       "units": "APP-01; T1-42, T1-48; T1-57",
       "requirements": "MON-DOC-002/003; MON-SEC-008",
-      "receipt": "build/governance/t1-57-financial-xlsx-intake.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-57-financial-xlsx-intake.md"
     },
     {
       "id": "P1-06",
       "area": "Documents",
       "name": "Document vault",
-      "state": "Partial",
-      "existing": "Authorized library, document details, exact source links, processing activity and version history are implemented.",
-      "remaining": "Complete the specified document category taxonomy, metadata, storage/verification presentation and replacement/reindex journey.",
-      "units": "APP-02; T1-13\u201319",
+      "state": "Complete",
+      "existing": "T1-101 delivers ten-category vault navigation, owner pagination beyond 100, version metadata, actual scan/storage/provider provenance, and reviewed checksum/current-version replacement. Exact history, processing and financial-source links retained.",
+      "remaining": "Physical migration/grant/restart, real provider import and full authenticated UAT remain unverified. Production storage ownership/retention (MON-DOC-016) and broader P1-07 classification/OCR remain separate.",
+      "units": "APP-02; T1-13\u201319; T1-93; T1-96/97; T1-101",
       "requirements": "MON-DOC-002/008\u2013011/014",
-      "receipt": "build/governance/t1-13-document-library-financial-links.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-101-document-vault.md"
     },
     {
       "id": "P1-07",
@@ -102,7 +102,7 @@
       "remaining": "Cover the remaining \u00a711 document classes and layouts, persist classification/unknown-review state, and expose the administration workflow.",
       "units": "T1-49\u201352; T1-58; T1-59; T1-60; T1-61; T1-62; T1-63",
       "requirements": "MON-DOC-004/005",
-      "receipt": "build/governance/t1-63-vehicle-purchase-ocr.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-63-vehicle-purchase-ocr.md"
     },
     {
       "id": "P1-08",
@@ -113,7 +113,7 @@
       "remaining": "Expand the approved document/layout/page matrix and durable processing path. Prove browser-to-live-scanner-to-OCR integration.",
       "units": "T1-49\u201352; T1-58; T1-59; T1-60; T1-61; T1-62; T1-63",
       "requirements": "MON-DOC-006/013",
-      "receipt": "build/governance/t1-63-vehicle-purchase-ocr.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-63-vehicle-purchase-ocr.md"
     },
     {
       "id": "P1-09",
@@ -124,40 +124,40 @@
       "remaining": "Complete domain records and broader document layouts. Other asset types, arbitrary Excel and durable integration remain open. Source classification does not verify ownership or current value.",
       "units": "T1-48\u201365; T1-69\u201386 reviewed records",
       "requirements": "MON-DOC-003/007; MON-FIN-001/003/004/006",
-      "receipt": "build/governance/t1-86-reviewed-tax-records.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-86-reviewed-tax-records.md"
     },
     {
       "id": "P1-10",
       "area": "Documents",
       "name": "Indexing",
       "state": "Partial",
-      "existing": "Authorized lexical retrieval and derived search projections expose source-linked documents and reviewed figures.",
+      "existing": "Authorized lexical retrieval and derived search projections expose source-linked documents and reviewed figures. T1-106 reads current owners for search/retrieval/refresh using isolated request snapshots, no cached fallback; explicit refresh is tenant-authorized.",
       "remaining": "Complete durable document/financial/knowledge indexing as applicable, replacement/rebuild/invalidation and freshness handling across required document classes.",
-      "units": "T1-11, T1-24/28/31/35/39",
+      "units": "T1-11, T1-24/28/31/35/39; T1-106",
       "requirements": "MON-DOC-003/008; MON-FIN-013; MON-SRH-002",
-      "receipt": "services/search-retrieval/Infrastructure/ReferenceSearchAdapters.cs"
+      "receipt": "build/governance/t1-106-index-freshness.md"
     },
     {
       "id": "P1-11",
       "area": "Cloud",
       "name": "Google Drive integration",
       "state": "Complete",
-      "existing": "Configured tenant Google OAuth, explicit customer permission, server-held encrypted tokens, account/folder binding, exact-version scanned Evidence import, refresh/status, import history and disconnect. Provider credentials supplied during operator onboarding. Current ownership, capability, consent and configuration rechecked.",
-      "remaining": "Live Google OAuth/API, physical Consent migration/grants/restart/concurrency, Docker/ClamAV and full UAT remain unverified. Google restricted-scope verification is operator configuration. Production distributed storage/key custody and unsupported original formats remain separate. OneDrive is P1-12.",
+      "existing": "Tenant-configured Google OAuth, explicit customer permission, account/folder binding, exact-version scanned Evidence import, status/refresh, retained history and disconnect. Current ownership, capability, consent and configuration are rechecked.",
+      "remaining": "Live Google OAuth/API, physical Consent migration/grants/restart and Docker/full UAT remain unverified. Google app verification is operator configuration. LOCAL Evidence remains temporary. Production storage/key custody and OneDrive remain separate.",
       "units": "T1-96",
       "requirements": "MON-SRC-007/008; MON-CON-004\u2013006",
-      "receipt": "build/governance/t1-96-google-drive.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/3b008c650890bb207b521d72b6eadbd0fb2acbc4/build/governance/t1-96-google-drive.md"
     },
     {
       "id": "P1-12",
       "area": "Cloud",
       "name": "OneDrive integration",
       "state": "Complete",
-      "existing": "Tenant-configured Microsoft OAuth with PKCE, explicit read/offline and folder permission, account and nested-folder selection, scanned exact-version Evidence import, refresh/status/history and local disconnect. Credentials supplied through optional onboarding configuration.",
-      "remaining": "Live Microsoft authorization/API and tenant approval, physical Consent migration/grants/restart/concurrency and full UAT remain unverified. Microsoft-side permission removal is manual and disclosed. LOCAL imported Evidence remains temporary. Production persistence/key custody remain separate.",
+      "existing": "Configurable Microsoft OAuth with PKCE, explicit read/offline and folder permission, account/nested folder selection, scanned exact-version Evidence import, status/refresh/history and local disconnect. Current owner/access/Consent/configuration checks.",
+      "remaining": "Live Microsoft and tenant approval, physical Consent migration/grants/restart and full UAT remain unverified. Microsoft permission removal is manual and disclosed. LOCAL imported Evidence remains temporary. Production storage/key custody remain separate.",
       "units": "T1-97",
       "requirements": "MON-SRC-007; MON-CON-004\u2013006",
-      "receipt": "build/governance/t1-97-onedrive.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/ea6d4396feb7e0ab7aff048fe2b5875932b4cfa1/build/governance/t1-97-onedrive.md"
     },
     {
       "id": "P1-13",
@@ -168,7 +168,7 @@
       "remaining": "Full monthly/household income snapshot, multi-source/duplicate/overlap reconciliation, payer verification, fiscal-calendar normalization and Financial Rules calculations remain open. Central audit and full UAT remain open.",
       "units": "T1-05\u201311, T1-42, T1-49\u201351; T1-71; T1-72; T1-75",
       "requirements": "MON-FIN-003/011/014",
-      "receipt": "build/governance/t1-75-income-period-comparison.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-75-income-period-comparison.md"
     },
     {
       "id": "P1-14",
@@ -179,7 +179,7 @@
       "remaining": "Full monthly/household expense snapshot, multi-source/duplicate/overlap reconciliation, payment verification, recurring-spend detection and Financial Rules calculations remain open. Central audit and full UAT remain open.",
       "units": "T1-05\u201311, T1-42; T1-73; T1-74; T1-76",
       "requirements": "MON-FIN-004/011/014",
-      "receipt": "build/governance/t1-76-expense-period-comparison.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-76-expense-period-comparison.md"
     },
     {
       "id": "P1-15",
@@ -190,7 +190,7 @@
       "remaining": "Vehicle registration/ownership/valuation verification,lifecycle and liability links remain open. Broader assets,investment reconciliation,complete asset position,central audit and physical/full UAT remain open.",
       "units": "T1-61\u201365; T1-69\u201370; T1-80\u201384",
       "requirements": "MON-FIN-001/011/014; MON-DAS-001",
-      "receipt": "build/governance/t1-84-dated-asset-snapshot.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-84-dated-asset-snapshot.md"
     },
     {
       "id": "P1-16",
@@ -201,7 +201,7 @@
       "remaining": "Broader sources/lifecycle, loan/multi-source reconciliation and creditor verification remain open. Complete liability coverage, totals/net worth, central audit and physical/full UAT remain open.",
       "units": "Loan-source foundation; T1-77\u201379",
       "requirements": "MON-FIN-001; MON-DAS-001; MR \u00a741",
-      "receipt": "build/governance/t1-79-dated-liability-snapshot.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-79-dated-liability-snapshot.md"
     },
     {
       "id": "P1-17",
@@ -212,7 +212,7 @@
       "remaining": "Complete lender/current-debt truth, multi-source reconciliation and broader lifecycle. Prove physical PostgreSQL, central audit delivery and integrated UAT. Customer-reported status does not verify repayment or clear debt.",
       "units": "T1-23\u201326, T1-42, T1-52; T1-60; T1-66; T1-67; T1-68",
       "requirements": "MON-FIN-006",
-      "receipt": "build/governance/t1-68-reviewed-loan-lifecycle.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-68-reviewed-loan-lifecycle.md"
     },
     {
       "id": "P1-18",
@@ -223,7 +223,7 @@
       "remaining": "Physical PostgreSQL/grant/restart execution and full authenticated live integration/UAT remain open as separate verification/acceptance. Broader records,external valuation/ownership verification,FX and central Audit remain separate journeys.",
       "units": "T1-90",
       "requirements": "MON-RUL-002; MON-DAS-001",
-      "receipt": "build/governance/t1-90-complete-net-worth.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-90-complete-net-worth.md"
     },
     {
       "id": "P1-19",
@@ -234,7 +234,7 @@
       "remaining": "Full monthly/household income snapshot, reconciliation/completeness, unequal-length calendar-month comparison and Financial Rules aggregates/changes remain open. Selected records do not establish total or verified income. Central audit and UAT remain open.",
       "units": "T1-06\u201309; T1-75",
       "requirements": "MON-DAS-001/004; MON-FIN-003",
-      "receipt": "build/governance/t1-75-income-period-comparison.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-75-income-period-comparison.md"
     },
     {
       "id": "P1-20",
@@ -245,29 +245,29 @@
       "remaining": "Full monthly/household expense snapshot, reconciliation/completeness, unequal-length calendar-month comparison and Financial Rules aggregates/changes remain open. Selected records do not establish total or verified spending. Central audit and UAT remain open.",
       "units": "T1-06\u201309; T1-76",
       "requirements": "MON-DAS-001/004; MON-FIN-004",
-      "receipt": "build/governance/t1-76-expense-period-comparison.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-76-expense-period-comparison.md"
     },
     {
       "id": "P1-21",
       "area": "Dashboard",
       "name": "Liabilities",
-      "state": "Partial",
-      "existing": "Explicit date and currency show latest saved balances as separate source-linked records. Complete owned set is filtered before200 bound. Correction history remains. Empty, overlap and coverage warnings; no totals.",
-      "remaining": "Broader complete comparable domain position,external ownership/valuation/creditor verification and reconciliation remain open. T1-90 separately delivers reviewed Net Worth inventory/calculation and saved dashboard results. Physical/full live UAT remains open.",
-      "units": "T1-79 dated snapshot; T1-77\u201378 records/history",
+      "state": "Complete",
+      "existing": "T1-105 completes saved reviewed Liabilities dashboard: loans, credit cards and other liabilities, authoritative Financial Rules total, balance date/currency/coverage, paged history, exact fresh result and source links. Update through Net Worth review.",
+      "remaining": "Customer balances are declarations; no creditor/repayment verification. P1-16/17 record/lifecycle/reconciliation breadth remains open. Physical PostgreSQL and full live UAT unverified. Existing dated record snapshot retained.",
+      "units": "T1-77\u201379; T1-90; T1-105",
       "requirements": "MON-DAS-001/004; MR \u00a741",
-      "receipt": "build/governance/t1-79-dated-liability-snapshot.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/bd2789d5525fbb55a7bf4f913ed0eeb365f64e15/build/governance/t1-105-liabilities-dashboard.md"
     },
     {
       "id": "P1-22",
       "area": "Dashboard",
       "name": "Assets",
-      "state": "Partial",
-      "existing": "Dated asset snapshot shows latest reviewed Investment,Property and Vehicle versions matching exact date/currency. Separate values,source links,review versions,per-kind bounds and overlap/coverage are visible;independent reads.",
-      "remaining": "Broader complete comparable domain position,external ownership/valuation/creditor verification and reconciliation remain open. T1-90 separately delivers reviewed Net Worth inventory/calculation and saved dashboard results. Physical/full live UAT remains open.",
-      "units": "T1-27/33; T1-69\u201370; T1-80\u201384 bounded view",
+      "state": "Complete",
+      "existing": "T1-102 completes the saved reviewed Assets dashboard: six categories, authoritative total, date/currency/coverage, paged history, exact fresh owner result and source links. Existing Net Worth review updates inventory; no browser aggregation.",
+      "remaining": "Independent ownership/market valuation and broader P1-17 financial-record breadth remain separate. Customer declarations are explicit. Physical PostgreSQL and full live UAT remain unverified.",
+      "units": "T1-84; T1-90; T1-102",
       "requirements": "MON-DAS-001/004",
-      "receipt": "build/governance/t1-84-dated-asset-snapshot.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/59d715dcd5820a2f10cf31db5c1a9680770f8088/build/governance/t1-102-assets-dashboard.md"
     },
     {
       "id": "P1-23",
@@ -278,18 +278,18 @@
       "remaining": "Complete the \u00a715 natural-language query journey and relevant retrieval across the required indexed document classes.",
       "units": "T1-11, T1-24/28/31/35/39; T1-64",
       "requirements": "MON-SRH-001/002; MON-AI-009",
-      "receipt": "build/governance/t1-64-financial-source-category-boundary.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-64-financial-source-category-boundary.md"
     },
     {
       "id": "P1-24",
       "area": "AI",
       "name": "Basic financial Q&A",
-      "state": "Pending",
-      "existing": "Search and source provenance are reusable foundations. A customer grounded-answer experience is not delivered.",
-      "remaining": "Deliver authorized financial Q&A with source citations, deterministic calculations, validation, audit and insufficient-data behavior within the approved model/privacy boundary.",
-      "units": "Search foundation only",
+      "state": "Partial",
+      "existing": "Source-record Q&A plus explicit document-version quotations and Financial Rules net worth from a selected reviewed inventory. Exact hash/location/calculation citations, current access, renewed permission and encrypted replay/history.",
+      "remaining": "Broader complete financial summaries, evaluated relevance/grounding and OD-11 approval remain open. Document answers are bounded quotations/transcriptions; net worth covers one selected reviewed inventory. Live provider, physical database and full UAT unverified. Production retention/key custody separate.",
+      "units": "T1-99",
       "requirements": "MON-AI-001/003/004/007/008/009",
-      "receipt": "services/ai-intelligence/Program.cs"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/bd33817e940e082186ac70fffc6059985bdaf753/build/governance/t1-99-grounded-qa.md"
     },
     {
       "id": "P1-25",
@@ -300,7 +300,7 @@
       "remaining": "Complete the basic AI financial-summary experience grounded in authoritative comparable records, with explanation, citations and no unsupported totals.",
       "units": "T1-10, T1-25/29/32/36/40; T1-64",
       "requirements": "MON-AI-003/009; MON-REP-004",
-      "receipt": "build/governance/t1-64-financial-source-category-boundary.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-64-financial-source-category-boundary.md"
     },
     {
       "id": "P1-26",
@@ -311,18 +311,18 @@
       "remaining": "Physical database/view/grant/restart and full authenticated live UAT remain separate verification/acceptance. Registration,KYC,assignments/Consent,other administrator journeys and product-wide Audit remain separate scope.",
       "units": "T1-91",
       "requirements": "MON-ADM-001/004",
-      "receipt": "build/governance/t1-91-customer-management.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-91-customer-management.md"
     },
     {
       "id": "P1-27",
       "area": "Admin",
       "name": "Document monitoring",
       "state": "Complete",
-      "existing": "Organization administrator accepted-document inventory with exact tenant provenance,version history,customer/scan/document filters,literal name/reference search,counts and bounded pages. Historical hash-bound scan evidence,unrecorded/legacy coverage guidance and metadata-only detected categories,processing/failure/attempt history. Exact document/customer recovery links to the existing reviewed Processing Status workflow;no scan,classification or financial authorization bypass.",
-      "remaining": "Physical PostgreSQL/migration/query/grant/restart and full authenticated live UAT remain separate verification/acceptance. Blocked uploads never register as documents;legacy versions without organization provenance are excluded and missing scan proof stays unverified. No content/financial values,manual classification catalogue,forced rescan,reconciliation override,provider producer or product-wide Audit completion.",
+      "existing": "Complete administrator tenant document/version inventory,literal name/reference search,customer/scan/document filters,counts/pages,details,all versions,historical scan proof and paged detected-category/processing/failure/attempt metadata. Exact customer/version links reuse reviewed Processing Status recovery.",
+      "remaining": "Physical PostgreSQL/migration/query/grant/restart,live ClamAV and full live UAT remain separate verification/acceptance. Missing scan evidence stays unverified;legacy unscoped versions excluded;blocked uploads never register. No content/financial bypass,forced rescan or manual classifier catalogue.",
       "units": "T1-93",
       "requirements": "MON-ADM-002/003/004",
-      "receipt": "build/governance/t1-93-document-monitoring.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-93-document-monitoring.md"
     },
     {
       "id": "P1-28",
@@ -333,18 +333,18 @@
       "remaining": "Physical PostgreSQL/query/grant/restart and full live UAT remain separate verification/acceptance. Running cancellation retains owner outcome;unknown outcomes require owner review. Document Monitoring/product-wide Audit and future producers remain separate.",
       "units": "T1-92",
       "requirements": "MON-ADM-002/004; MON-JOB-003",
-      "receipt": "build/governance/t1-92-processing-status.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-92-processing-status.md"
     },
     {
       "id": "P1-29",
       "area": "Admin",
       "name": "Audit log",
       "state": "Complete",
-      "existing": "Current tenant administrator sensitive-product activity and canonical domain ledger; literal search, action/outcome/user/customer/time filters, counts, cursor pages, fresh details and reviewed bounded JSON export. Verified owner identity, immutable request/result capture and unresolved outcome handling.",
-      "remaining": "Physical PostgreSQL/migration/query/grant/restart and full live UAT remain unverified. Legacy missing identities are not backfilled; IP/device disabled. Future producer journeys, direct engineering endpoints and broader security telemetry remain outside current product ingress.",
+      "existing": "Current tenant administrator sensitive-product activity and domain ledger. Literal search,action/outcome/user/customer/time filters,counts,cursor pages,fresh detail and reviewed JSON page export. Verified owner identity and immutable request/result evidence.",
+      "remaining": "Physical PostgreSQL/migration/query/grant/restart and full live UAT remain unverified. Legacy missing fields are not backfilled;IP/device disabled. Future producers,direct engineering endpoints and broader security telemetry outside current product ingress.",
       "units": "T1-94",
       "requirements": "MON-ADM-004; MON-AUD-001\u2013003",
-      "receipt": "build/governance/t1-94-audit-log.md"
+      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-94-audit-log.md"
     }
   ]
 }

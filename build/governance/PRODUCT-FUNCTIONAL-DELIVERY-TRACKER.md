@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-105 Liabilities dashboard (P1-21). Original29:14 Complete,15 Partial,0 Pending after paired merges. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-106 indexing freshness (P1-10 Partial). Original29:14 Complete,15 Partial,0 Pending. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-105 update — Liabilities dashboard
+## Current T1-106 update — Indexing freshness
+
+Search, retrieval-context and explicit refresh now read current owners into isolated request-local derived indexes. Removed selections, owner failures and scope mismatch fail closed; concurrent calls cannot overwrite another request's projection. CID-046 receives the current tenant search boundary. 67 focused backend checks pass. No UI/schema/package changes. [Receipt](t1-106-index-freshness.md).
+
+P1-10 remains Partial: durable indexes, complete corpus and broader lifecycle/background indexing remain open. Repository JSON is synchronized with the authoritative workbook through T1-105 before recording this increment. Counts remain14 Complete,15 Partial,0 Pending;T1-106=105 implementations+1 governance closure. Acceptance remains T1-06. Physical/live UAT not run.
+
+## Previous T1-105 update — Liabilities dashboard
 
 Workspace > Liabilities presents the complete saved customer-reviewed debt inventory across loans, credit cards and other liabilities, using the authoritative Financial Rules total. Category filters, balance date/currency, customer-confirmed coverage, owner gap messages, paged saved history and fresh exact-result/source confirmation preserve the existing owners. Update uses the existing Net Worth inventory review. Receipt: [t1-105-liabilities-dashboard.md](t1-105-liabilities-dashboard.md).
 
