@@ -4,6 +4,7 @@ import { AccessApiError } from '../access/accessApi';
 import type { AccessApi } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import CustomerPanExperience from './CustomerPanExperience';
+import ProfileKycSummary from './ProfileKycSummary';
 import './product.css';
 
 interface CustomerProfile {
@@ -82,7 +83,7 @@ export default function CustomerProfileExperience() {
         throw new AccessApiError(503, 'PROFILE_RECEIPT_INVALID');
       const profile = await api.selfCustomerProfile<unknown>('GET', undefined, controller.signal);
       if (!isCurrent()) return;
-      if (!validProfile(profile, tenant, actor, customer) || profile.version < receipt.version || profile.dateOfBirth !== (values.dateOfBirth || null))
+      if (!validProfile(profile, tenant, actor, customer) || profile.version !== receipt.version || profile.displayName !== values.displayName.trim() || profile.mobile !== (values.mobile.trim() || null) || profile.dateOfBirth !== (values.dateOfBirth || null))
         throw new AccessApiError(503, 'PROFILE_RESPONSE_INVALID');
       await refreshContext?.();
       if (!isCurrent()) return;
@@ -90,7 +91,7 @@ export default function CustomerProfileExperience() {
       setView({ api, scope, profile, loading: false, saving: false, dirty: false, uncertain: false, error: '', notice: 'Your profile has been saved.' });
     } catch (failure) {
       if (!isCurrent()) return;
-      setView({ ...current, saving: false, dirty: true, uncertain: true, notice: '', error:
+      setView({ ...current, profile: failure instanceof AccessApiError && [401, 403].includes(failure.status) ? null : current.profile, saving: false, dirty: true, uncertain: true, notice: '', error:
         failure instanceof AccessApiError && failure.status === 409
           ? 'Your profile changed since it was loaded. Reload the latest profile before saving again.'
           : 'The save result is not confirmed. Reload your profile before making another change.' });
@@ -98,7 +99,7 @@ export default function CustomerProfileExperience() {
   };
   if (!api || !customer) return <Alert type="warning" showIcon title="Connect to your own customer workspace to open My Profile." />;
   return <section className="product-page" aria-labelledby="customer-profile-title">
-    <header className="product-page-header"><div><p className="workspace-eyebrow">YOUR ACCOUNT</p><h1 id="customer-profile-title">My Profile</h1><a href="/kyc">Basic KYC status and review</a><p>Keep your name and contact details up to date.</p></div>
+    <header className="product-page-header"><div><p className="workspace-eyebrow">YOUR ACCOUNT</p><h1 id="customer-profile-title">My Profile</h1><p>Keep your name and contact details up to date.</p></div>
       <Button disabled={current?.saving} loading={!current && !!api} onClick={() => { setView(null); void load(); }}>{current?.dirty ? 'Discard changes and reload' : 'Reload profile'}</Button>
     </header>
     {current?.error && <Alert type="error" showIcon title={current.error} />}
@@ -124,6 +125,13 @@ export default function CustomerProfileExperience() {
         </Space>
       </Form>
     </Card>}
-    {current?.profile && <CustomerPanExperience key={scope} />}
+    {current?.profile && <>
+      <CustomerPanExperience key={scope} />
+      <ProfileKycSummary key={'kyc:' + scope} api={api} tenant={tenant} actor={actor} customer={customer} />
+      <Card title="Account settings"><p>Review your agreements, sharing permissions and active sessions.</p>
+        <Space wrap><a href="/settings/agreements">Account agreements</a><a href="/consent">Consent &amp; privacy</a><a href="/connections">Connected accounts</a><a href="/settings/sessions">Sessions and sign-in activity</a></Space>
+        <p>To reset your password, sign out and choose Forgot password on the email sign-in page. Verified recovery ends your previous sessions.</p>
+      </Card>
+    </>}
   </section>;
 }
