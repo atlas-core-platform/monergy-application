@@ -135,7 +135,7 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     {
         if (path.StartsWith("/contracts/", StringComparison.Ordinal) && app.Configuration.GetValue<bool>("Monergy:Product:Enabled"))
             await CustomerSetupAdmission.RequireAsync(http, http.RequestServices.GetRequiredService<CustomerOwnerClient>()).ConfigureAwait(false);
-        await ProxyAsync(http, path.StartsWith("/connections-api/", StringComparison.Ordinal)
+        await ProxyAsync(http, (path.StartsWith("/connections-api/", StringComparison.Ordinal) || path.StartsWith("/product-api/v1/financial-qa/", StringComparison.Ordinal))
             ? http.RequestServices.GetRequiredService<GoogleDriveProxyClient>().Client : client, new Uri(target + http.Request.QueryString)).ConfigureAwait(false);
         return;
     }
@@ -145,7 +145,7 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     if (path is not ("/" or "/actions" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
         "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
         "/access/activity" or "/access/audit" or "/access/sessions" or "/access/customers" or "/access/processing" or "/access/documents" or "/operations" or
-        "/search" or "/reports" or "/finances" or "/consent" or "/connections" or "/connections/onedrive" or "/profile" or "/settings/sessions" or "/settings/agreements" or "/vs02" or "/foundation"))
+        "/financial-qa" or "/search" or "/reports" or "/finances" or "/consent" or "/connections" or "/connections/onedrive" or "/profile" or "/settings/sessions" or "/settings/agreements" or "/vs02" or "/foundation"))
     { http.Response.StatusCode = 404; return; }
     http.Response.ContentType = "text/html; charset=utf-8";
     await http.Response.SendFileAsync(Path.Combine(environment.WebRootPath, "index.html"), http.RequestAborted).ConfigureAwait(false);
@@ -201,6 +201,9 @@ static string? Route(string path, string method)
         return "http://127.0.0.1:5102" + path[10..];
     if (path == "/audit-api/local/v1/administration/access-events" && method == "GET")
         return "http://127.0.0.1:5102" + path[10..];
+    const string qa = "/product-api/v1/financial-qa/";
+    if (method == "GET" && (path == qa + "configuration" || path == qa + "history") || method == "POST" && path == qa + "questions")
+        return "http://127.0.0.1:5119/local/v1/financial-qa/" + path[qa.Length..];
     const string drive = "/connections-api/local/v1/google-drive";
     if (method == "GET" && (path == drive || path == drive + "/folders" || path == drive + "/files" || path == drive + "/callback") ||
         method == "POST" && (path == drive + "/authorize" || path == drive + "/folder" || path == drive + "/import" || path == drive + "/disconnect"))

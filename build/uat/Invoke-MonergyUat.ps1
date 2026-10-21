@@ -13,6 +13,7 @@ param(
     [string]$EmailConfigurationFile,
     [string]$GoogleDriveConfigurationFile,
     [string]$OneDriveConfigurationFile,
+    [string]$AiModelConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
 )
@@ -157,6 +158,22 @@ if (-not [string]::IsNullOrWhiteSpace($OneDriveConfigurationFile)) {
         $oneDriveTenants[$entry.Name] = @{ Enabled='true'; ClientId=$value.ClientId; ClientSecret=$value.ClientSecret; RedirectUri=$value.RedirectUri }
     }
 }
+$aiModelTenants = @{}
+if (-not [string]::IsNullOrWhiteSpace($AiModelConfigurationFile)) {
+    if (-not $onboarding) { throw 'AI model configuration requires an onboarding profile.' }
+    $modelFile = Get-Item -LiteralPath $AiModelConfigurationFile -ErrorAction Stop
+    if ($modelFile.PSIsContainer -or $modelFile.Length -gt 16384) { throw 'Invalid AI model configuration file.' }
+    $suppliedModels = Get-Content -LiteralPath $modelFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+    foreach ($entry in $suppliedModels.PSObject.Properties) {
+        if ($entry.Name -notin @('T001','T002')) { throw 'AI model configuration has an unsupported tenant binding.' }
+        $value = $entry.Value
+        foreach ($name in @('Endpoint','ApiKey','Model','ProviderLabel','Notice')) {
+            if ([string]::IsNullOrWhiteSpace([string]$value.$name)) { throw "AI model configuration requires $name." }
+        }
+        $aiModelTenants[$entry.Name] = @{ Enabled='true'; Endpoint=$value.Endpoint; ApiKey=$value.ApiKey;
+            Model=$value.Model; ProviderLabel=$value.ProviderLabel; Notice=$value.Notice }
+    }
+}
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
 if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
@@ -165,7 +182,7 @@ if ($Action -in @('Prepare','Start')) {
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
-        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel','googleDriveProtection','oneDriveProtection')
+        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel','googleDriveProtection','oneDriveProtection','aiModelInternal','financialQaProtection')
     }
     foreach ($name in $requiredTokens) {
         if ($null -eq $state.tokens.PSObject.Properties[$name]) {
@@ -308,6 +325,18 @@ if ($Action -in @('Prepare','Start')) {
                     Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.jobAuditEvent
                 }
             }
+        }
+        if ($onboarding -and $service -eq 'integration-gateway') {
+            $config.Monergy.AiModel=@{ Enabled='true'; InternalToken=$state.tokens.aiModelInternal; Tenants=$aiModelTenants }
+        }
+        if ($onboarding -and $service -eq 'ai-intelligence') {
+            $config.Monergy.AccessIntegration=@{ Enabled='true'; CustomerRelationships='true';
+                AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
+                CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
+            $config.Monergy.FinancialQa=@{ Enabled='true'; IntegrationGatewayUrl='http://127.0.0.1:5117/';
+                FinancialProfileUrl='http://127.0.0.1:5113/'; EvidenceUrl='http://127.0.0.1:5111/'; SearchRetrievalUrl='http://127.0.0.1:5115/';
+                InternalToken=$state.tokens.aiModelInternal; StoreDirectory='/var/lib/monergy-drive/financial-qa';
+                EncryptionKey=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.financialQaProtection)) }
         }
         Save-Json "$service.json" $config
     }
