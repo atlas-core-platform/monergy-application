@@ -23,7 +23,7 @@ public static class CustomerReviewHttp
         TenantBoundaryOptions? bindings=null,bool write=false,bool calculate=false,bool documents=false)
     {
         var (tenant,_)=TenantAccessClient.Headers(http);
-        if(bindings is not null&&(!bindings.CustomerTenants.TryGetValue(customer,out var expected)||expected!=tenant))throw new TenantBoundaryException("CUSTOMER_TENANT_MISMATCH",403);
+        if(bindings is not null&&!bindings.AllowsCustomerLookup(customer,tenant))throw new TenantBoundaryException("CUSTOMER_TENANT_MISMATCH",403);
         var read=await access.EvaluateCustomerAsync(http,"financial-profile.profile.read",customer).ConfigureAwait(false);
         if(read.Outcome!="Allow"||read.AccessBasis!="Self")throw new TenantBoundaryException("ACCESS_DENIED",403);
         var capabilities=new List<string>();

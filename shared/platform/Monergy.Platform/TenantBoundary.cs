@@ -19,6 +19,11 @@ public sealed class TenantBoundaryOptions
     public required string ProbeUrl { get; init; }
     public bool CustomerRelationships { get; init; }
 
+    // In relationship mode an unknown customer is resolved by the mandatory
+    // owner decision that follows. Known contradictory bindings still fail closed.
+    public bool AllowsCustomerLookup(string customer, string tenant) =>
+        CustomerTenants.TryGetValue(customer, out var bound) ? bound == tenant : CustomerRelationships;
+
     public static bool Selected(IConfiguration configuration) => configuration["Monergy:TenantBoundary:Enabled"] == "true";
 
     public static TenantBoundaryOptions Read(IConfiguration configuration, IHostEnvironment environment, string serviceName)
@@ -107,7 +112,7 @@ public sealed class TenantBoundaryMiddleware(RequestDelegate next, TenantBoundar
             }
             var actor = security.GetProperty("actor");
             var customer = Text(security.GetProperty("access"), "customerId");
-            if (!options.CustomerTenants.TryGetValue(customer, out var owner) || owner != tenant)
+            if (!options.AllowsCustomerLookup(customer, tenant))
                 throw new TenantBoundaryException("CUSTOMER_TENANT_MISMATCH", 403);
             var payload = body.RootElement.GetProperty("payload");
             if (payload.TryGetProperty("customerId", out var payloadCustomer) && payloadCustomer.GetString() != customer)

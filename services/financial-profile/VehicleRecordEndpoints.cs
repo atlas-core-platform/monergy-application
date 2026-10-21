@@ -59,7 +59,7 @@ public static class VehicleRecordEndpoints
     private static async Task<(string Tenant, string Actor)> AuthorizeAsync(HttpContext http, string customer, TenantAccessClient access, TenantBoundaryOptions bindings, bool write)
     {
         var (tenant, _) = TenantAccessClient.Headers(http);
-        if (!bindings.CustomerTenants.TryGetValue(customer, out var sourceTenant) || sourceTenant != tenant)
+        if (!bindings.AllowsCustomerLookup(customer, tenant))
             throw new TenantBoundaryException("CUSTOMER_TENANT_MISMATCH", 403);
         var read = await access.EvaluateCustomerAsync(http, "financial-profile.profile.read", customer).ConfigureAwait(false);
         var evidence = await access.EvaluateCustomerAsync(http, "evidence.document.read", customer).ConfigureAwait(false);

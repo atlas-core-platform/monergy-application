@@ -176,6 +176,9 @@ static string? Route(string path, string method)
            (method=="GET"&&(parts.Length==1||parts.Length==2&&parts[1]=="history"||parts.Length==3&&parts[1]=="changes"&&Guid.TryParseExact(parts[2],"N",out _))||
             method=="POST"&&parts.Length==2&&parts[1]=="status"))return "http://127.0.0.1:5101"+path[13..];
     }
+    if (method=="GET" && path is "/identity-api/local/v1/customer-registration" or "/identity-api/local/v1/customer-registration/agreements" ||
+        method=="POST" && path is "/identity-api/local/v1/customer-registration/request" or "/identity-api/local/v1/customer-registration/confirm" or "/identity-api/local/v1/customer-registration/sign-in" or "/identity-api/local/v1/customer-registration/recovery/request" or "/identity-api/local/v1/customer-registration/recovery/confirm")
+        return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/customer-email-access" && method == "GET" ||
         path is "/identity-api/local/v1/customer-email-access/request" or "/identity-api/local/v1/customer-email-access/confirm" && method == "POST")
         return "http://127.0.0.1:5101" + path[13..];
