@@ -1,22 +1,22 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-96",
-  "applicationBase": "a148580d3bc14e9e851bfb6abac59a691ab3b49a",
+  "asOf": "T1-97",
+  "applicationBase": "3b008c650890bb207b521d72b6eadbd0fb2acbc4",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 3,
+    "libraryVersion": 4,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "T1-95 delivered baseline; T1-96 complete Google Drive source journey with configurable external credentials. Physical/live verification and business acceptance remain separate.",
+    "reviewThrough": "T1-96 delivered baseline; T1-97 complete OneDrive source journey with configurable external credentials. Physical/live verification and business acceptance remain separate.",
     "libraryFileId": "libfile_7747823175948191ad6e56244bee8cf2"
   },
   "counts": {
     "originalDeliverables": 29,
-    "fullyImplemented": 7,
+    "fullyImplemented": 8,
     "partial": 19,
-    "pendingBusinessJourneys": 3,
-    "remainingOriginalDeliverables": 22,
-    "numberedUnitsAfterPairedMerge": 96,
-    "mergedImplementationUnitsAfterPairedMerge": 95,
+    "pendingBusinessJourneys": 2,
+    "remainingOriginalDeliverables": 21,
+    "numberedUnitsAfterPairedMerge": 97,
+    "mergedImplementationUnitsAfterPairedMerge": 96,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -152,12 +152,12 @@
       "id": "P1-12",
       "area": "Cloud",
       "name": "OneDrive integration",
-      "state": "Pending",
-      "existing": "Provider-neutral connector and consent foundations exist; no real customer OneDrive journey is evidenced.",
-      "remaining": "Implement approved authorization, folder/file binding, import/status/refresh/disconnect and current consent enforcement.",
-      "units": "Foundation only",
+      "state": "Complete",
+      "existing": "Tenant-configured Microsoft OAuth with PKCE, explicit read/offline and folder permission, account and nested-folder selection, scanned exact-version Evidence import, refresh/status/history and local disconnect. Credentials supplied through optional onboarding configuration.",
+      "remaining": "Live Microsoft authorization/API and tenant approval, physical Consent migration/grants/restart/concurrency and full UAT remain unverified. Microsoft-side permission removal is manual and disclosed. LOCAL imported Evidence remains temporary. Production persistence/key custody remain separate.",
+      "units": "T1-97",
       "requirements": "MON-SRC-007; MON-CON-004\u2013006",
-      "receipt": "build/governance/PRODUCT-FUNCTIONAL-DELIVERY-TRACKER.md"
+      "receipt": "build/governance/t1-97-onedrive.md"
     },
     {
       "id": "P1-13",

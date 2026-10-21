@@ -12,6 +12,7 @@ param(
     [string]$AccountAgreementFile,
     [string]$EmailConfigurationFile,
     [string]$GoogleDriveConfigurationFile,
+    [string]$OneDriveConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
 )
@@ -142,6 +143,20 @@ if (-not [string]::IsNullOrWhiteSpace($GoogleDriveConfigurationFile)) {
         $googleDriveTenants[$entry.Name] = @{ Enabled='true'; ClientId=$value.ClientId; ClientSecret=$value.ClientSecret; RedirectUri=$value.RedirectUri }
     }
 }
+$oneDriveTenants = @{}
+if (-not [string]::IsNullOrWhiteSpace($OneDriveConfigurationFile)) {
+    if (-not $onboarding) { throw 'OneDrive configuration requires an onboarding profile.' }
+    $suppliedDrive = Get-Content -LiteralPath $OneDriveConfigurationFile -Raw | ConvertFrom-Json
+    foreach ($entry in $suppliedDrive.PSObject.Properties) {
+        if ($entry.Name -notin @('T001','T002')) { throw 'OneDrive configuration has an unsupported tenant binding.' }
+        $value = $entry.Value
+        if ([string]::IsNullOrWhiteSpace($value.ClientId) -or [string]::IsNullOrWhiteSpace($value.ClientSecret) -or
+            $value.RedirectUri -ne "http://localhost:$Port/connections-api/local/v1/onedrive/callback") {
+            throw 'OneDrive requires a client ID, client secret and the exact localhost callback for this UAT port.'
+        }
+        $oneDriveTenants[$entry.Name] = @{ Enabled='true'; ClientId=$value.ClientId; ClientSecret=$value.ClientSecret; RedirectUri=$value.RedirectUri }
+    }
+}
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
 if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
@@ -150,7 +165,7 @@ if ($Action -in @('Prepare','Start')) {
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
-        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel','googleDriveProtection')
+        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel','googleDriveProtection','oneDriveProtection')
     }
     foreach ($name in $requiredTokens) {
         if ($null -eq $state.tokens.PSObject.Properties[$name]) {
@@ -255,6 +270,9 @@ if ($Action -in @('Prepare','Start')) {
                 $config.Monergy.GoogleDrive=@{ Enabled='true'; StoreDirectory='/var/lib/monergy-drive/connections';
                     EncryptionKey=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.googleDriveProtection));
                     EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake; Tenants=$googleDriveTenants }
+                $config.Monergy.OneDrive=@{ Enabled='true'; StoreDirectory='/var/lib/monergy-drive/onedrive-connections';
+                    EncryptionKey=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.oneDriveProtection));
+                    EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake; Tenants=$oneDriveTenants }
             }
             if ($onboarding -and $service -eq 'evidence') {
                 $config.Monergy.OnboardingFixtures='true'

@@ -297,6 +297,14 @@ export class AccessApi {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   }
+  oneDrive<T>(action: '' | 'authorize' | 'folders' | 'files' | 'folder' | 'import' | 'disconnect', body?: unknown, signal?: AbortSignal, page?: string): Promise<T> {
+    return this.guarded<T>('/connections-api/local/v1/onedrive' + (action ? '/' + action : '') +
+      (page ? '?page=' + encodeURIComponent(page) : ''), {
+      method: body === undefined ? 'GET' : 'POST', signal,
+      headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+  }
   customerConsent<T>(customerId: string, signal?: AbortSignal): Promise<T> {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(customerId))
       return Promise.reject(new AccessApiError(400, 'INVALID_CUSTOMER_ID'));

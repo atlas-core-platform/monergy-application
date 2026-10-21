@@ -16,6 +16,7 @@ const TenantSetupGate = lazy(() =>
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const ProductSearchExperience = lazy(() => import('./product/ProductSearchExperience'));
+const OneDriveExperience = lazy(() => import('./product/OneDriveExperience'));
 const GoogleDriveExperience = lazy(() => import('./product/GoogleDriveExperience'));
 const ConsentExperience = lazy(() => import('./product/ConsentExperience'));
 const CustomerWorkspaceSetupExperience = lazy(() => import('./product/CustomerWorkspaceSetupExperience'));
@@ -181,6 +182,7 @@ function RouteContent() {
     );
   }
 
+  if (window.location.pathname === '/connections/onedrive') return <Suspense fallback={<main aria-busy="true">Loading connections…</main>}><OneDriveExperience /></Suspense>;
   if (window.location.pathname === '/connections') return <Suspense fallback={<main aria-busy="true">Loading connections…</main>}><GoogleDriveExperience /></Suspense>;
 
   if (window.location.pathname === '/consent') {
