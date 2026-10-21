@@ -43,7 +43,10 @@ public sealed class SearchRetrievalApplication(
             request.ContractName, request.CorrelationId, cancellationToken).ConfigureAwait(false);
         if (accessError is not null) { return Rejected<BuildRetrievalContext, RetrievalContext>(request, accessError); }
 
-        var records = index.FindAuthorized(request.Payload.CustomerId,
+        IDerivedSearchIndex currentIndex;
+        try { (currentIndex, _) = await CurrentIndexAsync(request, request.Payload.CustomerId, cancellationToken).ConfigureAwait(false); }
+        catch (SearchSourceException failure) { return Rejected<BuildRetrievalContext, RetrievalContext>(request, failure.Error); }
+        var records = currentIndex.FindAuthorized(request.Payload.CustomerId,
             request.Security.Access.AuthorizationContextId, request.Payload.SearchRecordIds);
         if (records.Length != request.Payload.SearchRecordIds.Length)
         {
@@ -72,8 +75,17 @@ public sealed class SearchRetrievalApplication(
             request.ContractName, request.CorrelationId, cancellationToken).ConfigureAwait(false);
         if (accessError is not null) { return Rejected<IndexRefreshRequested, IndexRefreshResult>(request, accessError); }
         var customerId = request.Payload.CustomerId;
-        return ContractResult<IndexRefreshResult>.Succeeded(request,
-            index.RebuildCustomer(customerId, projectionSource.ReadForCustomer(customerId)));
+        try
+        {
+            if (projectionSource is ICustomerSearchProjectionSource)
+            {
+                var (_, receipt) = await CurrentIndexAsync(request, customerId, cancellationToken).ConfigureAwait(false);
+                return ContractResult<IndexRefreshResult>.Succeeded(request, receipt!);
+            }
+            return ContractResult<IndexRefreshResult>.Succeeded(request,
+                index.RebuildCustomer(customerId, projectionSource.ReadForCustomer(customerId)));
+        }
+        catch (SearchSourceException failure) { return Rejected<IndexRefreshRequested, IndexRefreshResult>(request, failure.Error); }
     }
 
     private async Task<ContractResult<SearchResults>> SearchAsync<TPayload>(
@@ -112,30 +124,29 @@ public sealed class SearchRetrievalApplication(
                 "Customer search currently supports lexical matching only.");
         }
 
-        if (projectionSource is ICustomerSearchProjectionSource current)
-        {
-            try
-            {
-                await current.PrepareCustomerAsync(
-                    customerId,
-                    request.Security.Access.AuthorizationContextId,
-                    request.Security,
-                    request.ContractName,
-                    request.CorrelationId,
-                    cancellationToken).ConfigureAwait(false);
-                index.RebuildCustomer(customerId, projectionSource.ReadForCustomer(customerId));
-            }
-            catch (SearchSourceException failure)
-            {
-                return Rejected<TPayload, SearchResults>(
-                    request,
-                    failure.Error with { CorrelationId = request.CorrelationId });
-            }
-        }
+        IDerivedSearchIndex currentIndex;
+        try { (currentIndex, _) = await CurrentIndexAsync(request, customerId, cancellationToken).ConfigureAwait(false); }
+        catch (SearchSourceException failure) { return Rejected<TPayload, SearchResults>(request, failure.Error); }
 
-        var results = index.Search(customerId, request.Security.Access.AuthorizationContextId,
+        var results = currentIndex.Search(customerId, request.Security.Access.AuthorizationContextId,
             resultTypes, query, matchMode, limit).Select(item => ToHit(item.Record, item.Score)).ToImmutableArray();
         return ContractResult<SearchResults>.Succeeded(request, new(query.Trim(), matchMode, results));
+    }
+
+    private async Task<(IDerivedSearchIndex Index, IndexRefreshResult? Receipt)> CurrentIndexAsync<T>(
+        ContractRequest<T> request, string customer, CancellationToken ct)
+    {
+        if (projectionSource is not ICustomerSearchProjectionSource current) return (index, null);
+        var records = await current.ReadCurrentCustomerAsync(customer, request.Security.Access.AuthorizationContextId,
+            request.Security, request.ContractName, request.CorrelationId, ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        if (records.Any(x => x.CustomerId != customer || x.RequiredAuthorizationContextId != request.Security.Access.AuthorizationContextId))
+            throw new SearchSourceException(new("search.source.boundary-invalid", ContractErrorCategory.AccessDenied,
+                "Current source scope is required.", false, request.CorrelationId));
+        var error = await authorizationPolicy.AuthorizeAsync(request.Security, customer, request.ContractName, request.CorrelationId, ct).ConfigureAwait(false);
+        if (error is not null) throw new SearchSourceException(error);
+        var snapshot = index.CreateSnapshot(records);
+        return (snapshot, snapshot.RebuildCustomer(customer, records));
     }
 
     private static bool ValidCustomer(string customerId, TrustedSecurityContext security) =>

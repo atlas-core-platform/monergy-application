@@ -22,7 +22,7 @@ public interface ISearchProjectionSource
 
 public interface ICustomerSearchProjectionSource
 {
-    Task PrepareCustomerAsync(
+    Task<ImmutableArray<DerivedSearchRecord>> ReadCurrentCustomerAsync(
         string customerId,
         string authorizationContextId,
         TrustedSecurityContext security,
@@ -38,6 +38,7 @@ public sealed class SearchSourceException(ContractError error) : Exception(error
 
 public interface IDerivedSearchIndex
 {
+    IDerivedSearchIndex CreateSnapshot(IEnumerable<DerivedSearchRecord> source);
     IndexRefreshResult Rebuild(IEnumerable<DerivedSearchRecord> records);
     IndexRefreshResult RebuildCustomer(string customerId, IEnumerable<DerivedSearchRecord> records);
     ImmutableArray<RankedSearchRecord> Search(

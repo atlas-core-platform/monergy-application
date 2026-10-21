@@ -83,6 +83,15 @@ public sealed partial class InMemoryDerivedSearchIndex : IDerivedSearchIndex
 
     public InMemoryDerivedSearchIndex(IConfiguration configuration) => ReferenceAdapterGuard.EnsureAllowed(configuration);
 
+    private InMemoryDerivedSearchIndex() { }
+
+    public IDerivedSearchIndex CreateSnapshot(IEnumerable<DerivedSearchRecord> source)
+    {
+        var snapshot = new InMemoryDerivedSearchIndex();
+        snapshot.Rebuild(source);
+        return snapshot;
+    }
+
     public IndexRefreshResult Rebuild(IEnumerable<DerivedSearchRecord> records)
     {
         var ordered = records.OrderBy(item => item.SearchRecordId, StringComparer.Ordinal).ToArray();

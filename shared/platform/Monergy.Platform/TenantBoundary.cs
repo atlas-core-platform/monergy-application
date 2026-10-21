@@ -174,7 +174,7 @@ public sealed class TenantBoundaryMiddleware(RequestDelegate next, TenantBoundar
         ("financial-profile", "/contracts/cid-030/v1" or "/contracts/cid-032/v1" or "/contracts/cid-033/v1") => ("financial-profile.profile.read", "customer", "$customer"),
         ("financial-profile", "/contracts/cid-031/v1") => ("financial-profile.profile.update", "customer", "$customer"),
         ("financial-rules", "/contracts/cid-037/v1" or "/contracts/cid-038/v1" or "/contracts/cid-039/v1") => ("financial-rules.calculation.execute", "customer", "$customer"),
-        ("search-retrieval", "/contracts/cid-042/v1" or "/contracts/cid-043/v1" or "/contracts/cid-044/v1") => ("search.query.execute", null, null),
+        ("search-retrieval", "/contracts/cid-042/v1" or "/contracts/cid-043/v1" or "/contracts/cid-044/v1" or "/contracts/cid-046/v1") => ("search.query.execute", null, null),
         ("reporting", "/contracts/cid-051/v1") => ("reporting.report.generate", "report", "$intent"),
         ("reporting", "/contracts/cid-052/v1") => ("reporting.report.read", "report", "reportId"),
         ("integration-gateway", "/contracts/cid-015/v1" or "/contracts/cid-016/v1") => ("integration-gateway.connection.manage", "customer", "$customer"),

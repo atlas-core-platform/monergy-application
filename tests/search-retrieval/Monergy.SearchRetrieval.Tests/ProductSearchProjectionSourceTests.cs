@@ -20,7 +20,7 @@ public sealed class ProductSearchProjectionSourceTests
         var handler = new OwnerHandler();
         var source = Source(handler, Accessor(SearchContractNames.SearchDocuments));
 
-        await source.PrepareCustomerAsync(
+        var records = await source.ReadCurrentCustomerAsync(
             "reference-customer",
             "decision-search",
             Security(),
@@ -28,7 +28,6 @@ public sealed class ProductSearchProjectionSourceTests
             "search-correlation",
             CancellationToken.None);
 
-        var records = source.ReadForCustomer("reference-customer");
         var document = Assert.Single(records);
         Assert.Equal(SearchResultType.Document, document.ResultType);
         Assert.Equal("salary-statement.txt", document.Title);
@@ -55,7 +54,7 @@ public sealed class ProductSearchProjectionSourceTests
         var handler = new OwnerHandler { AssetType = assetType, CanonicalCategories = canonicalCategories };
         var source = Source(handler, Accessor(SearchContractNames.SearchFinancialData));
 
-        await source.PrepareCustomerAsync(
+        var records = await source.ReadCurrentCustomerAsync(
             "reference-customer",
             "decision-search",
             Security(),
@@ -63,7 +62,6 @@ public sealed class ProductSearchProjectionSourceTests
             "search-correlation",
             CancellationToken.None);
 
-        var records = source.ReadForCustomer("reference-customer");
         Assert.Equal(7, records.Length);
         Assert.Contains(records, item =>
             item.ResultType == SearchResultType.Financial &&
@@ -91,13 +89,13 @@ public sealed class ProductSearchProjectionSourceTests
     }
 
     [Fact]
-    public async Task RefreshingOneSearchFamilyPreservesTheOtherCurrentFamily()
+    public async Task SeparateSearchFamiliesReturnIndependentOwnerSnapshots()
     {
         var handler = new OwnerHandler();
         var accessor = Accessor(SearchContractNames.SearchDocuments);
         var documents = Source(handler, accessor);
 
-        await documents.PrepareCustomerAsync(
+        var documentRecords = await documents.ReadCurrentCustomerAsync(
             "reference-customer",
             "decision-search",
             Security(),
@@ -108,7 +106,7 @@ public sealed class ProductSearchProjectionSourceTests
         // The same source instance receives the next current-customer query under the next owner proof.
         accessor.HttpContext = Accessor(SearchContractNames.SearchFinancialData).HttpContext;
 
-        await documents.PrepareCustomerAsync(
+        var records = await documents.ReadCurrentCustomerAsync(
             "reference-customer",
             "decision-search",
             Security(),
@@ -116,9 +114,9 @@ public sealed class ProductSearchProjectionSourceTests
             "search-correlation-financial",
             CancellationToken.None);
 
-        var records = documents.ReadForCustomer("reference-customer");
-        Assert.Equal(8, records.Length);
-        Assert.Single(records, item => item.ResultType == SearchResultType.Document);
+        Assert.Single(documentRecords);
+        Assert.Equal(7, records.Length);
+        Assert.DoesNotContain(records, item => item.ResultType == SearchResultType.Document);
         Assert.Equal(7, records.Count(item => item.ResultType == SearchResultType.Financial));
     }
 
@@ -129,7 +127,7 @@ public sealed class ProductSearchProjectionSourceTests
         var source = Source(handler, Accessor(SearchContractNames.SearchFinancialData));
 
         var failure = await Assert.ThrowsAsync<SearchSourceException>(() =>
-            source.PrepareCustomerAsync(
+            source.ReadCurrentCustomerAsync(
                 "reference-customer",
                 "decision-search",
                 Security(),
@@ -147,7 +145,7 @@ public sealed class ProductSearchProjectionSourceTests
         var source = Source(handler, new HttpContextAccessor { HttpContext = new DefaultHttpContext() });
 
         var failure = await Assert.ThrowsAsync<SearchSourceException>(() =>
-            source.PrepareCustomerAsync(
+            source.ReadCurrentCustomerAsync(
                 "reference-customer",
                 "decision-search",
                 Security(),
@@ -157,6 +155,33 @@ public sealed class ProductSearchProjectionSourceTests
 
         Assert.Equal("search.source.boundary-invalid", failure.Error.Code);
         Assert.Empty(handler.Requests);
+    }
+
+    [Theory]
+    [InlineData(SearchContractNames.BuildRetrievalContext)]
+    [InlineData(SearchContractNames.IndexRefreshRequested)]
+    public async Task RetrievalAndRefreshReadBothOwnersWithoutCachedFamilies(string operation)
+    {
+        var handler = new OwnerHandler();
+        var source = Source(handler, Accessor(operation));
+        var records = await source.ReadCurrentCustomerAsync("reference-customer", "decision-search", Security(), operation, "correlation", CancellationToken.None);
+        Assert.Equal(8, records.Length);
+        Assert.Single(records, x => x.ResultType == SearchResultType.Document);
+        Assert.Equal(7, records.Count(x => x.ResultType == SearchResultType.Financial));
+        Assert.Contains(handler.Requests, x => x.Path == "/contracts/app-02/evidence-list/v1");
+        Assert.Contains(handler.Requests, x => x.Path == "/contracts/cid-030/v1");
+        Assert.Throws<InvalidOperationException>(() => source.ReadAll());
+        Assert.Throws<InvalidOperationException>(() => source.ReadForCustomer("reference-customer"));
+    }
+
+    [Theory]
+    [InlineData(SearchContractNames.BuildRetrievalContext)]
+    [InlineData(SearchContractNames.IndexRefreshRequested)]
+    public async Task CombinedSnapshotDoesNotReturnDocumentsWhenFinancialOwnerFails(string operation)
+    {
+        var source = Source(new OwnerHandler { CrossCustomerProvenance = true }, Accessor(operation));
+        var error = await Assert.ThrowsAsync<SearchSourceException>(() => source.ReadCurrentCustomerAsync("reference-customer", "decision-search", Security(), operation, "correlation", CancellationToken.None));
+        Assert.Equal(ContractErrorCategory.AccessDenied, error.Error.Category);
     }
 
     private static ProductSearchProjectionSource Source(
