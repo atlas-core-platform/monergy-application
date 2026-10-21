@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { AccessApi, AccessApiError, establishSession } from './accessApi';
 import type { TenantSession } from './accessApi';
+import { registrationRequest } from './registrationApi';
 import { confirmCustomerEmailCode } from './customerEmailApi';
 import { Context, productContextMemory, sessionMemory } from './workspaceSession';
 import type {
@@ -225,6 +226,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
   );
   const connect = useCallback((tenant: string, key: string) =>
     connectUsing(tenant, (signal) => establishSession(tenant, key, signal)), [connectUsing]);
+  const connectPassword = useCallback((tenant: string, email: string, password: string) => connectUsing(tenant, signal => registrationRequest<TenantSession>('/sign-in', { tenantId: tenant, email, password }, signal), true), [connectUsing]);
   const connectEmail = useCallback((tenant: string, challengeId: string, code: string) =>
     connectUsing(tenant, (signal) => confirmCustomerEmailCode(tenant, challengeId, code, signal), true), [connectUsing]);
   const refreshContext = useCallback(async () => {
@@ -335,7 +337,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     };
   }, [state.session, leave, retry]);
   return (
-    <Context.Provider value={{ ...state, connect, connectEmail, refreshContext, retry, signOut, cancel }}>
+    <Context.Provider value={{ ...state, connect, connectEmail, connectPassword, refreshContext, retry, signOut, cancel }}>
       {children}
     </Context.Provider>
   );

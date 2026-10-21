@@ -4,10 +4,10 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "fff6b3420eb8f2f8221f0c72c98c8ae12a7839a8",
-  "sourceTree": "e579cf4ef75af380ef93e1690bf0acc60a89c98f",
-  "verificationStatus": "WORK_MODE_T1_14_CANDIDATE_NO_HOSTED_CI",
-  "candidatePullRequest": 14,
+  "commit": "21c0e933719034554be7c61d8e74f7ec433fc840",
+  "sourceTree": "5b8d3c7644b308141a9dd1a16094c44a1c9be9ff",
+  "verificationStatus": "T1_95_MERGED_BUILD_VERIFIED_PHYSICAL_UAT_NOT_RUN",
+  "candidatePullRequest": 15,
   "files": [
     {
       "path": "Directory.Build.props",
@@ -52,6 +52,10 @@
     {
       "path": "src/Monergy.AccessManagement/CustomerAccess.cs",
       "gitBlobSha": "3932b782e6d8ff7b1583c4eb3f68f54e737af415"
+    },
+    {
+      "path": "src/Monergy.AccessManagement/CustomerEnrollment.cs",
+      "gitBlobSha": "e2a369d48b67ff16766f4efb972a7061ae82588a"
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerRelationshipAdministration.cs",
@@ -99,7 +103,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/Program.cs",
-      "gitBlobSha": "cfa9c78ff06d485d98492e75c541739d9f74ccfd"
+      "gitBlobSha": "3fa15c95b1b50fcbca1ad77a802227952066c7e3"
     },
     {
       "path": "src/Monergy.AccessManagement/ReferenceAdapters.cs",

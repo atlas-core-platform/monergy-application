@@ -22,7 +22,7 @@ public static class ProductAuditCapture
  public static bool Sensitive(PathString path)=>Prefixes.Any(p=>path.StartsWithSegments(p));
  public static string Action(string path,string method)
  {
-  if(path.Contains("tenant-sessions",StringComparison.Ordinal)||path.Contains("customer-email-access",StringComparison.Ordinal))return "LOGIN";
+  if(path.EndsWith("/customer-registration/sign-in",StringComparison.Ordinal)||path.Contains("tenant-sessions",StringComparison.Ordinal)||path.Contains("customer-email-access",StringComparison.Ordinal))return "LOGIN";
   if(path.Contains("/export",StringComparison.Ordinal))return "DATA_EXPORT";
   if(path.StartsWith("/consent-api/",StringComparison.Ordinal)&&method!="GET")return method=="DELETE"?"CONSENT_REVOKE":"CONSENT_GRANT";
   if(path.StartsWith("/product-api/v1/evidence",StringComparison.Ordinal))return method=="GET"?"DOCUMENT_VIEW":method=="POST"&&!path.Contains("/processing",StringComparison.Ordinal)?"DOCUMENT_UPLOAD":"DOCUMENT_UPDATE";

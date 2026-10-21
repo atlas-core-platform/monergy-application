@@ -28,6 +28,7 @@ export interface WorkspaceSessionState {
   message: string;
   recovery: { tenantId: string; actorId: string; operationId: string } | null;
   connect: (tenantId: string, key: string) => Promise<void>;
+  connectPassword?: (tenantId: string, email: string, password: string) => Promise<void>;
   connectEmail?: (tenantId: string, challengeId: string, code: string) => Promise<void>;
   refreshContext?: () => Promise<void>;
   retry: () => Promise<void>;

@@ -8,11 +8,15 @@ param(
     [switch]$ConfirmReset,
     [switch]$EnableOnboarding,
     [switch]$EnableEmailAccess,
+    [switch]$EnableCustomerRegistration,
     [string]$AccountAgreementFile,
+    [string]$EmailConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
 )
 $ErrorActionPreference = 'Stop'
+if ($EnableCustomerRegistration -and (-not $EnableEmailAccess -or -not $EnableOnboarding -or [string]::IsNullOrWhiteSpace($AccountAgreementFile))) { throw 'Customer registration requires onboarding, email access and published account agreements.' }
+if ($EnableCustomerRegistration) { $RequireCustomerSetup=$true }
 if ($RequireCustomerSetup -and (-not $EnableEmailAccess -or -not $EnableOnboarding)) { throw 'Required customer setup needs -EnableOnboarding and -EnableEmailAccess.' }
 if ($EnableOnboarding -and $Profile -eq 'default') { throw 'Use a new named profile for onboarding, for example -Profile onboarding -EnableOnboarding. The retained default profile is not upgraded.' }
 Set-StrictMode -Version Latest
@@ -107,9 +111,20 @@ $state = Get-Content $profileFile -Raw | ConvertFrom-Json
 $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
 if ($EnableCustomerPan -and -not $onboarding) { throw 'Customer PAN requires an onboarding profile.' }
 if ($EnableEmailAccess -and -not $onboarding) { throw 'Customer email access requires an onboarding profile with verified customer ownership.' }
+$emailConfiguration = $null
 if ($EnableEmailAccess -and $Action -in @('Prepare','Start')) {
-    foreach ($name in @('MONERGY_EMAIL_SMTP_HOST','MONERGY_EMAIL_SMTP_USER','MONERGY_EMAIL_SMTP_PASSWORD','MONERGY_EMAIL_FROM')) {
-        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) { throw "Customer email delivery requires $name in the operator environment." }
+    if (-not [string]::IsNullOrWhiteSpace($EmailConfigurationFile)) {
+        $emailFile = Get-Item -LiteralPath $EmailConfigurationFile -ErrorAction Stop
+        if ($emailFile.PSIsContainer -or $emailFile.Length -gt 16384) { throw 'Invalid email configuration file.' }
+        $emailConfiguration = Get-Content -LiteralPath $emailFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+        foreach ($name in @('SmtpHost','SmtpUser','SmtpPassword','From')) {
+            if ($null -eq $emailConfiguration.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$emailConfiguration.$name)) { throw "Email configuration requires $name." }
+        }
+    } else {
+        foreach ($name in @('MONERGY_EMAIL_SMTP_HOST','MONERGY_EMAIL_SMTP_USER','MONERGY_EMAIL_SMTP_PASSWORD','MONERGY_EMAIL_FROM')) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) { throw "Customer email delivery requires $name or -EmailConfigurationFile." }
+        }
+        $emailConfiguration = [pscustomobject]@{ SmtpHost=$env:MONERGY_EMAIL_SMTP_HOST; SmtpUser=$env:MONERGY_EMAIL_SMTP_USER; SmtpPassword=$env:MONERGY_EMAIL_SMTP_PASSWORD; From=$env:MONERGY_EMAIL_FROM; SmtpPort=$env:MONERGY_EMAIL_SMTP_PORT }
     }
 }
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
@@ -117,6 +132,7 @@ if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
     $requiredTokens = @('financialAuditEvent','productAuditEvent')
     if ($EnableEmailAccess) { $requiredTokens += 'emailAccess' }
+    if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
         $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel')
@@ -156,6 +172,7 @@ if ($Action -in @('Prepare','Start')) {
         $am.Monergy.AccessManagement.ConsentUrl='http://127.0.0.1:5110/'
         $am.Monergy.AccessManagement.ConsentToken=$state.tokens.consent
     }
+    if ($EnableCustomerRegistration) { $am.Monergy.AccessManagement.CustomerEnrollmentToken=$state.tokens.customerEnrollment }
     Save-Json 'access-management.json' $am
     foreach ($service in $ports.Keys) {
         $config = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; TenantBoundary=@{ Enabled='true'; ProbeUrl="http://127.0.0.1:$($ports[$service])/"; CustomerTenants=@{ 'reference-customer'='T001'; 'other-customer'='T002'; C001='T001'; C002='T002' } } } }
@@ -195,13 +212,14 @@ if ($Action -in @('Prepare','Start')) {
                     # revision at startup; no fabricated content or acceptance is seeded.
                     $config.Monergy.AccountAgreements = $publication
                 }
+                if ($EnableCustomerRegistration) { $config.Monergy.CustomerRegistration=@{ Enabled='true'; EnrollmentToken=$state.tokens.customerEnrollment } }
                 if ($EnableEmailAccess) {
                     $smtpPort = 587
-                    if (-not [string]::IsNullOrWhiteSpace($env:MONERGY_EMAIL_SMTP_PORT)) { $smtpPort = [int]$env:MONERGY_EMAIL_SMTP_PORT }
+                    if ($null -ne $emailConfiguration.PSObject.Properties['SmtpPort'] -and -not [string]::IsNullOrWhiteSpace([string]$emailConfiguration.SmtpPort)) { $smtpPort = [int]$emailConfiguration.SmtpPort }
                     $config.Monergy.CustomerEmailAccess = @{
-                        Enabled='true'; SmtpHost=$env:MONERGY_EMAIL_SMTP_HOST; SmtpPort=$smtpPort
-                        SmtpUser=$env:MONERGY_EMAIL_SMTP_USER; SmtpPassword=$env:MONERGY_EMAIL_SMTP_PASSWORD
-                        From=$env:MONERGY_EMAIL_FROM; Secret=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.emailAccess))
+                        Enabled='true'; SmtpHost=$emailConfiguration.SmtpHost; SmtpPort=$smtpPort
+                        SmtpUser=$emailConfiguration.SmtpUser; SmtpPassword=$emailConfiguration.SmtpPassword
+                        From=$emailConfiguration.From; Secret=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.emailAccess))
                     }
                 }
             } elseif ($service -eq 'consent') {

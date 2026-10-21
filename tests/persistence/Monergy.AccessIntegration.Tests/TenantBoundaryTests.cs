@@ -11,6 +11,30 @@ namespace Monergy.AccessIntegration.Tests;
 public sealed class TenantBoundaryTests
 {
     [Theory]
+    [InlineData(true, "T001", "Allow", 200)]
+    [InlineData(true, "T001", "Deny", 403)]
+    [InlineData(true, "T002", "Allow", 503)]
+    [InlineData(false, "T001", "Allow", 403)]
+    public async Task NewCustomersRequireMatchingCurrentOwnerDecision(bool relationships, string decisionTenant, string outcome, int expected)
+    {
+        var invoked = false;
+        var options = Options();
+        var middleware = new TenantBoundaryMiddleware(_ => { invoked = true; return Task.CompletedTask; }, new()
+        {
+            Service=options.Service, CapabilityPrefix=options.CapabilityPrefix, ProbeUrl=options.ProbeUrl,
+            CustomerTenants=options.CustomerTenants, CustomerRelationships=relationships
+        });
+        var http=Http(); http.Request.Path="/contracts/cid-021/v1";
+        http.Request.Body=new MemoryStream(Encoding.UTF8.GetBytes("""
+            {"contractName":"GetDocument","security":{"actor":{"actorId":"A100","authenticationContextId":"token"},"access":{"customerId":"customer-new"}},"payload":{"customerId":"customer-new","documentId":"D001"}}
+            """));
+        using var client=Client(new CustomerAccessDecision("decision-new",outcome,decisionTenant,"A100","customer-new","evidence.document.read",
+            "customer-advice","Granted","Self",3,2,1,0,DateTimeOffset.UtcNow));
+        await middleware.InvokeAsync(http,client);
+        Assert.Equal(expected,http.Response.StatusCode); Assert.Equal(expected==200,invoked);
+    }
+
+    [Theory]
     [InlineData("Allow", "C001", 1, 200)]
     [InlineData("Deny", "C001", 1, 403)]
     [InlineData("Allow", "C002", 1, 503)]

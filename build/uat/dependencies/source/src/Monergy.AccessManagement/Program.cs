@@ -89,6 +89,8 @@ if (customerRelationships)
 }
 
 var app = builder.Build();
+if(customerRelationships && builder.Configuration["Monergy:AccessManagement:CustomerEnrollmentToken"] is { } enrollmentToken)
+    app.MapCustomerEnrollment(enrollmentToken);
 if (customerRelationships)
 {
     app.MapCustomerRelationships();

@@ -18,7 +18,7 @@ public sealed class PostgresCustomerEmailAccess(PostgresTenantSessions sessions)
                 max(c.customer_id),max(c.version),@Now,@Now+interval '5 minutes',@Now,1
             FROM customer_identity.tenant_principals p
             JOIN customer_identity.current_customers c ON c.owner_actor_id=p.actor_id AND c.active
-            WHERE p.normalized_email=@Email
+            WHERE p.normalized_email=@Email AND NOT EXISTS(SELECT 1 FROM customer_identity.registered_credentials r WHERE r.actor_id=p.actor_id)
             GROUP BY p.normalized_email,p.actor_id HAVING count(*)=1
             ON CONFLICT(normalized_email) DO UPDATE SET
                 challenge_hash=EXCLUDED.challenge_hash,code_hash=EXCLUDED.code_hash,protected_code=EXCLUDED.protected_code,
@@ -47,6 +47,7 @@ public sealed class PostgresCustomerEmailAccess(PostgresTenantSessions sessions)
                 consumed=(code_hash=@CodeHash),
                 protected_code=CASE WHEN code_hash=@CodeHash OR attempts+1>=5 THEN NULL ELSE protected_code END
             WHERE challenge_hash=@ChallengeHash AND NOT consumed AND delivered AND expires_at>@Now AND attempts<5
+              AND NOT EXISTS(SELECT 1 FROM customer_identity.registered_credentials r WHERE r.actor_id=customer_identity.email_access_challenges.actor_id)
             RETURNING actor_id AS ActorId,customer_id AS CustomerId,customer_version AS CustomerVersion,
                 code_hash=@CodeHash AS Verified;
             """, new { ChallengeHash = challengeHash, CodeHash = codeHash, Now = now }, transaction, cancellationToken: ct)).ConfigureAwait(false);
@@ -63,7 +64,8 @@ public sealed class PostgresCustomerEmailAccess(PostgresTenantSessions sessions)
         return await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
             SELECT EXISTS(SELECT 1 FROM customer_identity.current_customers WHERE customer_id=@CustomerId
                 AND owner_actor_id=@ActorId AND version=@CustomerVersion AND active)
-                AND (SELECT count(*) FROM customer_identity.current_customers WHERE owner_actor_id=@ActorId AND active)=1;
+                AND (SELECT count(*) FROM customer_identity.current_customers WHERE owner_actor_id=@ActorId AND active)=1
+                AND NOT EXISTS(SELECT 1 FROM customer_identity.registered_credentials WHERE actor_id=@ActorId);
             """, customer, cancellationToken: ct)).ConfigureAwait(false);
     }
 
