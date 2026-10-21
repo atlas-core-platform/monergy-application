@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-103 Basic KYC (P1-04). Original29:12 Complete,17 Partial,0 Pending after paired merges. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-104 Customer Profile (P1-03). Original29:13 Complete,16 Partial,0 Pending after paired merges. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-103 update — Basic KYC
+## Current T1-104 update — Customer Profile
+
+My Profile now combines existing owned name/contact/DOB/protected PAN editing with a fresh KYC-owner status summary, assigned reviewer, latest note, status date and review/history action. Empty, unavailable, disabled and changed-notice states remain distinct. Account agreements, Consent/privacy, connections and sessions are linked to their existing owner journeys. Saved profile success requires exact returned revision and submitted fields; lost save authorization hides private profile details.
+
+P1-03 is Complete for the supported customer profile/KYC journey (MON-ID-005; profile/KYC portion of MON-FIN-002). This does not complete broader Settings: MON-ID-006/012, MON-CON-010, MFA/devices, account closure and retention choices remain explicitly open in requirements tracking. 82 UI and97 focused owner backend checks pass, plus TypeScript/ESLint/Vite. Receipt: [t1-104-customer-profile.md](t1-104-customer-profile.md). Physical database and live UAT remain unverified. After paired merges:13 Complete,16 Partial,0 Pending;16 original journeys unfinished. T1-104 =103 implementation units+1 governance closure. Acceptance stays T1-06.
+
+## Previous T1-103 update — Basic KYC
 
 Customer submission, exact scanned identity/address evidence, operator-published notice and assigned manual reviewer, review decisions, withdrawal/resubmission and immutable history complete the configured manual Basic KYC journey. Reviewer assignment does not grant document access: existing Advisor document authorization and current customer-advice Consent remain required. Acceptance is labelled Manual review accepted, never government/provider verified. Receipt: [t1-103-basic-kyc.md](t1-103-basic-kyc.md). Onboarding configuration: [BASIC-KYC.md](../uat/BASIC-KYC.md).
 

@@ -98,9 +98,10 @@ it('shows no agreements or acceptance action outside an owned customer context',
   const api = new AccessApi(session); const call = vi.spyOn(api, 'selfAccountAgreements'); mount({ ...state(api), authorization: null });
   expect(screen.getByText(/Connect to your own customer workspace/)).toBeVisible(); expect(call).not.toHaveBeenCalled();
 });
-it('keeps anonymous direct agreement entry behind the workspace gate', () => {
+it('keeps anonymous direct agreement entry behind the workspace gate', async () => {
   render(<FoundationProvider appearance="midnight"><WorkspaceSessionProvider area="product"><WorkspaceEntry area="product"><CustomerAccountAgreementsExperience /></WorkspaceEntry></WorkspaceSessionProvider></FoundationProvider>);
-  expect(screen.getByLabelText('Local access key')).toBeVisible(); expect(screen.queryByRole('heading', { name: 'Account agreements' })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: 'Use a local test key' }));
+  expect(await screen.findByLabelText('Local access key')).toBeVisible(); expect(screen.queryByRole('heading', { name: 'Account agreements' })).not.toBeInTheDocument();
 });
 it('does not follow a late save response after the customer context changes', async () => {
   const api = new AccessApi(session); let resolve: (v: unknown) => void = () => undefined; let operationId = '';

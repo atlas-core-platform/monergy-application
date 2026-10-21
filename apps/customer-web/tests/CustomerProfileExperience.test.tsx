@@ -176,3 +176,16 @@ it('does not claim a saved birth date when the receipt version reloads a differe
   expect(screen.queryByText('Your profile has been saved.')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Save profile' })).toBeDisabled();
 });
+
+it.each([{ displayName: 'Someone else' }, { mobile: '+441234567890' }, { version: 4 }])('does not claim a save whose readback differs from the confirmed revision: %s',async mismatch=>{
+ const api=new AccessApi(session);let changed=false;vi.spyOn(api,'selfCustomerProfile').mockImplementation((method,body)=>{
+  if(method==='PUT'){changed=true;return Promise.resolve({operationId:(body as {operationId:string}).operationId,version:3});}
+  return Promise.resolve(changed?{...profile(),displayName:'Updated Customer',version:3,...mismatch}:profile());
+ });mount(state(api));await edit();save();expect(await screen.findByText(/save result is not confirmed/)).toBeVisible();expect(screen.queryByText('Your profile has been saved.')).not.toBeInTheDocument();
+});
+it('clears profile and account details when save authorization is revoked',async()=>{
+ const api=new AccessApi(session);vi.spyOn(api,'selfCustomerProfile').mockImplementation(method=>method==='PUT'?Promise.reject(new AccessApiError(403,'denied')):Promise.resolve(profile()));mount(state(api));await edit();save();await screen.findByText(/save result is not confirmed/);expect(screen.queryByText('owner@example.test')).not.toBeInTheDocument();expect(screen.queryByRole('link',{name:'Account agreements'})).not.toBeInTheDocument();
+});
+it('connects the owned profile to existing account controls',async()=>{
+ const api=new AccessApi(session);vi.spyOn(api,'selfCustomerProfile').mockResolvedValue(profile());mount(state(api));await screen.findByText('owner@example.test');for(const[name,path]of [['Account agreements','/settings/agreements'],['Consent & privacy','/consent'],['Connected accounts','/connections'],['Sessions and sign-in activity','/settings/sessions']])expect(screen.getByRole('link',{name})).toHaveAttribute('href',path);
+});
