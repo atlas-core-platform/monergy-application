@@ -227,7 +227,7 @@ public static class ProductWorkspaceEndpoints
             var metadata = result.Data;
             if (metadata.DocumentId != documentId ||
                 metadata.CustomerId != customer.CustomerId ||
-                metadata.Versions.Count is < 1 or > 100 ||
+                metadata.Versions.Count < 1 ||
                 metadata.Versions.Select(version => version.DocumentVersionId)
                     .Distinct(StringComparer.Ordinal).Count() != metadata.Versions.Count ||
                 metadata.Versions.Select(version => version.Version).Distinct().Count() != metadata.Versions.Count ||
@@ -790,7 +790,7 @@ public sealed class ProductDocumentProcessingClient : IDisposable
     public void Dispose() => client.Dispose();
 }
 
-public sealed class ProductEvidenceClient : IDisposable
+public sealed partial class ProductEvidenceClient : IDisposable
 {
     private static readonly HashSet<string> LibraryContentTypes = new(StringComparer.OrdinalIgnoreCase)
     { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };

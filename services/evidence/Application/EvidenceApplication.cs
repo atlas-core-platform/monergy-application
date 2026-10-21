@@ -11,7 +11,8 @@ public sealed record EvidenceContentDescriptor(
     long ContentLength = 0,
     string? StorageKey = null,
     string? StorageVersionId = null,
-    EvidenceMalwareCheck? MalwareCheck = null);
+    EvidenceMalwareCheck? MalwareCheck = null,
+    EvidenceSourceLocation? SourceLocation = null);
 
 public sealed record EvidenceVersionRecord(
     string DocumentId,
@@ -29,7 +30,9 @@ public sealed record EvidenceVersionRecord(
     long ContentLength = 0,
     string? ContentStorageKey = null,
     string? ContentStorageVersionId = null,
-    string? TenantId = null, EvidenceMalwareCheck? MalwareCheck = null);
+    string? TenantId = null, EvidenceMalwareCheck? MalwareCheck = null,
+    string? ExpectedPreviousVersionId = null,
+    EvidenceSourceLocation? SourceLocation = null);
 
 public sealed record EvidenceSaveResult(EvidenceVersionRecord Version, bool Created, bool FirstVersion);
 
@@ -80,8 +83,13 @@ public sealed class EvidenceApplication(
     private static readonly HashSet<string> SupportedContentTypes =
         new(StringComparer.OrdinalIgnoreCase) { "application/pdf", "image/png", "image/jpeg", "text/plain", "text/csv", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
 
+    public Task<ContractResult<DocumentVersionCreatedResult>> CreateDocumentVersionAsync(
+        ContractRequest<CreateDocumentVersion> request,
+        CancellationToken cancellationToken = default) => CreateDocumentVersionAsync(request, null, cancellationToken);
+
     public async Task<ContractResult<DocumentVersionCreatedResult>> CreateDocumentVersionAsync(
         ContractRequest<CreateDocumentVersion> request,
+        string? expectedPreviousVersionId,
         CancellationToken cancellationToken = default)
     {
         var contextError = ContractGuard.Validate(request, Vs02ContractNames.CreateDocumentVersion);
@@ -123,7 +131,7 @@ public sealed class EvidenceApplication(
                 "The staged evidence content could not be verified.");
         }
 
-        if (payload.ContentReference.StartsWith("reference://customer-intake/", StringComparison.Ordinal) &&
+        if ((expectedPreviousVersionId is not null || payload.ContentReference.StartsWith("reference://customer-intake/", StringComparison.Ordinal)) &&
             !EvidenceMalwarePolicy.Verified(content.MalwareCheck, content.Sha256, timeProvider.GetUtcNow()))
             return ContractResult<DocumentVersionCreatedResult>.Rejected(request, "evidence.scan.unverified",
                 ContractErrorCategory.PreconditionFailed, "The uploaded content has no current verified malware check.");
@@ -145,7 +153,7 @@ public sealed class EvidenceApplication(
             content.ContentLength,
             content.StorageKey,
             content.StorageVersionId,
-            WorkloadTenant(request.Security), content.MalwareCheck);
+            WorkloadTenant(request.Security), content.MalwareCheck, expectedPreviousVersionId, content.SourceLocation);
 
         try
         {

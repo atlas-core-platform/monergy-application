@@ -1,4 +1,5 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
+import DocumentVault from './DocumentVault';
 import { Alert, Button, Checkbox, Drawer, Input, Select, Skeleton, Spin, Tag, Upload } from 'antd';
 import type { UploadProps } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -762,11 +763,13 @@ export default function EvidenceExperience() {
         </aside>
       </section>
 
+      <DocumentVault onOpen={setSelectedEvidence} refreshKey={confirmation?.documentVersionId ?? ''} />
       <section className="product-recent" aria-labelledby="evidence-library-title">
         <div className="product-section-heading">
           <div>
             <p className="workspace-eyebrow">YOUR DOCUMENTS</p>
             <h2 id="evidence-library-title">Your documents</h2>
+            <p>Recent 100 versions. Use the vault above to browse every category and page.</p>
           </div>
           <span>
             {evidence.length ? `${String(evidence.length)} available` : 'No documents yet'}

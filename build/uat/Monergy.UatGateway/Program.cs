@@ -57,6 +57,7 @@ app.UseStaticFiles();
 app.UseRouting();
 app.MapTenantSetup();
 app.MapProductWorkspace();
+app.MapProductDocumentVault();
 app.MapProductFinancialProfile();
 app.MapProductNetWorth();
 app.MapProductLoanRecords();

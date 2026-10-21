@@ -126,7 +126,7 @@ it('reviews the exact file before submitting and shows the upload confirmation',
   expect(submit.mock.calls.filter((call) => call[1] === 'POST')).toHaveLength(0);
   await user.click(screen.getByRole('button', { name: 'Upload document' }));
   await waitFor(() => {
-    expect(submit).toHaveBeenCalledTimes(3);
+    expect(submit.mock.calls.filter(call => !call[0].startsWith('v1/document-vault'))).toHaveLength(3);
   });
   const write = submit.mock.calls.find((call) => call[1] === 'POST');
   expect(write?.[0]).toBe('v1/evidence');

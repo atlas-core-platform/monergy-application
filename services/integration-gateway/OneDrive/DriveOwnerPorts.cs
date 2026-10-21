@@ -57,7 +57,7 @@ public sealed class DriveOwners(CustomerOwnerClient identity, TenantAccessClient
         await RequireUploadAsync(http, customer);
         using var stage = new HttpRequestMessage(HttpMethod.Post, new Uri(evidenceRoot, "internal/local/v1/evidence/content"));
         stage.Headers.Add("X-Monergy-Product-Token", token);
-        stage.Content = JsonContent.Create(new { operationId = operation, contentBase64 = Convert.ToBase64String(content), contentType = file.MimeType });
+        stage.Content = JsonContent.Create(new { operationId = operation, contentBase64 = Convert.ToBase64String(content), contentType = file.MimeType, sourceLocation = new { provider = "onedrive", folderId = connection.FolderId, fileId = file.Id, fileVersion = file.Version } });
         var descriptor = await SendAsync<DriveEvidenceDescriptor>(stage, http.RequestAborted);
         if (descriptor.Sha256 != hash || descriptor.ContentLength != content.Length ||
             !descriptor.Reference.StartsWith("reference://customer-intake/", StringComparison.Ordinal))
