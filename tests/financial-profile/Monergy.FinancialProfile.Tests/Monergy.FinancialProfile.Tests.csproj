@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductNetWorthEndpoints.cs" Link="ProductNetWorthEndpoints.cs" />
+    <Compile Include="../../../build/uat/Monergy.UatGateway/ProductMonthlyCashflowEndpoints.cs" Link="ProductMonthlyCashflowEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductLoanRecordEndpoints.cs" Link="ProductLoanRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductInvestmentRecordEndpoints.cs" Link="ProductInvestmentRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductPropertyRecordEndpoints.cs" Link="ProductPropertyRecordEndpoints.cs" />

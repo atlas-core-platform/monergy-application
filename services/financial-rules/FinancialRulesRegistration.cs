@@ -45,7 +45,7 @@ public static class FinancialRulesRegistration
             client.Timeout = TimeSpan.FromSeconds(10); // LOCAL/CI engineering timeout; not a client target.
         });
         services.AddTransient<FinancialRulesApplication>();
-        AddNetWorth(services,configuration,false);
+        AddNetWorth(services,configuration,false); AddMonthlyCashflow(services,configuration,false);
         return services;
     }
 
@@ -54,10 +54,19 @@ public static class FinancialRulesRegistration
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
         AddCommon(services, configuration);
         services.AddSingleton<ICalculationRepository, PostgresCalculationRepository>();
-        AddNetWorth(services,configuration,true);
+        AddNetWorth(services,configuration,true); AddMonthlyCashflow(services,configuration,true);
         return services;
     }
 
+    private static void AddMonthlyCashflow(IServiceCollection services,IConfiguration configuration,bool physical)
+    {
+        if(!configuration.GetValue<bool>("Monergy:MonthlyCashflow:Enabled"))return;
+        services.AddSingleton(new MonthlyCashflowRule(configuration));
+        services.AddSingleton<IMonthlyCashflowPositionReader,MonthlyCashflowPositionClient>();
+        if(physical)services.AddSingleton<IMonthlyCashflowCalculationRepository,PostgresMonthlyCashflowCalculations>();
+        else services.AddSingleton<IMonthlyCashflowCalculationRepository,InMemoryMonthlyCashflowCalculations>();
+        services.AddSingleton<MonthlyCashflowCalculationsApplication>();
+    }
     private static void AddNetWorth(IServiceCollection services,IConfiguration configuration,bool physical)
     {
         if(!configuration.GetValue<bool>("Monergy:NetWorth:Enabled"))return;

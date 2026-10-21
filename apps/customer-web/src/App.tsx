@@ -28,6 +28,7 @@ const SelfSessionsExperience = lazy(() => import('./product/SelfSessionsExperien
 const ProductReportsExperience = lazy(() => import('./product/ProductReportsExperience'));
 const EvidenceExperience = lazy(() => import('./product/EvidenceExperience'));
 const FinancialProfileExperience = lazy(() => import('./product/FinancialProfileExperience'));
+const MonthlyCashflowExperience = lazy(() => import('./product/MonthlyCashflowExperience'));
 const NetWorthExperience = lazy(() => import('./product/NetWorthExperience'));
 const ProductActionCentreExperience = lazy(() => import('./product/ProductActionCentreExperience'));
 const AccessExperience = lazy(() => import('./access/AccessExperience'));
@@ -136,6 +137,7 @@ function RouteContent() {
         <EvidenceExperience />
       </Suspense>
     );
+  if (window.location.pathname === '/monthly-cashflow') return <Suspense fallback={<main className="access-loading" aria-busy="true">Loading income and expenses…</main>}><MonthlyCashflowExperience /></Suspense>;
   if (window.location.pathname === '/net-worth') return <Suspense fallback={<main className="access-loading" aria-busy="true">Loading net worth…</main>}><NetWorthExperience /></Suspense>;
   if (window.location.pathname === '/finances')
     return (
@@ -309,7 +311,7 @@ function WorkspaceApplication() {
             '/',
             '/evidence',
             '/finances',
-            '/net-worth',
+            '/net-worth', '/monthly-cashflow',
             '/actions',
             '/access',
             '/reports',
@@ -351,7 +353,7 @@ function WorkspaceApplication() {
       ? `${current?.label ?? 'Overview'} · Organization Settings · Monergy`
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
-  const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/financial-qa', '/search', '/reports', '/consent', '/connections', '/profile', '/kyc', '/kyc/reviews', '/settings/sessions', '/settings/agreements'].includes(path);
+  const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/monthly-cashflow', '/financial-qa', '/search', '/reports', '/consent', '/connections', '/profile', '/kyc', '/kyc/reviews', '/settings/sessions', '/settings/agreements'].includes(path);
   const gated = inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';
