@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-104 Customer Profile (P1-03). Original29:13 Complete,16 Partial,0 Pending after paired merges. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-105 Liabilities dashboard (P1-21). Original29:14 Complete,15 Partial,0 Pending after paired merges. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-104 update — Customer Profile
+## Current T1-105 update — Liabilities dashboard
+
+Workspace > Liabilities presents the complete saved customer-reviewed debt inventory across loans, credit cards and other liabilities, using the authoritative Financial Rules total. Category filters, balance date/currency, customer-confirmed coverage, owner gap messages, paged saved history and fresh exact-result/source confirmation preserve the existing owners. Update uses the existing Net Worth inventory review. Receipt: [t1-105-liabilities-dashboard.md](t1-105-liabilities-dashboard.md).
+
+37 focused UI checks, TypeScript, changed-source/test ESLint and Vite pass. Focused NetWorthJourney owner checks are recorded in the receipt. No API/schema/package changes. Creditor verification, loan/debt reconciliation, physical PostgreSQL and full authenticated UAT remain open. After paired merges:14 Complete,15 Partial,0 Pending;15 original journeys unfinished. T1-105=104 implementation units+1 governance closure. Broad Settings and full requirement acceptance remain separate.
+
+## Previous T1-104 update — Customer Profile
 
 My Profile now combines existing owned name/contact/DOB/protected PAN editing with a fresh KYC-owner status summary, assigned reviewer, latest note, status date and review/history action. Empty, unavailable, disabled and changed-notice states remain distinct. Account agreements, Consent/privacy, connections and sessions are linked to their existing owner journeys. Saved profile success requires exact returned revision and submitted fields; lost save authorization hides private profile details.
 

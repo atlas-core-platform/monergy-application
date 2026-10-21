@@ -1,4 +1,5 @@
 import AssetDashboard from '../product/AssetDashboard';
+import LiabilitiesDashboard from '../product/LiabilitiesDashboard';
 import NetWorthSummary from '../product/NetWorthSummary';
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import type { WorkspaceIconName } from '@monergy/ui-foundation';
@@ -227,7 +228,7 @@ export default function WorkspaceHome() {
         </div>
       </section>
 
-      {api && context && canReadFinancial && capabilities.has('financial-rules.calculation.execute') && <><NetWorthSummary api={api} customerId={context.customerId} /><AssetDashboard api={api} customerId={context.customerId} canReadDocuments={canReadDocuments} /></>}
+      {api && context && canReadFinancial && capabilities.has('financial-rules.calculation.execute') && <><NetWorthSummary api={api} customerId={context.customerId} /><AssetDashboard api={api} customerId={context.customerId} canReadDocuments={canReadDocuments} /><LiabilitiesDashboard api={api} customerId={context.customerId} canReadDocuments={canReadDocuments} /></>}
 
       {(canReadFinancial || canReadDocuments) && (
         <section className="workspace-passport" aria-labelledby="workspace-passport-title">
