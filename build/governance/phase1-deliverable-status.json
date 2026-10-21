@@ -1,22 +1,22 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-106",
-  "applicationBase": "bd2789d5525fbb55a7bf4f913ed0eeb365f64e15",
+  "asOf": "T1-107",
+  "applicationBase": "dac379b0867a7e8833cc84fe2098fb2c5cd304c3",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 13,
+    "libraryVersion": 14,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook through T1-105 reconciled; T1-106 request-local current-owner indexing freshness. P1-10 remains Partial; acceptance unchanged.",
+    "reviewThrough": "Workbook through T1-106; T1-107 completes supported customer-reviewed monthly Income and Expenses dashboards. Business acceptance unchanged.",
     "libraryFileId": "libfile_7747823175948191ad6e56244bee8cf2"
   },
   "counts": {
     "originalDeliverables": 29,
-    "fullyImplemented": 14,
-    "partial": 15,
+    "fullyImplemented": 16,
+    "partial": 13,
     "pendingBusinessJourneys": 0,
-    "remainingOriginalDeliverables": 15,
-    "numberedUnitsAfterPairedMerge": 106,
-    "mergedImplementationUnitsAfterPairedMerge": 105,
+    "remainingOriginalDeliverables": 13,
+    "numberedUnitsAfterPairedMerge": 107,
+    "mergedImplementationUnitsAfterPairedMerge": 106,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -229,23 +229,23 @@
       "id": "P1-19",
       "area": "Dashboard",
       "name": "Income",
-      "state": "Partial",
-      "existing": "Two explicitly selected saved income versions now compare side by side with matching payer/type/currency, equal-length separate periods and distinct sources. Original totals, dates, revisions and source history stay visible. Coverage counts remain available.",
-      "remaining": "Full monthly/household income snapshot, reconciliation/completeness, unequal-length calendar-month comparison and Financial Rules aggregates/changes remain open. Selected records do not establish total or verified income. Central audit and UAT remain open.",
-      "units": "T1-06\u201309; T1-75",
+      "state": "Complete",
+      "existing": "T1-107 completes customer-reviewed monthly income/expense dashboards: named household/member scope, categories, exact whole-month record imports or declarations, explicit coverage, duplicate/source-overlap checks, authoritative Financial Rules totals and month comparisons, immutable paged history and exact source links.",
+      "remaining": "Customer-confirmed monthly coverage is not independent payer/bank verification. P1-13/14 record reconciliation and recurring/provider lifecycle remain separate. Physical PostgreSQL migrations/grants/restart and full authenticated live UAT unverified.",
+      "units": "T1-06\u201309; T1-75; T1-107",
       "requirements": "MON-DAS-001/004; MON-FIN-003",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-75-income-period-comparison.md"
+      "receipt": "build/governance/t1-107-monthly-cashflow.md"
     },
     {
       "id": "P1-20",
       "area": "Dashboard",
       "name": "Expenses",
-      "state": "Partial",
-      "existing": "Two explicitly selected saved expense versions compare side by side with matching category/currency, equal-length separate periods and distinct sources. Original totals, dates, revisions and source history stay visible. Coverage counts remain available.",
-      "remaining": "Full monthly/household expense snapshot, reconciliation/completeness, unequal-length calendar-month comparison and Financial Rules aggregates/changes remain open. Selected records do not establish total or verified spending. Central audit and UAT remain open.",
-      "units": "T1-06\u201309; T1-76",
+      "state": "Complete",
+      "existing": "T1-107 completes customer-reviewed monthly income/expense dashboards: named household/member scope, categories, exact whole-month record imports or declarations, explicit coverage, duplicate/source-overlap checks, authoritative Financial Rules totals and month comparisons, immutable paged history and exact source links.",
+      "remaining": "Customer-confirmed monthly coverage is not independent payer/bank verification. P1-13/14 record reconciliation and recurring/provider lifecycle remain separate. Physical PostgreSQL migrations/grants/restart and full authenticated live UAT unverified.",
+      "units": "T1-06\u201309; T1-76; T1-107",
       "requirements": "MON-DAS-001/004; MON-FIN-004",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-76-expense-period-comparison.md"
+      "receipt": "build/governance/t1-107-monthly-cashflow.md"
     },
     {
       "id": "P1-21",

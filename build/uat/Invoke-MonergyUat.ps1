@@ -347,6 +347,7 @@ if ($Action -in @('Prepare','Start')) {
                 }
             } elseif ($onboarding -and $service -eq 'financial-rules') {
                 $config.Monergy.NetWorth=@{ Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'; RuleVersion='1.0.0'; Formula='TOTAL_ASSETS_MINUS_TOTAL_LIABILITIES' }
+                $config.Monergy.MonthlyCashflow=@{ Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'; RuleVersion='1.0.0' }
             } elseif ($onboarding -and $service -eq 'reporting') {
                 $config.Monergy.ProductReporting=@{
                     Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'

@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-106 indexing freshness (P1-10 Partial). Original29:14 Complete,15 Partial,0 Pending. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-107 monthly Income and Expenses dashboards. Original29:16 Complete,13 Partial,0 Pending. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-106 update — Indexing freshness
+## Current T1-107 update — Monthly Income and Expenses
+
+P1-19 and P1-20 are Complete for the supported customer-reviewed monthly dashboard journey. Financial Profile owns immutable month-end household reviews with member/category/source detail and exact saved record imports. Financial Rules owns complete-coverage totals and changes between completed calendar months. Overview and review UI preserve missing-versus-zero, access checks, source history, retries and paged comparisons. [Receipt](t1-107-monthly-cashflow.md).
+
+P1-13/14 remain Partial for broader income/expense record reconciliation and provider/lifecycle behavior. Customer declarations are explicit, not externally verified financial truth. After paired merges:16 Complete,13 Partial,0 Pending;106 implementation units+1 governance closure. No product decision is required for this increment. Physical/live UAT remains unverified; acceptance T1-06 unchanged.
+
+## Previous T1-106 update — Indexing freshness
 
 Search, retrieval-context and explicit refresh now read current owners into isolated request-local derived indexes. Removed selections, owner failures and scope mismatch fail closed; concurrent calls cannot overwrite another request's projection. CID-046 receives the current tenant search boundary. 67 focused backend checks pass. No UI/schema/package changes. [Receipt](t1-106-index-freshness.md).
 

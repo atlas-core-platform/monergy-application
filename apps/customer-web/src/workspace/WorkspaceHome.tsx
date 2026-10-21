@@ -1,3 +1,4 @@
+import MonthlyCashflowDashboard from '../product/MonthlyCashflowDashboard';
 import AssetDashboard from '../product/AssetDashboard';
 import LiabilitiesDashboard from '../product/LiabilitiesDashboard';
 import NetWorthSummary from '../product/NetWorthSummary';
@@ -32,6 +33,7 @@ const journeys: {
     capability: 'financial-profile.profile.read',
     action: 'Open Action Centre',
   },
+  { title: 'Review monthly income and expenses', description: 'Review household totals, coverage and exact sources for a completed month.', href: '/monthly-cashflow', icon: 'reports', capability: 'financial-rules.calculation.execute', action: 'Review income and expenses' },
   {
     title: 'Review net worth',
     description: 'Review a complete dated inventory, calculate assets minus liabilities and follow saved sources.',
@@ -228,7 +230,7 @@ export default function WorkspaceHome() {
         </div>
       </section>
 
-      {api && context && canReadFinancial && capabilities.has('financial-rules.calculation.execute') && <><NetWorthSummary api={api} customerId={context.customerId} /><AssetDashboard api={api} customerId={context.customerId} canReadDocuments={canReadDocuments} /><LiabilitiesDashboard api={api} customerId={context.customerId} canReadDocuments={canReadDocuments} /></>}
+      {api && context && canReadFinancial && capabilities.has('financial-rules.calculation.execute') && <><MonthlyCashflowDashboard api={api} customerId={context.customerId} /><NetWorthSummary api={api} customerId={context.customerId} /><AssetDashboard api={api} customerId={context.customerId} canReadDocuments={canReadDocuments} /><LiabilitiesDashboard api={api} customerId={context.customerId} canReadDocuments={canReadDocuments} /></>}
 
       {(canReadFinancial || canReadDocuments) && (
         <section className="workspace-passport" aria-labelledby="workspace-passport-title">
