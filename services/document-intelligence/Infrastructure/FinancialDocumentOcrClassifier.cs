@@ -98,7 +98,7 @@ internal static class FinancialDocumentOcrClassifier
     internal static string AfterLabel(string value) => value[(value.IndexOf(':') + 1)..].Trim();
     private static DocumentRecognitionException Incomplete() => new(DocumentRecognitionFailure.Incomplete);
 
-    private static OcrLine[] ParseTsv(string tsv)
+    internal static OcrLine[] ParseTsv(string tsv)
     {
         if (tsv.Length > 1_048_576) throw Incomplete();
         using var reader = new StringReader(tsv);

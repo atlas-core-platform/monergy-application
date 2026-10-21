@@ -13,7 +13,7 @@ const position: NetWorthPosition = { positionId: 'position-saved', operationId: 
 const result: NetWorthResult = { calculationId: 'networth-saved', operationId: 'b'.repeat(32), customerId: position.customerId, position, ruleId: 'monergy.net-worth', ruleVersion: '1.0.0', definitionHash: 'a'.repeat(64), numericSemantics: 'Exact reviewed asset values minus outstanding liabilities', state: 'CALCULATED', totalAssets: '1000.10', totalLiabilities: '0.00', netWorth: '1000.10', issues: [], recordedBy: 'actor-001', recordedAt: '2026-10-20T00:00:00Z' };
 const page = <T,>(items: T[] = []) => ({ items, hasMore: false, nextBeforeId: null });
 function element(api: AccessApi, props: Partial<{ canRead: boolean; canWrite: boolean; canCalculate: boolean; canReadDocuments: boolean; customerId: string }> = {}) { return <FoundationProvider appearance="midnight"><NetWorthExperience api={api} customerId={position.customerId} canRead canWrite canCalculate canReadDocuments {...props} /></FoundationProvider>; }
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/'); });
 function backend(api: AccessApi, options: { initial?: boolean; issue?: string } = {}) {
   let saved = options.initial ? position : null; let calculated = options.initial ? result : null;
   return vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
@@ -105,4 +105,19 @@ it('imports exact saved source versions without confirming completeness or permi
 });
 it.each(['truncated', 'customer', 'date'])('rejects %s source imports without applying partial inventory rows', async field => {
   const api = new AccessApi(session); const changed = structuredClone(assetSnapshot); if (field === 'truncated') changed.investments.hasMore = true; if (field === 'customer') { const item = changed.investments.items.at(0); if (item) item.customerId = 'foreign'; } if (field === 'date') changed.asOfDate = '2026-09-30'; vi.spyOn(api, 'product').mockImplementation(path => Promise.resolve(path.startsWith('v1/asset-records/snapshot') ? changed : path.startsWith('v1/liability-records/snapshot') ? { asOfDate: draft.asOfDate, currency: 'INR', items: [], hasMore: false } : page())); render(element(api)); const user = userEvent.setup(); const drawer = await form(user); await user.click(within(drawer).getByRole('button', { name: 'Add saved records for this date and currency' })); await within(drawer).findByText(/No partial import was applied/); expect(within(drawer).queryByLabelText('Name for line 1')).not.toBeInTheDocument();
+});
+
+it('opens an exact cited calculation without executing a new calculation', async () => {
+  window.history.replaceState({}, '', '/net-worth?calculation=networth-saved');
+  const api = new AccessApi(session); const request = backend(api, { initial: true }); render(element(api));
+  expect(await screen.findByRole('dialog', { name: 'Saved net worth result' })).toHaveTextContent('INR 1,000.10');
+  expect(request.mock.calls.some(([path, method]) => path === 'v1/net-worth/calculations/networth-saved' && method === 'GET')).toBe(true);
+  expect(request.mock.calls.some(([, method]) => method === 'POST')).toBe(false);
+});
+it('does not fetch a cited calculation without calculation access', async () => {
+  window.history.replaceState({}, '', '/net-worth?calculation=networth-saved');
+  const api = new AccessApi(session); const request = backend(api, { initial: true }); render(element(api, { canCalculate: false }));
+  await screen.findByRole('button', { name: 'View saved inventory: 2026-10-01' });
+  expect(request.mock.calls.some(([path]) => path.includes('/calculations'))).toBe(false);
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

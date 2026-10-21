@@ -8,7 +8,7 @@ namespace Monergy.Services.AiIntelligence.Qa;
 
 public sealed record QaStoredRecord(string TenantId, string CustomerId, string ActorId, string RequestHash,
     QaAnswer Answer, IReadOnlyList<string> SearchRecordIds, IReadOnlyList<QaClaim> RetrievedClaims,
-    string PlanJson, string SelectionJson, string PlanModel, bool AllowModelProcessing, string PermissionNotice);
+    string PlanJson, string SelectionJson, string PlanModel, bool AllowModelProcessing, string PermissionNotice, string? SourceDocumentVersionId = null, string? SourcePositionId = null);
 
 // LOCAL/CI single-writer owner storage. A process semaphore plus an exclusive
 // file lease prevents split writes. Every persisted byte (including questions,

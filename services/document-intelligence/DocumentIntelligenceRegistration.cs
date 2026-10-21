@@ -26,6 +26,7 @@ public static class DocumentIntelligenceRegistration
         services.AddSingleton<IEvidenceContentReader, HttpEvidenceContentReader>();
         services.AddSingleton<IExecutionPolicy, OwnerBackedExecutionPolicy>();
         services.AddSingleton<DocumentProcessingApplication>();
+        services.AddSingleton<QaDocumentReader>();
         return services;
     }
 }

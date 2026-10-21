@@ -312,6 +312,7 @@ function WorkspaceApplication() {
             '/access',
             '/reports',
             '/search',
+            '/financial-qa',
             '/consent', '/connections',
             '/profile',
             '/settings/agreements',
@@ -348,7 +349,7 @@ function WorkspaceApplication() {
       ? `${current?.label ?? 'Overview'} · Organization Settings · Monergy`
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
-  const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/search', '/reports', '/consent', '/connections', '/profile', '/settings/sessions', '/settings/agreements'].includes(path);
+  const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/financial-qa', '/search', '/reports', '/consent', '/connections', '/profile', '/settings/sessions', '/settings/agreements'].includes(path);
   const gated = inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';

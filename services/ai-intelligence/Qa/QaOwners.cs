@@ -11,6 +11,8 @@ public interface IQaOwners
     Task<QaConfiguration> Configuration(HttpContext http);
     Task<QaModelResult> Generate(HttpContext http, QaModelRequest body);
     Task<IReadOnlyList<QaClaim>> Retrieve(HttpContext http, QaCustomer customer, string query, List<string> searchIds);
+    Task<IReadOnlyList<QaClaim>> Document(HttpContext http, QaCustomer customer, string version);
+    Task<IReadOnlyList<QaClaim>> Calculate(HttpContext http, QaCustomer customer, string position, string operation);
     Task Validate(HttpContext http, QaCustomer customer, IEnumerable<QaClaim> claims);
 }
 public sealed class QaOwners(CustomerOwnerClient identity, TenantAccessClient access, IConfiguration configuration, HttpClient client) : IQaOwners, IDisposable
@@ -62,13 +64,80 @@ public sealed class QaOwners(CustomerOwnerClient identity, TenantAccessClient ac
     }
     public async Task Validate(HttpContext http, QaCustomer customer, IEnumerable<QaClaim> claims)
     {
-        foreach (var claim in claims)
+        foreach (var group in claims.GroupBy(claim => claim.Kind + "|" + (claim.CalculationId ?? claim.SourceId)))
         {
-            // Read the exact historical revision for replay, then recheck evidence access.
-            var current = await Fact(http, customer, claim.SourceId, claim.Revision);
-            if (current with { Id = claim.Id } != claim) throw Invalid();
+            var first = group.First();
+            IReadOnlyList<QaClaim> canonical;
+            if (first.Kind == "DocumentExcerpt") canonical = await Document(http, customer, first.DocumentVersionId);
+            else if (first.Kind == "Calculation") canonical = await CalculationClaims(http, customer, first.CalculationId!);
+            else if (first.Kind == "FinancialFact") canonical = [await Fact(http, customer, first.SourceId, first.Revision)];
+            else throw Invalid();
+            foreach (var claim in group)
+            {
+                var match = canonical.SingleOrDefault(value => value with { Id = claim.Id } == claim);
+                if (match is null) throw Invalid();
+            }
         }
     }
+    public async Task<IReadOnlyList<QaClaim>> Document(HttpContext http, QaCustomer customer, string version)
+    {
+        if (!TenantAccessClient.Identifier(version, 160)) throw new TenantBoundaryException("AI_DOCUMENT_INVALID", 400);
+        using var request = Message(http, new Uri(Root("DocumentIntelligenceUrl"), "local/v1/customers/" + Uri.EscapeDataString(customer.Workspace.CustomerId) + "/documents/" + Uri.EscapeDataString(version) + "/qa-passages"), HttpMethod.Get);
+        var result = await Read<QaDocumentPassages>(http, request);
+        if (result.CustomerId != customer.Workspace.CustomerId || result.DocumentVersionId != version || result.ContentSha256.Length != 64 ||
+            !result.ContentSha256.All(char.IsAsciiHexDigit) || !NetWorthData.Text(result.ReaderVersion, 160) || result.Passages is null || result.Passages.Count > 20 ||
+            result.State is not ("AVAILABLE" or "UNSUPPORTED" or "UNRELIABLE_TEXT" or "NO_TEXT") || result.State != "AVAILABLE" && result.Passages.Count != 0 ||
+            result.Passages.Any(x => x is null || !NetWorthData.Text(x.Id, 80) || string.IsNullOrWhiteSpace(x.Text) || x.Text.Length > 1500 || !NetWorthData.Text(x.Location, 500)) ||
+            result.Passages.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() != result.Passages.Count) throw Invalid();
+        return result.Passages.Select(x => new QaClaim(x.Id, "Document quotation/transcription (not verified financial truth): " + x.Text,
+            "DocumentExcerpt", version, 1, result.ReaderVersion, version, result.ContentSha256, x.Location)).ToArray();
+    }
+    public async Task<IReadOnlyList<QaClaim>> Calculate(HttpContext http, QaCustomer customer, string position, string operation)
+    {
+        if (!TenantAccessClient.Identifier(position, 80) || !NetWorthData.Operation(operation)) throw new TenantBoundaryException("AI_CALCULATION_INVALID", 400);
+        await RequireCalculation(http, customer);
+        var input = await Position(http, customer, position);
+        using var request = Message(http, NetWorthUri(customer, "FinancialRulesUrl", "calculations"), HttpMethod.Post);
+        request.Content = JsonContent.Create(new CalculateNetWorth(operation, position), options: ContractJson.Options);
+        var result = await Read<NetWorthCalculation>(http, request);
+        if (!NetWorthData.Calculation(result, customer.Workspace.CustomerId) || result.OperationId != operation || result.RecordedBy != customer.Session.ActorId || !NetWorthData.Same(result.Position, input)) throw Invalid();
+        return await CalculationClaims(http, customer, result.CalculationId);
+    }
+    private async Task<IReadOnlyList<QaClaim>> CalculationClaims(HttpContext http, QaCustomer customer, string id)
+    {
+        if (!TenantAccessClient.Identifier(id, 80)) throw Invalid();
+        await RequireCalculation(http, customer);
+        using var request = Message(http, NetWorthUri(customer, "FinancialRulesUrl", "calculations/" + Uri.EscapeDataString(id)), HttpMethod.Get);
+        var result = await Read<NetWorthCalculation>(http, request);
+        if (!NetWorthData.Calculation(result, customer.Workspace.CustomerId) || result.CalculationId != id) throw Invalid();
+        var position = await Position(http, customer, result.Position.PositionId);
+        if (!NetWorthData.Same(result.Position, position)) throw Invalid();
+        await RequireCalculation(http, customer);
+        if (result.State != "CALCULATED") return [new QaClaim("calculation-incomplete",
+            "Financial Rules could not calculate from this inventory. Missing or incompatible inputs: " + string.Join(", ", result.Issues),
+            "Calculation", position.PositionId, 1, result.DefinitionHash, "", null, position.Position.AsOfDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), result.CalculationId, result.RuleVersion)];
+        var date = position.Position.AsOfDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        QaClaim Claim(string code, string label, string? value) => new("calculation-" + code,
+            $"Financial Rules calculated {label}: {value} {position.Position.Currency}, as of {date}, from the selected customer-reviewed inventory. These values are not externally verified.",
+            "Calculation", position.PositionId, 1, result.DefinitionHash, "", null, date, result.CalculationId, result.RuleVersion);
+        return [Claim("assets", "total assets", result.TotalAssets), Claim("liabilities", "total liabilities", result.TotalLiabilities), Claim("net-worth", "net worth", result.NetWorth)];
+    }
+    private async Task<ReviewedNetWorthPosition> Position(HttpContext http, QaCustomer customer, string id)
+    {
+        using var request = Message(http, NetWorthUri(customer, "FinancialProfileUrl", "positions/" + Uri.EscapeDataString(id)), HttpMethod.Get);
+        var value = await Read<ReviewedNetWorthPosition>(http, request);
+        if (!NetWorthData.Bound(value, customer.Workspace.CustomerId, DateTimeOffset.UtcNow) || value.PositionId != id) throw Invalid();
+        return value;
+    }
+    private Uri NetWorthUri(QaCustomer customer, string owner, string suffix) => new(Root(owner),
+        "local/v1/customers/" + Uri.EscapeDataString(customer.Workspace.CustomerId) + "/net-worth/" + suffix);
+    private async Task RequireCalculation(HttpContext http, QaCustomer customer)
+    {
+        var decision = await access.EvaluateCustomerAsync(http, "financial-rules.calculation.execute", customer.Workspace.CustomerId);
+        if (decision.Outcome != "Allow" || decision.AccessBasis != "Self") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+        CustomerReviewHttp.Confirm(customer.Decision, decision);
+    }
+
     private async Task<QaClaim> Fact(HttpContext http, QaCustomer customer, string id, int? revision)
     {
         var cid = customer.Workspace.CustomerId;

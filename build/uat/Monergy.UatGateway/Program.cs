@@ -145,7 +145,7 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     if (path is not ("/" or "/actions" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
         "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
         "/access/activity" or "/access/audit" or "/access/sessions" or "/access/customers" or "/access/processing" or "/access/documents" or "/operations" or
-        "/financial-qa" or "/search" or "/reports" or "/finances" or "/consent" or "/connections" or "/connections/onedrive" or "/profile" or "/settings/sessions" or "/settings/agreements" or "/vs02" or "/foundation"))
+        "/net-worth" or "/financial-qa" or "/search" or "/reports" or "/finances" or "/consent" or "/connections" or "/connections/onedrive" or "/profile" or "/settings/sessions" or "/settings/agreements" or "/vs02" or "/foundation"))
     { http.Response.StatusCode = 404; return; }
     http.Response.ContentType = "text/html; charset=utf-8";
     await http.Response.SendFileAsync(Path.Combine(environment.WebRootPath, "index.html"), http.RequestAborted).ConfigureAwait(false);
