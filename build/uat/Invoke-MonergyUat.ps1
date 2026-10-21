@@ -28,6 +28,15 @@ $folder = Join-Path $repository ".artifacts/uat/$Profile"
 $profileFile = Join-Path $folder 'profile.json'
 $windows = $env:OS -eq 'Windows_NT'
 function Secret { $bytes = New-Object byte[] 32; $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }; return ([BitConverter]::ToString($bytes)).Replace('-','').ToLowerInvariant() }
+# Compatible with Windows PowerShell 5.1 (.NET Framework) and PowerShell 7.
+function Convert-HexToBase64([string]$Hex) {
+    if ($Hex -notmatch '^[0-9a-fA-F]{64}$') { throw 'Invalid UAT encryption key. Restore the matching profile; do not rotate retained encryption keys.' }
+    $bytes = New-Object byte[] 32
+    for ($index = 0; $index -lt 32; $index++) {
+        $bytes[$index] = [Convert]::ToByte($Hex.Substring($index * 2, 2), 16)
+    }
+    return [Convert]::ToBase64String($bytes)
+}
 function Save-Text($name, $value) { [IO.File]::WriteAllText((Join-Path $folder $name), $value, (New-Object Text.UTF8Encoding($false))) }
 function Save-Json($name, $value) { Save-Text $name ($value | ConvertTo-Json -Depth 30) }
 function Assert-ProfileReadable {
@@ -75,7 +84,7 @@ function Invoke-UatDocker([string[]]$Arguments) {
 }
 function Compose([string[]]$Arguments) {
     $composeArgs = @('compose','--env-file',(Join-Path $folder 'compose.env'),'-f',(Join-Path $PSScriptRoot 'compose.yml'),'--project-name',"monergy-uat-$($state.instanceId.Substring(0,8))")
-    if ($state.onboarding) { $composeArgs += @('--profile','document-security') }
+    if ($onboarding) { $composeArgs += @('--profile','document-security') }
     Invoke-UatDocker ($composeArgs + $Arguments)
 }
 function Connection($database, $scope) {
@@ -111,6 +120,22 @@ if (-not (Test-Path $profileFile)) {
     Save-Json 'profile.json' $new
 }
 $state = Get-Content $profileFile -Raw | ConvertFrom-Json
+# Legacy profiles have no onboarding flag. Keep their original mode and port.
+# Required persisted identity/credential fields must never be silently regenerated.
+foreach ($name in @('instanceId','postgresPassword','databases','identities','tokens','port')) {
+    if ($null -eq $state -or $null -eq $state.PSObject.Properties[$name] -or $null -eq $state.$name) {
+        throw "UAT profile is missing required field '$name'. Restore its matching profile; do not reset retained data."
+    }
+}
+if ($null -ne $state.PSObject.Properties['onboarding'] -and $state.onboarding -isnot [bool]) {
+    throw 'UAT profile onboarding must be a JSON boolean.'
+}
+foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent')) {
+    if ($null -eq $state.tokens.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$state.tokens.$name)) {
+        throw "UAT profile is missing retained token '$name'. Restore its matching credentials; existing tokens will not be replaced."
+    }
+}
+$Port = [int]$state.port
 $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
 if ($EnableCustomerPan -and -not $onboarding) { throw 'Customer PAN requires an onboarding profile.' }
 if ($EnableEmailAccess -and -not $onboarding) { throw 'Customer email access requires an onboarding profile with verified customer ownership.' }
@@ -177,12 +202,12 @@ if (-not [string]::IsNullOrWhiteSpace($AiModelConfigurationFile)) {
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
 if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
-    $requiredTokens = @('financialAuditEvent','productAuditEvent')
+    $requiredTokens = @('jobAuditEvent','financialAuditEvent','productAuditEvent')
     if ($EnableEmailAccess) { $requiredTokens += 'emailAccess' }
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
-        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel','googleDriveProtection','oneDriveProtection','aiModelInternal','financialQaProtection')
+        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','recipientLabel','googleDriveProtection','oneDriveProtection','aiModelInternal','financialQaProtection')
     }
     foreach ($name in $requiredTokens) {
         if ($null -eq $state.tokens.PSObject.Properties[$name]) {
@@ -246,7 +271,7 @@ if ($Action -in @('Prepare','Start')) {
                 $config.Monergy.CustomerPan = @{ Enabled=[bool]$EnableCustomerPan }
                 if ($EnableCustomerPan) {
                     $config.Monergy.CustomerPan.CurrentKeyId = 'local-v1'
-                    $config.Monergy.CustomerPan.Keys = @{ 'local-v1'=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.panProtection)) }
+                    $config.Monergy.CustomerPan.Keys = @{ 'local-v1'=(Convert-HexToBase64 ([string]$state.tokens.panProtection)) }
                 }
                 $config.Monergy.CustomerWorkspaceSetup = @{ Required=[bool]$RequireCustomerSetup }
                 if (-not [string]::IsNullOrWhiteSpace($AccountAgreementFile)) {
@@ -266,7 +291,7 @@ if ($Action -in @('Prepare','Start')) {
                     $config.Monergy.CustomerEmailAccess = @{
                         Enabled='true'; SmtpHost=$emailConfiguration.SmtpHost; SmtpPort=$smtpPort
                         SmtpUser=$emailConfiguration.SmtpUser; SmtpPassword=$emailConfiguration.SmtpPassword
-                        From=$emailConfiguration.From; Secret=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.emailAccess))
+                        From=$emailConfiguration.From; Secret=(Convert-HexToBase64 ([string]$state.tokens.emailAccess))
                     }
                 }
             } elseif ($service -eq 'consent') {
@@ -285,10 +310,10 @@ if ($Action -in @('Prepare','Start')) {
                     AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
                     CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
                 $config.Monergy.GoogleDrive=@{ Enabled='true'; StoreDirectory='/var/lib/monergy-drive/connections';
-                    EncryptionKey=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.googleDriveProtection));
+                    EncryptionKey=(Convert-HexToBase64 ([string]$state.tokens.googleDriveProtection));
                     EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake; Tenants=$googleDriveTenants }
                 $config.Monergy.OneDrive=@{ Enabled='true'; StoreDirectory='/var/lib/monergy-drive/onedrive-connections';
-                    EncryptionKey=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.oneDriveProtection));
+                    EncryptionKey=(Convert-HexToBase64 ([string]$state.tokens.oneDriveProtection));
                     EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake; Tenants=$oneDriveTenants }
             }
             if ($onboarding -and $service -eq 'evidence') {
@@ -336,7 +361,7 @@ if ($Action -in @('Prepare','Start')) {
             $config.Monergy.FinancialQa=@{ Enabled='true'; DocumentIntelligenceUrl='http://127.0.0.1:5112/'; FinancialRulesUrl='http://127.0.0.1:5114/'; IntegrationGatewayUrl='http://127.0.0.1:5117/';
                 FinancialProfileUrl='http://127.0.0.1:5113/'; EvidenceUrl='http://127.0.0.1:5111/'; SearchRetrievalUrl='http://127.0.0.1:5115/';
                 InternalToken=$state.tokens.aiModelInternal; StoreDirectory='/var/lib/monergy-drive/financial-qa';
-                EncryptionKey=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.financialQaProtection)) }
+                EncryptionKey=(Convert-HexToBase64 ([string]$state.tokens.financialQaProtection)) }
         }
         Save-Json "$service.json" $config
     }
@@ -419,7 +444,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4')) {
+            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4','2.5')) {
                 throw 'The Access Management owner has not confirmed a supported Default Access Pack.'
             }
 
