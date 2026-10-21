@@ -8,6 +8,7 @@ export const destinations: WorkspaceDestination[] = [
   { id: 'finances', label: 'Financial information', icon: 'reports', href: '/finances' },
   { id: 'search', label: 'Search', icon: 'search', href: '/search' },
   { id: 'reports', label: 'Reports', icon: 'reports', href: '/reports' },
+  { id: 'connections', label: 'Connections', icon: 'evidence', href: '/connections' },
   { id: 'consent', label: 'Consent & privacy', icon: 'check', href: '/consent' },
   { id: 'profile', label: 'My Profile', icon: 'shield', href: '/profile', group: 'Your account' },
   { id: 'agreements', label: 'Account agreements', icon: 'check', href: '/settings/agreements' },

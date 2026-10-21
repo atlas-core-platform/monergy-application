@@ -115,7 +115,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
             : null;
         if (
           packPlan &&
-          (packPlan.targetVersion !== '2.4' ||
+          (packPlan.targetVersion !== '2.5' ||
             packPlan.policyVersion !== state.policyVersion ||
             !/^[0-9a-f]{64}$/.test(packPlan.planHash))
         )
@@ -238,7 +238,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
       case 'UPDATE_PERMISSION':
         return `Update access permission: ${before?.[1] ?? 'current permission'} → ${after?.[1] ?? 'recommended permission'}`;
       case 'SET_PACK_VERSION':
-        return `Recommended access model: version ${change.before ?? 'current'} → ${change.after ?? packPlan?.targetVersion ?? '2.4'}`;
+        return `Recommended access model: version ${change.before ?? 'current'} → ${change.after ?? packPlan?.targetVersion ?? '2.5'}`;
       default:
         return 'Update the recommended access configuration';
     }
@@ -345,7 +345,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                       showIcon
                       type="info"
                       title="Recommended access update available"
-                      description={`Review the changes from version ${pack?.installedVersion ?? 'not installed'} to ${packPlan?.targetVersion ?? '2.4'}. Existing people, customer assignments and organization-owned custom access remain unchanged unless the reviewed plan says otherwise.`}
+                      description={`Review the changes from version ${pack?.installedVersion ?? 'not installed'} to ${packPlan?.targetVersion ?? '2.5'}. Existing people, customer assignments and organization-owned custom access remain unchanged unless the reviewed plan says otherwise.`}
                     />
                     <section aria-label="Recommended access update review">
                       <h3>Review changes</h3>
@@ -602,7 +602,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                         {
                           key: 'access',
                           label: 'Recommended access',
-                          children: pack?.ready ? 'Version 2.4 confirmed' : 'Needs attention',
+                          children: pack?.ready ? 'Version 2.5 confirmed' : 'Needs attention',
                         },
                         {
                           key: 'people',

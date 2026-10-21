@@ -31,6 +31,7 @@ if (customerConsent)
 
 var app = builder.Build();
 if (customerConsent) app.MapCustomerConsent();
+if (customerConsent) app.MapProviderConsent();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
 if (!customerConsent) app.MapHealthChecks("/health/ready");
 

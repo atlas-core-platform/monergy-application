@@ -20,3 +20,7 @@ consent ownership.
 
 This candidate is not a sandbox, UAT or Production integration and does not
 advance any stage gate or resolve OD-04, OD-05 or OD-06.
+
+## T1-96 Google Drive owner adapter
+
+The onboarding composition selects `Monergy:GoogleDrive:Enabled=true` with the exclusive owner integration (reference contract simulator disabled). The real Google OAuth/Drive HTTP adapter, encrypted LOCAL connection store, current identity/access/Consent checks and scanned Evidence import are described in [T1-96](../../build/governance/t1-96-google-drive.md). Provider configuration is optional; absent credentials produce Not configured. This is implemented source functionality with simulated provider verification, not a claim of live Google or Production acceptance.

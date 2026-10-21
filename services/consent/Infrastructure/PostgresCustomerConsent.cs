@@ -7,7 +7,7 @@ using Npgsql;
 
 namespace Monergy.Services.Consent;
 
-public sealed class PostgresCustomerConsent : IAsyncDisposable, ICustomerSharingStore, ICustomerSharingReplacementStore
+public sealed partial class PostgresCustomerConsent : IAsyncDisposable, ICustomerSharingStore, ICustomerSharingReplacementStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     private readonly Dictionary<string, NpgsqlDataSource> sources = new(StringComparer.Ordinal);
@@ -223,6 +223,8 @@ public sealed class PostgresCustomerConsent : IAsyncDisposable, ICustomerSharing
                     AND NOT has_table_privilege(current_user,'consent.receipts','UPDATE,DELETE,TRUNCATE')
                     AND NOT has_table_privilege(current_user,'consent.outbox','UPDATE,DELETE,TRUNCATE')
                     AND NOT has_column_privilege(current_user,'consent.grants','expires_at','UPDATE')
+                    AND NOT has_table_privilege(current_user,'consent.provider_evidence','UPDATE,DELETE,TRUNCATE')
+                    AND NOT has_column_privilege(current_user,'consent.provider_grants','expires_at','UPDATE')
                     AND NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication));
                 """, new { Tenant = tenant }, cancellationToken: ct)).ConfigureAwait(false);
             if (!valid) throw new TenantBoundaryException("CONSENT_BINDING_INVALID", 503);

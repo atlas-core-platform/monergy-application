@@ -86,12 +86,17 @@ public static class EvidenceReferenceIntakeEndpoints
                 return Results.BadRequest(new { error = "EVIDENCE_PROCESSING_SOURCE_INVALID" });
             var tenants = request.Headers["X-Monergy-Tenant"];
             if (tenants.Count != 1 || !TenantAccessClient.Identifier(tenants[0], 64) ||
-                !customerTenants.TryGetValue(input.CustomerId, out var owningTenant) ||
+                customerTenants.TryGetValue(input.CustomerId, out var owningTenant) &&
                 !string.Equals(tenants[0], owningTenant, StringComparison.Ordinal))
                 return Results.StatusCode(StatusCodes.Status403Forbidden);
             var version = await repository.GetVersionAsync(input.DocumentVersionId, cancellationToken).ConfigureAwait(false);
             if (version is null || !string.Equals(version.CustomerId, input.CustomerId, StringComparison.Ordinal))
                 return Results.NotFound(new { error = "EVIDENCE_PROCESSING_SOURCE_NOT_FOUND" });
+            // Newly registered customers have no static fixture mapping. Their
+            // immutable Evidence tenant, written behind the owner boundary, is
+            // authoritative. Legacy unbound fixtures still require the mapping.
+            if (version.TenantId is not null ? version.TenantId != tenants[0] : !customerTenants.ContainsKey(input.CustomerId))
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
             if (!string.Equals(version.ContentType, "text/plain", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(version.ContentType, "text/csv", StringComparison.OrdinalIgnoreCase) &&
                 !string.Equals(version.ContentType, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", StringComparison.OrdinalIgnoreCase) &&

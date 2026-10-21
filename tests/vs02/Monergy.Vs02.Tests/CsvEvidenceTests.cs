@@ -150,6 +150,19 @@ public sealed class CsvEvidenceTests
         await Assert.ThrowsAsync<EvidenceDependencyException>(() =>
             reader.ReadAsync("document-version-001", "customer-001", denied, "csv-denied", default));
         Assert.Null(await reader.ReadAsync("missing-version", "customer-001", security, "csv-missing", default));
+        // Registration-created customers are resolved from the immutable owner
+        // tenant binding rather than the static LOCAL fixture directory.
+        var newRequest = Vs02TestContext.Request(Vs02ContractNames.CreateDocumentVersion,
+            Vs02TestContext.CreateVersionPayload() with { CustomerId = "registered-customer", DocumentId = "new-document",
+                DocumentVersionId = "new-version", EvidenceId = "new-evidence", OriginalFileName = "financial.csv", DeclaredContentType = "text/csv",
+                ContentReference = descriptor.Reference, ContentSha256 = descriptor.Sha256 }, "new-registration", "new-registration");
+        newRequest = newRequest with { Security = newRequest.Security with {
+            Workload = new WorkloadContext("integration-gateway", "local-uat-workspace:T001"),
+            Access = newRequest.Security.Access with { CustomerId = "registered-customer" } } };
+        Assert.Equal(ContractOutcome.Success, (await owner.CreateDocumentVersionAsync(newRequest)).Outcome);
+        Assert.NotNull(await reader.ReadAsync("new-version", "registered-customer", security, "new-read", default));
+        await Assert.ThrowsAsync<EvidenceDependencyException>(() => reader.ReadAsync("new-version", "registered-customer", denied, "new-denied", default));
+
         using var binary = await client.PostAsJsonAsync("/internal/local/v1/evidence/content",
             new ReferenceEvidenceContentRequest(new string('d', 32), "AAEC", "text/csv"));
         Assert.Equal(HttpStatusCode.BadRequest, binary.StatusCode);
