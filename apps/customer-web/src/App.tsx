@@ -15,6 +15,7 @@ const TenantSetupGate = lazy(() =>
 );
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
+const FinancialQaExperience = lazy(() => import('./product/FinancialQaExperience'));
 const ProductSearchExperience = lazy(() => import('./product/ProductSearchExperience'));
 const OneDriveExperience = lazy(() => import('./product/OneDriveExperience'));
 const GoogleDriveExperience = lazy(() => import('./product/GoogleDriveExperience'));
@@ -118,6 +119,7 @@ function ToolchainFoundation() {
 }
 
 function RouteContent() {
+  if (window.location.pathname === '/financial-qa') return <Suspense fallback={<main aria-busy="true">Loading Q&A…</main>}><FinancialQaExperience /></Suspense>;
   if (window.location.pathname === '/settings/sessions')
     return <Suspense fallback={<main aria-busy="true">Loading sessions…</main>}><SelfSessionsExperience /></Suspense>;
   if (window.location.pathname === '/') return <WorkspaceHome />;

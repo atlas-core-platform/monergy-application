@@ -197,6 +197,7 @@ services:
   ai-intelligence:
     <<: *runtime
     network_mode: service:workspace
+    volumes: ['drive-data:/var/lib/monergy-drive']
     working_dir: /app/ai-intelligence
     command: [Monergy.Services.AiIntelligence.dll, --urls, 'http://127.0.0.1:5119']
     secrets:

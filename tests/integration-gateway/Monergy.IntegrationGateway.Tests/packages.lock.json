@@ -261,6 +261,13 @@
           "OpenTelemetry.Instrumentation.Runtime": "[1.18.0, )"
         }
       },
+      "monergy.services.aiintelligence": {
+        "type": "Project",
+        "dependencies": {
+          "Monergy.Contracts": "[1.0.0, )",
+          "Monergy.Platform": "[1.0.0, )"
+        }
+      },
       "monergy.services.integrationgateway": {
         "type": "Project",
         "dependencies": {

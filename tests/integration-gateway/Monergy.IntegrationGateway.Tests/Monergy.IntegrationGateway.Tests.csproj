@@ -12,6 +12,7 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../services/ai-intelligence/Monergy.Services.AiIntelligence.csproj" />
     <ProjectReference Include="../../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
     <ProjectReference Include="../../../services/integration-gateway/Monergy.Services.IntegrationGateway.csproj" />
     <ProjectReference Include="../../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />

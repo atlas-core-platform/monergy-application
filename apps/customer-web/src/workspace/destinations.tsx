@@ -6,6 +6,7 @@ export const destinations: WorkspaceDestination[] = [
   { id: 'evidence', label: 'Documents', icon: 'evidence', href: '/evidence' },
   { id: 'net-worth', label: 'Net Worth', icon: 'reports', href: '/net-worth' },
   { id: 'finances', label: 'Financial information', icon: 'reports', href: '/finances' },
+  { id: 'financial-qa', label: 'Financial Q&A', icon: 'search', href: '/financial-qa' },
   { id: 'search', label: 'Search', icon: 'search', href: '/search' },
   { id: 'reports', label: 'Reports', icon: 'reports', href: '/reports' },
   { id: 'connections', label: 'Connections', icon: 'evidence', href: '/connections' },

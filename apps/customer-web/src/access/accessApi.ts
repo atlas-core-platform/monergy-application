@@ -99,7 +99,7 @@ export class AccessApiError extends Error {
 async function read<T>(url: string, options: RequestInit): Promise<T> {
   const signal = AbortSignal.any([
     ...(options.signal ? [options.signal] : []),
-    AbortSignal.timeout(20_000),
+    AbortSignal.timeout(url.startsWith('/product-api/v1/financial-qa/') ? 95_000 : 20_000),
   ]);
   let response: Response;
   try {

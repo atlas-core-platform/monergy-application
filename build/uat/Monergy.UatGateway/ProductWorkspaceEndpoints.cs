@@ -109,6 +109,7 @@ public static class ProductWorkspaceEndpoints
         "financial-profile.profile.update",
         "financial-rules.calculation.execute",
         "search.query.execute",
+        "ai-intelligence.analysis.execute",
         "reporting.report.generate",
         "reporting.report.read",
     ];
