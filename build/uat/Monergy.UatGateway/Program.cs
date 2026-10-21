@@ -33,6 +33,7 @@ builder.AddProductSearch();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
 builder.Services.AddSingleton(new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
 { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1_048_576 });
+if(builder.Configuration.GetValue<bool>("Monergy:ProductAudit:Enabled"))builder.Services.AddSingleton<IProductAuditWriter,ProductAuditWriter>();
 var app = builder.Build();
 app.Use(async (http, next) =>
 {
@@ -48,6 +49,7 @@ app.Use(async (http, next) =>
     catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException && !http.RequestAborted.IsCancellationRequested)
     { http.Response.StatusCode = 503; await http.Response.WriteAsJsonAsync(new { error = "OWNER_UNAVAILABLE" }, http.RequestAborted).ConfigureAwait(false); }
 });
+app.UseProductAudit();
 app.UseStaticFiles();
 app.UseRouting();
 app.MapTenantSetup();
@@ -138,7 +140,7 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     // Static files are handled earlier; only known SPA destinations get the shell.
     if (path is not ("/" or "/actions" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
         "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
-        "/access/activity" or "/access/sessions" or "/access/customers" or "/access/processing" or "/access/documents" or "/operations" or
+        "/access/activity" or "/access/audit" or "/access/sessions" or "/access/customers" or "/access/processing" or "/access/documents" or "/operations" or
         "/search" or "/reports" or "/finances" or "/consent" or "/profile" or "/settings/sessions" or "/settings/agreements" or "/vs02" or "/foundation"))
     { http.Response.StatusCode = 404; return; }
     http.Response.ContentType = "text/html; charset=utf-8";
@@ -188,6 +190,8 @@ static string? Route(string path, string method)
     if (path == "/identity-api/local/v1/me/sessions" && method == "GET" ||
         path == "/identity-api/local/v1/me/sessions/revoke" && method == "POST")
         return "http://127.0.0.1:5101" + path[13..];
+    if (method=="GET"&&(path=="/audit-api/local/v1/administration/audit-log"||path=="/audit-api/local/v1/administration/audit-log/export"||path.StartsWith("/audit-api/local/v1/administration/audit-log/",StringComparison.Ordinal)&&path["/audit-api/local/v1/administration/audit-log/".Length..].Length>0&&!path["/audit-api/local/v1/administration/audit-log/".Length..].Contains('/')))
+        return "http://127.0.0.1:5102" + path[10..];
     if (path == "/audit-api/local/v1/administration/access-events" && method == "GET")
         return "http://127.0.0.1:5102" + path[10..];
     if (path.StartsWith("/consent-api/local/v1/consents/customers/", StringComparison.Ordinal) && method is "GET" or "POST" or "DELETE")

@@ -115,7 +115,7 @@ if ($EnableEmailAccess -and $Action -in @('Prepare','Start')) {
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
 if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
-    $requiredTokens = @('financialAuditEvent')
+    $requiredTokens = @('financialAuditEvent','productAuditEvent')
     if ($EnableEmailAccess) { $requiredTokens += 'emailAccess' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
@@ -208,7 +208,7 @@ if ($Action -in @('Prepare','Start')) {
                 $integration.ConsentDatabases=@{}
                 foreach ($db in $state.databases | Where-Object service -eq 'consent') { $integration.ConsentDatabases[$db.tenant] = Connection $db 'runtime' }
             } else {
-                $integration.AuditEventToken=$state.tokens.auditEvent; $integration.JobAuditEventToken=$state.tokens.jobAuditEvent; $integration.FinancialAuditEventToken=$state.tokens.financialAuditEvent; $integration.AuditDatabases=@{}
+                $integration.AuditEventToken=$state.tokens.auditEvent; $integration.JobAuditEventToken=$state.tokens.jobAuditEvent; $integration.FinancialAuditEventToken=$state.tokens.financialAuditEvent; $integration.ProductAuditEventToken=$state.tokens.productAuditEvent; $integration.AuditDatabases=@{}
                 foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.AuditDatabases[$db.tenant] = Connection $db 'runtime' }
             }
             $config.Monergy.AccessIntegration=$integration
@@ -269,6 +269,7 @@ if ($Action -in @('Prepare','Start')) {
             CustomerIdentityUrl='http://127.0.0.1:5101/'; CustomerContextToken=$state.tokens.customerContext
             CustomerIdentityToken=$state.tokens.context; MembershipToken=$state.tokens.membership
         }
+        $workspace.Monergy.ProductAudit=@{ Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.productAuditEvent }
         $workspace.Monergy.Product=@{
             Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake
             JobManagementUrl='http://127.0.0.1:5118/'; JobManagementToken=$state.tokens.jobControl

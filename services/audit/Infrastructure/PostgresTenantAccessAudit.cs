@@ -7,7 +7,7 @@ using Npgsql;
 
 namespace Monergy.Services.Audit.Infrastructure;
 
-public sealed class PostgresTenantAccessAudit : ITenantAccessAuditRepository, ITenantJobAuditRepository, ITenantFinancialAuditRepository, IAsyncDisposable
+public sealed partial class PostgresTenantAccessAudit : ITenantAccessAuditRepository, ITenantJobAuditRepository, ITenantFinancialAuditRepository, IAsyncDisposable
 {
     private readonly Dictionary<string, NpgsqlDataSource> sources = new(StringComparer.Ordinal);
 
