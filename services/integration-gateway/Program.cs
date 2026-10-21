@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Monergy.Platform;
 using Monergy.Services.IntegrationGateway;
+using Monergy.Services.IntegrationGateway.GoogleDrive;
 
 const string serviceName = "Integration Gateway Service";
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddMonergyPlatform(serviceName);
 builder.Services.AddHealthChecks();
+builder.AddGoogleDrive();
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);
 if (referenceAdapters)
 {
@@ -14,6 +16,7 @@ if (referenceAdapters)
 }
 
 var app = builder.Build();
+app.MapGoogleDrive();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
 app.MapHealthChecks("/health/ready");
 if (referenceAdapters)

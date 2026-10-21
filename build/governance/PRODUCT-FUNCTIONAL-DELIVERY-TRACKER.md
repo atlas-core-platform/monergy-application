@@ -1,8 +1,15 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-93 complete Document Monitoring (P1-27). Original29:4 Complete,19 Partial,6 Pending. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-96 complete Google Drive integration (P1-11). Original29:7 Complete,19 Partial,3 Pending. Physical/live UAT and business acceptance remain separate and open.
 
-## Current T1-93 update — complete Document Monitoring
+## Current T1-96 update — complete Google Drive integration
+
+Connections delivers configurable tenant Google OAuth, explicit customer permission, server-held encrypted tokens, named account/folder selection, exact provider-version import through scanned Evidence intake, refresh/status, retained import history and disconnect. Fresh customer ownership/capability/Consent/configuration checks guard provider work and registration. Access Pack 2.5 uses the reviewed upgrade flow. Receipt: [t1-96-google-drive.md](t1-96-google-drive.md).
+
+413 backend and27 focused UI checks pass. TypeScript/ESLint/Vite and owner/Gateway builds pass. Physical Consent migration/grants/restart, live Google OAuth/API, Docker/ClamAV and full live UAT NOT RUN. After paired merges:96 numbered units=95 implementations+1 governance closure. Pending: P1-04 Basic KYC, P1-12 OneDrive and P1-24 Basic Financial Q&A. Registration T1-95 and Audit T1-94 remain delivered. Original IDs/source phases/business acceptance unchanged.
+
+
+## Previous T1-93 update — complete Document Monitoring
 
 Organization Settings > Document Monitoring delivers named tenant document inventory,version history,literal name/reference search,customer/scan/document filters,counts/pages,metadata details,historical scan evidence and detected categories/processing history. Exact document/customer links reuse reviewed Processing Status recovery;no scan/content/financial authorization bypass. Receipt: [t1-93-document-monitoring.md](t1-93-document-monitoring.md).
 

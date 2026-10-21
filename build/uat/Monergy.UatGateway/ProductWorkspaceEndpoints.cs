@@ -100,6 +100,7 @@ public static class ProductWorkspaceEndpoints
 {
     private static readonly string[] ProductCapabilities =
     [
+        "integration-gateway.connection.manage",
         "evidence.document.upload",
         "evidence.document.read",
         "document-intelligence.document.process",

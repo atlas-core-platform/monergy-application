@@ -159,11 +159,12 @@ export default function ConsentExperience() {
         </div>
         <Tag>TEST ENVIRONMENT · TEMPORARY DATA</Tag>
       </div>
+      <p><a href="/connections">Manage Google Drive permission and connection</a></p>
       <Alert
         showIcon
         type="info"
         title="About these permissions"
-        description="This view covers up to 100 recent delegated customer-advice grants. Unexpired does not confirm effective access: current customer, actor, owner version, and permissions are checked separately when protected information is requested. Provider connections are not shown here."
+        description="This view covers up to 100 recent delegated customer-advice grants. Unexpired does not confirm effective access: current customer, actor, owner version, and permissions are checked separately when protected information is requested. Google Drive permission is managed in Connections."
       />
       <div className="product-drawer-actions">
         <Button

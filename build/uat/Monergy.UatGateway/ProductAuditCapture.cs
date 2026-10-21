@@ -18,7 +18,7 @@ public sealed class ProductAuditWriter:IProductAuditWriter,IDisposable
 }
 public static class ProductAuditCapture
 {
- private static readonly string[] Prefixes=["/product-api","/identity-api","/access-api","/consent-api","/evidence-api","/classification-api","/jobs-api","/audit-api","/contracts","/uat-api"];
+ private static readonly string[] Prefixes=["/connections-api","/product-api","/identity-api","/access-api","/consent-api","/evidence-api","/classification-api","/jobs-api","/audit-api","/contracts","/uat-api"];
  public static bool Sensitive(PathString path)=>Prefixes.Any(p=>path.StartsWithSegments(p));
  public static string Action(string path,string method)
  {
@@ -26,6 +26,7 @@ public static class ProductAuditCapture
   if(path.Contains("/export",StringComparison.Ordinal))return "DATA_EXPORT";
   if(path.StartsWith("/consent-api/",StringComparison.Ordinal)&&method!="GET")return method=="DELETE"?"CONSENT_REVOKE":"CONSENT_GRANT";
   if(path.StartsWith("/product-api/v1/evidence",StringComparison.Ordinal))return method=="GET"?"DOCUMENT_VIEW":method=="POST"&&!path.Contains("/processing",StringComparison.Ordinal)?"DOCUMENT_UPLOAD":"DOCUMENT_UPDATE";
+  if(path.StartsWith("/connections-api/",StringComparison.Ordinal))return path.EndsWith("/import",StringComparison.Ordinal)?"DOCUMENT_UPLOAD":"API_ACCESS";
   if(path.Contains("/reports",StringComparison.Ordinal)&&method=="POST")return "REPORT_GENERATION";
   return "API_ACCESS";
  }

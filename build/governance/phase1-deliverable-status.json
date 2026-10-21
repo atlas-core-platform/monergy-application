@@ -1,21 +1,22 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-95",
-  "applicationBase": "d4151a9a7ebe2d618d458be044d6c6d9b04c17a6",
+  "asOf": "T1-96",
+  "applicationBase": "a148580d3bc14e9e851bfb6abac59a691ab3b49a",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 35,
+    "libraryVersion": 3,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "T1-94 delivered baseline; T1-95 approved registration policy and configurable external inputs. Physical/live verification and business acceptance remain separate."
+    "reviewThrough": "T1-95 delivered baseline; T1-96 complete Google Drive source journey with configurable external credentials. Physical/live verification and business acceptance remain separate.",
+    "libraryFileId": "libfile_7747823175948191ad6e56244bee8cf2"
   },
   "counts": {
     "originalDeliverables": 29,
-    "fullyImplemented": 6,
+    "fullyImplemented": 7,
     "partial": 19,
-    "pendingBusinessJourneys": 4,
-    "remainingOriginalDeliverables": 23,
-    "numberedUnitsAfterPairedMerge": 95,
-    "mergedImplementationUnitsAfterPairedMerge": 94,
+    "pendingBusinessJourneys": 3,
+    "remainingOriginalDeliverables": 22,
+    "numberedUnitsAfterPairedMerge": 96,
+    "mergedImplementationUnitsAfterPairedMerge": 95,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -140,12 +141,12 @@
       "id": "P1-11",
       "area": "Cloud",
       "name": "Google Drive integration",
-      "state": "Pending",
-      "existing": "Provider-neutral connector and consent foundations exist; no real customer Google Drive journey is evidenced.",
-      "remaining": "Implement approved OAuth, Monergy folder binding, exact provider file identity, import/status/refresh/disconnect and authorization revalidation.",
-      "units": "Foundation only",
+      "state": "Complete",
+      "existing": "Configured tenant Google OAuth, explicit customer permission, server-held encrypted tokens, account/folder binding, exact-version scanned Evidence import, refresh/status, import history and disconnect. Provider credentials supplied during operator onboarding. Current ownership, capability, consent and configuration rechecked.",
+      "remaining": "Live Google OAuth/API, physical Consent migration/grants/restart/concurrency, Docker/ClamAV and full UAT remain unverified. Google restricted-scope verification is operator configuration. Production distributed storage/key custody and unsupported original formats remain separate. OneDrive is P1-12.",
+      "units": "T1-96",
       "requirements": "MON-SRC-007/008; MON-CON-004\u2013006",
-      "receipt": "build/governance/PRODUCT-FUNCTIONAL-DELIVERY-TRACKER.md"
+      "receipt": "build/governance/t1-96-google-drive.md"
     },
     {
       "id": "P1-12",

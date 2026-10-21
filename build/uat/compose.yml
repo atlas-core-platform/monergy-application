@@ -176,6 +176,7 @@ services:
   integration-gateway:
     <<: *runtime
     network_mode: service:workspace
+    volumes: ['drive-data:/var/lib/monergy-drive']
     working_dir: /app/integration-gateway
     command: [Monergy.Services.IntegrationGateway.dll, --urls, 'http://127.0.0.1:5117']
     secrets:
@@ -231,6 +232,7 @@ services:
       workspace: { condition: service_started }
 volumes:
   tenant-data:
+  drive-data:
   onboarding-data:
   clamav-signatures:
 configs:

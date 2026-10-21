@@ -11,6 +11,7 @@ param(
     [switch]$EnableCustomerRegistration,
     [string]$AccountAgreementFile,
     [string]$EmailConfigurationFile,
+    [string]$GoogleDriveConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
 )
@@ -127,6 +128,20 @@ if ($EnableEmailAccess -and $Action -in @('Prepare','Start')) {
         $emailConfiguration = [pscustomobject]@{ SmtpHost=$env:MONERGY_EMAIL_SMTP_HOST; SmtpUser=$env:MONERGY_EMAIL_SMTP_USER; SmtpPassword=$env:MONERGY_EMAIL_SMTP_PASSWORD; From=$env:MONERGY_EMAIL_FROM; SmtpPort=$env:MONERGY_EMAIL_SMTP_PORT }
     }
 }
+$googleDriveTenants = @{}
+if (-not [string]::IsNullOrWhiteSpace($GoogleDriveConfigurationFile)) {
+    if (-not $onboarding) { throw 'Google Drive configuration requires an onboarding profile.' }
+    $suppliedDrive = Get-Content -LiteralPath $GoogleDriveConfigurationFile -Raw | ConvertFrom-Json
+    foreach ($entry in $suppliedDrive.PSObject.Properties) {
+        if ($entry.Name -notin @('T001','T002')) { throw 'Google Drive configuration has an unsupported tenant binding.' }
+        $value = $entry.Value
+        if ([string]::IsNullOrWhiteSpace($value.ClientId) -or [string]::IsNullOrWhiteSpace($value.ClientSecret) -or
+            $value.RedirectUri -ne "http://localhost:$Port/connections-api/local/v1/google-drive/callback") {
+            throw 'Google Drive requires a client ID, client secret and the exact localhost callback for this UAT port.'
+        }
+        $googleDriveTenants[$entry.Name] = @{ Enabled='true'; ClientId=$value.ClientId; ClientSecret=$value.ClientSecret; RedirectUri=$value.RedirectUri }
+    }
+}
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
 if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
@@ -135,7 +150,7 @@ if ($Action -in @('Prepare','Start')) {
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
-        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel')
+        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','jobAuditEvent','recipientLabel','googleDriveProtection')
     }
     foreach ($name in $requiredTokens) {
         if ($null -eq $state.tokens.PSObject.Properties[$name]) {
@@ -232,6 +247,15 @@ if ($Action -in @('Prepare','Start')) {
             $config.Monergy.AccessIntegration=$integration
         } elseif ($service -in @('evidence','document-intelligence','financial-profile','financial-rules','search-retrieval','reporting','integration-gateway','job-management')) {
             $config.Monergy.ReferenceAdapters='true'
+            if ($onboarding -and $service -eq 'integration-gateway') {
+                $config.Monergy.ReferenceAdapters='false'
+                $config.Monergy.AccessIntegration=@{ Enabled='true'; CustomerRelationships='true';
+                    AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
+                    CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
+                $config.Monergy.GoogleDrive=@{ Enabled='true'; StoreDirectory='/var/lib/monergy-drive/connections';
+                    EncryptionKey=[Convert]::ToBase64String([Convert]::FromHexString([string]$state.tokens.googleDriveProtection));
+                    EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake; Tenants=$googleDriveTenants }
+            }
             if ($onboarding -and $service -eq 'evidence') {
                 $config.Monergy.OnboardingFixtures='true'
                 $config.Monergy.ProductIntake=@{ Enabled='true'; EvidenceToken=$state.tokens.evidenceIntake; ProcessingToken=$state.tokens.evidenceProcessing; ClamdPort=3310 }

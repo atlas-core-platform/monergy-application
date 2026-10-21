@@ -16,6 +16,7 @@ const TenantSetupGate = lazy(() =>
 
 const Vs02Experience = lazy(() => import('./vs02/Vs02Experience'));
 const ProductSearchExperience = lazy(() => import('./product/ProductSearchExperience'));
+const GoogleDriveExperience = lazy(() => import('./product/GoogleDriveExperience'));
 const ConsentExperience = lazy(() => import('./product/ConsentExperience'));
 const CustomerWorkspaceSetupExperience = lazy(() => import('./product/CustomerWorkspaceSetupExperience'));
 const CustomerAccountAgreementsExperience = lazy(() => import('./product/CustomerAccountAgreementsExperience'));
@@ -180,6 +181,8 @@ function RouteContent() {
     );
   }
 
+  if (window.location.pathname === '/connections') return <Suspense fallback={<main aria-busy="true">Loading connections…</main>}><GoogleDriveExperience /></Suspense>;
+
   if (window.location.pathname === '/consent') {
     return (
       <Suspense fallback={<main className="access-loading" aria-busy="true">Loading sharing permissions…</main>}>
@@ -305,7 +308,7 @@ function WorkspaceApplication() {
             '/access',
             '/reports',
             '/search',
-            '/consent',
+            '/consent', '/connections',
             '/profile',
             '/settings/agreements',
             '/vs02',
@@ -341,7 +344,7 @@ function WorkspaceApplication() {
       ? `${current?.label ?? 'Overview'} · Organization Settings · Monergy`
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
-  const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/search', '/reports', '/consent', '/profile', '/settings/sessions', '/settings/agreements'].includes(path);
+  const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/search', '/reports', '/consent', '/connections', '/profile', '/settings/sessions', '/settings/agreements'].includes(path);
   const gated = inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';
