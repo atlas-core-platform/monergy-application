@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import AccessExperience from '../src/access/AccessExperience';
-import { AccessApi, recordId } from '../src/access/accessApi';
+import { AccessApi, establishSession, recordId } from '../src/access/accessApi';
 
 const session = {
   tenantId: 'T001',
@@ -42,6 +42,22 @@ afterEach(() => {
 });
 
 describe('tenant administration trust boundaries', () => {
+  it('removes copied terminal whitespace from a local key before authentication', async () => {
+    const request = vi.fn((url: string, options?: RequestInit) => {
+      expect(url).toBe('/identity-api/local/v1/tenant-sessions');
+      expect(options?.method).toBe('POST');
+      return Promise.resolve(json(session));
+    });
+    vi.stubGlobal('fetch', request);
+
+    await establishSession('T001', '  test-key-not-a-real-credential\r\n');
+
+    const headers = new Headers(request.mock.calls[0]?.[1]?.headers);
+    expect(headers.get('X-Monergy-Reference-Authentication')).toBe(
+      'test-key-not-a-real-credential',
+    );
+  });
+
   it('keeps administration unavailable when the server rejects administrator authority', async () => {
     vi.stubGlobal(
       'fetch',

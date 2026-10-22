@@ -141,7 +141,7 @@ export async function establishSession(
   return read<TenantSession>('/identity-api/local/v1/tenant-sessions', {
     method: 'POST',
     signal,
-    headers: { 'Content-Type': 'application/json', 'X-Monergy-Reference-Authentication': key },
+    headers: { 'Content-Type': 'application/json', 'X-Monergy-Reference-Authentication': key.trim() },
     body: JSON.stringify({ tenantId }),
   });
 }
