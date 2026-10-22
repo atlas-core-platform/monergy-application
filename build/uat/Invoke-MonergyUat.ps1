@@ -15,6 +15,7 @@ param(
     [string]$OneDriveConfigurationFile,
     [string]$AiModelConfigurationFile,
     [string]$KycConfigurationFile,
+    [string]$EvidencePersistenceConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
 )
@@ -156,6 +157,27 @@ if ($EnableEmailAccess -and $Action -in @('Prepare','Start')) {
         $emailConfiguration = [pscustomobject]@{ SmtpHost=$env:MONERGY_EMAIL_SMTP_HOST; SmtpUser=$env:MONERGY_EMAIL_SMTP_USER; SmtpPassword=$env:MONERGY_EMAIL_SMTP_PASSWORD; From=$env:MONERGY_EMAIL_FROM; SmtpPort=$env:MONERGY_EMAIL_SMTP_PORT }
     }
 }
+# Opt-in durable Evidence configuration is retained in the protected profile for subsequent starts.
+$evidencePersistence = $null
+$evidenceConfigPath = Join-Path $folder 'evidence-persistence.json'
+if (-not [string]::IsNullOrWhiteSpace($EvidencePersistenceConfigurationFile)) { $evidenceConfigPath = $EvidencePersistenceConfigurationFile }
+if (Test-Path -LiteralPath $evidenceConfigPath) {
+    if (-not $onboarding) { throw 'Durable Evidence configuration requires an onboarding profile.' }
+    $evidenceFile = Get-Item -LiteralPath $evidenceConfigPath -ErrorAction Stop
+    if ($evidenceFile.PSIsContainer -or $evidenceFile.Length -gt 65536) { throw 'Invalid Evidence persistence configuration file.' }
+    $evidencePersistence = Get-Content -LiteralPath $evidenceFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($null -eq $evidencePersistence -or $null -eq $evidencePersistence.PSObject.Properties['RuntimeConnections'] -or
+        $null -eq $evidencePersistence.PSObject.Properties['S3']) { throw 'Evidence persistence requires RuntimeConnections and S3 settings.' }
+    $bindings = @($evidencePersistence.RuntimeConnections.PSObject.Properties)
+    if ($bindings.Count -eq 0) { throw 'Evidence persistence requires at least one tenant database.' }
+    foreach ($binding in $bindings) {
+        if ($binding.Name -notin @('T001','T002') -or [string]::IsNullOrWhiteSpace([string]$binding.Value)) { throw 'Invalid Evidence tenant database binding.' }
+    }
+    foreach ($name in @('Endpoint','Bucket','AccessKey','SecretKey')) {
+        if ($null -eq $evidencePersistence.S3.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$evidencePersistence.S3.$name)) { throw "Evidence S3 configuration requires $name." }
+    }
+    if ($Action -in @('Prepare','Start')) { Save-Json 'evidence-persistence.json' $evidencePersistence; Protect-Files }
+} elseif (-not [string]::IsNullOrWhiteSpace($EvidencePersistenceConfigurationFile)) { throw 'Evidence persistence configuration file was not found.' }
 $kycTenants = @{}
 if (-not [string]::IsNullOrWhiteSpace($KycConfigurationFile)) {
     if (-not $onboarding) { throw 'Basic KYC configuration requires an onboarding profile.' }
@@ -333,6 +355,11 @@ if ($Action -in @('Prepare','Start')) {
             }
             if ($onboarding -and $service -eq 'evidence') {
                 $config.Monergy.OnboardingFixtures='true'
+                if ($null -ne $evidencePersistence) {
+                    $config.Monergy.ReferenceAdapters='false'
+                    $config.Monergy.OnboardingFixtures='false'
+                    $config.Monergy.Persistence=@{ Provider='POSTGRESQL_S3'; Evidence=$evidencePersistence }
+                }
                 $config.Monergy.ProductIntake=@{ Enabled='true'; EvidenceToken=$state.tokens.evidenceIntake; ProcessingToken=$state.tokens.evidenceProcessing; ClamdPort=3310 }
             } elseif ($onboarding -and $service -eq 'document-intelligence') {
                 $config.Monergy.DocumentProcessing=@{

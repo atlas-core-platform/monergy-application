@@ -159,6 +159,12 @@ public sealed partial class PostgresEvidenceRepository : IEvidenceRepository, IA
         return values.Select(ToRecord).ToArray();
     }
 
+    public async Task CheckReadyAsync(CancellationToken ct)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(ct);
+        await connection.ExecuteAsync(new CommandDefinition($"SELECT {VersionColumns} FROM evidence.document_versions LIMIT 0;", cancellationToken: ct));
+    }
+
     public ValueTask DisposeAsync() => dataSource.DisposeAsync();
 
     private static async Task<EvidenceVersionRecord?> FindVersionAsync(
@@ -246,9 +252,9 @@ public sealed record S3StoredContent(
     string ObjectKey,
     string ObjectVersionId);
 
-public sealed class S3EvidenceContentStore : IEvidenceContentStore, IDisposable
+public sealed partial class S3EvidenceContentStore : IEvidenceIntakeStore, IDisposable
 {
-    private readonly AmazonS3Client client;
+    private readonly IAmazonS3 client;
     private readonly string bucket;
 
     public S3EvidenceContentStore(IConfiguration configuration)
@@ -262,8 +268,14 @@ public sealed class S3EvidenceContentStore : IEvidenceContentStore, IDisposable
         {
             ServiceURL = PhysicalPersistenceGuard.Require(configuration, "Monergy:Persistence:Evidence:S3:Endpoint"),
             ForcePathStyle = true,
-            UseHttp = true,
+            UseHttp = new Uri(PhysicalPersistenceGuard.Require(configuration, "Monergy:Persistence:Evidence:S3:Endpoint")).Scheme == Uri.UriSchemeHttp,
         });
+    }
+
+    // Dependency injection seam for deterministic S3 protocol tests.
+    public S3EvidenceContentStore(IAmazonS3 client, string bucket)
+    {
+        this.client = client; this.bucket = bucket;
     }
 
     public async Task EnsureBucketAsync(CancellationToken cancellationToken = default)
@@ -308,6 +320,8 @@ public sealed class S3EvidenceContentStore : IEvidenceContentStore, IDisposable
     public async Task<EvidenceContentDescriptor?> GetDescriptorAsync(
         string reference, CancellationToken cancellationToken)
     {
+        if (reference.StartsWith(EvidenceIntakeReference.DurablePrefix, StringComparison.Ordinal))
+            return (await ReadReceiptAsync(reference, cancellationToken)).Descriptor;
         var objectKey = ObjectKey(reference);
         try
         {

@@ -18,9 +18,10 @@ if (physicalPersistence)
     builder.Services.AddEvidencePhysicalPersistence(builder.Configuration);
 }
 
-if (referenceAdapters && builder.Configuration.GetValue<bool>("Monergy:ProductIntake:Enabled"))
+if ((referenceAdapters || physicalPersistence) && builder.Configuration.GetValue<bool>("Monergy:ProductIntake:Enabled"))
 {
     builder.Services.AddHealthChecks().AddCheck<Monergy.Services.Evidence.Infrastructure.EvidenceScannerHealthCheck>("upload-malware-scanner");
+    if (physicalPersistence) builder.Services.AddHealthChecks().AddCheck<Monergy.Services.Evidence.Infrastructure.EvidenceStorageHealthCheck>("durable-evidence-storage");
     builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 1_500_000);
     builder.Services.ConfigureHttpJsonOptions(options =>
     {
@@ -37,8 +38,9 @@ if (referenceAdapters || physicalPersistence)
 {
     app.MapEvidenceContracts();
 }
-if (referenceAdapters && builder.Configuration.GetValue<bool>("Monergy:ProductIntake:Enabled"))
+if ((referenceAdapters || physicalPersistence) && builder.Configuration.GetValue<bool>("Monergy:ProductIntake:Enabled"))
 {
+    if (physicalPersistence) _ = app.Services.GetRequiredService<Monergy.Services.Evidence.Infrastructure.TenantEvidenceRepository>();
     app.MapEvidenceReferenceIntake(builder.Configuration);
 }
 if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Profile"], "persisted-reporting",

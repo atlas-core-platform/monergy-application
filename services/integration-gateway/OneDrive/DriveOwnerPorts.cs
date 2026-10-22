@@ -60,7 +60,7 @@ public sealed class DriveOwners(CustomerOwnerClient identity, TenantAccessClient
         stage.Content = JsonContent.Create(new { operationId = operation, contentBase64 = Convert.ToBase64String(content), contentType = file.MimeType, sourceLocation = new { provider = "onedrive", folderId = connection.FolderId, fileId = file.Id, fileVersion = file.Version } });
         var descriptor = await SendAsync<DriveEvidenceDescriptor>(stage, http.RequestAborted);
         if (descriptor.Sha256 != hash || descriptor.ContentLength != content.Length ||
-            !descriptor.Reference.StartsWith("reference://customer-intake/", StringComparison.Ordinal))
+            !EvidenceIntakeReference.Matches(descriptor.Reference, operation))
             throw new TenantBoundaryException("EVIDENCE_RESPONSE_INVALID", 503);
         // Scanning can be slow: refresh owner, configuration and consent before
         // registration. The Evidence contract independently reauthorizes too.

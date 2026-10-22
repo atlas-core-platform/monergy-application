@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-109 document search corpus traversal. Original29:17 Complete,12 Partial,0 Pending. Physical/live UAT, provider evaluation and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-110 durable scanned Evidence intake. Original29:17 Complete,12 Partial,0 Pending. Physical/live UAT, provider evaluation and business acceptance remain separate and open.
 
-## Current T1-109 update — Document search corpus
+## Current T1-110 update — Durable scanned originals
+
+Product upload/import and processing now support opt-in tenant-specific PostgreSQL Evidence metadata and versioned S3 originals. Exact bytes, scan/provider receipts, immutable object-version reads, retry recovery and current owner access are retained. Onboarding configuration persists across starts and readiness checks storage. [Receipt](t1-110-durable-evidence.md).
+
+745 backend checks pass; Gateway build/startup and PowerShell retained-profile checks pass. Physical PostgreSQL/S3, live scanner/native OCR and full UAT remain unverified. P1-05/08/09 remain Partial for remaining file/layout coverage and downstream durability. Counts unchanged:17 Complete,12 Partial,0 Pending;109 implementation units+1 governance closure. Acceptance unchanged.
+
+## Previous T1-109 update — Document search corpus
 
 Search, retrieval context and explicit refresh traverse the owner-scoped document library beyond 100 versions. Immutable keyset pagination, exact references and whole-request rejection on later-page failure retain current access checks. An explicit 10,000-version resource limit fails instead of silently truncating. [Receipt](t1-109-search-corpus.md).
 
