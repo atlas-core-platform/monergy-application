@@ -172,7 +172,7 @@ export class AccessApi {
       if (
         !this.lifecycle?.signal.aborted &&
         failure instanceof AccessApiError &&
-        [401, 403, 503].includes(failure.status)
+        [401, 403].includes(failure.status)
       )
         this.lifecycle?.onFailure(failure);
       throw failure;

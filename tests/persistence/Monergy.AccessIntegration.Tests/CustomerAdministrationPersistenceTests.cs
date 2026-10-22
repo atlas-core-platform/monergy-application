@@ -26,6 +26,7 @@ public sealed class CustomerAdministrationPersistenceTests
    await using(var sources=new PostgresTenantSessions(config))
    {
     var repo=new PostgresCustomerAdministration(sources);var contexts=new PostgresCustomers(sources);var profile=new PostgresSelfCustomerProfile(sources);
+    var directory=await repo.ListAsync("T001",new(Search:suffix),default);Assert.Single(directory.Items);Assert.Equal(customer,directory.Items[0].CustomerId);Assert.True(directory.Total>=1);Assert.Empty((await repo.ListAsync("T002",new(Search:suffix),default)).Items);
     Assert.True((await contexts.ReadOwnedAsync("T001",actor,default))!.Active);Assert.True(await profile.OwnsAsync("T001",actor,customer,default));
     receipt=await repo.ChangeAsync("T001","A900",customer,change,DateTimeOffset.UtcNow,default);
     Assert.False((await contexts.ReadAsync("T001",customer,default))!.Active);Assert.Null(await contexts.ReadOwnedAsync("T001",actor,default));Assert.False(await profile.OwnsAsync("T001",actor,customer,default));Assert.Null(await profile.ReadAsync("T001",actor,default));

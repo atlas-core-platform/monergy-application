@@ -346,4 +346,34 @@ describe('tenant administration trust boundaries', () => {
     });
     expect(onFailure).not.toHaveBeenCalled();
   });
+
+  it('keeps the authenticated workspace when one feature owner is unavailable', async () => {
+    const onFailure = vi.fn();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(json({ error: 'AUDIT_OWNER_UNAVAILABLE' }, 503)),
+    );
+    const api = new AccessApi(session, {
+      signal: new AbortController().signal,
+      onFailure,
+      onOperation: vi.fn(),
+    });
+    await expect(api.owner('audit', 'local/v1/administration/audit-log')).rejects.toMatchObject({
+      status: 503,
+      code: 'AUDIT_OWNER_UNAVAILABLE',
+    });
+    expect(onFailure).not.toHaveBeenCalled();
+  });
+
+  it.each([401, 403])('ends the administration view when current authority returns %s', async status => {
+    const onFailure = vi.fn();
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ error: 'AUTHORITY_ENDED' }, status)));
+    const api = new AccessApi(session, {
+      signal: new AbortController().signal,
+      onFailure,
+      onOperation: vi.fn(),
+    });
+    await expect(api.owner('audit', 'local/v1/administration/audit-log')).rejects.toMatchObject({ status });
+    expect(onFailure).toHaveBeenCalledOnce();
+  });
 });

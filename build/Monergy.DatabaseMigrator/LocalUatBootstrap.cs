@@ -105,7 +105,10 @@ internal static partial class LocalUatBootstrap
                     if ((string?)await ScalarAsync(scoped, $"SELECT tenant_id FROM {table} WHERE singleton;").ConfigureAwait(false) != database.Tenant)
                         throw new InvalidOperationException("Tenant database mismatch.");
                 }
-                if (profile.Onboarding && database.Service == "customer-identity")
+                // Customer administration is part of every LOCAL tenant profile.
+                // Seed its owner-backed directory additively even when the older
+                // six-database profile does not enable the wider onboarding stack.
+                if (database.Service == "customer-identity")
                     await SeedCustomerOwnershipAsync(scoped, database.Tenant, profile.InstanceId).ConfigureAwait(false);
                 Console.WriteLine($"Ready: {database.Service}/{database.Tenant}; scoped runtime grants applied.");
             }
