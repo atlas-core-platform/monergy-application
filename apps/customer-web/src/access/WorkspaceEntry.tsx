@@ -117,7 +117,7 @@ export function WorkspaceEntry({
               layout="vertical"
               initialValues={{ tenantId: 'T001' }}
               onFinish={(values) => {
-                const key = values.key;
+                const key = values.key.trim();
                 form.setFieldValue('key', '');
                 void connect(values.tenantId.trim(), key);
               }}

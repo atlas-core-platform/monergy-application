@@ -10,6 +10,28 @@ $null=[System.Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref
 if ($parseErrors.Count) { throw 'Parser errors' }
 function docker { $global:LASTEXITCODE=0; if ($args[0] -eq 'info') { 'linux' } }
 function Invoke-WebRequest { [pscustomobject]@{StatusCode=200} }
+$global:fixtureMembers=@{ T001=@('A900'); T002=@('A900') }
+$global:memberWrites=@()
+function Invoke-RestMethod {
+ param([string]$Uri,[string]$Method='Get',[string]$ContentType,[hashtable]$Headers,[string]$Body,[int]$TimeoutSec)
+ if ($Uri.EndsWith('/identity-api/local/v1/tenant-sessions/revoke')) { return $true }
+ if ($Uri.EndsWith('/identity-api/local/v1/tenant-sessions')) {
+  $tenant=($Body | ConvertFrom-Json).tenantId
+  return [pscustomobject]@{tenantId=$tenant;actorId='A900';authenticationContextId=('session-'+$tenant);subjectVersion=1;expiresAt='2099-01-01T00:00:00Z'}
+ }
+ if ($Uri -like '*/access-api/v1/administration/members?limit=100') {
+  $tenant=[string]$Headers['X-Monergy-Tenant']
+  $items=@($global:fixtureMembers[$tenant] | ForEach-Object { [pscustomobject]@{actorId=$_} })
+  return [pscustomobject]@{policyVersion=1+@($global:memberWrites).Count;items=$items;nextCursor=$null}
+ }
+ if ($Uri.EndsWith('/access-api/v1/administration/members') -and $Method -eq 'Post') {
+  $tenant=[string]$Headers['X-Monergy-Tenant']; $actor=($Body | ConvertFrom-Json).actorId
+  $global:fixtureMembers[$tenant]=@($global:fixtureMembers[$tenant])+$actor
+  $global:memberWrites+=($tenant+'/'+$actor)
+  return [pscustomobject]@{actorId=$actor}
+ }
+ throw "Unexpected mocked request: $Method $Uri"
+}
 & $scriptPath -Action Prepare
 $path=Join-Path $testRoot '.artifacts/uat/default/profile.json'
 $original=Get-Content $path -Raw | ConvertFrom-Json
@@ -30,6 +52,14 @@ foreach ($action in @('Prepare','Start','Status','Verify','Stop')) {
  & $scriptPath -Action $action
  if ((Get-Content $path -Raw) -ne $bytes) { throw "Profile changed during $action" }
 }
+foreach ($expected in @('T001/A100','T001/A300','T002/A100','T002/A300')) {
+ if ($expected -notin $global:memberWrites) { throw "Retained profile did not repair $expected" }
+}
+$memberWriteCount=@($global:memberWrites).Count
+if (-not (Test-Path (Join-Path (Split-Path $path) 'reference-members-v2-initialized'))) { throw 'Revised membership marker missing' }
+& $scriptPath -Action Start
+if (@($global:memberWrites).Count -ne $memberWriteCount) { throw 'Revised membership replay replaced operator state' }
+if ((Get-Content $path -Raw) -ne $bytes) { throw 'Profile changed during revised membership replay' }
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -Port 4183
 $onboardPath=Join-Path $testRoot '.artifacts/uat/onboarding/profile.json'
 $onboard=Get-Content $onboardPath -Raw | ConvertFrom-Json
@@ -61,6 +91,6 @@ if ($classification.Monergy.Classification.Reviewers.T001[0] -ne 'A900' -or $cla
 $classificationAgain=Get-Content (Join-Path (Split-Path $onboardPath) 'document-intelligence.json') -Raw | ConvertFrom-Json
 if ($classificationAgain.Monergy.Classification.Reviewers.T001[0] -ne 'A900') { throw 'Classification silently fell back on repeat start.' }
 'PASS: classification persistence and explicit reviewer configuration retained.'
-'PASS: Basic KYC onboarding configuration; syntax; fresh/default/legacy/onboarding configuration; all non-destructive actions with mocked Docker/readiness; credential preservation; repeat-run stability; encryption conversion.'
+'PASS: Basic KYC onboarding configuration; syntax; fresh/default/legacy/onboarding configuration; retained membership repair; all non-destructive actions with mocked Docker/readiness; credential preservation; repeat-run stability; encryption conversion.'
 
 } finally { Remove-Item -LiteralPath $testRoot -Recurse -Force }

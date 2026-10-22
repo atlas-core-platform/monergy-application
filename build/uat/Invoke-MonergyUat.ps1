@@ -280,7 +280,13 @@ if ($Action -in @('Prepare','Start')) {
 if ($Action -eq 'Credentials') {
     $identity = $state.identities | Where-Object { $_.tenantId -eq $Tenant -and $_.actorId -eq $Actor }
     if ($null -eq $identity) { throw 'This actor has no key in the selected profile.' }
-    Write-Host "Local UAT only | Tenant $Tenant | Actor $Actor"
+    $persona = switch ($Actor) {
+        'A900' { 'Organization Administrator' }
+        'A100' { 'Primary Customer' }
+        'A200' { 'Additional Customer' }
+        'A300' { 'Financial Advisor / configured reviewer' }
+    }
+    Write-Host "Local UAT only | Tenant $Tenant | Actor $Actor | Persona $persona"
     Write-Output $identity.token
     return
 }
@@ -483,8 +489,11 @@ for ($attempt=0; $attempt -lt 90; $attempt++) {
     Start-Sleep -Seconds 2
 }
 if (-not $ready) { Compose @('ps','--all'); throw 'UAT readiness timed out. Inspect docker compose service logs using this profile; do not share credentials.' }
-# Fixture membership is created through AM once; subsequent starts preserve operator changes.
-if ($Action -eq 'Start' -and -not (Test-Path (Join-Path $folder 'members-initialized'))) {
+# Fixture membership is created through AM once per bootstrap revision; subsequent
+# starts preserve operator changes. The revisioned marker repairs retained profiles
+# whose older marker exists while one or more advertised local identities are absent.
+$memberBootstrapMarker = Join-Path $folder 'reference-members-v2-initialized'
+if ($Action -eq 'Start' -and -not (Test-Path $memberBootstrapMarker)) {
     foreach ($tenantId in @('T001','T002')) {
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
@@ -498,11 +507,17 @@ if ($Action -eq 'Start' -and -not (Test-Path (Join-Path $folder 'members-initial
                     Invoke-RestMethod "$url/access-api/v1/administration/members" -Method Post -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;actorId=$actorId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
                 }
             }
+            $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
+            foreach ($actorId in $memberActors) {
+                if (-not @($members.items | Where-Object actorId -eq $actorId).Count) {
+                    throw "Local reference membership reconciliation failed for $tenantId/$actorId."
+                }
+            }
         } finally {
             Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
-    Save-Text 'members-initialized' $state.instanceId
+    Save-Text 'reference-members-v2-initialized' $state.instanceId
     Protect-Files
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'app03-processing-policy-initialized'))) {
