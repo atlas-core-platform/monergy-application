@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-108",
-  "applicationBase": "c3973730a86b06b15bed65e6cb2d3b2813700262",
+  "asOf": "T1-109",
+  "applicationBase": "858b7c244d8b740ba387ac8b32c1f52e6d0584e2",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 15,
+    "libraryVersion": 16,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook through T1-107; T1-108 completes supported basic financial summary from exact comparable reviewed calculations. Acceptance unchanged.",
+    "reviewThrough": "Workbook through T1-108; T1-109 removes silent document corpus truncation through owner-scoped pagination. No deliverable completion or acceptance change.",
     "libraryFileId": "libfile_7747823175948191ad6e56244bee8cf2"
   },
   "counts": {
@@ -15,8 +15,8 @@
     "partial": 12,
     "pendingBusinessJourneys": 0,
     "remainingOriginalDeliverables": 12,
-    "numberedUnitsAfterPairedMerge": 108,
-    "mergedImplementationUnitsAfterPairedMerge": 107,
+    "numberedUnitsAfterPairedMerge": 109,
+    "mergedImplementationUnitsAfterPairedMerge": 108,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -131,11 +131,11 @@
       "area": "Documents",
       "name": "Indexing",
       "state": "Partial",
-      "existing": "Authorized lexical retrieval and derived search projections expose source-linked documents and reviewed figures. T1-106 reads current owners for search/retrieval/refresh using isolated request snapshots, no cached fallback; explicit refresh is tenant-authorized.",
+      "existing": "Authorized lexical retrieval and derived search projections expose source-linked documents and reviewed figures. T1-106 reads current owners for search/retrieval/refresh using isolated request snapshots, no cached fallback; explicit refresh is tenant-authorized. T1-109 reads all authorized document pages up to an explicit 10,000-version safety limit; later owner/page failures reject the whole search instead of returning incomplete results.",
       "remaining": "Complete durable document/financial/knowledge indexing as applicable, replacement/rebuild/invalidation and freshness handling across required document classes.",
-      "units": "T1-11, T1-24/28/31/35/39; T1-106",
+      "units": "T1-11, T1-24/28/31/35/39; T1-106; T1-109",
       "requirements": "MON-DOC-003/008; MON-FIN-013; MON-SRH-002",
-      "receipt": "build/governance/t1-106-index-freshness.md"
+      "receipt": "build/governance/t1-109-search-corpus.md"
     },
     {
       "id": "P1-11",
@@ -274,11 +274,11 @@
       "area": "AI",
       "name": "Financial document search",
       "state": "Partial",
-      "existing": "Authorized lexical Search now includes canonical Insurance/Tax owner figures under existing source categories, with original provenance. Broader natural-language search and grounded financial Q&A remain open.",
+      "existing": "Authorized lexical Search now includes canonical Insurance/Tax owner figures under existing source categories, with original provenance. Broader natural-language search and grounded financial Q&A remain open. T1-109 reads all authorized document pages up to an explicit 10,000-version safety limit; later owner/page failures reject the whole search instead of returning incomplete results.",
       "remaining": "Complete the \u00a715 natural-language query journey and relevant retrieval across the required indexed document classes.",
-      "units": "T1-11, T1-24/28/31/35/39; T1-64",
+      "units": "T1-11, T1-24/28/31/35/39; T1-64; T1-109",
       "requirements": "MON-SRH-001/002; MON-AI-009",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-64-financial-source-category-boundary.md"
+      "receipt": "build/governance/t1-109-search-corpus.md"
     },
     {
       "id": "P1-24",

@@ -85,7 +85,7 @@ public sealed partial class InMemoryEvidenceRepository : IEvidenceRepository
     public Task<IReadOnlyList<EvidenceVersionRecord>> ListCustomerAsync(
         string customerId,
         int limit,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, EvidenceVersionRecord? after = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         lock (sync)
@@ -93,6 +93,8 @@ public sealed partial class InMemoryEvidenceRepository : IEvidenceRepository
             return Task.FromResult<IReadOnlyList<EvidenceVersionRecord>>(
                 versions.Values
                     .Where(version => string.Equals(version.CustomerId, customerId, StringComparison.Ordinal))
+                    .Where(version => after is null || version.CreatedAt < after.CreatedAt ||
+                        (version.CreatedAt == after.CreatedAt && string.CompareOrdinal(version.DocumentVersionId, after.DocumentVersionId) < 0))
                     .OrderByDescending(version => version.CreatedAt)
                     .ThenByDescending(version => version.DocumentVersionId, StringComparer.Ordinal)
                     .Take(limit)

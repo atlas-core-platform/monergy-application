@@ -146,15 +146,16 @@ public sealed partial class PostgresEvidenceRepository : IEvidenceRepository, IA
     public async Task<IReadOnlyList<EvidenceVersionRecord>> ListCustomerAsync(
         string customerId,
         int limit,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, EvidenceVersionRecord? after = null)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         var values = await connection.QueryAsync<VersionRow>(new CommandDefinition($"""
             SELECT {VersionColumns} FROM evidence.document_versions
             WHERE customer_id=@customerId
-            ORDER BY created_at DESC, document_version_id DESC
+              AND (@afterId IS NULL OR created_at < @afterAt OR (created_at = @afterAt AND document_version_id COLLATE "C" < @afterId COLLATE "C"))
+            ORDER BY created_at DESC, document_version_id COLLATE "C" DESC
             LIMIT @limit;
-            """, new { customerId, limit }, cancellationToken: cancellationToken));
+            """, new { customerId, limit, afterId = after?.DocumentVersionId, afterAt = after?.CreatedAt ?? DateTimeOffset.MinValue }, cancellationToken: cancellationToken));
         return values.Select(ToRecord).ToArray();
     }
 

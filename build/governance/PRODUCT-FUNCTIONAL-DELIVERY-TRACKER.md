@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-108 basic financial summary. Original29:17 Complete,12 Partial,0 Pending. Physical/live UAT, provider evaluation and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-109 document search corpus traversal. Original29:17 Complete,12 Partial,0 Pending. Physical/live UAT, provider evaluation and business acceptance remain separate and open.
 
-## Current T1-108 update — Basic financial summary
+## Current T1-109 update — Document search corpus
+
+Search, retrieval context and explicit refresh traverse the owner-scoped document library beyond 100 versions. Immutable keyset pagination, exact references and whole-request rejection on later-page failure retain current access checks. An explicit 10,000-version resource limit fails instead of silently truncating. [Receipt](t1-109-search-corpus.md).
+
+P1-10 and P1-23 remain Partial for durable indexing, broader source coverage and natural-language retrieval. Counts remain 17 Complete, 12 Partial, 0 Pending; 108 implementation units plus one governance closure. Physical database and live UAT remain unverified. Acceptance unchanged.
+
+## Previous T1-108 update — Basic financial summary
 
 P1-25 is Complete for a basic personal summary of selected reviewed net-worth and monthly cash-flow results. Both reviews must share a completed month-end date and currency; monthly household/member scope must be Self. Six exact Financial Rules claims cover assets, liabilities, net worth, income, expenses and monthly balance. The model only organizes those claims. Missing coverage bypasses model spend and cannot produce totals. [Receipt](t1-108-financial-summary.md).
 

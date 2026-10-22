@@ -81,34 +81,40 @@ public sealed class ProductSearchProjectionSource(
         string correlationId,
         CancellationToken cancellationToken)
     {
-        var request = new ContractRequest<ListCustomerEvidence>(
-            App02ContractNames.ListCustomerEvidence,
-            ContractGuard.CurrentVersion,
-            RequestId("documents"),
-            correlationId,
-            null,
-            security,
-            null,
-            new ListCustomerEvidence(customerId, 100));
-        var result = await SendAsync<ListCustomerEvidence, CustomerEvidenceLibrary>(
-            clients.CreateClient(EvidenceClient),
-            evidenceEndpoint,
-            proof,
-            "contracts/app-02/evidence-list/v1",
-            request,
-            cancellationToken).ConfigureAwait(false);
+        var items = new List<CustomerEvidenceItem>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        string? after = null;
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            // Bound resource use without silently returning a truncated corpus.
+            if (items.Count >= 10_000)
+                throw Failure("search.source.corpus-limit", ContractErrorCategory.DependencyFailure,
+                    "Document search exceeds the supported corpus size.", correlationId);
+            var request = new ContractRequest<ListCustomerEvidence>(
+                App02ContractNames.ListCustomerEvidence, ContractGuard.CurrentVersion,
+                RequestId("documents"), correlationId, null, security, null,
+                new ListCustomerEvidence(customerId, 100, after));
+            var result = await SendAsync<ListCustomerEvidence, CustomerEvidenceLibrary>(
+                clients.CreateClient(EvidenceClient), evidenceEndpoint, proof,
+                "contracts/app-02/evidence-list/v1", request, cancellationToken).ConfigureAwait(false);
+            if (result.Outcome != ContractOutcome.Success || result.Data is null)
+                throw OwnerFailure(result.Error, "search.source.evidence-unavailable", correlationId);
+            var page = result.Data;
+            if (page.CustomerId != customerId || page.Items is null || page.Items.Count > 100 ||
+                page.Items.Any(item => item is null ||
+                    string.IsNullOrWhiteSpace(item.DocumentVersionId) ||
+                    string.IsNullOrWhiteSpace(item.EvidenceId) ||
+                    string.IsNullOrWhiteSpace(item.OriginalFileName) || !seen.Add(item.DocumentVersionId)) ||
+                (page.NextVersionId is not null && (page.Items.Count != 100 ||
+                    page.NextVersionId != page.Items[^1].DocumentVersionId || page.NextVersionId == after)))
+                throw Failure("search.source.evidence-boundary-invalid", ContractErrorCategory.AccessDenied,
+                    "Document search sources are outside the current customer boundary.", correlationId);
+            items.AddRange(page.Items);
+            after = page.NextVersionId;
+        } while (after is not null);
 
-        if (result.Outcome != ContractOutcome.Success || result.Data is null)
-            throw OwnerFailure(result.Error, "search.source.evidence-unavailable", correlationId);
-        if (result.Data.CustomerId != customerId ||
-            result.Data.Items.Any(item =>
-                string.IsNullOrWhiteSpace(item.DocumentVersionId) ||
-                string.IsNullOrWhiteSpace(item.EvidenceId) ||
-                string.IsNullOrWhiteSpace(item.OriginalFileName)))
-            throw Failure("search.source.evidence-boundary-invalid", ContractErrorCategory.AccessDenied,
-                "Document search sources are outside the current customer boundary.", correlationId);
-
-        return result.Data.Items
+        return items
             .OrderBy(item => item.OriginalFileName, StringComparer.OrdinalIgnoreCase)
             .ThenBy(item => item.DocumentVersionId, StringComparer.Ordinal)
             .Select(item => new DerivedSearchRecord(

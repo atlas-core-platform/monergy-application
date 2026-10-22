@@ -59,7 +59,7 @@ public interface IEvidenceRepository
     Task<IReadOnlyList<EvidenceVersionRecord>> ListCustomerAsync(
         string customerId,
         int limit,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken, EvidenceVersionRecord? after = null);
 }
 
 public interface IEvidenceContentStore
@@ -245,16 +245,25 @@ public sealed class EvidenceApplication(
                 request, "evidence.customer.denied", ContractErrorCategory.AccessDenied, "Evidence access is denied.");
         }
 
-        if (!TenantAccessClient.Identifier(request.Payload.CustomerId, 128) || request.Payload.Limit is < 1 or > 100)
+        if (!TenantAccessClient.Identifier(request.Payload.CustomerId, 128) || request.Payload.Limit is < 1 or > 100 ||
+            (request.Payload.AfterVersionId is not null && !TenantAccessClient.Identifier(request.Payload.AfterVersionId, 160)))
         {
             return ContractResult<CustomerEvidenceLibrary>.Rejected(
                 request, "evidence.library.invalid", ContractErrorCategory.ValidationError, "The evidence library request is invalid.");
         }
 
+        EvidenceVersionRecord? after = null;
+        if (request.Payload.AfterVersionId is not null)
+        {
+            after = await repository.GetVersionAsync(request.Payload.AfterVersionId, cancellationToken);
+            if (after is null || after.CustomerId != request.Payload.CustomerId)
+                return ContractResult<CustomerEvidenceLibrary>.Rejected(request,
+                    "evidence.library.cursor-invalid", ContractErrorCategory.ValidationError, "The evidence page cursor is invalid.");
+        }
         var versions = await repository.ListCustomerAsync(
             request.Payload.CustomerId,
-            request.Payload.Limit,
-            cancellationToken);
+            request.Payload.Limit + 1,
+            cancellationToken, after);
         if (versions.Any(version => !string.Equals(version.CustomerId, request.Payload.CustomerId, StringComparison.Ordinal)))
         {
             return ContractResult<CustomerEvidenceLibrary>.Rejected(
@@ -263,7 +272,7 @@ public sealed class EvidenceApplication(
 
         var library = new CustomerEvidenceLibrary(
             request.Payload.CustomerId,
-            versions.Select(version => new CustomerEvidenceItem(
+            versions.Take(request.Payload.Limit).Select(version => new CustomerEvidenceItem(
                 version.DocumentId,
                 version.DocumentVersionId,
                 version.EvidenceId,
@@ -274,7 +283,8 @@ public sealed class EvidenceApplication(
                 version.ContentLength,
                 version.ContentSha256,
                 version.ReceivedAt,
-                version.CreatedAt)).ToArray());
+                version.CreatedAt)).ToArray(),
+            versions.Count > request.Payload.Limit ? versions[request.Payload.Limit - 1].DocumentVersionId : null);
         telemetry.Record(new LifecycleSignal(
             "Evidence Service",
             App02ContractNames.ListCustomerEvidence,

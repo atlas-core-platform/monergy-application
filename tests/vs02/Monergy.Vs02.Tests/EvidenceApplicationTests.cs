@@ -8,6 +8,36 @@ namespace Monergy.Vs02.Tests;
 public sealed class EvidenceApplicationTests
 {
     [Fact]
+    public async Task LibraryPagesUseStableOwnerScopedVersionCursor()
+    {
+        var repository = new InMemoryEvidenceRepository();
+        var app = new EvidenceApplication(repository, new ReferenceEvidenceContentStore(), new CapturingTelemetry(), TimeProvider.System);
+        for (var i = 0; i < 205; i++)
+        {
+            var id = $"version-{i:000}";
+            var at = DateTimeOffset.UnixEpoch;
+            var version = new EvidenceVersionRecord("document-" + id, id, "evidence-" + id, Vs02TestContext.CustomerId,
+                1, "Upload", "statement.txt", "text/plain", "reference://content", new string('a', 64), at, at);
+            await repository.SaveVersionAsync(new("create", "1.0", Vs02TestContext.CustomerId, id), version, _ => [], CancellationToken.None);
+        }
+        async Task<ContractResult<CustomerEvidenceLibrary>> Page(string? after) => await app.ListCustomerEvidenceAsync(Vs02TestContext.Request(
+            App02ContractNames.ListCustomerEvidence, new ListCustomerEvidence(Vs02TestContext.CustomerId, 100, after), "page-request"));
+        var first = (await Page(null)).Data!;
+        var second = (await Page(first.NextVersionId)).Data!;
+        var third = (await Page(second.NextVersionId)).Data!;
+        Assert.Equal(100, first.Items.Count); Assert.Equal(100, second.Items.Count); Assert.Equal(5, third.Items.Count);
+        Assert.Null(third.NextVersionId);
+        Assert.Equal(205, first.Items.Concat(second.Items).Concat(third.Items).Select(x => x.DocumentVersionId).Distinct().Count());
+        Assert.Equal("version-204", first.Items[0].DocumentVersionId);
+        Assert.Equal("version-000", third.Items[^1].DocumentVersionId);
+        Assert.Equal(ContractOutcome.Rejected, (await Page("missing-version")).Outcome);
+        Assert.Equal(ContractOutcome.Rejected, (await Page("../invalid")).Outcome);
+        var wrongCustomer = await app.ListCustomerEvidenceAsync(Vs02TestContext.Request(App02ContractNames.ListCustomerEvidence,
+            new ListCustomerEvidence("customer-002", 100, first.NextVersionId), "other-page", security: Vs02TestContext.Security("customer-002")));
+        Assert.Equal("evidence.library.cursor-invalid", wrongCustomer.Error!.Code);
+    }
+
+    [Fact]
     public async Task CreatesImmutableVersionAndReplaysIdempotently()
     {
         var repository = new InMemoryEvidenceRepository();
