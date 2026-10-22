@@ -12,7 +12,7 @@ public static class QaEndpoints
         builder.Services.AddSingleton<CustomerOwnerClient>(); builder.Services.AddSingleton<TenantAccessClient>();
         builder.Services.AddSingleton(provider => new QaOwners(provider.GetRequiredService<CustomerOwnerClient>(), provider.GetRequiredService<TenantAccessClient>(),
             provider.GetRequiredService<IConfiguration>(), new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
-            { Timeout = TimeSpan.FromSeconds(40), MaxResponseContentBufferSize = 262144 }));
+            { Timeout = TimeSpan.FromSeconds(40), MaxResponseContentBufferSize = 4194304 }));
         builder.Services.AddSingleton<IQaOwners>(provider => provider.GetRequiredService<QaOwners>());
         builder.Services.AddSingleton<QaStore>(); builder.Services.AddSingleton<QaApplication>();
     }

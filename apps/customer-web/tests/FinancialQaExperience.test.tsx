@@ -53,6 +53,7 @@ function mount(api: AccessApi, capabilities = ['ai-intelligence.analysis.execute
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.history.replaceState({}, '', '/');
 });
 
 const configuration = { available: true, revision: 'a'.repeat(64), providerLabel: 'Configured provider', notice: 'Operator-published notice' };
@@ -114,4 +115,39 @@ it('links calculation history to the retained calculation instead of a new calcu
   vi.spyOn(api, 'product').mockImplementation(path => Promise.resolve(path.endsWith('/configuration') ? configuration : [{ ...answer, claims: [{ ...answer.claims[0], kind: 'Calculation', calculationId: 'networth-1', documentVersionId: '', sourceLocation: 'Reviewed position', ruleVersion: '1.0.0' }] }]));
   mount(api); expect(await screen.findByRole('link', { name: 'Open exact calculation' })).toHaveAttribute('href', '/net-worth?calculation=networth-1');
   expect(screen.queryByRole('link', { name: 'Open source document version' })).not.toBeInTheDocument();
+});
+
+const summaryPosition = { positionId: 'position-1', operationId: 'a'.repeat(32), customerId: 'reference-customer', position: { asOfDate: '2026-09-30', currency: 'USD', lines: [], assetsComplete: true, liabilitiesComplete: true, replacesPositionId: null }, lines: [], recordedBy: 'A100', recordedAt: '2026-10-20T00:00:00Z' };
+const summaryNet = { calculationId: 'net-result', operationId: 'b'.repeat(32), customerId: 'reference-customer', position: summaryPosition, ruleId: 'monergy.net-worth', ruleVersion: '1.0.0', definitionHash: 'a'.repeat(64), numericSemantics: 'Exact totals', state: 'CALCULATED', totalAssets: '0.00', totalLiabilities: '0.00', netWorth: '0.00', issues: [], recordedBy: 'A100', recordedAt: '2026-10-20T00:00:00Z' };
+const summaryCash = { ...summaryNet, calculationId: 'cash-result', ruleId: 'monergy.monthly-cashflow', totalIncome: '0.00', totalExpenses: '0.00', balance: '0.00', position: { ...summaryPosition, position: { asOfDate: '2026-09-30', currency: 'USD', lines: [], incomeComplete: true, expensesComplete: true, replacesPositionId: null, household: 'Self' } } };
+it.each(['valid', 'omitted', 'swapped'])('creates a selected summary and validates %s citations', async mode => {
+ const api = new AccessApi(session); const user = userEvent.setup(); window.history.replaceState({}, '', '/financial-qa?mode=summary'); vi.spyOn(crypto, 'randomUUID').mockReturnValue('cccccccc-cccc-cccc-cccc-cccccccccccc');
+ const claims = Array.from({ length: mode === 'omitted' ? 5 : 6 }, (_, i) => ({ ...answer.claims[0], id: 'summary-' + String(i), kind: i < 3 ? 'Calculation' : 'MonthlyCalculation', text: 'Reviewed result ' + String(i), documentVersionId: '', calculationId: mode === 'swapped' ? 'foreign-result' : i < 3 ? 'net-result' : 'cash-result', ruleVersion: '1.0.0' }));
+ const request = vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
+  if (path.endsWith('/configuration')) return Promise.resolve(configuration); if (path.endsWith('/history')) return Promise.resolve([]);
+  if (path === 'v1/net-worth/calculations') return Promise.resolve({ items: [summaryNet], hasMore: false, nextBeforeId: null });
+  if (path === 'v1/monthly-cashflow/calculations') return Promise.resolve({ items: [summaryCash], hasMore: false, nextBeforeId: null });
+  expect(method).toBe('POST'); const input = body as { question: string; summaryNetWorthCalculationId: string; summaryCashflowCalculationId: string }; expect(input.summaryNetWorthCalculationId).toBe('net-result'); expect(input.summaryCashflowCalculationId).toBe('cash-result'); return Promise.resolve({ ...answer, question: input.question, claims });
+ });
+ mount(api, ['ai-intelligence.analysis.execute', 'search.query.execute', 'financial-profile.profile.read', 'evidence.document.read', 'financial-rules.calculation.execute']); await screen.findByText(configuration.notice); await waitFor(() => { expect(screen.getByRole('combobox', { name: 'Summary net-worth result' })).toBeEnabled(); });
+ expect(screen.queryByLabelText('Your question')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Create financial summary' })).toBeDisabled();
+ await user.click(screen.getByRole('combobox', { name: 'Summary net-worth result' })); await user.click(await screen.findByText('2026-09-30 · USD · saved 2026-10-20T00:00:00Z'));
+ await user.click(screen.getByRole('checkbox')); await user.click(screen.getByRole('combobox', { name: 'Summary monthly result' })); await user.click(await screen.findByText('2026-09-30 · Self · USD · saved 2026-10-20T00:00:00Z')); expect(screen.getByRole('checkbox')).not.toBeChecked(); await user.click(screen.getByRole('checkbox')); await user.click(screen.getByRole('button', { name: 'Create financial summary' }));
+ if (mode === 'valid') { expect((await screen.findAllByRole('link', { name: 'Open exact monthly calculation' }))[0]).toHaveAttribute('href', '/monthly-cashflow?calculation=cash-result'); expect(screen.getAllByRole('link', { name: 'Open exact calculation' })[0]).toHaveAttribute('href', '/net-worth?calculation=net-result'); expect(screen.queryByRole('link', { name: 'Open source document version' })).not.toBeInTheDocument(); } else { await screen.findByText(/No answer could be confirmed/); expect(screen.queryByText('Reviewed result 0')).not.toBeInTheDocument(); }
+ expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(1);
+});
+it.each([false, true])('loads older summary reviews and rejects invalid owner pages (%s)', async invalid => {
+ const api = new AccessApi(session); const user = userEvent.setup(); window.history.replaceState({}, '', '/financial-qa?mode=summary');
+ const many = Array.from({ length: 50 }, (_, i) => ({ ...summaryNet, calculationId: 'net-' + String(i), recordedAt: '2026-10-19T00:00:' + String(i).padStart(2, '0') + 'Z' }));
+ const request = vi.spyOn(api, 'product').mockImplementation(path => {
+  if (path.endsWith('/configuration')) return Promise.resolve(configuration); if (path.endsWith('/history')) return Promise.resolve([]);
+  if (path === 'v1/monthly-cashflow/calculations') return Promise.resolve({ items: [summaryCash], hasMore: false, nextBeforeId: null });
+  if (path.includes('beforeId=net-49')) return Promise.resolve({ items: [{ ...summaryNet, customerId: invalid ? 'foreign' : summaryNet.customerId }], hasMore: false, nextBeforeId: null });
+  return Promise.resolve({ items: many, hasMore: true, nextBeforeId: 'net-49' });
+ });
+ mount(api, ['ai-intelligence.analysis.execute', 'search.query.execute', 'financial-profile.profile.read', 'evidence.document.read', 'financial-rules.calculation.execute']);
+ await screen.findByRole('button', { name: 'Load older net-worth results' }); await user.click(screen.getByRole('combobox', { name: 'Summary monthly result' })); await user.click(await screen.findByText('2026-09-30 · Self · USD · saved 2026-10-20T00:00:00Z')); await user.click(screen.getByRole('button', { name: 'Load older net-worth results' }));
+ if (invalid) { await screen.findByText(/Saved summary reviews could not be loaded/); expect(screen.getByRole('combobox', { name: 'Summary net-worth result' })).toBeDisabled(); }
+ else { await waitFor(() => { expect(screen.getByRole('combobox', { name: 'Summary net-worth result' })).toBeEnabled(); }); await user.type(screen.getByRole('combobox', { name: 'Summary net-worth result' }), '2026-10-20'); await user.click(await screen.findByText('2026-09-30 · USD · saved 2026-10-20T00:00:00Z')); await user.click(screen.getByRole('checkbox')); expect(screen.getByRole('button', { name: 'Create financial summary' })).toBeEnabled(); }
+ expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(0);
 });

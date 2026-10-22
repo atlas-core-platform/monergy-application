@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-107 monthly Income and Expenses dashboards. Original29:16 Complete,13 Partial,0 Pending. Physical/live UAT and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-108 basic financial summary. Original29:17 Complete,12 Partial,0 Pending. Physical/live UAT, provider evaluation and business acceptance remain separate and open.
 
-## Current T1-107 update — Monthly Income and Expenses
+## Current T1-108 update — Basic financial summary
+
+P1-25 is Complete for a basic personal summary of selected reviewed net-worth and monthly cash-flow results. Both reviews must share a completed month-end date and currency; monthly household/member scope must be Self. Six exact Financial Rules claims cover assets, liabilities, net worth, income, expenses and monthly balance. The model only organizes those claims. Missing coverage bypasses model spend and cannot produce totals. [Receipt](t1-108-financial-summary.md).
+
+P1-24 remains Partial for general question relevance/grounding and OD-11 model approval. Configuration remains operator-supplied during onboarding. After paired merges:17 Complete,12 Partial,0 Pending;107 implementation units+1 governance closure. Business acceptance T1-06 unchanged. No user decision is required to implement this bounded summary; live provider validation and full UAT remain open.
+
+## Previous T1-107 update — Monthly Income and Expenses
 
 P1-19 and P1-20 are Complete for the supported customer-reviewed monthly dashboard journey. Financial Profile owns immutable month-end household reviews with member/category/source detail and exact saved record imports. Financial Rules owns complete-coverage totals and changes between completed calendar months. Overview and review UI preserve missing-versus-zero, access checks, source history, retries and paged comparisons. [Receipt](t1-107-monthly-cashflow.md).
 

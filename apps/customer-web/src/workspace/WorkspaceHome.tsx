@@ -60,10 +60,10 @@ const journeys: {
   },
   {
     title: 'Create a basic financial summary',
-    description: 'Bring your trusted financial information into one source-connected exportable view.',
-    href: '/reports',
+    description: 'Summarize selected reviewed monthly and net-worth results with exact calculation citations.',
+    href: '/financial-qa?mode=summary',
     icon: 'reports',
-    capability: 'reporting.report.generate',
+    capability: 'ai-intelligence.analysis.execute',
     action: 'Create summary',
   },
 ];

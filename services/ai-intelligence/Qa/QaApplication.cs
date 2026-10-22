@@ -6,7 +6,7 @@ namespace Monergy.Services.AiIntelligence.Qa;
 
 public sealed class QaApplication(IQaOwners owners, QaStore store)
 {
-    public const string PromptVersion = "monergy-basic-qa/2";
+    public const string PromptVersion = "monergy-basic-qa/3";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
     public static QaPlan ParsePlan(string content)
@@ -39,7 +39,10 @@ public sealed class QaApplication(IQaOwners owners, QaStore store)
         if (input.DocumentVersionId is not null && input.NetWorthPositionId is not null ||
             input.DocumentVersionId is not null && !TenantAccessClient.Identifier(input.DocumentVersionId, 160) ||
             input.NetWorthPositionId is not null && !TenantAccessClient.Identifier(input.NetWorthPositionId, 80)) throw new TenantBoundaryException("AI_REQUEST_INVALID", 400);
-        var basis = input.DocumentVersionId is not null ? "document" : input.NetWorthPositionId is not null ? "net-worth" : "financial";
+        var summary=input.SummaryNetWorthCalculationId is not null||input.SummaryCashflowCalculationId is not null;
+        if(summary&&(input.DocumentVersionId is not null||input.NetWorthPositionId is not null||
+            !TenantAccessClient.Identifier(input.SummaryNetWorthCalculationId,80)||!TenantAccessClient.Identifier(input.SummaryCashflowCalculationId,80)))throw new TenantBoundaryException("AI_SUMMARY_INVALID",400);
+        var basis = summary ? "summary" : input.DocumentVersionId is not null ? "document" : input.NetWorthPositionId is not null ? "net-worth" : "financial";
         var customer = await owners.Authorize(http);
         var settings = await owners.Configuration(http);
         if (!settings.Available) throw new TenantBoundaryException("AI_NOT_CONFIGURED", 503);
@@ -67,7 +70,7 @@ public sealed class QaApplication(IQaOwners owners, QaStore store)
             records.Add(new(customer.Session.TenantId, customer.Workspace.CustomerId, customer.Session.ActorId, requestHash,
                 attempt, [], [], "", "", "", true, settings.Notice, input.DocumentVersionId, input.NetWorthPositionId));
             await store.CheckpointAsync(records);
-            var planResult = await owners.Generate(http, new("plan", input.Question, settings.Revision, true, [], basis));
+            var planResult = summary ? new QaModelResult("", "{\"mode\":\"lookup\",\"query\":\"reviewed financial summary\"}") : await owners.Generate(http, new("plan", input.Question, settings.Revision, true, [], basis));
             var plan = ParsePlan(planResult.Content); var searchIds = new List<string>();
             IReadOnlyList<QaClaim> retrieved = []; IReadOnlyList<QaClaim> selected = [];
             QaModelResult? selection = null;
@@ -75,25 +78,29 @@ public sealed class QaApplication(IQaOwners owners, QaStore store)
             if (plan.Mode is "lookup" or "calculation")
             {
                 retrieved = basis switch {
+                    "summary" => await owners.Summary(http,customer,input.SummaryNetWorthCalculationId!,input.SummaryCashflowCalculationId!),
                     "document" => await owners.Document(http, customer, input.DocumentVersionId!),
                     "net-worth" => await owners.Calculate(http, customer, input.NetWorthPositionId!, input.OperationId),
                     _ => await owners.Retrieve(http, customer, plan.Query, searchIds)
                 };
                 records[recordIndex] = records[recordIndex] with { SearchRecordIds = searchIds, RetrievedClaims = retrieved, PlanJson = planResult.Content, PlanModel = planResult.Model };
                 await store.CheckpointAsync(records);
-                if (retrieved.Count > 0)
+                if (summary && retrieved.Any(x => x.Id.EndsWith("-incomplete",StringComparison.Ordinal))) selected = retrieved;
+                else if (retrieved.Count > 0)
                 {
                     CustomerReviewHttp.Confirm(customer.Decision, (await owners.Authorize(http)).Decision);
                     selection = await owners.Generate(http, new("select", input.Question, settings.Revision, true, retrieved, basis));
                     selected = Select(selection.Content, retrieved);
+                    if(summary && selected.Count>0 && (retrieved.Count!=6 || selected.Count!=retrieved.Count))throw Invalid();
                 }
             }
             await owners.Validate(http, customer, retrieved);
             CustomerReviewHttp.Confirm(customer.Decision, (await owners.Authorize(http)).Decision);
             if ((await owners.Configuration(http)).Revision != settings.Revision) throw new TenantBoundaryException("AI_PERMISSION_CHANGED", 409);
-            var state = plan.Mode == "unsupported" ? "UNSUPPORTED" : selected.Count == 0 || selected.Any(x => x.Id == "calculation-incomplete") ? "INSUFFICIENT_DATA" : "SOURCES";
+            var state = plan.Mode == "unsupported" ? "UNSUPPORTED" : selected.Count == 0 || selected.Any(x => x.Id.EndsWith("-incomplete",StringComparison.Ordinal)) ? "INSUFFICIENT_DATA" : "SOURCES";
             var answer = new QaAnswer(attempt.AnswerId, input.OperationId, input.Question, state,
-                state == "SOURCES" && basis == "document" ? "These passages come from the selected document version. Text and OCR transcriptions may contain errors; verify the original. They are not authoritative financial facts."
+                state == "SOURCES" && summary ? "Financial summary of your selected customer-reviewed inventories: assets, liabilities and net worth at month end, plus income, expenses and balance for that completed month. Financial Rules calculated every amount; the model only organized these cited results. These are self-declared, not externally verified. Monthly balance is not a bank balance or a change in net worth."
+                : state == "SOURCES" && basis == "document" ? "These passages come from the selected document version. Text and OCR transcriptions may contain errors; verify the original. They are not authoritative financial facts."
                 : state == "SOURCES" && basis == "net-worth" ? "Financial Rules calculated these values from your selected reviewed inventory. The model only selected relevant results; it did not calculate figures."
                 : state == "SOURCES" ? "These matching source records may help. This is a limited retrieval, not a complete financial inventory or verification of the figures."
                 : state == "UNSUPPORTED" ? "This question is outside the selected source scope. Choose a reviewed Net worth position for its supported calculation; advice, forecasts and external verification are not available here."

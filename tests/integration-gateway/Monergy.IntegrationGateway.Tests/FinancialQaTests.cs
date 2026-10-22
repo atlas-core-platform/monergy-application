@@ -10,7 +10,7 @@ using Monergy.Services.IntegrationGateway.AiModel;
 using Xunit;
 namespace Monergy.IntegrationGateway.Tests;
 
-public sealed class FinancialQaTests
+public sealed partial class FinancialQaTests
 {
     private static readonly string[] PrivateValues = ["fact-1", "provenance-1", "version-1", "private-secret", "T001"];
     private static readonly QaClaim Claim = new("source-0", "Salary source amount 100 USD.", "FinancialFact", "fact-1", 1, "provenance-1", "version-1");
@@ -226,6 +226,9 @@ public sealed class FinancialQaTests
     private static AskFinancialQuestion Input() => new(Guid.NewGuid().ToString("N"), "Show salary source records", new string('a', 64), true);
     private sealed class Owners : IQaOwners
     {
+        public Task<IReadOnlyList<QaClaim>> Summary(HttpContext http,QaCustomer customer,string netWorthCalculation,string cashflowCalculation) => Task.FromResult<IReadOnlyList<QaClaim>>(SummaryIncomplete ? [SummaryClaims[0] with { Id = "monthly-incomplete" }] : SummaryClaims);
+        public bool SummaryIncomplete { get; set; }
+        public bool OmitSummaryClaim { get; set; }
         public string Tenant { get; set; } = "T001";
         public int Calls { get; private set; }
         public bool Denied { get; set; }
@@ -247,6 +250,7 @@ public sealed class FinancialQaTests
             Calls++; if (Fail) throw new HttpRequestException();
             if (input.Phase == "plan") return Task.FromResult(new QaModelResult("model-v1", JsonSerializer.Serialize(new { mode = Unsupported ? "unsupported" : "lookup", query = "salary" })));
             if (RevokeAfterSelection) Denied = true;
+            if(input.Basis=="summary")return Task.FromResult(new QaModelResult("model-v1",JsonSerializer.Serialize(new {state="SOURCES",claimIds=SummaryClaims.Take(OmitSummaryClaim?5:6).Select(x=>x.Id)})));
             return Task.FromResult(new QaModelResult("model-v1", """{"state":"SOURCES","claimIds":["source-0"]}"""));
         }
         public Task<IReadOnlyList<QaClaim>> Retrieve(HttpContext http, QaCustomer customer, string query, List<string> ids)
