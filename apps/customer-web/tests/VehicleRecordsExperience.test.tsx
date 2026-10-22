@@ -303,3 +303,18 @@ it('edits an unknown registration as blank and can add then clear the optional r
   await screen.findByText('Vehicle record saved: Family car');expect(latest.vehicle.registrationNumber).toBeNull();
   expect(request.mock.calls.filter(([path])=>path.endsWith('/corrections')).map(([, ,body])=>(body as {expectedRevision:number}).expectedRevision)).toEqual([1,2]);
 });
+
+it('pages beyond 200 vehicle records and refreshes from the newest page', async () => {
+ const api = new AccessApi(session); const first = Array.from({ length: 200 }, (_, i) => ({ ...record, vehicleRecordId: 'vehicle-page-' + String(i), vehicle: { ...record.vehicle, name: 'Paged record ' + String(i) } }));
+ const request = vi.spyOn(api, 'product').mockImplementation(async path => {
+  await Promise.resolve();
+  if (path === 'v1/vehicle-records') return { items: first, hasMore: true, dataDurability: 'Temporary data' };
+  if (path === 'v1/vehicle-records?afterId=vehicle-page-199') return { items: [record], hasMore: false, dataDurability: 'Temporary data' };
+  throw new Error('Unexpected page');
+ });
+ mount(api, false); fireEvent.click(await screen.findByRole('button', { name: 'Earlier vehicle records' }));
+ expect(await screen.findByRole('button', { name: 'View vehicle record: ' + record.vehicle.name })).toBeVisible();
+ expect(screen.queryByRole('button', { name: 'Earlier vehicle records' })).not.toBeInTheDocument();
+ expect(request.mock.calls.some(([path]) => path === 'v1/vehicle-records?afterId=vehicle-page-199')).toBe(true);
+ fireEvent.click(screen.getByRole('button', { name: 'Refresh vehicle records' })); expect(await screen.findByRole('button', { name: 'Earlier vehicle records' })).toBeVisible();
+});

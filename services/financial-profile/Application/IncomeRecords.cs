@@ -11,7 +11,7 @@ public interface IIncomeRecordRepository
     Task<ReviewedIncomeRecord> CreateAsync(string tenant, string customer, string actor,
         string fingerprint, ReviewedIncomeRecord record, CancellationToken ct);
     Task<ReviewedIncomeRecord?> ReadAsync(string tenant, string customer, string id, CancellationToken ct, int? revision = null);
-    Task<IncomeRecordList> ListAsync(string tenant, string customer, CancellationToken ct);
+    Task<IncomeRecordList> ListAsync(string tenant, string customer, CancellationToken ct, string? afterId = null);
     Task<ReviewedIncomeRecord> ReviseAsync(string tenant, string customer, string actor, string fingerprint,
         int expectedRevision, ReviewedIncomeRecord record, CancellationToken ct);
     Task<IncomeRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct);
@@ -52,7 +52,7 @@ public sealed class IncomeRecordsApplication(IFinancialProfileRepository financi
             provenance.FinancialProvenanceId, provenance.DocumentVersionId, provenance.EvidenceId, actor, clock.GetUtcNow(),"CUSTOMER_REVIEWED");
         return await repository.CreateAsync(tenant, customer, actor, fingerprint, record, ct).ConfigureAwait(false);
     }
-    public Task<IncomeRecordList> ListAsync(string tenant, string customer, CancellationToken ct) => repository.ListAsync(tenant, customer, ct);
+    public Task<IncomeRecordList> ListAsync(string tenant, string customer, CancellationToken ct, string? afterId = null) => repository.ListAsync(tenant, customer, ct, ReviewedRecordPaging.Validate(afterId));
     public async Task<ReviewedIncomeRecord> ReviseAsync(string tenant, string customer, string actor, string id,
         ReviseIncomeRecord input, CancellationToken ct)
     {

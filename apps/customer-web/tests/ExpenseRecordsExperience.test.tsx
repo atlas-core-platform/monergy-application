@@ -275,3 +275,18 @@ it('rejects a history page claiming independent expense verification',async()=>{
   mount(api,false);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View expense history: September groceries'}));
   expect(await screen.findByText('Expense history is unavailable.')).toBeVisible();expect(screen.queryByRole('button',{name:'View version 1'})).not.toBeInTheDocument();
 });
+
+it('pages beyond 200 expense records and refreshes from the newest page', async () => {
+ const api = new AccessApi(session); const first = Array.from({ length: 200 }, (_, i) => ({ ...record, expenseRecordId: 'expense-page-' + String(i), expense: { ...record.expense, name: 'Paged record ' + String(i) } }));
+ const request = vi.spyOn(api, 'product').mockImplementation(async path => {
+  await Promise.resolve();
+  if (path === 'v1/expense-records') return { items: first, hasMore: true, dataDurability: 'Temporary data' };
+  if (path === 'v1/expense-records?afterId=expense-page-199') return { items: [record], hasMore: false, dataDurability: 'Temporary data' };
+  throw new Error('Unexpected page');
+ });
+ mount(api, false); fireEvent.click(await screen.findByRole('button', { name: 'Earlier expense records' }));
+ expect(await screen.findByRole('button', { name: 'View expense record: ' + record.expense.name })).toBeVisible();
+ expect(screen.queryByRole('button', { name: 'Earlier expense records' })).not.toBeInTheDocument();
+ expect(request.mock.calls.some(([path]) => path === 'v1/expense-records?afterId=expense-page-199')).toBe(true);
+ fireEvent.click(screen.getByRole('button', { name: 'Refresh expense records' })); expect(await screen.findByRole('button', { name: 'Earlier expense records' })).toBeVisible();
+});

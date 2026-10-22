@@ -90,12 +90,15 @@ public sealed class InMemoryVehicleRecords : IVehicleRecordRepository
             return Task.FromResult(new VehicleRecordHistory(items.Take(50).ToArray(), items.Length > 50, items.Length > 50 ? items[49].Revision : null));
         }
     }
-    public Task<VehicleRecordList> ListAsync(string tenant, string customer, CancellationToken ct)
+    public Task<VehicleRecordList> ListAsync(string tenant, string customer, CancellationToken ct, string? afterId = null)
     {
         ct.ThrowIfCancellationRequested();
         lock (sync)
         {
-            var items = records.Where(x => x.Key.Tenant == tenant && x.Key.Customer == customer)
+            var anchor = afterId is null ? null : records.GetValueOrDefault((tenant, customer, afterId)).Record;
+            if (afterId is not null && anchor is null) throw new TenantBoundaryException("RECORD_PAGE_NOT_FOUND", 404);
+            var items = records.Where(x => x.Key.Tenant == tenant && x.Key.Customer == customer &&
+                (anchor is null || x.Value.Record.RecordedAt < anchor.RecordedAt || x.Value.Record.RecordedAt == anchor.RecordedAt && string.CompareOrdinal(x.Key.Id, afterId) > 0))
                 .OrderByDescending(x => x.Value.Record.RecordedAt).ThenBy(x => x.Key.Id, StringComparer.Ordinal).Take(201)
                 .Select(x => revisions.GetValueOrDefault(x.Key)?.LastOrDefault() ?? x.Value.Record).ToArray();
             return Task.FromResult(new VehicleRecordList(items.Take(200).ToArray(), items.Length > 200));

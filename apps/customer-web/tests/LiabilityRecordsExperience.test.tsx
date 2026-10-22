@@ -275,3 +275,18 @@ it('rejects a history page claiming independent liability verification',async()=
   mount(api,false);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View liability history: September debt'}));
   expect(await screen.findByText('Liability history is unavailable.')).toBeVisible();expect(screen.queryByRole('button',{name:'View version 1'})).not.toBeInTheDocument();
 });
+
+it('pages beyond 200 liability records and refreshes from the newest page', async () => {
+ const api = new AccessApi(session); const first = Array.from({ length: 200 }, (_, i) => ({ ...record, liabilityRecordId: 'liability-page-' + String(i), liability: { ...record.liability, name: 'Paged record ' + String(i) } }));
+ const request = vi.spyOn(api, 'product').mockImplementation(async path => {
+  await Promise.resolve();
+  if (path === 'v1/liability-records') return { items: first, hasMore: true, dataDurability: 'Temporary data' };
+  if (path === 'v1/liability-records?afterId=liability-page-199') return { items: [record], hasMore: false, dataDurability: 'Temporary data' };
+  throw new Error('Unexpected page');
+ });
+ mount(api, false); fireEvent.click(await screen.findByRole('button', { name: 'Earlier liability records' }));
+ expect(await screen.findByRole('button', { name: 'View liability record: ' + record.liability.name })).toBeVisible();
+ expect(screen.queryByRole('button', { name: 'Earlier liability records' })).not.toBeInTheDocument();
+ expect(request.mock.calls.some(([path]) => path === 'v1/liability-records?afterId=liability-page-199')).toBe(true);
+ fireEvent.click(screen.getByRole('button', { name: 'Refresh liability records' })); expect(await screen.findByRole('button', { name: 'Earlier liability records' })).toBeVisible();
+});

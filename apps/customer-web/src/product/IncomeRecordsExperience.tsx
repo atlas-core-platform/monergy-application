@@ -31,7 +31,7 @@ export default function IncomeRecordsExperience({ api, facts, canRead, canCreate
   const [saved, setSaved] = useState<ProductIncomeRecord | null>(null);
   const [history, setHistory] = useState<{ api: AccessApi; record: ProductIncomeRecord } | null>(null);
   const [selected, setSelected] = useState<{ api: AccessApi; record: ProductIncomeRecord } | null>(null);
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const load = useCallback(async (signal?: AbortSignal, afterId?: string) => {
     if (!canRead) return;
     const sequence = ++loadSequence.current;
     activeLoad.current?.abort();
@@ -41,8 +41,8 @@ export default function IncomeRecordsExperience({ api, facts, canRead, canCreate
     const active = () => !signal?.aborted && !controller.signal.aborted && sequence === loadSequence.current && scope.current.api === api && scope.current.canRead;
     setLoading(true); setFailure(null);
     try {
-      const list = await getIncomeRecords(api, controller.signal);
-      if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean' || list.items.some(item=>item.verificationStatus !== 'CUSTOMER_REVIEWED')) throw new Error('Invalid record list');
+      const list = await getIncomeRecords(api, controller.signal, afterId);
+      if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean' || list.hasMore && list.items.length !== 200 || new Set(list.items.map(x => x.incomeRecordId)).size !== list.items.length || list.items.some(x => x.incomeRecordId === afterId) || list.items.some(item=>item.verificationStatus !== 'CUSTOMER_REVIEWED')) throw new Error('Invalid record list');
       if (active()) setLoaded({ api, list });
     } catch (error) {
       if (active()) { setLoaded(null); setFailure({ api, text: error instanceof AccessApiError && error.status === 403
@@ -109,11 +109,13 @@ export default function IncomeRecordsExperience({ api, facts, canRead, canCreate
         {current?.submission ? 'Continue save confirmation' : 'Add income record'}</Button>}
     </Space>
     <p>Record the total received for a stated past reporting period. Frequency describes the payment schedule. Your financial-year label and income details are customer reported; no totals or annualisation are calculated.</p>
+    <p><a href="/monthly-cashflow">Review monthly income and expense totals</a></p>
     {saved && editor?.api === api && <Alert type="success" title={'Income record saved: ' + saved.income.name} />}
     {failure?.api === api && <Alert type="error" title={failure.text} action={<Button onClick={() => { void load(); }}>Retry income records</Button>} />}
     {loading && <p role="status">Loading income records…</p>}
     {list?.items.length === 0 && <p>No income records added yet. Review an income source figure in Documents, then add its income details and reporting period here.</p>}
-    {list?.hasMore && <Alert type="info" title="Showing the 200 most recently added income records." />}
+    {list?.hasMore && <Button disabled={loading || saving} onClick={() => { void load(undefined, list.items.at(-1)?.incomeRecordId); }}>Earlier income records</Button>}
+    {list && <p>Showing {list.items.length} income records on this page. Refresh returns to the newest records.</p>}
     {list && <IncomePeriodComparisonExperience api={api} records={list.items} hasMore={list.hasMore} />}
     {list?.items.map((record) => <Card key={record.incomeRecordId} size="small" style={{ marginBlock: 12 }}>
       <Space wrap><strong>{record.income.name}</strong><Tag>Customer reviewed</Tag><span>{record.income.incomeSource} · {record.income.incomeType}</span></Space>

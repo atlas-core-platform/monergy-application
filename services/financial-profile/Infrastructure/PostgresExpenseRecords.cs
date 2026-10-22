@@ -107,16 +107,21 @@ public sealed class PostgresExpenseRecords : IExpenseRecordRepository, IAsyncDis
             """, new { Tenant = tenant, Customer = customer, Id = id, Revision = revision }, cancellationToken: ct)).ConfigureAwait(false);
         return payload is null ? null : Decode(payload);
     }
-    public async Task<ExpenseRecordList> ListAsync(string tenant, string customer, CancellationToken ct)
+    public async Task<ExpenseRecordList> ListAsync(string tenant, string customer, CancellationToken ct, string? afterId = null)
     {
         await using var db = await source.OpenConnectionAsync(ct).ConfigureAwait(false);
+        DateTimeOffset? anchor = afterId is null ? null : await db.QuerySingleOrDefaultAsync<DateTimeOffset?>(new CommandDefinition(
+            "SELECT recorded_at FROM financial_profile.expense_records WHERE tenant_id=@Tenant AND customer_id=@Customer AND expense_record_id=@After",
+            new { Tenant = tenant, Customer = customer, After = afterId }, cancellationToken: ct)).ConfigureAwait(false);
+        if (afterId is not null && anchor is null) throw new TenantBoundaryException("RECORD_PAGE_NOT_FOUND", 404);
         var rows = (await db.QueryAsync<string>(new CommandDefinition("""
             SELECT COALESCE((SELECT r.payload::text FROM financial_profile.expense_record_revisions r
               WHERE r.tenant_id=l.tenant_id AND r.customer_id=l.customer_id AND r.expense_record_id=l.expense_record_id
               ORDER BY r.revision DESC LIMIT 1),l.payload::text)
             FROM financial_profile.expense_records l WHERE l.tenant_id=@Tenant AND l.customer_id=@Customer
-            ORDER BY l.recorded_at DESC,l.expense_record_id LIMIT 201;
-            """, new { Tenant = tenant, Customer = customer }, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
+            AND (@After::text IS NULL OR l.recorded_at < @Anchor OR l.recorded_at = @Anchor AND l.expense_record_id COLLATE "C" > @After COLLATE "C")
+            ORDER BY l.recorded_at DESC,l.expense_record_id COLLATE "C" LIMIT 201;
+            """, new { Tenant = tenant, Customer = customer, After = afterId, Anchor = anchor }, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
         return new(rows.Take(200).Select(Decode).ToArray(), rows.Length > 200);
     }
     public async Task<ExpenseRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct)

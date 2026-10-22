@@ -303,3 +303,18 @@ it('hides an unconfirmed prior-session status form and prevents a request after 
   expect(screen.queryByRole('dialog',{name:'Review loan status'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Continue loan status confirmation'})).not.toBeInTheDocument();
   await screen.findByText(/No loan records added yet/);expect(request.mock.calls.every(([,method])=>method==='GET')).toBe(true);
 });
+
+it('pages beyond 200 loan records and refreshes from the newest page', async () => {
+ const api = new AccessApi(session); const first = Array.from({ length: 200 }, (_, i) => ({ ...record, loanRecordId: 'loan-page-' + String(i), loan: { ...record.loan, name: 'Paged record ' + String(i) } }));
+ const request = vi.spyOn(api, 'product').mockImplementation(async path => {
+  await Promise.resolve();
+  if (path === 'v1/loan-records') return { items: first, hasMore: true, dataDurability: 'Temporary data' };
+  if (path === 'v1/loan-records?afterId=loan-page-199') return { items: [record], hasMore: false, dataDurability: 'Temporary data' };
+  throw new Error('Unexpected page');
+ });
+ mount(api, false); fireEvent.click(await screen.findByRole('button', { name: 'Earlier loan records' }));
+ expect(await screen.findByRole('button', { name: 'View loan record: ' + record.loan.name })).toBeVisible();
+ expect(screen.queryByRole('button', { name: 'Earlier loan records' })).not.toBeInTheDocument();
+ expect(request.mock.calls.some(([path]) => path === 'v1/loan-records?afterId=loan-page-199')).toBe(true);
+ fireEvent.click(screen.getByRole('button', { name: 'Refresh loan records' })); expect(await screen.findByRole('button', { name: 'Earlier loan records' })).toBeVisible();
+});

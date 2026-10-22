@@ -447,7 +447,7 @@ export interface ProductLoanRecord {
   lifecycleStatus: 'UNREVIEWED' | 'ACTIVE' | 'CLOSED'; lifecycleAsOfDate: string | null;
 }
 export interface ProductLoanRecordList { items: ProductLoanRecord[]; hasMore: boolean; dataDurability: string }
-export const getLoanRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductLoanRecordList>('v1/loan-records', 'GET', undefined, signal);
+export const getLoanRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) => api.product<ProductLoanRecordList>('v1/loan-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
 export const createLoanRecord = (api: AccessApi, input: { operationId: string; loan: ProductLoanDraft }, signal?: AbortSignal) => api.product<ProductLoanRecord>('v1/loan-records', 'POST', input, signal);
 export interface ProductLoanRecordHistory { items: ProductLoanRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
 export const reviseLoanRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; loan: ProductLoanDraft }) =>
@@ -468,7 +468,7 @@ export interface ProductInvestmentRecord {
   sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
 }
 export interface ProductInvestmentRecordList { items: ProductInvestmentRecord[]; hasMore: boolean; dataDurability: string }
-export const getInvestmentRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductInvestmentRecordList>('v1/investment-records', 'GET', undefined, signal);
+export const getInvestmentRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) => api.product<ProductInvestmentRecordList>('v1/investment-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
 export const createInvestmentRecord = (api: AccessApi, input: { operationId: string; investment: ProductInvestmentDraft }, signal?: AbortSignal) =>
   api.product<ProductInvestmentRecord>('v1/investment-records', 'POST', input, signal);
 
@@ -489,7 +489,7 @@ export interface ProductIncomeRecord {
   verificationStatus: string; revision: number;
 }
 export interface ProductIncomeRecordList { items: ProductIncomeRecord[]; hasMore: boolean; dataDurability: string }
-export const getIncomeRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductIncomeRecordList>('v1/income-records', 'GET', undefined, signal);
+export const getIncomeRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) => api.product<ProductIncomeRecordList>('v1/income-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
 export const createIncomeRecord = (api: AccessApi, input: { operationId: string; income: ProductIncomeDraft }, signal?: AbortSignal) =>
   api.product<ProductIncomeRecord>('v1/income-records', 'POST', input, signal);
 
@@ -509,7 +509,7 @@ export interface ProductExpenseRecord {
   verificationStatus: string; revision: number;
 }
 export interface ProductExpenseRecordList { items: ProductExpenseRecord[]; hasMore: boolean; dataDurability: string }
-export const getExpenseRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductExpenseRecordList>('v1/expense-records', 'GET', undefined, signal);
+export const getExpenseRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) => api.product<ProductExpenseRecordList>('v1/expense-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
 export const createExpenseRecord = (api: AccessApi, input: { operationId: string; expense: ProductExpenseDraft }, signal?: AbortSignal) =>
   api.product<ProductExpenseRecord>('v1/expense-records', 'POST', input, signal);
 
@@ -537,7 +537,7 @@ export interface ProductLiabilityRecord {
   verificationStatus: string; revision: number;
 }
 export interface ProductLiabilityRecordList { items: ProductLiabilityRecord[]; hasMore: boolean; dataDurability: string }
-export const getLiabilityRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductLiabilityRecordList>('v1/liability-records', 'GET', undefined, signal);
+export const getLiabilityRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) => api.product<ProductLiabilityRecordList>('v1/liability-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
 export const createLiabilityRecord = (api: AccessApi, input: { operationId: string; liability: ProductLiabilityDraft }, signal?: AbortSignal) =>
   api.product<ProductLiabilityRecord>('v1/liability-records', 'POST', input, signal);
 
@@ -560,7 +560,7 @@ export interface ProductPropertyRecord {
   sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
 }
 export interface ProductPropertyRecordList { items: ProductPropertyRecord[]; hasMore: boolean; dataDurability: string }
-export const getPropertyRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductPropertyRecordList>('v1/property-records', 'GET', undefined, signal);
+export const getPropertyRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) => api.product<ProductPropertyRecordList>('v1/property-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
 export const createPropertyRecord = (api: AccessApi, input: { operationId: string; property: ProductPropertyDraft }, signal?: AbortSignal) =>
   api.product<ProductPropertyRecord>('v1/property-records', 'POST', input, signal);
 
@@ -579,7 +579,7 @@ export interface ProductVehicleRecord {
   sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
 }
 export interface ProductVehicleRecordList { items: ProductVehicleRecord[]; hasMore: boolean; dataDurability: string }
-export const getVehicleRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductVehicleRecordList>('v1/vehicle-records', 'GET', undefined, signal);
+export const getVehicleRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) => api.product<ProductVehicleRecordList>('v1/vehicle-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
 export const createVehicleRecord = (api: AccessApi, input: { operationId: string; vehicle: ProductVehicleDraft }, signal?: AbortSignal) =>
   api.product<ProductVehicleRecord>('v1/vehicle-records', 'POST', input, signal);
 

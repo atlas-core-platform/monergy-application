@@ -36,8 +36,9 @@ public static class ProductLiabilityRecordEndpoints
         group.MapGet("", async (HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductLiabilityRecordClient client) =>
         {
             var (session, customer) = await ResolveAsync(http, owners, access, false).ConfigureAwait(false);
-            var list = await client.ListAsync(session, customer.CustomerId, http.RequestAborted).ConfigureAwait(false);
-            if (list.Items.Count > 200 || list.Items.Any(item => !Bound(item, customer.CustomerId)))
+            var afterId = ReviewedRecordPaging.ReadAfter(http.Request);
+            var list = await client.ListAsync(session, customer.CustomerId, http.RequestAborted, afterId).ConfigureAwait(false);
+            if (list.Items is null || list.Items.Count > 200 || list.HasMore && list.Items.Count != 200 || list.Items.Select(x => x?.LiabilityRecordId).Distinct(StringComparer.Ordinal).Count() != list.Items.Count || list.Items.Any(item => !Bound(item, customer.CustomerId) || item.LiabilityRecordId == afterId))
                 throw new TenantBoundaryException("LIABILITY_RECORD_RESPONSE_INVALID", 503);
             await ConfirmAsync(http, owners, access, session, customer, false).ConfigureAwait(false);
             return new ProductLiabilityRecordList(list.Items, list.HasMore, "Temporary data");
@@ -191,8 +192,8 @@ public sealed class ProductLiabilityRecordClient : IDisposable
         client = httpClient; client.Timeout = TimeSpan.FromSeconds(10); client.MaxResponseContentBufferSize = 1048576;
         endpoint = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:Product:FinancialProfileUrl"));
     }
-    public Task<LiabilityRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct) =>
-        SendAsync<LiabilityRecordList>(session, customer, "", null, ct);
+    public Task<LiabilityRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct, string? afterId = null) =>
+        SendAsync<LiabilityRecordList>(session, customer, afterId is null ? "" : "?afterId=" + Uri.EscapeDataString(afterId), null, ct);
     public Task<ReviewedLiabilityRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct, int? revision = null) =>
         SendAsync<ReviewedLiabilityRecord>(session, customer, "/" + Uri.EscapeDataString(id) + (revision is null ? "" : "?revision=" + revision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
     public Task<ReviewedLiabilityRecord> CreateAsync(CustomerOwnerSession session, string customer, CreateLiabilityRecord input, CancellationToken ct) =>

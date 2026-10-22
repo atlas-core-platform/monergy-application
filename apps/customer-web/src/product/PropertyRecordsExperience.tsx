@@ -29,7 +29,7 @@ export default function PropertyRecordsExperience({ api, facts, canRead, canCrea
   const [saved, setSaved] = useState<ProductPropertyRecord | null>(null);
   const [history, setHistory] = useState<{ api: AccessApi; record: ProductPropertyRecord } | null>(null);
   const [selected, setSelected] = useState<{ api: AccessApi; record: ProductPropertyRecord } | null>(null);
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const load = useCallback(async (signal?: AbortSignal, afterId?: string) => {
     if (!canRead) return;
     const sequence = ++loadSequence.current;
     activeLoad.current?.abort();
@@ -39,8 +39,8 @@ export default function PropertyRecordsExperience({ api, facts, canRead, canCrea
     const active = () => !signal?.aborted && !controller.signal.aborted && sequence === loadSequence.current && scope.current.api === api && scope.current.canRead;
     setLoading(true); setFailure(null);
     try {
-      const list = await getPropertyRecords(api, controller.signal);
-      if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean') throw new Error('Invalid record list');
+      const list = await getPropertyRecords(api, controller.signal, afterId);
+      if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean' || list.hasMore && list.items.length !== 200 || new Set(list.items.map(x => x.propertyRecordId)).size !== list.items.length || list.items.some(x => x.propertyRecordId === afterId)) throw new Error('Invalid record list');
       if (active()) { setLoaded({ api, list }); onRecordsChanged?.(); }
     } catch (error) {
       if (active()) { setLoaded(null); setFailure({ api, text: error instanceof AccessApiError && error.status === 403
@@ -111,7 +111,8 @@ export default function PropertyRecordsExperience({ api, facts, canRead, canCrea
     {failure?.api === api && <Alert type="error" title={failure.text} action={<Button onClick={() => { void load(); }}>Retry property records</Button>} />}
     {loading && <p role="status">Loading property records…</p>}
     {list?.items.length === 0 && <p>No property records added yet. Review an property source figure in Documents, then add the holding and values here.</p>}
-    {list?.hasMore && <Alert type="info" title="Showing the 200 most recently added property records." />}
+    {list?.hasMore && <Button disabled={loading || saving} onClick={() => { void load(undefined, list.items.at(-1)?.propertyRecordId); }}>Earlier property records</Button>}
+    {list && <p>Showing {list.items.length} property records on this page. Refresh returns to the newest records.</p>}
     {list?.items.map((record) => <Card key={record.propertyRecordId} size="small" style={{ marginBlock: 12 }}>
       <Space wrap><strong>{record.property.name}</strong><Tag>Customer reviewed</Tag><span>{record.property.location} · {terms(record)}</span></Space>
       <p>Current value: {money(record.property.currentValue, record.currency)} · as of {record.property.valueAsOfDate}</p>

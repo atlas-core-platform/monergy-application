@@ -25,7 +25,7 @@ public static class VehicleRecordEndpoints
         group.MapGet("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, VehicleRecordsApplication owner) =>
         {
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
-            return await owner.ListAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
+            return await owner.ListAsync(tenant, customerId, http.RequestAborted, ReviewedRecordPaging.ReadAfter(http.Request)).ConfigureAwait(false);
         });
         group.MapGet("/{vehicleRecordId}", async (string customerId, string vehicleRecordId, int? revision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, VehicleRecordsApplication owner) =>
         {

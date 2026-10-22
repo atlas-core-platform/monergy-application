@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Drawer, Input, Select, Space, Tag } from 'antd';
 import type { AccessApi} from '../access/accessApi';
 import { AccessApiError } from '../access/accessApi';
@@ -22,6 +22,10 @@ const statusLabel = (record: ProductLoanRecord) => record.lifecycleStatus === 'A
 export default function LoanRecordsExperience({ api, facts, canRead, canCreate }: {
   api: AccessApi; facts: ProductFinancialFact[]; canRead: boolean; canCreate: boolean;
 }) {
+  const scope = useRef({ api, canRead, canCreate });
+  useLayoutEffect(() => { scope.current = { api, canRead, canCreate }; }, [api, canRead, canCreate]);
+  const loadSequence = useRef(0);
+  const activeLoad = useRef<AbortController | null>(null);
   const [loaded, setLoaded] = useState<{ api: AccessApi; list: ProductLoanRecordList } | null>(null);
   const [failure, setFailure] = useState<{ api: AccessApi; text: string } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -33,22 +37,28 @@ export default function LoanRecordsExperience({ api, facts, canRead, canCreate }
   const [statusError, setStatusError] = useState('');
   const [selected, setSelected] = useState<{ api: AccessApi; record: ProductLoanRecord } | null>(null);
   const [history, setHistory] = useState<{ api: AccessApi; record: ProductLoanRecord } | null>(null);
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const load = useCallback(async (signal?: AbortSignal, afterId?: string) => {
     if (!canRead) return;
+    const sequence = ++loadSequence.current;
+    activeLoad.current?.abort();
+    const controller = new AbortController(); activeLoad.current = controller;
+    const abort = () => { controller.abort(); };
+    signal?.addEventListener('abort', abort, { once: true });
+    const active = () => !signal?.aborted && !controller.signal.aborted && sequence === loadSequence.current && scope.current.api === api && scope.current.canRead;
     setLoading(true); setFailure(null);
     try {
-      const list = await getLoanRecords(api, signal);
-      if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean') throw new Error('Invalid record list');
-      if (!signal?.aborted) setLoaded({ api, list });
+      const list = await getLoanRecords(api, controller.signal, afterId);
+      if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean' || list.hasMore && list.items.length !== 200 || new Set(list.items.map(x => x.loanRecordId)).size !== list.items.length || list.items.some(x => x.loanRecordId === afterId)) throw new Error('Invalid record list');
+      if (active()) setLoaded({ api, list });
     } catch (error) {
-      if (!signal?.aborted) { setLoaded(null); setFailure({ api, text: error instanceof AccessApiError && error.status === 403
+      if (active()) { setLoaded(null); setFailure({ api, text: error instanceof AccessApiError && error.status === 403
         ? 'Your current access does not include loan records and their source documents.' : 'Loan records are unavailable. Try again.' }); }
-    } finally { if (!signal?.aborted) setLoading(false); }
+    } finally { signal?.removeEventListener('abort', abort); if (active()) setLoading(false); }
   }, [api, canRead]);
   useEffect(() => {
     const controller = new AbortController();
     const start = window.setTimeout(() => { void load(controller.signal); }, 0);
-    return () => { window.clearTimeout(start); controller.abort(); };
+    return () => { window.clearTimeout(start); controller.abort(); activeLoad.current?.abort(); };
   }, [load]);
   const current = editor?.api === api ? editor : null;
   const currentStatus = statusEditor?.api === api ? statusEditor : null;
@@ -136,10 +146,12 @@ export default function LoanRecordsExperience({ api, facts, canRead, canCreate }
     <Button onClick={() => { void load(); }} disabled={loading}>Refresh loan records</Button>
     <p>Record the terms you have reviewed. Document figures remain separate from your loan record. Ownership and lender balances are not independently verified.</p>
     {saved?.api === api && <Alert type="success" title={(saved.statusReview?'Loan status saved: ':'Loan record saved: ') + saved.record.loan.name} />}
+    <p><a href="/net-worth">Review loans in your debt inventory</a></p>
     {failure?.api === api && <Alert type="error" title={failure.text} action={<Button onClick={() => { void load(); }}>Retry loan records</Button>} />}
     {loading && <p role="status">Loading loan records…</p>}
     {list?.items.length === 0 && <p>No loan records added yet. Review a loan source figure in Documents, then add the loan terms here.</p>}
-    {list?.hasMore && <Alert type="info" title="Showing the 200 most recently added loan records." />}
+    {list?.hasMore && <Button disabled={loading || saving} onClick={() => { void load(undefined, list.items.at(-1)?.loanRecordId); }}>Earlier loan records</Button>}
+    {list && <p>Showing {list.items.length} loan records on this page. Refresh returns to the newest records.</p>}
     {list?.items.map((record) => <Card key={record.loanRecordId} size="small" style={{ marginBlock: 12 }}>
       <Space wrap><strong>{record.loan.name}</strong><Tag>Customer reviewed</Tag><Tag>{statusLabel(record)}</Tag><span>{record.loan.lender} · {terms(record)}</span></Space>
       {record.lifecycleAsOfDate && <p>Loan status as of {record.lifecycleAsOfDate}</p>}
