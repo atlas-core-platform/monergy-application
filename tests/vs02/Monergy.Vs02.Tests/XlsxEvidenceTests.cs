@@ -49,6 +49,32 @@ public sealed class XlsxEvidenceTests
     private static void TextCell(XElement cell, string value)
     { cell.SetAttributeValue("t", "inlineStr"); cell.RemoveNodes(); cell.Add(new XElement(Main + "is", new XElement(Main + "t", value))); }
     [Fact]
+    public async Task IntakeAcceptsNonTemplateMultiSheetWorkbookWithoutClaimingFinancialExtraction()
+    {
+        var parts = Parts(); var workbook = Xml(parts, "xl/workbook.xml");
+        var sheet = new XElement(workbook.Element(Main + "sheets")!.Elements().Single());
+        sheet.SetAttributeValue("name", "General notes"); sheet.SetAttributeValue("sheetId", "2");
+        XNamespace rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"; sheet.SetAttributeValue(rel + "id", "general-sheet"); workbook.Element(Main + "sheets")!.Add(sheet); Store(parts, workbook, "xl/workbook.xml");
+        var links = Xml(parts, "xl/_rels/workbook.xml.rels"); links.Add(new XElement(links.Name.Namespace + "Relationship", new XAttribute("Id", "general-sheet"), new XAttribute("Type", rel.NamespaceName + "/worksheet"), new XAttribute("Target", "worksheets/sheet2.xml"))); Store(parts, links, "xl/_rels/workbook.xml.rels");
+        var types = Xml(parts, "[Content_Types].xml"); types.Add(new XElement(types.Name.Namespace + "Override", new XAttribute("PartName", "/xl/worksheets/sheet2.xml"), new XAttribute("ContentType", "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"))); Store(parts, types, "[Content_Types].xml");
+        parts["xl/worksheets/sheet2.xml"] = parts[SheetPath]; var bytes = Package(parts);
+        Assert.True(XlsxEvidenceValidation.Valid(bytes));
+        await Assert.ThrowsAsync<DocumentExtractionException>(() => new XlsxFinancialDocumentExtractor().ExtractAsync(Source(bytes), "multi", default));
+    }
+    [Theory][InlineData("zip-only")][InlineData("missing-workbook")][InlineData("missing-sheet")][InlineData("duplicate")][InlineData("traversal")][InlineData("macro")][InlineData("xml-entity")][InlineData("wrong-sheet")]
+    public void IntakeRejectsDisguisedOrMalformedWorkbookBeforeScanAndStorage(string mode)
+    {
+        var parts = Parts();
+        if (mode == "zip-only") parts = new() { ["arbitrary.txt"] = "not a workbook"u8.ToArray() };
+        if (mode == "missing-workbook") parts.Remove("xl/workbook.xml");
+        if (mode == "missing-sheet") parts.Remove(SheetPath);
+        if (mode == "traversal") parts["../outside"] = [1];
+        if (mode == "macro") parts["xl/vbaProject.bin"] = [1];
+        if (mode == "xml-entity") parts["xl/workbook.xml"] = Encoding.UTF8.GetBytes("<!DOCTYPE workbook [<!ENTITY x SYSTEM 'file:///must-not-read'>]><workbook>&x;</workbook>");
+        if (mode == "wrong-sheet") parts[SheetPath] = "<not-a-worksheet/>"u8.ToArray();
+        Assert.False(XlsxEvidenceValidation.Valid(Package(parts, mode == "duplicate")));
+    }
+    [Fact]
     public async Task ActualDownloadTemplatePreservesExplicitValuesOriginalSourceAndDeterministicRowIdentity()
     {
         var source = Source(Template()); var extractor = new StructuredDocumentExtractor();

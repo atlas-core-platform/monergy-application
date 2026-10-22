@@ -138,7 +138,7 @@ public static class EvidenceReferenceIntakeEndpoints
     private static bool ContentMatchesType(byte[] content, string contentType)
     {
         if (contentType.Equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", StringComparison.OrdinalIgnoreCase))
-            return content.Length >= 22 && content.AsSpan().StartsWith(new byte[] { 0x50, 0x4B, 0x03, 0x04 });
+            return XlsxEvidenceValidation.Valid(content);
         if (contentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
             return content.AsSpan().StartsWith("%PDF-"u8);
         if (contentType.Equals("image/png", StringComparison.OrdinalIgnoreCase))

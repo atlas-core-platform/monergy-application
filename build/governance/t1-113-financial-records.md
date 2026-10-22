@@ -1,5 +1,7 @@
 # T1-113 — Complete financial-record navigation and reconcile original scope
 
+Correction recorded by T1-114: MON-FIN-005 belongs to Phase2. The bank-detail gap below is future scope and was incorrectly described as a Phase1 Assets blocker. Original phase assignments are unchanged.
+
 Date: 2026-10-22. P1-13 Income, P1-14 Expenses, P1-16 Liabilities and P1-17 Loans are implementation Complete. P1-15 Assets remains Partial for detailed bank-account records. Business acceptance remains separate.
 
 ## Fixed navigation gap
