@@ -126,7 +126,12 @@ public sealed class DocumentProcessingApplication(
     Infrastructure.DocumentClassifier? classifier = null)
 {
     private static string? WorkloadTenant(TrustedSecurityContext security)
-    {const string prefix="local-uat-workspace:";var value=security.Workload.WorkloadIdentityId;return value.StartsWith(prefix,StringComparison.Ordinal)&&TenantAccessClient.Identifier(value[prefix.Length..],64)?value[prefix.Length..]:null;}
+    {
+        var value = security.Workload.WorkloadIdentityId;
+        foreach (var prefix in new[] { "local-uat-workspace:", "job-management:" })
+            if (value.StartsWith(prefix, StringComparison.Ordinal) && TenantAccessClient.Identifier(value[prefix.Length..], 64)) return value[prefix.Length..];
+        return null;
+    }
     public async Task<ContractResult<ProcessingStatus>> ProcessDocumentAsync(
         ContractRequest<ProcessDocument> request,
         CancellationToken cancellationToken = default)

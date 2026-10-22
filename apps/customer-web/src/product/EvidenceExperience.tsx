@@ -1,5 +1,6 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import DocumentVault from './DocumentVault';
+import { DocumentOcrView } from './DocumentOcrView';
 import { Alert, Button, Checkbox, Drawer, Input, Select, Skeleton, Spin, Tag, Upload } from 'antd';
 import type { UploadProps } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -1400,6 +1401,7 @@ export default function EvidenceExperience() {
               <WorkspaceIcon name="check" size={25} />
             </span>
             <Tag color="success">UPLOADED</Tag>
+            {product && api && canRead && canProcess && ['image/png', 'image/jpeg', 'application/pdf'].includes(selectedEvidence.contentType) && <DocumentOcrView key={selectedEvidence.documentVersionId} api={api} tenantId={product.tenantId} customerId={product.customerId} versionId={selectedEvidence.documentVersionId} sourceHash={selectedEvidence.contentSha256} />}
             <h3>{selectedEvidence.originalFileName}</h3>
             <p>
               {typeName(selectedEvidence.contentType)} ·{' '}

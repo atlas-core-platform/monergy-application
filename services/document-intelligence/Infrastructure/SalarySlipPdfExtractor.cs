@@ -47,8 +47,8 @@ public sealed class SalarySlipPdfExtractor(IPdfPageRenderer renderer, IImageText
     internal static DocumentRecognitionException Unsupported() => new(DocumentRecognitionFailure.UnsupportedPdf);
 }
 
-// LOCAL-only Poppler adapter: one unlocked page, bounded raster, no PDF passwords or remote resource fetches supplied.
-public sealed class PopplerPdfPageRenderer(IConfiguration configuration) : IPdfPageRenderer, IDisposable
+// LOCAL/UAT Poppler adapter: bounded unlocked pages for transcription; financial extraction still requires one page.
+public sealed class PopplerPdfPageRenderer(IConfiguration configuration) : IPdfPageSetRenderer, IDisposable
 {
     public const string EngineVersion = "24.02.0";
     private readonly SemaphoreSlim admission = new(1, 1);
@@ -56,10 +56,15 @@ public sealed class PopplerPdfPageRenderer(IConfiguration configuration) : IPdfP
         RegexOptions.CultureInvariant | RegexOptions.NonBacktracking, TimeSpan.FromMilliseconds(100));
 
     public async Task<byte[]> RenderAsync(byte[] pdf, CancellationToken cancellationToken)
+        => (await RenderDocumentAsync(pdf, true, cancellationToken))[0];
+
+    public Task<IReadOnlyList<byte[]>> RenderPagesAsync(byte[] pdf, CancellationToken ct) => RenderDocumentAsync(pdf, false, ct);
+
+    private async Task<IReadOnlyList<byte[]>> RenderDocumentAsync(byte[] pdf, bool singleOnly, CancellationToken cancellationToken)
     {
         SalarySlipPdfExtractor.ValidatePdf(pdf);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(TimeSpan.FromSeconds(6));
+        deadline.CancelAfter(TimeSpan.FromSeconds(singleOnly ? 6 : 20));
         string? directory = null;
         var admitted = false;
         try
@@ -83,13 +88,16 @@ public sealed class PopplerPdfPageRenderer(IConfiguration configuration) : IPdfP
                 await file.WriteAsync(pdf, deadline.Token).ConfigureAwait(false);
             var metadata = await NativeDocumentProcess.RunAsync(info, [input], libraries, 65_536, deadline.Token).ConfigureAwait(false);
             if (metadata.ExitCode != 0 || metadata.Error.Length != 0) throw SalarySlipPdfExtractor.Unsupported();
-            RequireSinglePage(metadata.Text);
-            var raster = await NativeDocumentProcess.RunAsync(render,
-                ["-png", "-singlefile", "-scale-to", "2500", "-r", "144", input], libraries, 1_048_576, deadline.Token).ConfigureAwait(false);
-            if (raster.ExitCode != 0 || raster.Error.Length != 0) throw SalarySlipPdfExtractor.Unsupported();
-            SalarySlipPngExtractor.ValidatePng(raster.Output);
-            cancellationToken.ThrowIfCancellationRequested();
-            return raster.Output;
+            var count = RequirePages(metadata.Text, singleOnly); var pages = new List<byte[]>();
+            for (var page = 1; page <= count; page++)
+            {
+                var number = page.ToString(CultureInfo.InvariantCulture);
+                var raster = await NativeDocumentProcess.RunAsync(render,
+                    ["-png", "-f", number, "-l", number, "-singlefile", "-scale-to", "2500", "-r", "144", input], libraries, 1_048_576, deadline.Token).ConfigureAwait(false);
+                if (raster.ExitCode != 0 || raster.Error.Length != 0) throw SalarySlipPdfExtractor.Unsupported();
+                SalarySlipPngExtractor.ValidatePng(raster.Output); pages.Add(raster.Output);
+            }
+            cancellationToken.ThrowIfCancellationRequested(); return pages;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         { throw new OcrEngineUnavailableException(); }
@@ -115,7 +123,7 @@ public sealed class PopplerPdfPageRenderer(IConfiguration configuration) : IPdfP
         if (result.ExitCode != 0 || result.Error.Split('\n')[0].Trim() != name + " version " + EngineVersion)
             throw new OcrEngineUnavailableException();
     }
-    private static void RequireSinglePage(string metadata)
+    private static int RequirePages(string metadata, bool singleOnly)
     {
         var lines = metadata.Split('\n');
         string Field(string label)
@@ -123,12 +131,13 @@ public sealed class PopplerPdfPageRenderer(IConfiguration configuration) : IPdfP
             var rows = lines.Where(line => line.StartsWith(label + ":", StringComparison.Ordinal)).ToArray();
             return rows.Length == 1 ? rows[0][(label.Length + 1)..].Trim() : throw SalarySlipPdfExtractor.Unsupported();
         }
-        if (Field("Pages") != "1" || Field("Encrypted") != "no" || Field("JavaScript") != "no" || Field("Form") != "none")
+        if (!int.TryParse(Field("Pages"), NumberStyles.None, CultureInfo.InvariantCulture, out var pages) || pages is < 1 or > DocumentOcrRules.MaximumPages || singleOnly && pages != 1 || Field("Encrypted") != "no" || Field("JavaScript") != "no" || Field("Form") != "none")
             throw SalarySlipPdfExtractor.Unsupported();
         var size = PageSize.Match(Field("Page size"));
         if (!size.Success || !decimal.TryParse(size.Groups[1].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var width) ||
             !decimal.TryParse(size.Groups[2].Value, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var height) ||
             width is < 36 or > 1440 || height is < 36 or > 1440) throw SalarySlipPdfExtractor.Unsupported();
+        return pages;
     }
     public void Dispose() => admission.Dispose();
 }

@@ -164,6 +164,12 @@ static string? Route(string path, string method)
     if(method=="GET"&&(path==documents||path.StartsWith(documents+"/",StringComparison.Ordinal)&&TenantAccessClient.Identifier(path[(documents.Length+1)..],160)))return "http://127.0.0.1:5111"+path[13..];
     if(method=="GET"&&path=="/classification-api/local/v1/administration/document-classifications")return "http://127.0.0.1:5112"+path[19..];
     const string classificationReviews="/classification-api/local/v1/administration/classification-reviews";
+    const string ocr="/ocr-api/local/v1/customers/";
+    if(method=="GET"&&path.StartsWith(ocr,StringComparison.Ordinal))
+    {
+        var ids=path[ocr.Length..].Split('/');
+        if(ids.Length==4&&TenantAccessClient.Identifier(ids[0],128)&&ids[1]=="documents"&&TenantAccessClient.Identifier(ids[2],160)&&ids[3]=="ocr")return "http://127.0.0.1:5112"+path[8..];
+    }
     if(path==classificationReviews&&method=="GET")return "http://127.0.0.1:5112"+path[19..];
     if(path.StartsWith(classificationReviews+"/",StringComparison.Ordinal)&&method is "GET" or "POST")
     {

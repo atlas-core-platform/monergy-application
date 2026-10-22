@@ -20,8 +20,8 @@ without classification must pass the existing processing/reprocessing flow.
 Default LOCAL adapters keep classification state in memory. For retained reviews,
 configure distinct, pre-provisioned Document Intelligence PostgreSQL databases per
 tenant and apply `services/document-intelligence/migrations/001-document-classifications.sql`
-as their owner. Grant the runtime role CONNECT, schema USAGE and only
-SELECT/INSERT/UPDATE on `document_classifications`; no DDL or DELETE grants.
+and `002-document-ocr.sql` as their owner. Grant the runtime role CONNECT, schema USAGE and only
+SELECT/INSERT/UPDATE on `document_classifications` and `document_ocr`; no DDL or DELETE grants.
 Readiness fails if configured storage is unavailable. No runtime migration or
 automatic copying of old in-memory state occurs.
 
@@ -51,3 +51,26 @@ The configuration is retained in the protected profile and reused on subsequent
 starts. Keep it out of source control and shared logs. Physical migration/grant,
 database restart, native OCR corpus quality and authenticated browser UAT require
 operator validation. Production enablement is not claimed.
+
+## Customer OCR text
+
+Customer document processing records OCR separately from financial extraction.
+Open the uploaded PDF/PNG/JPEG document in the vault and choose **Read scanned
+text**. This displays the latest recorded transcription for that exact source
+version. Refresh only reads stored output; request processing first if no result
+exists. Unknown document classes can still have readable OCR text.
+
+PDF transcription supports up to 20 unlocked pages within the existing 1 MiB
+original limit. English Tesseract OCR and Poppler retain their pinned engine
+versions, bounded raster sizes and timeouts. Password-protected PDFs, forms,
+JavaScript and excessive pages are rejected. Financial extraction still supports
+its documented single-page templates. OCR never verifies or adopts a financial
+fact. Low-confidence lines and unreadable pages are explicitly marked.
+
+The customer must retain current document-read and processing permissions;
+administrator classification access does not expose scanned text. Original
+source access and hash are rechecked before reading retained OCR. Tenant OCR text
+uses the same configured Document Intelligence database as classification, in a
+separate table. Apply both migrations before starting a retained profile; schema
+readiness fails closed. Unconfigured reference profiles retain OCR only in memory.
+Native corpus accuracy, physical database restart and full UAT remain unverified.

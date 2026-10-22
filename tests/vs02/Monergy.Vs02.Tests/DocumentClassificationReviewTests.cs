@@ -71,11 +71,12 @@ public sealed class DocumentClassificationReviewTests
         do { var rows = await repo.ListAsync("T001", true, cursor, default); foreach (var row in rows.Take(50)) Assert.True(seen.Add(row.DocumentVersionId)); cursor = rows.Count == 51 ? ClassificationRules.Key(rows[49].CustomerId, rows[49].DocumentVersionId) : null; } while (cursor is not null);
         Assert.Equal(111, seen.Count); Assert.Null(await repo.ReadAsync("T002", "customer-001", "version-0", default));
     }
-    [Fact] public async Task ClassificationRemainsRecordedWhenExtractionFails()
+    [Theory][InlineData("local-uat-workspace")][InlineData("job-management")]
+    public async Task ClassificationRemainsRecordedWhenExtractionFails(string workload)
     {
         var content = Source("FORM 16"); var classes = new InMemoryDocumentClassificationRepository(); var processing = new InMemoryDocumentProcessingRepository();
         var app = new DocumentProcessingApplication(processing, new Reader(content), new FailedExtractor(), new ReferenceExecutionPolicy(), new CapturingTelemetry(), TimeProvider.System, Classifier(classes));
-        var security = Vs02TestContext.Security() with { Workload = new("workspace", "local-uat-workspace:T001") };
+        var security = Vs02TestContext.Security() with { Workload = new(workload, workload + ":T001") };
         var request = Vs02TestContext.Request(Vs02ContractNames.ProcessDocument, new ProcessDocument("processing-classification", "document-version-001", "evidence-001", "customer-001", DateTimeOffset.UtcNow), "request-classification", "key-classification", security);
         await app.ProcessDocumentAsync(request);
         Assert.Equal(ProcessingState.Failed, (await processing.GetAsync("processing-classification", default))!.State);

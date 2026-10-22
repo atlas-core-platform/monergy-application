@@ -101,7 +101,7 @@ public sealed class HttpDocumentProcessingTarget : IJobExecutionTarget, IDisposa
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true };
     private readonly HttpClient client = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
-    { Timeout = TimeSpan.FromSeconds(20), MaxResponseContentBufferSize = 1_048_576 };
+    { Timeout = TimeSpan.FromSeconds(90), MaxResponseContentBufferSize = 1_048_576 };
     private readonly DocumentProcessingJobRegistry registry;
     private readonly Uri endpoint;
     private readonly string token;

@@ -1,22 +1,22 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-111",
-  "applicationBase": "1618e57e68a9862523bea67a4de003ed04d47594",
+  "asOf": "T1-112",
+  "applicationBase": "523da352b7c967c426fb3c57b88da0421fefa8bf",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 18,
+    "libraryVersion": 19,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook through T1-110; T1-111 adds independent document-family classification, retained review state and administrator workflow. Counts and acceptance unchanged.",
+    "reviewThrough": "Workbook through T1-111; T1-112 completes original OCR transcription/asynchronous functionality with source-bound multi-page text. Live quality and acceptance remain separate.",
     "libraryFileId": "libfile_7747823175948191ad6e56244bee8cf2"
   },
   "counts": {
     "originalDeliverables": 29,
-    "fullyImplemented": 17,
-    "partial": 12,
+    "fullyImplemented": 18,
+    "partial": 11,
     "pendingBusinessJourneys": 0,
-    "remainingOriginalDeliverables": 12,
-    "numberedUnitsAfterPairedMerge": 111,
-    "mergedImplementationUnitsAfterPairedMerge": 110,
+    "remainingOriginalDeliverables": 11,
+    "numberedUnitsAfterPairedMerge": 112,
+    "mergedImplementationUnitsAfterPairedMerge": 111,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -108,12 +108,12 @@
       "id": "P1-08",
       "area": "Documents",
       "name": "OCR",
-      "state": "Partial",
-      "existing": "Real pinned OCR reads eight printed-English document classes. T1-63 adds explicit vehicle purchase value, currency and invoice date in PNG/JPEG/single-page PDF. Original source and review remain required. T1-110 connects opt-in tenant-specific PostgreSQL/S3 original storage, scan/provider receipts, exact-version processing reads and retained onboarding configuration.",
-      "remaining": "Expand the approved document/layout/page matrix and downstream durable processing path. Original-byte durable intake/read is implemented in T1-110; live scanner/storage/OCR integration remains unverified.",
-      "units": "T1-49\u201352; T1-58; T1-59; T1-60; T1-61; T1-62; T1-63; T1-110",
+      "state": "Complete",
+      "existing": "T1-112 records generic OCR for PNG/JPEG and up to20 unlocked PDF pages, independently of class/financial extraction. Exact source-bound customer text view preserves page order and flags uncertain/empty text. Asynchronous Job Management retains tenant binding; optional tenant PostgreSQL stores OCR output and source hash.",
+      "remaining": "Live PostgreSQL migration/grants/restart, pinned native multi-page corpus quality and full authenticated UAT remain unverified. English, original-size and page/time bounds are explicit; other languages/handwriting are not claimed. Financial extraction and durable downstream indexing remain their own journeys.",
+      "units": "T1-49\u201352; T1-58; T1-59; T1-60; T1-61; T1-62; T1-63; T1-110; T1-112",
       "requirements": "MON-DOC-006/013",
-      "receipt": "build/governance/t1-110-durable-evidence.md"
+      "receipt": "build/governance/t1-112-general-ocr.md"
     },
     {
       "id": "P1-09",

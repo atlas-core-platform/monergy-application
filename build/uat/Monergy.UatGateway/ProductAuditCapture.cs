@@ -18,7 +18,7 @@ public sealed class ProductAuditWriter:IProductAuditWriter,IDisposable
 }
 public static class ProductAuditCapture
 {
- private static readonly string[] Prefixes=["/connections-api","/product-api","/identity-api","/access-api","/consent-api","/evidence-api","/classification-api","/jobs-api","/audit-api","/contracts","/uat-api"];
+ private static readonly string[] Prefixes=["/connections-api","/product-api","/identity-api","/access-api","/consent-api","/evidence-api","/classification-api","/ocr-api","/jobs-api","/audit-api","/contracts","/uat-api"];
  public static bool Sensitive(PathString path)=>Prefixes.Any(p=>path.StartsWithSegments(p));
  public static string Action(string path,string method)
  {
