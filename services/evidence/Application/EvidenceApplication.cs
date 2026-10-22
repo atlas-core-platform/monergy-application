@@ -45,6 +45,7 @@ public sealed record EvidenceOperationIdentity(
 public interface IEvidenceRepository
 {
     string AdapterKind { get; }
+    bool RequireScannedUploads => false;
 
     Task<EvidenceSaveResult> SaveVersionAsync(
         EvidenceOperationIdentity identity,
@@ -131,7 +132,7 @@ public sealed class EvidenceApplication(
                 "The staged evidence content could not be verified.");
         }
 
-        if ((expectedPreviousVersionId is not null || payload.ContentReference.StartsWith("reference://customer-intake/", StringComparison.Ordinal)) &&
+        if ((repository.RequireScannedUploads || expectedPreviousVersionId is not null || EvidenceIntakeReference.IsProduct(payload.ContentReference)) &&
             !EvidenceMalwarePolicy.Verified(content.MalwareCheck, content.Sha256, timeProvider.GetUtcNow()))
             return ContractResult<DocumentVersionCreatedResult>.Rejected(request, "evidence.scan.unverified",
                 ContractErrorCategory.PreconditionFailed, "The uploaded content has no current verified malware check.");

@@ -7,22 +7,29 @@ public static class EvidenceEndpoints
 {
     public static IEndpointRouteBuilder MapEvidenceContracts(this IEndpointRouteBuilder endpoints)
     {
-        endpoints.MapPost("/contracts/cid-020/v1", async (
+        var group = endpoints.MapGroup("");
+        group.AddEndpointFilter(async (context, next) =>
+        {
+            try { return await next(context); }
+            catch (EvidenceStorageUnavailableException) { return Results.Json(new { error = "EVIDENCE_STORAGE_UNAVAILABLE" }, statusCode: 503); }
+            catch (Monergy.Platform.TenantBoundaryException e) { return Results.Json(new { error = e.Code }, statusCode: e.Status); }
+        });
+        group.MapPost("/contracts/cid-020/v1", async (
             ContractRequest<CreateDocumentVersion> request,
             EvidenceApplication application,
             CancellationToken cancellationToken) =>
             ToResult(await application.CreateDocumentVersionAsync(request, cancellationToken)));
-        endpoints.MapPost("/contracts/cid-021/v1", async (
+        group.MapPost("/contracts/cid-021/v1", async (
             ContractRequest<GetEvidenceMetadata> request,
             EvidenceApplication application,
             CancellationToken cancellationToken) =>
             ToResult(await application.GetEvidenceMetadataAsync(request, cancellationToken)));
-        endpoints.MapPost("/contracts/cid-022/v1", async (
+        group.MapPost("/contracts/cid-022/v1", async (
             ContractRequest<GetEvidenceReference> request,
             EvidenceApplication application,
             CancellationToken cancellationToken) =>
             ToResult(await application.GetEvidenceReferenceAsync(request, cancellationToken)));
-        endpoints.MapPost("/contracts/app-02/evidence-list/v1", async (
+        group.MapPost("/contracts/app-02/evidence-list/v1", async (
             ContractRequest<ListCustomerEvidence> request,
             EvidenceApplication application,
             CancellationToken cancellationToken) =>

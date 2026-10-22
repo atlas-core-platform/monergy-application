@@ -43,6 +43,15 @@ $kycPath=Join-Path $testRoot 'kyc-fixture.json'
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -KycConfigurationFile $kycPath
 $identity=Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
 if ($identity.Monergy.BasicKyc.Tenants.T001.Reviewers[0].ActorId -ne 'A300' -or $identity.Monergy.BasicKyc.EvidenceBaseUrl -ne 'http://127.0.0.1:5111/') { throw 'KYC configuration was not preserved.' }
+$durablePath=Join-Path $testRoot 'evidence-fixture.json'
+@{ RuntimeConnections=@{T001='Host=127.0.0.1;Database=fixture_evidence;Username=fixture'}; S3=@{ Endpoint='http://127.0.0.1:9000';Bucket='fixture';AccessKey='fixture';SecretKey='fixture'} } | ConvertTo-Json -Depth 10 | Set-Content $durablePath
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EvidencePersistenceConfigurationFile $durablePath
+$evidence=Get-Content (Join-Path (Split-Path $onboardPath) 'evidence.json') -Raw | ConvertFrom-Json
+if ($evidence.Monergy.ReferenceAdapters -ne 'false' -or $evidence.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3' -or $evidence.Monergy.Persistence.Evidence.RuntimeConnections.T001 -notlike '*fixture_evidence*') { throw 'Durable Evidence configuration missing.' }
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
+$again=Get-Content (Join-Path (Split-Path $onboardPath) 'evidence.json') -Raw | ConvertFrom-Json
+if ($again.Monergy.Persistence.Evidence.S3.Bucket -ne 'fixture' -or $again.Monergy.ReferenceAdapters -ne 'false') { throw 'Durable Evidence silently fell back on repeat start.' }
+'PASS: durable Evidence opt-in and retained configuration; no credentials output.'
 'PASS: Basic KYC onboarding configuration; syntax; fresh/default/legacy/onboarding configuration; all non-destructive actions with mocked Docker/readiness; credential preservation; repeat-run stability; encryption conversion.'
 
 } finally { Remove-Item -LiteralPath $testRoot -Recurse -Force }

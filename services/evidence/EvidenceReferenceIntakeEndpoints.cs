@@ -27,7 +27,8 @@ public static class EvidenceReferenceIntakeEndpoints
         this IEndpointRouteBuilder endpoints,
         IConfiguration configuration)
     {
-        ReferenceAdapterGuard.EnsureAllowed(configuration);
+        if (PhysicalPersistenceGuard.IsSelected(configuration)) PhysicalPersistenceGuard.EnsureAllowed(configuration);
+        else ReferenceAdapterGuard.EnsureAllowed(configuration);
         var token = TenantAccessIntegration.Required(configuration, "Monergy:ProductIntake:EvidenceToken");
         var processingToken = TenantAccessIntegration.Required(configuration, "Monergy:ProductIntake:ProcessingToken");
         TenantAccessIntegration.ValidateToken(token);
@@ -42,7 +43,7 @@ public static class EvidenceReferenceIntakeEndpoints
         endpoints.MapPost("/internal/local/v1/evidence/content", async (
             HttpRequest request,
             ReferenceEvidenceContentRequest input,
-            ReferenceEvidenceContentStore content, IEvidenceMalwareScanner scanner, HttpResponse response, CancellationToken ct) =>
+            IEvidenceIntakeStore content, IEvidenceMalwareScanner scanner, HttpResponse response, CancellationToken ct) =>
         {
             response.Headers.CacheControl = "no-store";
             if (!LocalControlToken.IsValid(request.Headers["X-Monergy-Product-Token"].ToString(), token))
@@ -66,12 +67,14 @@ public static class EvidenceReferenceIntakeEndpoints
             {
                 var check = await scanner.CheckAsync(value, ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
-                return Results.Ok(content.StageScanned(input.OperationId, value, input.ContentType, check, input.SourceLocation));
+                return Results.Ok(await content.StageScannedAsync(input.OperationId, value, input.ContentType, check, input.SourceLocation, ct));
             }
             catch (EvidenceScanRejectedException)
             { return Results.Json(new { error = "EVIDENCE_SCAN_REJECTED" }, statusCode: 422); }
             catch (EvidenceScanUnavailableException)
             { return Results.Json(new { error = "EVIDENCE_SCAN_UNAVAILABLE" }, statusCode: 503); }
+            catch (EvidenceStorageUnavailableException)
+            { return Results.Json(new { error = "EVIDENCE_STORAGE_UNAVAILABLE" }, statusCode: 503); }
             catch (InvalidOperationException)
             { return Results.Conflict(new { error = "EVIDENCE_OPERATION_CONFLICT" }); }
         });
@@ -79,7 +82,7 @@ public static class EvidenceReferenceIntakeEndpoints
             HttpRequest request,
             ReferenceEvidenceReadRequest input,
             IEvidenceRepository repository,
-            ReferenceEvidenceContentStore content,
+            IEvidenceIntakeStore content,
             CancellationToken cancellationToken) =>
         {
             if (!LocalControlToken.IsValid(request.Headers["X-Monergy-Processing-Token"].ToString(), processingToken))
@@ -108,8 +111,11 @@ public static class EvidenceReferenceIntakeEndpoints
                 !string.Equals(version.ContentType, "image/jpeg", StringComparison.OrdinalIgnoreCase))
                 return Results.Json(new { error = "EVIDENCE_PROCESSING_CONTENT_UNSUPPORTED" }, statusCode: StatusCodes.Status422UnprocessableEntity);
             request.HttpContext.Response.Headers.CacheControl = "no-store";
-            var value = await content.ReadBytesAsync(version.ContentReference, cancellationToken).ConfigureAwait(false);
-            if (value is null)
+            byte[]? value;
+            try { value = await content.ReadRegisteredAsync(version, cancellationToken).ConfigureAwait(false); }
+            catch (EvidenceStorageUnavailableException) { return Results.Json(new { error = "EVIDENCE_PROCESSING_CONTENT_UNAVAILABLE" }, statusCode: 503); }
+            if (value is null || value.LongLength != version.ContentLength ||
+                Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(value)) != version.ContentSha256)
                 return Results.Json(new { error = "EVIDENCE_PROCESSING_CONTENT_UNAVAILABLE" }, statusCode: StatusCodes.Status503ServiceUnavailable);
             var binary = version.ContentType.Equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", StringComparison.OrdinalIgnoreCase) ||
                 version.ContentType.Equals("image/png", StringComparison.OrdinalIgnoreCase) ||

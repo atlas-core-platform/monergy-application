@@ -834,7 +834,7 @@ public sealed partial class ProductEvidenceClient : IDisposable
                 ?? throw new TenantBoundaryException("EVIDENCE_STAGING_RESPONSE_INVALID", 503);
         }
         catch (JsonException) { throw new TenantBoundaryException("EVIDENCE_STAGING_RESPONSE_INVALID", 503); }
-        if (!descriptor.Reference.StartsWith("reference://customer-intake/", StringComparison.Ordinal) ||
+        if (!EvidenceIntakeReference.Matches(descriptor.Reference, operationId) ||
             descriptor.Sha256.Length != 64 || descriptor.ContentLength is < 1 or > 1_048_576)
             throw new TenantBoundaryException("EVIDENCE_STAGING_RESPONSE_INVALID", 503);
         return descriptor;

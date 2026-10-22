@@ -162,3 +162,7 @@ Run owner bootstrap migrations through0006 for physical investment corrections. 
 ## T1-71 reviewed income records
 
 Financial information > Income supports explicit reviewed records with payer/type, period total, frequency, reported financial-year label and reporting dates. Exact reviewed income source/currency and owner CUSTOMER_REVIEWED status remain; no amount autofill, annualisation or year/calendar inference. Run owner migrations through0007 for physical storage. Current Self/read/document/update and ready owned-customer controls plus fresh immutable owner readback apply. Uncertain saves retain their request across close and missing current source. [Receipt](../governance/t1-71-reviewed-income-records.md). Corrections/history, reconciliation, verification, comparable snapshots, central audit and physical/integrated UAT remain open.
+
+## Durable original documents
+
+Onboarding profiles can opt into tenant-specific PostgreSQL Evidence databases and versioned S3 storage through `-EvidencePersistenceConfigurationFile`. See [Evidence persistence](Evidence-Persistence.md) for the configuration, provisioning and retained-profile behavior. Existing temporary profiles remain supported.

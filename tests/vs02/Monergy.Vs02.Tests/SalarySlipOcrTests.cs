@@ -179,7 +179,7 @@ public sealed class SalarySlipOcrTests
             ["Monergy:TenantBoundary:CustomerTenants:customer-001"] = "T001",
         });
         var store = new ReferenceEvidenceContentStore(); var repository = new InMemoryEvidenceRepository();
-        builder.Services.AddSingleton(store); builder.Services.AddSingleton<IEvidenceRepository>(repository);
+        builder.Services.AddSingleton(store); builder.Services.AddSingleton<IEvidenceIntakeStore>(store); builder.Services.AddSingleton<IEvidenceRepository>(repository);
         builder.Services.AddSingleton<IEvidenceMalwareScanner, FixtureMalwareScanner>();
         await using var host = builder.Build(); host.MapEvidenceReferenceIntake(builder.Configuration); await host.StartAsync();
         using var client = new HttpClient { BaseAddress = new Uri(host.Urls.Single()) };

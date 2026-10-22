@@ -125,7 +125,7 @@ public sealed partial class InMemoryEvidenceRepository : IEvidenceRepository
         string.Equals(prior.ContentSha256, candidate.ContentSha256, StringComparison.OrdinalIgnoreCase);
 }
 
-public sealed class ReferenceEvidenceContentStore : IEvidenceContentStore
+public sealed class ReferenceEvidenceContentStore : IEvidenceIntakeStore
 {
     private readonly ConcurrentDictionary<string, (EvidenceContentDescriptor Descriptor, byte[] Content)> content =
         new(StringComparer.Ordinal);
@@ -164,6 +164,14 @@ public sealed class ReferenceEvidenceContentStore : IEvidenceContentStore
             return (descriptor, current.Content);
         }).Descriptor;
     }
+
+    public Task<EvidenceContentDescriptor> StageScannedAsync(string operationId, byte[] bytes, string contentType,
+        EvidenceMalwareCheck check, EvidenceSourceLocation? source, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return Task.FromResult(StageScanned(operationId, bytes, contentType, check, source));
+    }
+    public Task<byte[]?> ReadRegisteredAsync(EvidenceVersionRecord version, CancellationToken ct) => ReadBytesAsync(version.ContentReference, ct);
 
     public Task<EvidenceContentDescriptor?> GetDescriptorAsync(string reference, CancellationToken cancellationToken)
     {

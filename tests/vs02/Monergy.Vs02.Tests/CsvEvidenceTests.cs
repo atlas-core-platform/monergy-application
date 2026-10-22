@@ -115,7 +115,7 @@ public sealed class CsvEvidenceTests
         });
         var store = new ReferenceEvidenceContentStore();
         var repository = new InMemoryEvidenceRepository();
-        builder.Services.AddSingleton(store);
+        builder.Services.AddSingleton(store); builder.Services.AddSingleton<IEvidenceIntakeStore>(store);
         builder.Services.AddSingleton<IEvidenceMalwareScanner, FixtureMalwareScanner>();
         builder.Services.AddSingleton<IEvidenceRepository>(repository);
         await using var host = builder.Build();

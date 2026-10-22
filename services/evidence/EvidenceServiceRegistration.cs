@@ -29,6 +29,7 @@ public static class EvidenceServiceRegistration
             return store;
         });
         services.AddSingleton<IEvidenceContentStore>(provider => provider.GetRequiredService<ReferenceEvidenceContentStore>());
+        services.AddSingleton<IEvidenceIntakeStore>(provider => provider.GetRequiredService<ReferenceEvidenceContentStore>());
         services.AddSingleton<ClamdEvidenceMalwareScanner>();
         services.AddSingleton<IEvidenceMalwareScanner>(provider => provider.GetRequiredService<ClamdEvidenceMalwareScanner>());
         services.AddSingleton<EvidenceApplication>();
@@ -41,12 +42,28 @@ public static class EvidenceServiceRegistration
     {
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
         services.AddSingleton(TimeProvider.System);
-        services.AddSingleton<PostgresEvidenceRepository>();
-        services.AddSingleton<IEvidenceRepository>(provider=>provider.GetRequiredService<PostgresEvidenceRepository>());
-        services.AddSingleton<IDocumentMonitoringRepository>(provider=>provider.GetRequiredService<PostgresEvidenceRepository>());
-        services.AddSingleton<IDocumentVaultRepository>(provider=>provider.GetRequiredService<PostgresEvidenceRepository>());
+        if (configuration.GetValue<bool>("Monergy:ProductIntake:Enabled"))
+        {
+            if (!TenantBoundaryOptions.Selected(configuration))
+                throw new InvalidOperationException("Durable product Evidence requires the current tenant access boundary.");
+            services.AddHttpContextAccessor();
+            services.AddSingleton<TenantEvidenceRepository>();
+            services.AddSingleton<IEvidenceRepository>(p => p.GetRequiredService<TenantEvidenceRepository>());
+            services.AddSingleton<IDocumentMonitoringRepository>(p => p.GetRequiredService<TenantEvidenceRepository>());
+            services.AddSingleton<IDocumentVaultRepository>(p => p.GetRequiredService<TenantEvidenceRepository>());
+            services.AddSingleton<ClamdEvidenceMalwareScanner>();
+            services.AddSingleton<IEvidenceMalwareScanner>(p => p.GetRequiredService<ClamdEvidenceMalwareScanner>());
+        }
+        else
+        {
+            services.AddSingleton<PostgresEvidenceRepository>();
+            services.AddSingleton<IEvidenceRepository>(p => p.GetRequiredService<PostgresEvidenceRepository>());
+            services.AddSingleton<IDocumentMonitoringRepository>(p => p.GetRequiredService<PostgresEvidenceRepository>());
+            services.AddSingleton<IDocumentVaultRepository>(p => p.GetRequiredService<PostgresEvidenceRepository>());
+        }
         services.AddSingleton<S3EvidenceContentStore>();
         services.AddSingleton<IEvidenceContentStore>(provider => provider.GetRequiredService<S3EvidenceContentStore>());
+        services.AddSingleton<IEvidenceIntakeStore>(provider => provider.GetRequiredService<S3EvidenceContentStore>());
         services.AddSingleton<EvidenceApplication>();
         return services;
     }
