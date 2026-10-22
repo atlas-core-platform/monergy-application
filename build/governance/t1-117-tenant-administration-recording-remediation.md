@@ -16,7 +16,8 @@ The supplied 88.5-second LOCAL UAT recording showed the retained `default` profi
 
 1. Customer Administration was registered and mapped only when the wider customer-onboarding composition enabled `CustomerRelationships`. The UI route is available in every administration profile, so the retained six-database `default` profile reached an owner route that did not exist. Customer Administration is now mapped whenever tenant integration is enabled. The database bootstrap additively seeds the two bounded LOCAL customer-owner fixtures for both retained and onboarding profiles. Existing credentials, databases, and customer state are not reset or replaced.
 2. `AccessApi` treated every feature-owner `503` as a session-level failure. A failed Audit, Customer, Evidence, Jobs, or other feature read therefore destroyed a valid administrator session. Only current authentication/authority failures (`401`/`403`) now end the administration view. Owner unavailability remains visible on the affected page and can be retried without re-entering credentials.
-3. The existing zero-job Processing Status result is preserved as a valid empty state; no jobs or documents are fabricated.
+3. The retained LOCAL audit runtime role had read access to `audit.product_activity`, but not the insert authority required by the gateway's product-activity capture. The additive bootstrap grant now includes that append-only table; update/delete/truncate authority remains denied. Disposable UAT explicitly reads the product activity Audit Log after restart and checks tenant isolation.
+4. The existing zero-job Processing Status result is preserved as a valid empty state; no jobs or documents are fabricated.
 
 ## Verification
 
