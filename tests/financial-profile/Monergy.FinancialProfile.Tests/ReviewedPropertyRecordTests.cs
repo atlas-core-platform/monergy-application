@@ -246,6 +246,34 @@ public sealed partial class ReviewedPropertyRecordTests
             new NormalizeSourceFacts("profile-"+Customer,Customer,"processing-unclassified",[source],"normalize/1.0.0",DateTimeOffset.UtcNow),"unclassified","unclassified"));
         Assert.Null(result.Data);Assert.NotNull(result.Error);
     }
+    [Fact]
+    public async Task CursorPagesReachAllRecordsWithTiedDatesAndCurrentAuthority()
+    {
+        await using var h = await Harness.Create(); using var client = h.Client();
+        var response = await client.PostAsJsonAsync("/product-api/v1/property-records", Input(h.Source.FinancialFactId), ContractJson.Options);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var original = (await response.Content.ReadFromJsonAsync<ReviewedPropertyRecord>())!;
+        for (var i = 0; i < 401; i++)
+            await h.Records.CreateAsync("T001", Customer, "actor-001", "paging-" + i, original with { PropertyRecordId = "property-page-" + i.ToString("D3", System.Globalization.CultureInfo.InvariantCulture), OperationId = i.ToString("x32", System.Globalization.CultureInfo.InvariantCulture), RecordedAt = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero) }, default);
+        var seen = new HashSet<string>(); string? after = null; var pages = 0;
+        do
+        {
+            var list = (await client.GetFromJsonAsync<ProductPropertyRecordList>("/product-api/v1/property-records" + (after is null ? "" : "?afterId=" + after)))!;
+            foreach (var item in list.Items) Assert.True(seen.Add(item.PropertyRecordId));
+            if (pages == 0)
+            {
+                var anchor = list.Items[^1];
+                await h.Records.ReviseAsync("T001", Customer, "actor-001", "paging-correction", 1, anchor with { OperationId = Guid.NewGuid().ToString("N"), Revision = 2, RecordedAt = DateTimeOffset.UtcNow }, default);
+            }
+            Assert.InRange(list.Items.Count, 1, 200); after = list.HasMore ? list.Items[^1].PropertyRecordId : null; pages++;
+        } while (after is not null);
+        Assert.Equal(402, seen.Count); Assert.Equal(3, pages);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/product-api/v1/property-records?afterId=a&afterId=b")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/product-api/v1/property-records?customerId=foreign")).StatusCode);
+        var wrong = await Assert.ThrowsAsync<TenantBoundaryException>(() => h.Records.ListAsync("T002", Customer, default, original.PropertyRecordId)); Assert.Equal(404, wrong.Status);
+        h.Authority.Failure = "deny";
+        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/product-api/v1/property-records?afterId=" + original.PropertyRecordId)).StatusCode);
+    }
     private sealed class TamperHandler(string scenario) : DelegatingHandler(new SocketsHttpHandler {AllowAutoRedirect=false,UseProxy=false})
     {
         private bool corrected;

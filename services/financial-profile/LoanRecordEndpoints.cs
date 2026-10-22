@@ -25,7 +25,7 @@ public static class LoanRecordEndpoints
         group.MapGet("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
         {
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
-            return await owner.ListAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
+            return await owner.ListAsync(tenant, customerId, http.RequestAborted, ReviewedRecordPaging.ReadAfter(http.Request)).ConfigureAwait(false);
         });
         group.MapGet("/{loanRecordId}", async (string customerId, string loanRecordId, int? revision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, LoanRecordsApplication owner) =>
         {

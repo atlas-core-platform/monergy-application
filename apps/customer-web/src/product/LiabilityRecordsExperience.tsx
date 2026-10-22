@@ -29,7 +29,7 @@ export default function LiabilityRecordsExperience({ api, facts, canRead, canCre
   const [saved, setSaved] = useState<ProductLiabilityRecord | null>(null);
   const [history, setHistory] = useState<{ api: AccessApi; record: ProductLiabilityRecord } | null>(null);
   const [selected, setSelected] = useState<{ api: AccessApi; record: ProductLiabilityRecord } | null>(null);
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const load = useCallback(async (signal?: AbortSignal, afterId?: string) => {
     if (!canRead) return;
     const sequence = ++loadSequence.current;
     activeLoad.current?.abort();
@@ -39,8 +39,8 @@ export default function LiabilityRecordsExperience({ api, facts, canRead, canCre
     const active = () => !signal?.aborted && !controller.signal.aborted && sequence === loadSequence.current && scope.current.api === api && scope.current.canRead;
     setLoading(true); setFailure(null);
     try {
-      const list = await getLiabilityRecords(api, controller.signal);
-      if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean' || list.items.some(item=>item.verificationStatus !== 'CUSTOMER_REVIEWED')) throw new Error('Invalid record list');
+      const list = await getLiabilityRecords(api, controller.signal, afterId);
+      if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean' || list.hasMore && list.items.length !== 200 || new Set(list.items.map(x => x.liabilityRecordId)).size !== list.items.length || list.items.some(x => x.liabilityRecordId === afterId) || list.items.some(item=>item.verificationStatus !== 'CUSTOMER_REVIEWED')) throw new Error('Invalid record list');
       if (active()) setLoaded({ api, list });
     } catch (error) {
       if (active()) { setLoaded(null); setFailure({ api, text: error instanceof AccessApiError && error.status === 403
@@ -107,11 +107,13 @@ export default function LiabilityRecordsExperience({ api, facts, canRead, canCre
         {current?.submission ? 'Continue save confirmation' : 'Add liability record'}</Button>}
     </Space>
     <p>Enter a liability balance, creditor and as-of date using a reviewed loan/debt source. Source figures stay separate. These records do not establish total debt, reconcile duplicate loans or verify repayment.</p>
+    <p><a href="/net-worth">Review the complete debt inventory and totals</a></p>
     {saved && editor?.api === api && <Alert type="success" title={'Liability record saved: ' + saved.liability.name} />}
     {failure?.api === api && <Alert type="error" title={failure.text} action={<Button onClick={() => { void load(); }}>Retry liability records</Button>} />}
     {loading && <p role="status">Loading liability records…</p>}
     {list?.items.length === 0 && <p>No liability records added yet. Review a loan/debt source figure in Documents, then enter its creditor, balance and as-of date here.</p>}
-    {list?.hasMore && <Alert type="info" title="Showing the 200 most recently added liability records." />}
+    {list?.hasMore && <Button disabled={loading || saving} onClick={() => { void load(undefined, list.items.at(-1)?.liabilityRecordId); }}>Earlier liability records</Button>}
+    {list && <p>Showing {list.items.length} liability records on this page. Refresh returns to the newest records.</p>}
     <LiabilitySnapshotExperience api={api} refreshKey={list} />
     {list?.items.map((record) => <Card key={record.liabilityRecordId} size="small" style={{ marginBlock: 12 }}>
       <Space wrap><strong>{record.liability.name}</strong><Tag>Customer reviewed</Tag><span>{record.liability.creditor}</span></Space>

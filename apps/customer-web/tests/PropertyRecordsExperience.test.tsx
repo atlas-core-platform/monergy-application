@@ -274,3 +274,18 @@ it.each(['source','customer'])('rejects property history with changed %s identit
   mount(api,false);const user=userEvent.setup();await user.click(await screen.findByRole('button',{name:'View property history: Family home'}));
   expect(await screen.findByText('Property history is unavailable.')).toBeVisible();expect(screen.queryByRole('button',{name:'View version 1'})).not.toBeInTheDocument();
 });
+
+it('pages beyond 200 property records and refreshes from the newest page', async () => {
+ const api = new AccessApi(session); const first = Array.from({ length: 200 }, (_, i) => ({ ...record, propertyRecordId: 'property-page-' + String(i), property: { ...record.property, name: 'Paged record ' + String(i) } }));
+ const request = vi.spyOn(api, 'product').mockImplementation(async path => {
+  await Promise.resolve();
+  if (path === 'v1/property-records') return { items: first, hasMore: true, dataDurability: 'Temporary data' };
+  if (path === 'v1/property-records?afterId=property-page-199') return { items: [record], hasMore: false, dataDurability: 'Temporary data' };
+  throw new Error('Unexpected page');
+ });
+ mount(api, false); fireEvent.click(await screen.findByRole('button', { name: 'Earlier property records' }));
+ expect(await screen.findByRole('button', { name: 'View property record: ' + record.property.name })).toBeVisible();
+ expect(screen.queryByRole('button', { name: 'Earlier property records' })).not.toBeInTheDocument();
+ expect(request.mock.calls.some(([path]) => path === 'v1/property-records?afterId=property-page-199')).toBe(true);
+ fireEvent.click(screen.getByRole('button', { name: 'Refresh property records' })); expect(await screen.findByRole('button', { name: 'Earlier property records' })).toBeVisible();
+});

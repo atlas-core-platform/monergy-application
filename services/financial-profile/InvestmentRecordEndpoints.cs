@@ -25,7 +25,7 @@ public static class InvestmentRecordEndpoints
         group.MapGet("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, InvestmentRecordsApplication owner) =>
         {
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
-            return await owner.ListAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
+            return await owner.ListAsync(tenant, customerId, http.RequestAborted, ReviewedRecordPaging.ReadAfter(http.Request)).ConfigureAwait(false);
         });
         group.MapGet("/{investmentRecordId}", async (string customerId, string investmentRecordId, int? revision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, InvestmentRecordsApplication owner) =>
         {

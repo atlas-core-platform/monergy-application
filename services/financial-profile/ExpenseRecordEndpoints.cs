@@ -25,7 +25,7 @@ public static class ExpenseRecordEndpoints
         group.MapGet("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, ExpenseRecordsApplication owner) =>
         {
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
-            return await owner.ListAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
+            return await owner.ListAsync(tenant, customerId, http.RequestAborted, ReviewedRecordPaging.ReadAfter(http.Request)).ConfigureAwait(false);
         });
         group.MapGet("/{expenseRecordId}", async (string customerId, string expenseRecordId, int? revision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, ExpenseRecordsApplication owner) =>
         {

@@ -36,8 +36,9 @@ public static class ProductExpenseRecordEndpoints
         group.MapGet("", async (HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductExpenseRecordClient client) =>
         {
             var (session, customer) = await ResolveAsync(http, owners, access, false).ConfigureAwait(false);
-            var list = await client.ListAsync(session, customer.CustomerId, http.RequestAborted).ConfigureAwait(false);
-            if (list.Items.Count > 200 || list.Items.Any(item => !Bound(item, customer.CustomerId)))
+            var afterId = ReviewedRecordPaging.ReadAfter(http.Request);
+            var list = await client.ListAsync(session, customer.CustomerId, http.RequestAborted, afterId).ConfigureAwait(false);
+            if (list.Items is null || list.Items.Count > 200 || list.HasMore && list.Items.Count != 200 || list.Items.Select(x => x?.ExpenseRecordId).Distinct(StringComparer.Ordinal).Count() != list.Items.Count || list.Items.Any(item => !Bound(item, customer.CustomerId) || item.ExpenseRecordId == afterId))
                 throw new TenantBoundaryException("EXPENSE_RECORD_RESPONSE_INVALID", 503);
             await ConfirmAsync(http, owners, access, session, customer, false).ConfigureAwait(false);
             return new ProductExpenseRecordList(list.Items, list.HasMore, "Temporary data");
@@ -190,8 +191,8 @@ public sealed class ProductExpenseRecordClient : IDisposable
         client = httpClient; client.Timeout = TimeSpan.FromSeconds(10); client.MaxResponseContentBufferSize = 1048576;
         endpoint = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:Product:FinancialProfileUrl"));
     }
-    public Task<ExpenseRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct) =>
-        SendAsync<ExpenseRecordList>(session, customer, "", null, ct);
+    public Task<ExpenseRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct, string? afterId = null) =>
+        SendAsync<ExpenseRecordList>(session, customer, afterId is null ? "" : "?afterId=" + Uri.EscapeDataString(afterId), null, ct);
     public Task<ReviewedExpenseRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct, int? revision = null) =>
         SendAsync<ReviewedExpenseRecord>(session, customer, "/" + Uri.EscapeDataString(id) + (revision is null ? "" : "?revision=" + revision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
     public Task<ReviewedExpenseRecord> CreateAsync(CustomerOwnerSession session, string customer, CreateExpenseRecord input, CancellationToken ct) =>

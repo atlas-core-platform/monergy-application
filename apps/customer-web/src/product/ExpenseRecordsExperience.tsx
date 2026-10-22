@@ -29,7 +29,7 @@ export default function ExpenseRecordsExperience({ api, facts, canRead, canCreat
   const [saved, setSaved] = useState<ProductExpenseRecord | null>(null);
   const [history, setHistory] = useState<{ api: AccessApi; record: ProductExpenseRecord } | null>(null);
   const [selected, setSelected] = useState<{ api: AccessApi; record: ProductExpenseRecord } | null>(null);
-  const load = useCallback(async (signal?: AbortSignal) => {
+  const load = useCallback(async (signal?: AbortSignal, afterId?: string) => {
     if (!canRead) return;
     const sequence = ++loadSequence.current;
     activeLoad.current?.abort();
@@ -39,8 +39,8 @@ export default function ExpenseRecordsExperience({ api, facts, canRead, canCreat
     const active = () => !signal?.aborted && !controller.signal.aborted && sequence === loadSequence.current && scope.current.api === api && scope.current.canRead;
     setLoading(true); setFailure(null);
     try {
-      const list = await getExpenseRecords(api, controller.signal);
-      if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean' || list.items.some(item=>item.verificationStatus !== 'CUSTOMER_REVIEWED')) throw new Error('Invalid record list');
+      const list = await getExpenseRecords(api, controller.signal, afterId);
+      if (!Array.isArray(list.items) || list.items.length > 200 || typeof list.hasMore !== 'boolean' || list.hasMore && list.items.length !== 200 || new Set(list.items.map(x => x.expenseRecordId)).size !== list.items.length || list.items.some(x => x.expenseRecordId === afterId) || list.items.some(item=>item.verificationStatus !== 'CUSTOMER_REVIEWED')) throw new Error('Invalid record list');
       if (active()) setLoaded({ api, list });
     } catch (error) {
       if (active()) { setLoaded(null); setFailure({ api, text: error instanceof AccessApiError && error.status === 403
@@ -107,11 +107,13 @@ export default function ExpenseRecordsExperience({ api, facts, canRead, canCreat
         {current?.submission ? 'Continue save confirmation' : 'Add expense record'}</Button>}
     </Space>
     <p>Record the total spent in a stated past reporting period and the category you reviewed. Source figures stay separate. These customer-reviewed records do not calculate spending totals or infer recurring expenses.</p>
+    <p><a href="/monthly-cashflow">Review monthly income and expense totals</a></p>
     {saved && editor?.api === api && <Alert type="success" title={'Expense record saved: ' + saved.expense.name} />}
     {failure?.api === api && <Alert type="error" title={failure.text} action={<Button onClick={() => { void load(); }}>Retry expense records</Button>} />}
     {loading && <p role="status">Loading expense records…</p>}
     {list?.items.length === 0 && <p>No expense records added yet. Review an expense source figure in Documents, then add its expense details and reporting period here.</p>}
-    {list?.hasMore && <Alert type="info" title="Showing the 200 most recently added expense records." />}
+    {list?.hasMore && <Button disabled={loading || saving} onClick={() => { void load(undefined, list.items.at(-1)?.expenseRecordId); }}>Earlier expense records</Button>}
+    {list && <p>Showing {list.items.length} expense records on this page. Refresh returns to the newest records.</p>}
     {list && <ExpensePeriodComparisonExperience api={api} records={list.items} hasMore={list.hasMore} />}
     {list?.items.map((record) => <Card key={record.expenseRecordId} size="small" style={{ marginBlock: 12 }}>
       <Space wrap><strong>{record.expense.name}</strong><Tag>Customer reviewed</Tag><span>{record.expense.category}</span></Space>

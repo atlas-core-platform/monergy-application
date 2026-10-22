@@ -258,3 +258,18 @@ it('aborts pending history and rejects a late previous-session response',async()
   expect(signal?.aborted).toBe(true);complete({items:[record],hasMore:false,nextBeforeRevision:null});
   await screen.findByText(/No investment records added yet/);expect(screen.queryByRole('dialog',{name:'Investment record history'})).not.toBeInTheDocument();
 });
+
+it('pages beyond 200 investment records and refreshes from the newest page', async () => {
+ const api = new AccessApi(session); const first = Array.from({ length: 200 }, (_, i) => ({ ...record, investmentRecordId: 'investment-page-' + String(i), investment: { ...record.investment, name: 'Paged record ' + String(i) } }));
+ const request = vi.spyOn(api, 'product').mockImplementation(async path => {
+  await Promise.resolve();
+  if (path === 'v1/investment-records') return { items: first, hasMore: true, dataDurability: 'Temporary data' };
+  if (path === 'v1/investment-records?afterId=investment-page-199') return { items: [record], hasMore: false, dataDurability: 'Temporary data' };
+  throw new Error('Unexpected page');
+ });
+ mount(api, false); fireEvent.click(await screen.findByRole('button', { name: 'Earlier investment records' }));
+ expect(await screen.findByRole('button', { name: 'View investment record: ' + record.investment.name })).toBeVisible();
+ expect(screen.queryByRole('button', { name: 'Earlier investment records' })).not.toBeInTheDocument();
+ expect(request.mock.calls.some(([path]) => path === 'v1/investment-records?afterId=investment-page-199')).toBe(true);
+ fireEvent.click(screen.getByRole('button', { name: 'Refresh investment records' })); expect(await screen.findByRole('button', { name: 'Earlier investment records' })).toBeVisible();
+});

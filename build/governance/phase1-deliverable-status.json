@@ -1,22 +1,22 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-112",
-  "applicationBase": "523da352b7c967c426fb3c57b88da0421fefa8bf",
+  "asOf": "T1-113",
+  "applicationBase": "bd29c9109fc4f00e36f7d73f1d3a2a8a3035b2cb",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 19,
+    "libraryVersion": 20,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook through T1-111; T1-112 completes original OCR transcription/asynchronous functionality with source-bound multi-page text. Live quality and acceptance remain separate.",
+    "reviewThrough": "Workbook through T1-112; T1-113 adds seven-domain record pagination and reconciles Income, Expenses, Liabilities and Loans against original requirements and delivered T1-90/94/105/107 functionality. External verification and live acceptance remain separate.",
     "libraryFileId": "libfile_7747823175948191ad6e56244bee8cf2"
   },
   "counts": {
     "originalDeliverables": 29,
-    "fullyImplemented": 18,
-    "partial": 11,
+    "fullyImplemented": 22,
+    "partial": 7,
     "pendingBusinessJourneys": 0,
-    "remainingOriginalDeliverables": 11,
-    "numberedUnitsAfterPairedMerge": 112,
-    "mergedImplementationUnitsAfterPairedMerge": 111,
+    "remainingOriginalDeliverables": 7,
+    "numberedUnitsAfterPairedMerge": 113,
+    "mergedImplementationUnitsAfterPairedMerge": 112,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -163,56 +163,56 @@
       "id": "P1-13",
       "area": "Financial Data",
       "name": "Income",
-      "state": "Partial",
-      "existing": "Reviewed income records support payer/type, explicit period totals, frequency/year labels and exact source/currency. Corrections/history and selected saved-period comparison retain customer review. Salary OCR/source history, Search and basic Reports remain.",
-      "remaining": "Full monthly/household income snapshot, multi-source/duplicate/overlap reconciliation, payer verification, fiscal-calendar normalization and Financial Rules calculations remain open. Central audit and full UAT remain open.",
-      "units": "T1-05\u201311, T1-42, T1-49\u201351; T1-71; T1-72; T1-75",
+      "state": "Complete",
+      "existing": "Reviewed income records cover source/payer,type,amount,frequency,financial-year label,period,exact source document and CUSTOMER_REVIEWED verification status. Corrections,immutable history,last-updated timestamps and all-record pagination are available. T1-107 adds reviewed monthly household scope,source-overlap checks and deterministic totals.",
+      "remaining": "MON-FIN-003 requires a verification status; it does not require independent payer verification or automatic fiscal-calendar inference. Customer-reviewed status remains explicit. Physical PostgreSQL/page queries,restart and full live UAT remain unverified.",
+      "units": "T1-05\u201311, T1-42, T1-49\u201351; T1-71; T1-72; T1-75; T1-94; T1-107; T1-113",
       "requirements": "MON-FIN-003/011/014",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-75-income-period-comparison.md"
+      "receipt": "build/governance/t1-113-financial-records.md"
     },
     {
       "id": "P1-14",
       "area": "Financial Data",
       "name": "Expenses",
-      "state": "Partial",
-      "existing": "Reviewed expense records support category, explicit period totals/dates and exact source/currency. Corrections/history and selected saved-period comparison retain customer review. Text/CSV source figures, source history, Search and basic Reports remain.",
-      "remaining": "Full monthly/household expense snapshot, multi-source/duplicate/overlap reconciliation, payment verification, recurring-spend detection and Financial Rules calculations remain open. Central audit and full UAT remain open.",
-      "units": "T1-05\u201311, T1-42; T1-73; T1-74; T1-76",
+      "state": "Complete",
+      "existing": "Reviewed expense records cover category,amount,reporting period and exact source; corrections,immutable history,last-updated timestamps and all-record pagination retain provenance. T1-107 adds monthly household scope,source-overlap checks and Financial Rules totals.",
+      "remaining": "Independent payment verification and inferred recurring spending are not required fields in MON-FIN-004. Customer review remains explicit. Physical PostgreSQL/page queries,restart and full live UAT remain unverified.",
+      "units": "T1-05\u201311, T1-42; T1-73; T1-74; T1-76; T1-94; T1-107; T1-113",
       "requirements": "MON-FIN-004/011/014",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-76-expense-period-comparison.md"
+      "receipt": "build/governance/t1-113-financial-records.md"
     },
     {
       "id": "P1-15",
       "area": "Financial Data",
       "name": "Assets",
       "state": "Partial",
-      "existing": "Vehicle,Property and Investment corrections/history retain exact sources,currency,separate values and dates. Dated asset snapshot exposes latest versions matching exact date/currency. Registration and values remain customer reported.",
-      "remaining": "Vehicle registration/ownership/valuation verification,lifecycle and liability links remain open. Broader assets,investment reconciliation,complete asset position,central audit and physical/full UAT remain open.",
-      "units": "T1-61\u201365; T1-69\u201370; T1-80\u201384",
-      "requirements": "MON-FIN-001/011/014; MON-DAS-001",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-84-dated-asset-snapshot.md"
+      "existing": "Vehicle,Property and Investment corrections/history retain exact sources,currency,separate values and dates. Dated asset snapshot exposes latest versions matching exact date/currency. Registration and values remain customer reported. T1-113 adds all-record pagination for Investment,Property and Vehicle; complete generic dated inventory and totals already exist through T1-90/102.",
+      "remaining": "Bank Account structured record fields under MON-FIN-005 remain missing from the detailed asset-record journey. Ownership,valuation,physical PostgreSQL and live UAT remain unverified. Complete generic asset totals and product audit were already delivered.",
+      "units": "T1-61\u201365; T1-69\u201370; T1-80\u201384; T1-90; T1-102; T1-113",
+      "requirements": "MON-FIN-001/011/014; MON-DAS-001; MON-FIN-005",
+      "receipt": "build/governance/t1-113-financial-records.md"
     },
     {
       "id": "P1-16",
       "area": "Financial Data",
       "name": "Liabilities",
-      "state": "Partial",
-      "existing": "Reviewed liabilities support version-checked corrections, exact saved-version reads and paged history. Dated snapshot selects latest saved versions by exact balance date and currency. Original source/currency/status and receipts remain.",
-      "remaining": "Broader sources/lifecycle, loan/multi-source reconciliation and creditor verification remain open. Complete liability coverage, totals/net worth, central audit and physical/full UAT remain open.",
-      "units": "Loan-source foundation; T1-77\u201379",
+      "state": "Complete",
+      "existing": "Reviewed liability records support creditor,type,outstanding balance,date,currency,exact sources,corrections/history and all-record pagination. Complete dated debt inventory and authoritative totals/net-worth calculations are delivered by T1-90/105, including loan,credit-card and other-debt declarations with explicit coverage and duplicate-source checks.",
+      "remaining": "Customer-reported debt coverage and balances are not creditor verification. Loan closure does not silently erase debt. Physical PostgreSQL/page queries,restart and full live UAT remain unverified.",
+      "units": "Loan-source foundation; T1-77\u201379; T1-90; T1-94; T1-105; T1-113",
       "requirements": "MON-FIN-001; MON-DAS-001; MR \u00a741",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-79-dated-liability-snapshot.md"
+      "receipt": "build/governance/t1-113-financial-records.md"
     },
     {
       "id": "P1-17",
       "area": "Financial Data",
       "name": "Loans",
-      "state": "Partial",
-      "existing": "T1-66\u201368 adds reviewed loan create/read, corrections/history and explicit dated customer-reported Active/Closed/reopen status. Original source/currency and recorded terms/balances remain; existing status is unreviewed until explicit review.",
-      "remaining": "Complete lender/current-debt truth, multi-source reconciliation and broader lifecycle. Prove physical PostgreSQL, central audit delivery and integrated UAT. Customer-reported status does not verify repayment or clear debt.",
-      "units": "T1-23\u201326, T1-42, T1-52; T1-60; T1-66; T1-67; T1-68",
+      "state": "Complete",
+      "existing": "Reviewed loan records capture lender,type,sanction amount,outstanding amount,interest,EMI,tenure and dates; exact source/currency,corrections,immutable history,last-updated metadata and all-record pagination remain available. Dated Active/Closed/reopen status is customer reported.",
+      "remaining": "MON-FIN-006 requires recorded loan fields, not externally certified lender truth. Repayment verification and live lender integration are not claimed. Physical PostgreSQL/page queries,restart and full live UAT remain unverified.",
+      "units": "T1-23\u201326, T1-42, T1-52; T1-60; T1-66; T1-67; T1-68; T1-94; T1-113",
       "requirements": "MON-FIN-006",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-68-reviewed-loan-lifecycle.md"
+      "receipt": "build/governance/t1-113-financial-records.md"
     },
     {
       "id": "P1-18",

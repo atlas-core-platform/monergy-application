@@ -36,8 +36,9 @@ public static class ProductInvestmentRecordEndpoints
         group.MapGet("", async (HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductInvestmentRecordClient client) =>
         {
             var (session, customer) = await ResolveAsync(http, owners, access, false).ConfigureAwait(false);
-            var list = await client.ListAsync(session, customer.CustomerId, http.RequestAborted).ConfigureAwait(false);
-            if (list.Items.Count > 200 || list.Items.Any(item => !Bound(item, customer.CustomerId)))
+            var afterId = ReviewedRecordPaging.ReadAfter(http.Request);
+            var list = await client.ListAsync(session, customer.CustomerId, http.RequestAborted, afterId).ConfigureAwait(false);
+            if (list.Items is null || list.Items.Count > 200 || list.HasMore && list.Items.Count != 200 || list.Items.Select(x => x?.InvestmentRecordId).Distinct(StringComparer.Ordinal).Count() != list.Items.Count || list.Items.Any(item => !Bound(item, customer.CustomerId) || item.InvestmentRecordId == afterId))
                 throw new TenantBoundaryException("INVESTMENT_RECORD_RESPONSE_INVALID", 503);
             await ConfirmAsync(http, owners, access, session, customer, false).ConfigureAwait(false);
             return new ProductInvestmentRecordList(list.Items, list.HasMore, "Temporary data");
@@ -167,8 +168,8 @@ public sealed class ProductInvestmentRecordClient : IDisposable
         client = httpClient; client.Timeout = TimeSpan.FromSeconds(10); client.MaxResponseContentBufferSize = 1048576;
         endpoint = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:Product:FinancialProfileUrl"));
     }
-    public Task<InvestmentRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct) =>
-        SendAsync<InvestmentRecordList>(session, customer, "", null, ct);
+    public Task<InvestmentRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct, string? afterId = null) =>
+        SendAsync<InvestmentRecordList>(session, customer, afterId is null ? "" : "?afterId=" + Uri.EscapeDataString(afterId), null, ct);
     public Task<ReviewedInvestmentRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct, int? revision = null) =>
         SendAsync<ReviewedInvestmentRecord>(session, customer, "/" + Uri.EscapeDataString(id) + (revision is null ? "" : "?revision=" + revision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
     public Task<ReviewedInvestmentRecord> CreateAsync(CustomerOwnerSession session, string customer, CreateInvestmentRecord input, CancellationToken ct) =>
