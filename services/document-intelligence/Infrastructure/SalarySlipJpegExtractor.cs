@@ -18,7 +18,7 @@ public sealed class SalarySlipJpegExtractor(IImageTextRecognizer recognizer) : I
             !string.Equals(content.Reference.ContentSha256, Convert.ToHexStringLower(SHA256.HashData(bytes)), StringComparison.OrdinalIgnoreCase))
             throw Unsupported();
         ValidateJpeg(bytes);
-        var tsv = await recognizer.RecognizeAsync(bytes, cancellationToken).ConfigureAwait(false);
+        var tsv = content.RecognizedTsv ?? await recognizer.RecognizeAsync(bytes, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         return SalarySlipPngExtractor.CreateCandidates(content, processingId, tsv, ExtractionVersion);
     }

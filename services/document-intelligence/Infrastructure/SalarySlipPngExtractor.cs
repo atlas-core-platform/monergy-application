@@ -22,7 +22,7 @@ public sealed class SalarySlipPngExtractor(IImageTextRecognizer recognizer) : ID
             !string.Equals(content.Reference.ContentSha256, Convert.ToHexStringLower(SHA256.HashData(bytes)), StringComparison.OrdinalIgnoreCase))
             throw Incomplete();
         ValidatePng(bytes);
-        var tsv = await recognizer.RecognizeAsync(bytes, cancellationToken).ConfigureAwait(false);
+        var tsv = content.RecognizedTsv ?? await recognizer.RecognizeAsync(bytes, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
         return CreateCandidates(content, processingId, tsv, ExtractionVersion);
     }

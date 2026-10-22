@@ -16,6 +16,7 @@ param(
     [string]$AiModelConfigurationFile,
     [string]$KycConfigurationFile,
     [string]$EvidencePersistenceConfigurationFile,
+    [string]$ClassificationConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
 )
@@ -178,6 +179,29 @@ if (Test-Path -LiteralPath $evidenceConfigPath) {
     }
     if ($Action -in @('Prepare','Start')) { Save-Json 'evidence-persistence.json' $evidencePersistence; Protect-Files }
 } elseif (-not [string]::IsNullOrWhiteSpace($EvidencePersistenceConfigurationFile)) { throw 'Evidence persistence configuration file was not found.' }
+# Classification owner connections and explicit reviewer assignments remain operator supplied.
+$classificationConfiguration = $null
+$classificationConfigPath = Join-Path $folder 'classification.json'
+if (-not [string]::IsNullOrWhiteSpace($ClassificationConfigurationFile)) { $classificationConfigPath = $ClassificationConfigurationFile }
+if (Test-Path -LiteralPath $classificationConfigPath) {
+    if (-not $onboarding) { throw 'Classification configuration requires an onboarding profile.' }
+    $classificationFile = Get-Item -LiteralPath $classificationConfigPath
+    if ($classificationFile.PSIsContainer -or $classificationFile.Length -gt 65536) { throw 'Invalid classification configuration file.' }
+    $classificationConfiguration = Get-Content -LiteralPath $classificationFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+    foreach ($name in @('RuntimeConnections','Reviewers')) {
+        if ($null -eq $classificationConfiguration -or $null -eq $classificationConfiguration.PSObject.Properties[$name] -or $null -eq $classificationConfiguration.$name) { throw "Classification configuration requires $name." }
+    }
+    $classificationBindings = @($classificationConfiguration.RuntimeConnections.PSObject.Properties)
+    if ($classificationBindings.Count -eq 0) { throw 'Classification requires at least one tenant database.' }
+    foreach ($binding in $classificationBindings) {
+        if ($binding.Name -notin @('T001','T002') -or [string]::IsNullOrWhiteSpace([string]$binding.Value)) { throw 'Invalid classification tenant database binding.' }
+    }
+    foreach ($binding in $classificationConfiguration.Reviewers.PSObject.Properties) {
+        if ($binding.Name -notin @($classificationBindings.Name)) { throw 'Classification reviewers require a configured tenant database.' }
+        foreach ($reviewer in @($binding.Value)) { if ($reviewer -isnot [string] -or $reviewer -notmatch '^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$') { throw 'Invalid classification reviewer assignment.' } }
+    }
+    if ($Action -in @('Prepare','Start')) { Save-Json 'classification.json' $classificationConfiguration; Protect-Files }
+} elseif (-not [string]::IsNullOrWhiteSpace($ClassificationConfigurationFile)) { throw 'Classification configuration file was not found.' }
 $kycTenants = @{}
 if (-not [string]::IsNullOrWhiteSpace($KycConfigurationFile)) {
     if (-not $onboarding) { throw 'Basic KYC configuration requires an onboarding profile.' }
@@ -362,6 +386,7 @@ if ($Action -in @('Prepare','Start')) {
                 }
                 $config.Monergy.ProductIntake=@{ Enabled='true'; EvidenceToken=$state.tokens.evidenceIntake; ProcessingToken=$state.tokens.evidenceProcessing; ClamdPort=3310 }
             } elseif ($onboarding -and $service -eq 'document-intelligence') {
+                if ($null -ne $classificationConfiguration) { $config.Monergy.Classification=$classificationConfiguration }
                 $config.Monergy.DocumentProcessing=@{
                     EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceProcessing
                     ControlToken=$state.tokens.documentControl

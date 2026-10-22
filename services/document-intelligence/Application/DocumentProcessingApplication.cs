@@ -5,7 +5,7 @@ using Monergy.Platform;
 
 namespace Monergy.Services.DocumentIntelligence.Application;
 
-public sealed record EvidenceContent(EvidenceReference Reference, string Content, byte[]? BinaryContent = null);
+public sealed record EvidenceContent(EvidenceReference Reference, string Content, byte[]? BinaryContent = null, string? RecognizedTsv = null);
 
 public sealed class EvidenceDependencyException(string message) : Exception(message);
 
@@ -122,7 +122,8 @@ public sealed class DocumentProcessingApplication(
     IDocumentExtractor extractor,
     IExecutionPolicy executionPolicy,
     ILifecycleTelemetry telemetry,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider,
+    Infrastructure.DocumentClassifier? classifier = null)
 {
     private static string? WorkloadTenant(TrustedSecurityContext security)
     {const string prefix="local-uat-workspace:";var value=security.Workload.WorkloadIdentityId;return value.StartsWith(prefix,StringComparison.Ordinal)&&TenantAccessClient.Identifier(value[prefix.Length..],64)?value[prefix.Length..]:null;}
@@ -477,7 +478,14 @@ public sealed class DocumentProcessingApplication(
         IReadOnlyList<ValidatedSourceFact> facts;
         try
         {
+            if (classifier is not null && started.TenantId is not null)
+                evidence = await classifier.ClassifyAsync(started.TenantId, evidence!, cancellationToken);
             facts = await extractor.ExtractAsync(evidence!, started.ProcessingId, cancellationToken);
+        }
+        catch (Exception error) when (error is EvidenceDependencyException or Npgsql.NpgsqlException)
+        {
+            return await FailAsync(request, started, "processing.classification.unavailable",
+                ContractErrorCategory.DependencyFailure, true, cancellationToken);
         }
         catch (OcrEngineUnavailableException)
         {

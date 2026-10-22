@@ -184,6 +184,12 @@ export class AccessApi {
   classificationMonitoring<T>(path: string, signal?: AbortSignal): Promise<T> {
     return this.guarded<T>('/classification-api/local/v1/administration/document-classifications' + path, { headers: { 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId }, signal });
   }
+  classificationReviews<T>(path = '', method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/classification-api/local/v1/administration/classification-reviews' + path, {
+      method, headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
+      body: body === undefined ? undefined : JSON.stringify(body), signal,
+    });
+  }
   processingAdministration<T>(path = '', method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
     return this.guarded<T>('/jobs-api/local/v1/administration/processing' + path, {
       method, headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },

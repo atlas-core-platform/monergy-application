@@ -163,6 +163,13 @@ static string? Route(string path, string method)
     const string documents="/evidence-api/local/v1/administration/documents";
     if(method=="GET"&&(path==documents||path.StartsWith(documents+"/",StringComparison.Ordinal)&&TenantAccessClient.Identifier(path[(documents.Length+1)..],160)))return "http://127.0.0.1:5111"+path[13..];
     if(method=="GET"&&path=="/classification-api/local/v1/administration/document-classifications")return "http://127.0.0.1:5112"+path[19..];
+    const string classificationReviews="/classification-api/local/v1/administration/classification-reviews";
+    if(path==classificationReviews&&method=="GET")return "http://127.0.0.1:5112"+path[19..];
+    if(path.StartsWith(classificationReviews+"/",StringComparison.Ordinal)&&method is "GET" or "POST")
+    {
+        var ids=path[(classificationReviews.Length+1)..].Split('/');
+        if(ids.Length==2&&TenantAccessClient.Identifier(ids[0],128)&&TenantAccessClient.Identifier(ids[1],160))return "http://127.0.0.1:5112"+path[19..];
+    }
     const string processing="/jobs-api/local/v1/administration/processing";
     if(path==processing&&method=="GET")return "http://127.0.0.1:5118"+path[9..];
     if(path.StartsWith(processing+"/",StringComparison.Ordinal))

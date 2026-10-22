@@ -1,12 +1,12 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-110",
-  "applicationBase": "cc891c671abd09afcf70959e49a72fe7d602ab62",
+  "asOf": "T1-111",
+  "applicationBase": "1618e57e68a9862523bea67a4de003ed04d47594",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 17,
+    "libraryVersion": 18,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook through T1-109; T1-110 connects durable scanned original intake and exact-version processing reads. Counts and acceptance unchanged.",
+    "reviewThrough": "Workbook through T1-110; T1-111 adds independent document-family classification, retained review state and administrator workflow. Counts and acceptance unchanged.",
     "libraryFileId": "libfile_7747823175948191ad6e56244bee8cf2"
   },
   "counts": {
@@ -15,8 +15,8 @@
     "partial": 12,
     "pendingBusinessJourneys": 0,
     "remainingOriginalDeliverables": 12,
-    "numberedUnitsAfterPairedMerge": 110,
-    "mergedImplementationUnitsAfterPairedMerge": 109,
+    "numberedUnitsAfterPairedMerge": 111,
+    "mergedImplementationUnitsAfterPairedMerge": 110,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -98,11 +98,11 @@
       "area": "Documents",
       "name": "Classification",
       "state": "Partial",
-      "existing": "Strict recognition covers eight printed-English OCR classes, now including vehicle purchase invoices, in supported PNG/JPEG/single-page PDFs. Mixed known titles reject. Broader classes/layouts remain open.",
-      "remaining": "Cover the remaining \u00a711 document classes and layouts, persist classification/unknown-review state, and expose the administration workflow.",
-      "units": "T1-49\u201352; T1-58; T1-59; T1-60; T1-61; T1-62; T1-63",
+      "existing": "T1-111 separates source classification from financial extraction across all required document families, flags unknown/ambiguous/low-confidence sources, persists optional tenant-specific PostgreSQL review history and supplies a version-checked administrator review screen. Automatic reprocessing preserves reviewed classifications.",
+      "remaining": "Broader layout/language corpus quality, production classification capability/role-pack approval, physical migration/grant/restart and full UAT remain open. LOCAL/UAT reviewer assignments are operator-configured during onboarding.",
+      "units": "T1-49\u201352; T1-58; T1-59; T1-60; T1-61; T1-62; T1-63; T1-111",
       "requirements": "MON-DOC-004/005",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-63-vehicle-purchase-ocr.md"
+      "receipt": "build/governance/t1-111-classification-review.md"
     },
     {
       "id": "P1-08",
