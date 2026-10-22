@@ -184,6 +184,40 @@ public sealed class ProductSearchProjectionSourceTests
         Assert.Equal(ContractErrorCategory.AccessDenied, error.Error.Category);
     }
 
+    [Fact]
+    public async Task ReadsAllPagesBeyondOneHundredWithExactSources()
+    {
+        var handler = new OwnerHandler { DocumentCount = 205 };
+        var records = await Source(handler, Accessor(SearchContractNames.SearchDocuments)).ReadCurrentCustomerAsync(
+            "reference-customer", "decision-search", Security(), SearchContractNames.SearchDocuments, "correlation", CancellationToken.None);
+        Assert.Equal(205, records.Length);
+        Assert.Equal(205, records.Select(x => x.Source.SourceObjectId).Distinct().Count());
+        Assert.Contains(records, x => x.Source.SourceObjectId == "document-version-205");
+        Assert.Equal(3, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task CorpusSafetyLimitFailsExplicitlyInsteadOfTruncating()
+    {
+        var handler = new OwnerHandler { DocumentCount = 10_001 };
+        var error = await Assert.ThrowsAsync<SearchSourceException>(() => Source(handler, Accessor(SearchContractNames.SearchDocuments)).ReadCurrentCustomerAsync(
+            "reference-customer", "decision-search", Security(), SearchContractNames.SearchDocuments, "correlation", CancellationToken.None));
+        Assert.Equal("search.source.corpus-limit", error.Error.Code);
+        Assert.Equal(100, handler.Requests.Count);
+    }
+
+    [Theory]
+    [InlineData("denied")]
+    [InlineData("duplicate")]
+    [InlineData("customer")]
+    [InlineData("cursor")]
+    public async Task LaterPageFailureDoesNotReturnPartialCorpus(string failure)
+    {
+        var handler = new OwnerHandler { DocumentCount = 205, PageFailure = failure };
+        await Assert.ThrowsAsync<SearchSourceException>(() => Source(handler, Accessor(SearchContractNames.SearchDocuments)).ReadCurrentCustomerAsync(
+            "reference-customer", "decision-search", Security(), SearchContractNames.SearchDocuments, "correlation", CancellationToken.None));
+    }
+
     private static ProductSearchProjectionSource Source(
         HttpMessageHandler handler,
         IHttpContextAccessor accessor)
@@ -225,6 +259,8 @@ public sealed class ProductSearchProjectionSourceTests
 
     private sealed class OwnerHandler : HttpMessageHandler
     {
+        public int DocumentCount { get; set; } = 1;
+        public string? PageFailure { get; set; }
         public string AssetType { get; set; } = "ASSET";
         public bool CanonicalCategories { get; set; }
         public bool CrossCustomerProvenance { get; set; }
@@ -252,7 +288,7 @@ public sealed class ProductSearchProjectionSourceTests
             };
         }
 
-        private static HttpResponseMessage Evidence(string body)
+        private HttpResponseMessage Evidence(string body)
         {
             var request = JsonSerializer.Deserialize<ContractRequest<ListCustomerEvidence>>(
                 body, ContractJson.Options)!;
@@ -268,7 +304,14 @@ public sealed class ProductSearchProjectionSourceTests
                 new string('A', 64),
                 DateTimeOffset.Parse("2026-10-16T08:00:00Z", CultureInfo.InvariantCulture),
                 DateTimeOffset.Parse("2026-10-16T08:00:00Z", CultureInfo.InvariantCulture));
-            return Success(request, new CustomerEvidenceLibrary("reference-customer", [item]));
+            var offset = request.Payload.AfterVersionId is null ? 0 : int.Parse(request.Payload.AfterVersionId.Split('-')[^1], CultureInfo.InvariantCulture);
+            if (offset > 0 && PageFailure == "denied") return new(HttpStatusCode.Forbidden);
+            var items = Enumerable.Range(offset + 1, Math.Min(100, DocumentCount - offset))
+                .Select(i => item with { DocumentVersionId = $"document-version-{i:000}", EvidenceId = $"evidence-{i:000}" }).ToArray();
+            if (offset > 0 && PageFailure == "duplicate") items[0] = item;
+            var next = offset + items.Length < DocumentCount ? items[^1].DocumentVersionId : null;
+            if (offset > 0 && PageFailure == "cursor") next = "forged-cursor";
+            return Success(request, new CustomerEvidenceLibrary(offset > 0 && PageFailure == "customer" ? "other" : "reference-customer", items, next));
         }
 
         private HttpResponseMessage Profile(string body)

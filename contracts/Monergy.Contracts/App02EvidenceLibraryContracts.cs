@@ -5,7 +5,7 @@ public static class App02ContractNames
     public const string ListCustomerEvidence = "ListCustomerEvidence";
 }
 
-public sealed record ListCustomerEvidence(string CustomerId, int Limit);
+public sealed record ListCustomerEvidence(string CustomerId, int Limit, string? AfterVersionId = null);
 
 public sealed record CustomerEvidenceItem(
     string DocumentId,
@@ -22,4 +22,4 @@ public sealed record CustomerEvidenceItem(
 
 public sealed record CustomerEvidenceLibrary(
     string CustomerId,
-    IReadOnlyList<CustomerEvidenceItem> Items);
+    IReadOnlyList<CustomerEvidenceItem> Items, string? NextVersionId = null);
