@@ -10,9 +10,10 @@ namespace Monergy.Services.DocumentIntelligence;
 
 // Document Intelligence owns bounded text/OCR interpretation. Passages are
 // evidence quotations/transcriptions, never adopted Financial Profile facts.
-public sealed class QaDocumentReader(IEvidenceContentReader evidence, IImageTextRecognizer recognizer, IPdfPageRenderer renderer)
+public sealed class QaDocumentReader(IEvidenceContentReader evidence, IDocumentOcrRepository ocr)
 {
     public const string Version = "qa-document-passages/1; tesseract-5.3.4; poppler-24.02.0";
+    public const string RetainedOcrVersion = "qa-document-passages/2; retained-source-ocr/1";
     public async Task<QaDocumentPassages> Read(string customer, string version, TrustedSecurityContext security, CancellationToken ct)
     {
         var content = await evidence.ReadAsync(version, customer, security, "qa-document-" + Guid.NewGuid().ToString("N"), ct)
@@ -20,7 +21,7 @@ public sealed class QaDocumentReader(IEvidenceContentReader evidence, IImageText
         if (content.Reference.CustomerId != customer || content.Reference.DocumentVersionId != version ||
             content.Reference.ContentSha256.Length != 64) throw new TenantBoundaryException("AI_DOCUMENT_INVALID", 503);
         var reference = content.Reference;
-        QaDocumentPassages Result(string state, IReadOnlyList<QaDocumentPassage> passages) => new(customer, version, reference.ContentSha256, Version, state, passages);
+        QaDocumentPassages Result(string state, IReadOnlyList<QaDocumentPassage> passages) => new(customer, version, reference.ContentSha256, reference.ContentType is "image/png" or "image/jpeg" or "application/pdf" ? RetainedOcrVersion : Version, state, passages);
         try
         {
             IReadOnlyList<QaDocumentPassage> passages;
@@ -34,16 +35,32 @@ public sealed class QaDocumentReader(IEvidenceContentReader evidence, IImageText
             }
             else if (reference.ContentType is "image/png" or "image/jpeg" or "application/pdf" && content.BinaryContent is not null)
             {
-                var bytes = content.BinaryContent;
-                if (reference.ContentType == "application/pdf") bytes = await renderer.RenderAsync(bytes, ct);
-                var lines = FinancialDocumentOcrClassifier.ParseTsv(await recognizer.RecognizeAsync(bytes, ct));
-                // Do not silently remove uncertain words and change the meaning of a passage.
-                if (lines.Length == 0 || lines.Any(line => line.Confidence < 90)) return Result("UNRELIABLE_TEXT", []);
-                passages = TextPassages(string.Join('\n', lines.Select(line => line.Text)));
+                const string prefix = "local-uat-workspace:";
+                var identity = security.Workload.WorkloadIdentityId;
+                if (!identity.StartsWith(prefix, StringComparison.Ordinal) || !TenantAccessClient.Identifier(identity[prefix.Length..], 64))
+                    throw new TenantBoundaryException("AI_DOCUMENT_INVALID", 503);
+                var tenant = identity[prefix.Length..];
+                DocumentOcrResult? recorded;
+                try { recorded = await ocr.ReadOcrAsync(tenant, customer, version, ct); }
+                catch (InvalidOperationException) { throw new TenantBoundaryException("AI_DOCUMENT_UNAVAILABLE", 503); }
+                if (recorded is null) return Result("NOT_PROCESSED", []);
+                if (!DocumentOcrRules.Valid(recorded) || recorded.TenantId != tenant || recorded.CustomerId != customer ||
+                    recorded.DocumentVersionId != version || !string.Equals(recorded.SourceHash, reference.ContentSha256, StringComparison.OrdinalIgnoreCase))
+                    throw new TenantBoundaryException("AI_DOCUMENT_INVALID", 503);
+                if (recorded.State != "AVAILABLE") return Result(recorded.State, []);
+                // Preserve page boundaries and line locations. Never discard uncertain/blank
+                // pages or silently return a prefix when the quotation budget is exceeded.
+                var collected = new List<QaDocumentPassage>();
+                foreach (var page in recorded.Pages)
+                    foreach (var passage in TextPassages(string.Join('\n', page.Lines.Select(line => line.Text))))
+                        collected.Add(passage with { Id = "passage-" + collected.Count.ToString(CultureInfo.InvariantCulture), Location = $"page {page.Number}, {passage.Location}" });
+                if (collected.Count > 20 || collected.Sum(x => x.Text.Length) > 20000) return Result("UNSUPPORTED", []);
+                passages = collected;
             }
             else return Result("UNSUPPORTED", []);
             return Result(passages.Count == 0 ? "NO_TEXT" : "AVAILABLE", passages);
         }
+        catch (DocumentExtractionException) { return Result("UNSUPPORTED", []); }
         catch (DocumentRecognitionException) { return Result("UNSUPPORTED", []); }
     }
     public static IReadOnlyList<QaDocumentPassage> TextPassages(string text)

@@ -88,7 +88,7 @@ public sealed partial class QaOwners(CustomerOwnerClient identity, TenantAccessC
         var result = await Read<QaDocumentPassages>(http, request);
         if (result.CustomerId != customer.Workspace.CustomerId || result.DocumentVersionId != version || result.ContentSha256.Length != 64 ||
             !result.ContentSha256.All(char.IsAsciiHexDigit) || !NetWorthData.Text(result.ReaderVersion, 160) || result.Passages is null || result.Passages.Count > 20 ||
-            result.State is not ("AVAILABLE" or "UNSUPPORTED" or "UNRELIABLE_TEXT" or "NO_TEXT") || result.State != "AVAILABLE" && result.Passages.Count != 0 ||
+            result.State is not ("AVAILABLE" or "UNSUPPORTED" or "UNRELIABLE_TEXT" or "NO_TEXT" or "NOT_PROCESSED") || result.State != "AVAILABLE" && result.Passages.Count != 0 ||
             result.Passages.Any(x => x is null || !NetWorthData.Text(x.Id, 80) || string.IsNullOrWhiteSpace(x.Text) || x.Text.Length > 1500 || !NetWorthData.Text(x.Location, 500)) ||
             result.Passages.Select(x => x.Id).Distinct(StringComparer.Ordinal).Count() != result.Passages.Count) throw Invalid();
         return result.Passages.Select(x => new QaClaim(x.Id, "Document quotation/transcription (not verified financial truth): " + x.Text,

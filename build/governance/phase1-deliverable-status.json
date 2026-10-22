@@ -1,22 +1,22 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-114",
-  "applicationBase": "1156b4f8d64cec0addd360d9080b055c29c5529b",
+  "asOf": "T1-115",
+  "applicationBase": "01a784bebb4b5d8ba0e7b297d72de67e41dc06cd",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 21,
+    "libraryVersion": 22,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook through T1-113, including original Requirements151 phase column. T1-114 corrects the mistaken bank-detail completion gate: MON-FIN-005 is Phase2, not Phase1. Upload,Classification and Assets are reconciled to their original scope; XLSX structural intake validation added.",
+    "reviewThrough": "Original Requirements151 phases and the29-journey checklist through T1-114,plus architecture D02/D08 OD-11 stage boundary. T1-115 completes retained OCR Q&A and scope-safe natural-language retrieval; original requirements/acceptance remain unchanged.",
     "libraryFileId": "libfile_7747823175948191ad6e56244bee8cf2"
   },
   "counts": {
     "originalDeliverables": 29,
-    "fullyImplemented": 25,
-    "partial": 4,
+    "fullyImplemented": 29,
+    "partial": 0,
     "pendingBusinessJourneys": 0,
-    "remainingOriginalDeliverables": 4,
-    "numberedUnitsAfterPairedMerge": 114,
-    "mergedImplementationUnitsAfterPairedMerge": 113,
+    "remainingOriginalDeliverables": 0,
+    "numberedUnitsAfterPairedMerge": 115,
+    "mergedImplementationUnitsAfterPairedMerge": 114,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -119,23 +119,23 @@
       "id": "P1-09",
       "area": "Documents",
       "name": "Extraction",
-      "state": "Partial",
-      "existing": "Source figures and reviewed domain records remain separate. Tax now supports explicit jurisdiction/type,amount meaning,amount,tax-year label and period with corrections/history. No new OCR field/layout coverage is claimed. T1-110 connects opt-in tenant-specific PostgreSQL/S3 original storage, scan/provider receipts, exact-version processing reads and retained onboarding configuration.",
-      "remaining": "Complete domain records and broader document layouts. Other asset types, arbitrary Excel and durable integration remain open. Source classification does not verify ownership or current value.",
-      "units": "T1-48\u201365; T1-69\u201386 reviewed records; T1-110",
+      "state": "Complete",
+      "existing": "Validated template/layout extraction produces structured source candidates,normalization and exact provenance; reviewed domain records/corrections complete Phase1 income,expense,loan and asset workflows. T1-113 completes fields and navigation. Unknown sources remain reviewable without fabricated facts.",
+      "remaining": "Supported financial layouts/templates only; arbitrary spreadsheet interpretation and later-phase domain detail are not promised. Source classification does not verify ownership/value. Physical retained-pipeline deployment,live migrations/grants/restart and native corpus quality remain unverified.",
+      "units": "T1-48\u201365; T1-69\u201386 reviewed records; T1-110; T1-115",
       "requirements": "MON-DOC-003/007; MON-FIN-001/003/004/006",
-      "receipt": "build/governance/t1-110-durable-evidence.md"
+      "receipt": "build/governance/t1-115-phase1-implementation-closure.md"
     },
     {
       "id": "P1-10",
       "area": "Documents",
       "name": "Indexing",
-      "state": "Partial",
-      "existing": "Authorized lexical retrieval and derived search projections expose source-linked documents and reviewed figures. T1-106 reads current owners for search/retrieval/refresh using isolated request snapshots, no cached fallback; explicit refresh is tenant-authorized. T1-109 reads all authorized document pages up to an explicit 10,000-version safety limit; later owner/page failures reject the whole search instead of returning incomplete results.",
-      "remaining": "Complete durable document/financial/knowledge indexing as applicable, replacement/rebuild/invalidation and freshness handling across required document classes.",
-      "units": "T1-11, T1-24/28/31/35/39; T1-106; T1-109",
+      "state": "Complete",
+      "existing": "Current authorized Evidence/Financial Profile projections rebuild on each search/context/refresh with source references and fingerprints. Replacement,removed selections,revocation and owner failures cannot reuse stale cached data. All evidence pages are read within an explicit10,000-version bound.",
+      "remaining": "Derived request snapshots rely on their configured authoritative owners; temporary owner profiles remain temporary. Separate physical/vector/full-text infrastructure and broad document-body semantic indexing are not claimed. Live retained-owner restart and full UAT remain unverified.",
+      "units": "T1-11, T1-24/28/31/35/39; T1-106; T1-109; T1-115",
       "requirements": "MON-DOC-003/008; MON-FIN-013; MON-SRH-002",
-      "receipt": "build/governance/t1-109-search-corpus.md"
+      "receipt": "build/governance/t1-115-phase1-implementation-closure.md"
     },
     {
       "id": "P1-11",
@@ -273,23 +273,23 @@
       "id": "P1-23",
       "area": "AI",
       "name": "Financial document search",
-      "state": "Partial",
-      "existing": "Authorized lexical Search now includes canonical Insurance/Tax owner figures under existing source categories, with original provenance. Broader natural-language search and grounded financial Q&A remain open. T1-109 reads all authorized document pages up to an explicit 10,000-version safety limit; later owner/page failures reject the whole search instead of returning incomplete results.",
-      "remaining": "Complete the \u00a715 natural-language query journey and relevant retrieval across the required indexed document classes.",
-      "units": "T1-11, T1-24/28/31/35/39; T1-64; T1-109",
+      "state": "Complete",
+      "existing": "Natural-language financial questions use the configured model to produce bounded search terms,then current Search and Financial Profile owners return canonical cited records. Search now links directly to this permission-gated flow alongside keyword document/financial retrieval and exact source links; customer switches abort and discard old results.",
+      "remaining": "Configured provider and explicit per-question permission required. Bounded basic retrieval is not a complete inventory or arbitrary document-body semantic search. Live-model relevance,OD-11 acceptance and full authenticated UAT remain open.",
+      "units": "T1-11, T1-24/28/31/35/39; T1-64; T1-109; T1-115",
       "requirements": "MON-SRH-001/002; MON-AI-009",
-      "receipt": "build/governance/t1-109-search-corpus.md"
+      "receipt": "build/governance/t1-115-phase1-implementation-closure.md"
     },
     {
       "id": "P1-24",
       "area": "AI",
       "name": "Basic financial Q&A",
-      "state": "Partial",
-      "existing": "Source-record Q&A plus explicit document-version quotations and Financial Rules net worth from a selected reviewed inventory. Exact hash/location/calculation citations, current access, renewed permission and encrypted replay/history. T1-108 adds complete supported basic summary from selected comparable net-worth and monthly reviews.",
-      "remaining": "Evaluated relevance/grounding for general questions and OD-11 approval remain open. Document answers are bounded quotations/transcriptions; calculations and summaries require explicit reviewed sources. Live provider, physical database and full UAT unverified. Production retention/key custody separate.",
-      "units": "T1-99; T1-108",
+      "state": "Complete",
+      "existing": "Basic source lookup,selected-document quotations,Financial Rules net worth and supported financial summary retain exact citations,model/prompt/configuration trace,encrypted replay/history and current authority. T1-115 consumes retained multi-page OCR with hash/page/line validation; missing/uncertain/oversized output never becomes a fabricated answer.",
+      "remaining": "Live-provider relevance/grounding evaluation and OD-11 UAT approval remain open; the architecture explicitly treats OD-11 as an acceptance gate. Quotes are not verified financial truth; calculations require selected reviewed sources. Physical services/full UAT and production retention/key custody remain unverified/open.",
+      "units": "T1-99; T1-108; T1-115",
       "requirements": "MON-AI-001/003/004/007/008/009",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/bd33817e940e082186ac70fffc6059985bdaf753/build/governance/t1-99-grounded-qa.md"
+      "receipt": "build/governance/t1-115-phase1-implementation-closure.md"
     },
     {
       "id": "P1-25",

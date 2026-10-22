@@ -1,6 +1,6 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Collapse, Empty, Input, Radio, Skeleton, Tag } from 'antd';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import type { SearchHit, SearchResults } from '../search/types';
@@ -19,6 +19,11 @@ const resultHref = (result: SearchHit) =>
     : '/finances?fact=' + encodeURIComponent(result.source.sourceObjectId);
 
 export default function ProductSearchExperience() {
+  const { session, authorization } = useWorkspaceSession();
+  return <ProductSearchPanel key={JSON.stringify([session, authorization])} />;
+}
+
+function ProductSearchPanel() {
   const { api, authorization } = useWorkspaceSession();
   const product = authorization?.area === 'product' ? authorization.context : null;
   const canSearch = product?.capabilities.includes('search.query.execute') ?? false;
@@ -27,6 +32,9 @@ export default function ProductSearchExperience() {
   const [result, setResult] = useState<SearchResults | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const active = useRef<AbortController | null>(null);
+  useEffect(() => () => { active.current?.abort(); }, []);
+  const canAsk = ['ai-intelligence.analysis.execute', 'search.query.execute', 'financial-profile.profile.read', 'evidence.document.read'].every(capability => product?.capabilities.includes(capability));
 
   const trimmed = query.trim();
   const canSubmit = canSearch && !busy && trimmed.length > 0;
@@ -45,15 +53,18 @@ export default function ProductSearchExperience() {
 
   const submit = async () => {
     if (!api || !canSubmit) return;
+    active.current?.abort();
+    const controller = new AbortController(); active.current = controller;
     setBusy(true);
     setError('');
     setResult(null);
     try {
-      setResult(await searchProductInformation(api, trimmed, scope));
+      const value = await searchProductInformation(api, trimmed, scope, controller.signal);
+      if (!controller.signal.aborted) setResult(value);
     } catch (failure) {
-      setError(message(failure));
+      if (!controller.signal.aborted) setError(message(failure));
     } finally {
-      setBusy(false);
+      if (!controller.signal.aborted) setBusy(false);
     }
   };
 
@@ -87,6 +98,12 @@ export default function ProductSearchExperience() {
         </Tag>
       </header>
 
+      {canAsk && <section className="product-panel" aria-label="Natural-language financial search">
+        <h2>Search with a question</h2>
+        <p>Ask about your recorded financial information in your own words. Review the configured provider notice and give permission before a question is sent. Results include source references; missing information is stated explicitly.</p>
+        <Button href="/financial-qa">Ask a financial question</Button>
+      </section>}
+
       {!canSearch && (
         <Alert
           showIcon
@@ -109,7 +126,7 @@ export default function ProductSearchExperience() {
             enterButton="Search"
             loading={busy}
             disabled={!canSearch}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => { setQuery(event.target.value); }}
             onSearch={() => {
               void submit();
             }}
@@ -120,7 +137,7 @@ export default function ProductSearchExperience() {
           <Radio.Group
             value={scope}
             disabled={!canSearch || busy}
-            onChange={(event) => setScope(event.target.value as ProductSearchScope)}
+            onChange={(event) => { setScope(event.target.value as ProductSearchScope); }}
             optionType="button"
             buttonStyle="solid"
           >
