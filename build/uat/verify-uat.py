@@ -147,6 +147,9 @@ for _ in range(45):
 else: raise AssertionError('Revocation did not reach canonical Audit')
 assert all(item['event']['tenantId']=='T001' for item in events)
 assert all(item['event']['tenantId']=='T002' for item in call('/audit-api/local/v1/administration/access-events',session=other)['items'])
+audit_page=call('/audit-api/local/v1/administration/audit-log',session=owner)
+assert audit_page['tenantId']=='T001' and audit_page['coverage']=='Product activity and canonical domain/access evidence available to this tenant'
+assert all(item['tenantId']=='T001' for item in audit_page['items'])
 sessions=call('/identity-api/local/v1/administration/sessions',session=owner)['items']
 assert any(row['actorId']=='A100' and row['revoked'] for row in sessions)
 assert all(len(row['sessionReference'])==64 and 'authenticationContextId' not in row for row in sessions)
@@ -171,6 +174,6 @@ for service in services:
     assert result.returncode != 0, 'Local composition accepted Production: '+service['id']
     checks += 1
 summary={'checks':checks,'services':13,'actualContract':'SearchDocuments','productionAccepted':False,
-         'validated':['live authorization','tenant isolation','admin authority','scope checks','revocation','disablement','durable audit','restart recovery','owner outage','gateway allowlist']}
+         'validated':['live authorization','tenant isolation','admin authority','scope checks','revocation','disablement','durable audit','product activity audit log','restart recovery','owner outage','gateway allowlist']}
 (root/'.artifacts/uat-acceptance.json').write_text(json.dumps(summary,indent=2)+'\n')
 print('Local UAT owner/process acceptance passed:',checks,'checks across 13 boundaries.')
