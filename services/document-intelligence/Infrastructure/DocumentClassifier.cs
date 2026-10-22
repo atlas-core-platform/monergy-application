@@ -5,8 +5,9 @@ using Monergy.Services.DocumentIntelligence.Application;
 namespace Monergy.Services.DocumentIntelligence.Infrastructure;
 
 // Classification is derived source metadata. It never creates or approves financial facts.
-public sealed class DocumentClassifier(IDocumentClassificationRepository repository, IImageTextRecognizer recognizer, IPdfPageRenderer renderer, TimeProvider clock)
+public sealed class DocumentClassifier(IDocumentClassificationRepository repository, IImageTextRecognizer recognizer, IPdfPageRenderer renderer, TimeProvider clock, DocumentOcrService? ocr = null)
 {
+    private readonly DocumentOcrService ocrReader = ocr ?? new(new InMemoryDocumentOcrRepository(), recognizer, renderer, clock);
     public async Task<EvidenceContent> ClassifyAsync(string tenant, EvidenceContent content, CancellationToken ct)
     {
         var reference = content.Reference;
@@ -21,12 +22,10 @@ public sealed class DocumentClassifier(IDocumentClassificationRepository reposit
                 lines = content.Content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Select(x => (x, 100m)).ToArray();
             else if (reference.ContentType is "image/png" or "image/jpeg" or "application/pdf" && content.BinaryContent is not null)
             {
-                if (reference.ContentType == "image/png") SalarySlipPngExtractor.ValidatePng(bytes);
-                else if (reference.ContentType == "image/jpeg") SalarySlipJpegExtractor.ValidateJpeg(bytes);
-                else bytes = await renderer.RenderAsync(bytes, ct);
-                var tsv = await recognizer.RecognizeAsync(bytes, ct);
-                lines = FinancialDocumentOcrClassifier.ParseTsv(tsv).Select(x => (x.Text, x.Confidence)).ToArray();
-                content = content with { RecognizedTsv = tsv };
+                var recognized = await ocrReader.RecognizeAsync(tenant, content, ct);
+                lines = recognized.Result.Pages.SelectMany(x => x.Lines).Select(x => (x.Text, x.Confidence)).ToArray();
+                content = content with { RecognizedTsv = recognized.SinglePageTsv };
+                if (recognized.Result.State == "UNSUPPORTED") throw new DocumentRecognitionException(DocumentRecognitionFailure.Unclassified);
             }
             else lines = [];
             result = ClassificationRules.Classify(lines);

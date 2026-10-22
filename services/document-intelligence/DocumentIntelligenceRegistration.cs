@@ -18,9 +18,15 @@ public static class DocumentIntelligenceRegistration
         {
             services.AddSingleton<PostgresDocumentClassificationRepository>();
             services.AddSingleton<IDocumentClassificationRepository>(p => p.GetRequiredService<PostgresDocumentClassificationRepository>());
+            services.AddSingleton<IDocumentOcrRepository>(p => p.GetRequiredService<PostgresDocumentClassificationRepository>());
             services.AddHealthChecks().AddCheck<PostgresDocumentClassificationRepository>("classification-storage");
         }
-        else services.AddSingleton<IDocumentClassificationRepository, InMemoryDocumentClassificationRepository>();
+        else
+        {
+            services.AddSingleton<IDocumentClassificationRepository, InMemoryDocumentClassificationRepository>();
+            services.AddSingleton<IDocumentOcrRepository, InMemoryDocumentOcrRepository>();
+        }
+        services.AddSingleton<DocumentOcrService>();
         services.AddSingleton<DocumentClassifier>();
         services.AddSingleton<InMemoryDocumentProcessingRepository>();
         services.AddSingleton<IClassificationMonitoringRepository>(provider=>provider.GetRequiredService<InMemoryDocumentProcessingRepository>());

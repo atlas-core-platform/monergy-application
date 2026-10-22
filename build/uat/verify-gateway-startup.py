@@ -14,9 +14,9 @@ import urllib.request
 
 opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
-def get(url):
+def get(url, method="GET"):
     try:
-        with opener.open(url, timeout=15) as response:
+        with opener.open(urllib.request.Request(url, method=method), timeout=15) as response:
             return response.status, response.read()
     except urllib.error.HTTPError as error:
         return error.code, error.read()
@@ -55,6 +55,10 @@ for enabled in (False, True):
                 assert get(base + '/kyc/reviews') == (200, b'gateway-shell-probe')
                 # Owners are intentionally absent: readiness must fail cleanly, not crash routing.
                 assert get(base + '/health/ready')[0] == 503
+                ocr = base + '/ocr-api/local/v1/customers/customer-one/documents/version-one/ocr'
+                assert get(ocr)[0] == 503  # Correct route; owner deliberately absent.
+                assert get(ocr, 'POST')[0] == 404
+                assert get(ocr + '/extra')[0] == 404
                 if not enabled:
                     assert get(base + '/product-api/v1/document-vault')[0] == 404
                 print(f'PASS product={enabled}: live, access shell, readiness, disabled vault boundary')

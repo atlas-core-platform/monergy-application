@@ -117,6 +117,22 @@ public sealed class SalarySlipPdfTests
     }
 
     [Fact]
+    public async Task GenericPdfRenderingIncludesEveryPageWhileFinancialExtractionRejectsMultiplePages()
+    {
+        using var fixture = new ProcessDouble(Metadata.Replace("Pages: 1", "Pages: 2", StringComparison.Ordinal), raster: true);
+        using var renderer = new PopplerPdfPageRenderer(fixture.Configuration);
+        Assert.Equal(2, (await renderer.RenderPagesAsync(Source().BinaryContent!, default)).Count);
+        await Assert.ThrowsAsync<DocumentRecognitionException>(() => renderer.RenderAsync(Source().BinaryContent!, default));
+    }
+    [Fact]
+    public async Task GenericPdfRenderingRejectsExcessPagesBeforeRendering()
+    {
+        using var fixture = new ProcessDouble(Metadata.Replace("Pages: 1", "Pages: 21", StringComparison.Ordinal));
+        using var renderer = new PopplerPdfPageRenderer(fixture.Configuration);
+        await Assert.ThrowsAsync<DocumentRecognitionException>(() => renderer.RenderPagesAsync(Source().BinaryContent!, default));
+        Assert.False(File.Exists(fixture.Ready));
+    }
+    [Fact]
     public async Task RendererFailsUnavailableForMissingOrMismatchedNativeVersion()
     {
         using var missing = new PopplerPdfPageRenderer(new ConfigurationManager());
@@ -208,7 +224,7 @@ public sealed class SalarySlipPdfTests
         private readonly string root = Path.Combine(Path.GetTempPath(), "monergy-pdf-test-" + Guid.NewGuid().ToString("N"));
         public string Ready => Path.Combine(root, "ready");
         public ConfigurationManager Configuration { get; } = new();
-        public ProcessDouble(string metadata, bool sleep = false, bool huge = false, string version = PopplerPdfPageRenderer.EngineVersion)
+        public ProcessDouble(string metadata, bool sleep = false, bool huge = false, bool raster = false, string version = PopplerPdfPageRenderer.EngineVersion)
         {
             if (!OperatingSystem.IsLinux()) throw new InvalidOperationException("The native process fixture requires Linux.");
             Directory.CreateDirectory(root, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
@@ -221,7 +237,7 @@ public sealed class SalarySlipPdfTests
                     (name == "pdfinfo" ? "sys.stdout.write(" + Literal(metadata) + ")\n" :
                         "with open(" + Literal(Ready + ".tmp") + ", 'w') as f:\n f.write(str(os.getpid()) + '\\n' + sys.argv[-1])\n" +
                         "os.rename(" + Literal(Ready + ".tmp") + ", " + Literal(Ready) + ")\n" +
-                        (sleep ? "time.sleep(60)\n" : huge ? "sys.stdout.buffer.write(b'x' * 1048577)\nsys.stdout.flush()\ntime.sleep(60)\n" : "sys.exit(1)\n"));
+                        (sleep ? "time.sleep(60)\n" : raster ? "sys.stdout.buffer.write(bytes.fromhex(" + Literal(Convert.ToHexString(Fixture("salary-slip.png"))) + "))\n" : huge ? "sys.stdout.buffer.write(b'x' * 1048577)\nsys.stdout.flush()\ntime.sleep(60)\n" : "sys.exit(1)\n"));
                 File.WriteAllText(path, script); File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
                 Configuration["Monergy:DocumentProcessing:" + (name == "pdfinfo" ? "PdfInfoExecutable" : "PdfRenderExecutable")] = path;
             }

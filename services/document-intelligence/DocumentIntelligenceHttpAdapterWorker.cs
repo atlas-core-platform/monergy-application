@@ -48,6 +48,8 @@ public sealed class DocumentIntelligenceHttpAdapterWorker(
             builder.Services.AddSingleton(ownerServices.GetRequiredService<IDocumentClassificationRepository>());
             builder.Services.AddSingleton(ownerServices.GetRequiredService<ClassificationReviewPolicy>());
             builder.Services.AddSingleton(ownerServices.GetRequiredService<TimeProvider>());
+            builder.Services.AddSingleton(ownerServices.GetRequiredService<IEvidenceContentReader>());
+            builder.Services.AddSingleton(ownerServices.GetRequiredService<IDocumentOcrRepository>());
         }
 
         await using var app = builder.Build();
@@ -57,7 +59,7 @@ public sealed class DocumentIntelligenceHttpAdapterWorker(
         app.MapHealthChecks("/health/ready");
         if (documentProcessing)
             app.MapDocumentProcessing(configuration);
-        if(documentProcessing && tenantBoundary) { app.MapClassificationMonitoring(); app.MapClassificationReviews(); app.MapQaDocumentPassages(); }
+        if(documentProcessing && tenantBoundary) { app.MapClassificationMonitoring(); app.MapClassificationReviews(); app.MapQaDocumentPassages(); app.MapDocumentOcr(); }
 
         await app.StartAsync(stoppingToken).ConfigureAwait(false);
         try
