@@ -23,6 +23,11 @@ if (tenantIntegration)
     builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectRequiredConstructorParameters = true);
     builder.Services.AddTenantSessionAuthority(builder.Configuration);
     builder.Services.AddSelfSessions();
+    // Tenant administrators need the customer directory independently of the
+    // customer-facing onboarding composition. Keeping this registration behind
+    // CustomerRelationships made the retained LOCAL profile advertise a route
+    // that the owner had never mapped.
+    builder.Services.AddSingleton<ICustomerAdministrationRepository, Monergy.Services.CustomerIdentity.Infrastructure.PostgresCustomerAdministration>();
     if (builder.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
     {
         builder.Services.AddSelfCustomerProfiles();
@@ -30,7 +35,6 @@ if (tenantIntegration)
         builder.Services.AddCustomerAccountAgreements(builder.Configuration);
         builder.Services.AddCustomerPan(builder.Configuration);
         builder.Services.AddSingleton<CustomerWorkspaceSetupApplication>();
-        builder.Services.AddSingleton<ICustomerAdministrationRepository, Monergy.Services.CustomerIdentity.Infrastructure.PostgresCustomerAdministration>();
     }
 }
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);
@@ -55,11 +59,11 @@ if (tenantIntegration)
     app.MapSelfSessions();
     app.MapCustomerEmailAccess(customerEmailAccess);
     app.MapCustomerRegistration(customerRegistration);
+    app.MapCustomerAdministration();
     if (app.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
     {
         app.MapSelfCustomerProfile();
         app.MapBasicKyc();
-        app.MapCustomerAdministration();
         app.MapCustomerAccountAgreements();
         app.MapCustomerPan();
     }
