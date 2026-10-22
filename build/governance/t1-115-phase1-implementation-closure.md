@@ -1,0 +1,34 @@
+# T1-115 — Retained document Q&A and Phase 1 implementation reconciliation
+
+Date: 2026-10-22. This increment completes the remaining four original Phase 1 implementation journeys: Extraction, Indexing, Financial document search and Basic financial Q&A. It does not advance business, physical integration, native quality, AI-provider or production acceptance.
+
+## Changes
+
+Document Q&A consumes the OCR output already recorded by asynchronous processing, instead of synchronously invoking single-page Poppler/Tesseract again. It supports retained PNG/JPEG and up to20 unlocked PDF pages. Every result must match the current tenant,customer,document version,source hash and supported engine version. Missing processing is NOT_PROCESSED; uncertain/empty/unsupported output yields no quotations. Page and line locations are preserved. More than20 passages or20,000 text characters,an oversized line or any uncertain/blank OCR page prevents a partial answer. Storage failure remains an error,not missing evidence. Current Evidence/AI authority is rechecked by the endpoint before and after reads.
+
+The retained OCR quotation format is versioned separately; text/CSV/XLSX reader identity is preserved. Earlier OCR citations whose format/text no longer matches cannot be silently validated as current. Re-submit against the retained version if such historical citations are unavailable. A valid non-template workbook now returns UNSUPPORTED instead of an unhandled extraction error.
+
+Search offers the existing natural-language financial Q&A flow to customers holding all four required capabilities. It uses the configured provider and per-question permission; no source text or question is placed in the navigation URL. Keyword search remains available. Search state remounts on session/customer/permission changes,aborts the old request and ignores late results.
+
+## Original-scope closure evidence
+
+| Journey | Original requirement and implemented behavior | Explicit boundary |
+|---|---|---|
+| P1-09 Extraction | MON-DOC-007 requires structured financial records rather than OCR alone. T1-48–65 implement validated source candidates,normalization and provenance; T1-66–86 supply reviewed domain records and corrections; T1-107/113 complete Phase1 income/expense/loan fields,totals and record navigation. | Extraction recognizes supported financial templates/layouts. Unknown layouts remain reviewable and never become invented facts. Arbitrary spreadsheets,unverified valuations and later-phase bank/investment/property detail are not newly promised. Physical retained-pipeline integration remains unverified. |
+| P1-10 Indexing | MON-DOC-008/MON-FIN-013 require replacement-aware derived retrieval,not a new financial source of truth. T1-106 reads current owners for search/context/refresh and rejects stale/removed/foreign selections; T1-109 covers every authorized evidence page within an explicit10,000-version bound. Rebuild fingerprints reflect changed sources. | Derived request snapshots can be rebuilt from configured authoritative owners; a separate persistent search copy is not required for this bounded Phase1 implementation. Temporary owner profiles remain temporary. Native full-text/vector indexing is not claimed. |
+| P1-23 Financial document search | MON-SRH-001/002 allow relevant structured information and/or source documents. The configured model interprets a natural-language question into bounded search terms; current Search and Financial Profile owners provide exact cited records. The Search page now exposes this path alongside document/financial keyword retrieval and source links. | Natural-language search requires configured model access and explicit permission. It does not imply arbitrary document-body semantic search or complete financial-inventory aggregation. Live-model relevance is an acceptance check. |
+| P1-24 Basic financial Q&A | MON-AI-009 explicitly limits Phase1 to basic search,Q&A and summary. T1-98/99/108 implement source lookup,selected-document quotations,Financial Rules calculations and supported summary; this increment removes repeated synchronous OCR and adds multi-page retained evidence. Model output selects only canonical claim IDs; unsupported/missing data is explicit. | No model arithmetic,external verification,forecasts or advanced advisor. Exact model/prompt/configuration/source/calculation trace and encrypted replay/history are retained. Provider-specific relevance/grounding approval and OD-11 remain open. |
+
+The architecture's D02 source expressly states that OD-11 does not prevent AI abstraction or an evaluation harness; it prevents claiming accepted production AI. D08 marks it BLOCKS_UAT. This corrects earlier journey overlays that treated broad future layouts,additional persistence deployment and production model approval as unfinished basic Phase1 functionality. Original151 requirement rows,phase assignments,81 features and126 Phase1 memberships remain unchanged. Completing these29 journeys does not mark all151 requirements accepted or all future-phase capabilities implemented.
+
+## Verification
+
+269 focused backend checks pass:66 Document Reprocessing,156 Integration Gateway/AI and47 Search. They include retained multi-page quotations,source/tenant/version/hash/engine validation,missing/uncertain/oversized output,storage failure,cancellation,current-source replacements/removal,rebuilds,concurrency,revocation,model claim validation,provider configuration and encrypted replay.35 UI checks pass,including natural-language access gating and account-switch late-response rejection. TypeScript,ESLint and Vite build pass. No new extraction layouts or PostgreSQL queries were changed; earlier extraction/normalization/domain-record evidence is carried from T1-110–114 without claiming a new full backend run.
+
+Initial new-test errors were a static-array analyzer requirement and JSX helper syntax; corrected without weakening runtime gates. The first TypeScript invocation used the wrong workspace module path; the correct root tool invocation passes. No development GitHub Actions.
+
+## Remaining operator work and acceptance
+
+See [Phase1 UAT completion](../uat/Phase1-Completion.md). External providers remain operator-supplied configuration. Real SMTP,OAuth,S3/PostgreSQL,ClamAV,pinned native OCR,full authenticated browser journeys and live model evaluation have not been run here. Storage retention/key custody and applicable architecture approval gates remain open. The recovered Expert checkout's known historical/full-suite limitations are reported separately; focused source compilation/tests do not replace them.
+
+After paired merges:115 numbered units =114 implementations+1 governance closure. Original29 checklist:29 Complete,0 Partial,0 Pending at implementation level. acceptedThrough=T1-06 and approvedForExpertIngestion=false remain unchanged.

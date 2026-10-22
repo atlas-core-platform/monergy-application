@@ -104,7 +104,7 @@ public sealed class QaApplication(IQaOwners owners, QaStore store)
                 : state == "SOURCES" && basis == "net-worth" ? "Financial Rules calculated these values from your selected reviewed inventory. The model only selected relevant results; it did not calculate figures."
                 : state == "SOURCES" ? "These matching source records may help. This is a limited retrieval, not a complete financial inventory or verification of the figures."
                 : state == "UNSUPPORTED" ? "This question is outside the selected source scope. Choose a reviewed Net worth position for its supported calculation; advice, forecasts and external verification are not available here."
-                : "There is insufficient authorized source information to answer this question. Review the selected source and any missing calculation inputs. Unsupported, oversized or uncertain document text is not used.",
+                : "There is insufficient authorized source information to answer this question. Review the selected source and any missing calculation inputs. Process the selected scan first if OCR is not recorded. Unsupported, oversized or uncertain document text is not used.",
                 selected, DateTimeOffset.UtcNow, selection?.Model ?? planResult.Model, PromptVersion, settings.Revision);
             records[recordIndex] = new(customer.Session.TenantId, customer.Workspace.CustomerId, customer.Session.ActorId, requestHash, answer,
                 searchIds, retrieved, planResult.Content, selection?.Content ?? "", planResult.Model, true, settings.Notice, input.DocumentVersionId, input.NetWorthPositionId);

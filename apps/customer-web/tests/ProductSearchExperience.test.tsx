@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AccessApi } from '../src/access/accessApi';
@@ -15,7 +15,10 @@ const session = {
 };
 
 function mount(api: AccessApi, capabilities = ['search.query.execute']) {
-  render(
+  return render(element(api, capabilities));
+}
+function element(api: AccessApi, capabilities = ['search.query.execute'], customerId = 'reference-customer') {
+  return (
     <FoundationProvider appearance="midnight">
       <Context
         value={{
@@ -27,7 +30,7 @@ function mount(api: AccessApi, capabilities = ['search.query.execute']) {
             context: {
               tenantId: 'T001',
               actorId: 'A100',
-              customerId: 'reference-customer',
+              customerId,
               customerName: 'Reference Customer',
               customerDetail: 'Primary UAT customer',
               capabilities,
@@ -46,7 +49,7 @@ function mount(api: AccessApi, capabilities = ['search.query.execute']) {
       >
         <ProductSearchExperience />
       </Context>
-    </FoundationProvider>,
+    </FoundationProvider>
   );
 }
 
@@ -106,7 +109,7 @@ it('searches current Documents and Financial information through the product bou
     'v1/search',
     'POST',
     { query: 'salary', scope: 'all' },
-    undefined,
+    expect.any(AbortSignal),
   );
   expect(screen.getByRole('link', { name: 'Open document' })).toHaveAttribute(
     'href',
@@ -139,7 +142,7 @@ it('lets the customer bound the query to Financial information', async () => {
     'v1/search',
     'POST',
     { query: 'rent', scope: 'financial' },
-    undefined,
+    expect.any(AbortSignal),
   );
 });
 
@@ -317,4 +320,28 @@ it('searches a trusted Tax source figure without claiming assessed tax or refund
   expect(await screen.findByText('1 result for “tax”')).toBeVisible();
   expect(screen.getByText(/not assessed liability or refund/i)).toBeVisible();
   expect(screen.getByRole('link', {name:'View source & history'})).toHaveAttribute('href','/finances?fact=ff-tax');
+});
+
+it('offers natural-language retrieval only with all required source and AI permissions', () => {
+  const api = new AccessApi(session);
+  mount(api, ['search.query.execute', 'ai-intelligence.analysis.execute', 'financial-profile.profile.read', 'evidence.document.read']);
+  expect(screen.getByRole('link', { name: 'Ask a financial question' })).toHaveAttribute('href', '/financial-qa');
+  cleanup(); mount(api, ['search.query.execute']);
+  expect(screen.queryByRole('link', { name: 'Ask a financial question' })).not.toBeInTheDocument();
+});
+
+it('aborts an old customer search and ignores its late response after a scope switch', async () => {
+  const api = new AccessApi(session); let signal: AbortSignal | undefined;
+  let finish: (value: unknown) => void = () => undefined;
+  vi.spyOn(api, 'product').mockImplementation((_path, _method, _body, incoming) => {
+    signal = incoming; return new Promise(resolve => { finish = resolve; });
+  });
+  const mounted = mount(api); const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Search query'), 'old private query');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+  mounted.rerender(element(new AccessApi(session), ['search.query.execute'], 'new-customer'));
+  expect(signal?.aborted).toBe(true);
+  await act(async () => { finish({ query: 'old private query', matchMode: 'Lexical', items: [] }); await Promise.resolve(); });
+  expect(screen.queryByText(/results for/)).not.toBeInTheDocument();
+  expect(screen.getByLabelText('Search query')).toHaveValue('');
 });
