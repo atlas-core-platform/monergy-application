@@ -24,6 +24,8 @@ public sealed class SalarySlipPdfExtractor(IPdfPageRenderer renderer, IImageText
             !string.Equals(content.Reference.ContentSha256, Convert.ToHexStringLower(SHA256.HashData(bytes)), StringComparison.OrdinalIgnoreCase))
             throw Unsupported();
         ValidatePdf(bytes);
+        if (content.RecognizedTsv is not null)
+            return SalarySlipPngExtractor.CreateCandidates(content, processingId, content.RecognizedTsv, ExtractionVersion);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(10));
         try

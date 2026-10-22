@@ -1,8 +1,14 @@
 # Monergy Functional Delivery Tracker — authoritative working sequence
 
-Status: ACTIVE · Current implementation: T1-110 durable scanned Evidence intake. Original29:17 Complete,12 Partial,0 Pending. Physical/live UAT, provider evaluation and business acceptance remain separate and open.
+Status: ACTIVE · Current implementation: T1-111 independent document classification and unknown review. Original29:17 Complete,12 Partial,0 Pending. Physical/live UAT, provider evaluation and business acceptance remain separate and open.
 
-## Current T1-110 update — Durable scanned originals
+## Current T1-111 update — Classification and unknown review
+
+Document-family classification now survives extraction failure and reuses transient OCR. Unknown/all queues, exact source binding, explicit reviewer permission, immutable revision history and optional tenant PostgreSQL persistence complete the missing LOCAL/UAT review workflow. [Receipt](t1-111-classification-review.md).
+
+680 backend and36 UI checks pass; TypeScript/ESLint/Vite, Gateway and PowerShell profile checks pass. P1-07 remains Partial for broader layout/language quality and production capability approval. Live database/native OCR/full UAT remain unverified. Counts:17 Complete,12 Partial,0 Pending;110 implementation units+1 governance closure. Acceptance unchanged.
+
+## Previous T1-110 update — Durable scanned originals
 
 Product upload/import and processing now support opt-in tenant-specific PostgreSQL Evidence metadata and versioned S3 originals. Exact bytes, scan/provider receipts, immutable object-version reads, retry recovery and current owner access are retained. Onboarding configuration persists across starts and readiness checks storage. [Receipt](t1-110-durable-evidence.md).
 

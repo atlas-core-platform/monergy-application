@@ -52,6 +52,15 @@ if ($evidence.Monergy.ReferenceAdapters -ne 'false' -or $evidence.Monergy.Persis
 $again=Get-Content (Join-Path (Split-Path $onboardPath) 'evidence.json') -Raw | ConvertFrom-Json
 if ($again.Monergy.Persistence.Evidence.S3.Bucket -ne 'fixture' -or $again.Monergy.ReferenceAdapters -ne 'false') { throw 'Durable Evidence silently fell back on repeat start.' }
 'PASS: durable Evidence opt-in and retained configuration; no credentials output.'
+$classificationPath=Join-Path $testRoot 'classification-fixture.json'
+@{ RuntimeConnections=@{T001='Host=127.0.0.1;Database=fixture_classification;Username=fixture'}; Reviewers=@{T001=@('A900')} } | ConvertTo-Json -Depth 10 | Set-Content $classificationPath
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -ClassificationConfigurationFile $classificationPath
+$classification=Get-Content (Join-Path (Split-Path $onboardPath) 'document-intelligence.json') -Raw | ConvertFrom-Json
+if ($classification.Monergy.Classification.Reviewers.T001[0] -ne 'A900' -or $classification.Monergy.Classification.RuntimeConnections.T001 -notlike '*fixture_classification*') { throw 'Classification configuration missing.' }
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
+$classificationAgain=Get-Content (Join-Path (Split-Path $onboardPath) 'document-intelligence.json') -Raw | ConvertFrom-Json
+if ($classificationAgain.Monergy.Classification.Reviewers.T001[0] -ne 'A900') { throw 'Classification silently fell back on repeat start.' }
+'PASS: classification persistence and explicit reviewer configuration retained.'
 'PASS: Basic KYC onboarding configuration; syntax; fresh/default/legacy/onboarding configuration; all non-destructive actions with mocked Docker/readiness; credential preservation; repeat-run stability; encryption conversion.'
 
 } finally { Remove-Item -LiteralPath $testRoot -Recurse -Force }

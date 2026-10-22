@@ -57,7 +57,7 @@ function DocumentMonitoringView({ api, tenantId }: { api: AccessApi; tenantId: s
  function open(row: MonitoredDocument) { setDetail(null); setActivity(null); setActivityError(''); setError(''); setSelected(row); setClassificationAfter(null); }
  if (customerId !== null && !id(customerId)) return <Alert type="error" title="Invalid customer selection" action={<Button onClick={() => { setCustomerId(null); }}>All customers</Button>} />;
  return <section className="access-page" aria-labelledby="document-monitoring-title">
-  <h1 id="document-monitoring-title">Document Monitoring</h1><p>Inspect registered document versions, historical scan evidence and detected categories. This view contains operational metadata.</p>
+  <h1 id="document-monitoring-title">Document Monitoring</h1><Button href="/access/classifications">Review document classifications</Button><p>Inspect registered document versions, historical scan evidence and detected categories. This view contains operational metadata.</p>
   <p>Blocked uploads never become registered documents. Missing scan evidence is unverified. Legacy versions without recorded organization provenance are excluded. Refresh to check current owner status.</p>
   {error && <Alert type="error" title={error} />}
   {customerId && <Tag>Customer: {name(customerId)}</Tag>}{query.documentId && <Tag>Selected document reference: {query.documentId}</Tag>}

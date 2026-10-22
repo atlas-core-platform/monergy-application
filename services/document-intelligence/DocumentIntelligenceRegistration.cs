@@ -13,6 +13,15 @@ public static class DocumentIntelligenceRegistration
     {
         ReferenceAdapterGuard.EnsureAllowed(configuration);
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<ClassificationReviewPolicy>();
+        if (configuration.GetSection("Monergy:Classification:RuntimeConnections").GetChildren().Any())
+        {
+            services.AddSingleton<PostgresDocumentClassificationRepository>();
+            services.AddSingleton<IDocumentClassificationRepository>(p => p.GetRequiredService<PostgresDocumentClassificationRepository>());
+            services.AddHealthChecks().AddCheck<PostgresDocumentClassificationRepository>("classification-storage");
+        }
+        else services.AddSingleton<IDocumentClassificationRepository, InMemoryDocumentClassificationRepository>();
+        services.AddSingleton<DocumentClassifier>();
         services.AddSingleton<InMemoryDocumentProcessingRepository>();
         services.AddSingleton<IClassificationMonitoringRepository>(provider=>provider.GetRequiredService<InMemoryDocumentProcessingRepository>());
         services.AddSingleton<IDocumentProcessingRepository>(provider => provider.GetRequiredService<InMemoryDocumentProcessingRepository>());
