@@ -1,22 +1,22 @@
 {
   "schemaVersion": "1.0.0",
-  "asOf": "T1-107",
-  "applicationBase": "dac379b0867a7e8833cc84fe2098fb2c5cd304c3",
+  "asOf": "T1-108",
+  "applicationBase": "c3973730a86b06b15bed65e6cb2d3b2813700262",
   "sourceReview": {
     "workbook": "Monergy_Master_Requirements_and_Scope_Reconciliation_v0.4.xlsx",
-    "libraryVersion": 14,
+    "libraryVersion": 15,
     "master": "v1.0 section41 pp29\u201330",
-    "reviewThrough": "Workbook through T1-106; T1-107 completes supported customer-reviewed monthly Income and Expenses dashboards. Business acceptance unchanged.",
+    "reviewThrough": "Workbook through T1-107; T1-108 completes supported basic financial summary from exact comparable reviewed calculations. Acceptance unchanged.",
     "libraryFileId": "libfile_7747823175948191ad6e56244bee8cf2"
   },
   "counts": {
     "originalDeliverables": 29,
-    "fullyImplemented": 16,
-    "partial": 13,
+    "fullyImplemented": 17,
+    "partial": 12,
     "pendingBusinessJourneys": 0,
-    "remainingOriginalDeliverables": 13,
-    "numberedUnitsAfterPairedMerge": 107,
-    "mergedImplementationUnitsAfterPairedMerge": 106,
+    "remainingOriginalDeliverables": 12,
+    "numberedUnitsAfterPairedMerge": 108,
+    "mergedImplementationUnitsAfterPairedMerge": 107,
     "governanceClosures": 1,
     "phase1ApplicableRequirements": 126,
     "futureIncrementCount": null
@@ -285,9 +285,9 @@
       "area": "AI",
       "name": "Basic financial Q&A",
       "state": "Partial",
-      "existing": "Source-record Q&A plus explicit document-version quotations and Financial Rules net worth from a selected reviewed inventory. Exact hash/location/calculation citations, current access, renewed permission and encrypted replay/history.",
-      "remaining": "Broader complete financial summaries, evaluated relevance/grounding and OD-11 approval remain open. Document answers are bounded quotations/transcriptions; net worth covers one selected reviewed inventory. Live provider, physical database and full UAT unverified. Production retention/key custody separate.",
-      "units": "T1-99",
+      "existing": "Source-record Q&A plus explicit document-version quotations and Financial Rules net worth from a selected reviewed inventory. Exact hash/location/calculation citations, current access, renewed permission and encrypted replay/history. T1-108 adds complete supported basic summary from selected comparable net-worth and monthly reviews.",
+      "remaining": "Evaluated relevance/grounding for general questions and OD-11 approval remain open. Document answers are bounded quotations/transcriptions; calculations and summaries require explicit reviewed sources. Live provider, physical database and full UAT unverified. Production retention/key custody separate.",
+      "units": "T1-99; T1-108",
       "requirements": "MON-AI-001/003/004/007/008/009",
       "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/bd33817e940e082186ac70fffc6059985bdaf753/build/governance/t1-99-grounded-qa.md"
     },
@@ -295,12 +295,12 @@
       "id": "P1-25",
       "area": "AI",
       "name": "Financial summary",
-      "state": "Partial",
-      "existing": "Basic owner-sourced Reports now include canonical Insurance/Tax figures and original provenance. Full financial summary/calculations and integrated UAT remain open.",
-      "remaining": "Complete the basic AI financial-summary experience grounded in authoritative comparable records, with explanation, citations and no unsupported totals.",
-      "units": "T1-10, T1-25/29/32/36/40; T1-64",
+      "state": "Complete",
+      "existing": "T1-108 completes basic personal financial summary: explicitly selected same-date/currency Self reviews; six Financial Rules results; model organization only; exact calculation/source citations; incomplete coverage without totals; encrypted history and replay without repeat spend.",
+      "remaining": "Customer-reviewed declarations are not external verification. Model/provider configuration is operator-supplied during onboarding. Live-provider evaluation, OD-11 production approval, physical database and full UAT remain unverified/open; broader advice/forecasting is not included.",
+      "units": "T1-10, T1-25/29/32/36/40; T1-64; T1-108",
       "requirements": "MON-AI-003/009; MON-REP-004",
-      "receipt": "https://github.com/atlas-core-platform/monergy-application/blob/b9d0af581a773eed546e05ff2e8d3a8e1737da8d/build/governance/t1-64-financial-source-category-boundary.md"
+      "receipt": "build/governance/t1-108-financial-summary.md"
     },
     {
       "id": "P1-26",

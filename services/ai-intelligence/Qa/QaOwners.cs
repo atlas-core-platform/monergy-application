@@ -13,9 +13,10 @@ public interface IQaOwners
     Task<IReadOnlyList<QaClaim>> Retrieve(HttpContext http, QaCustomer customer, string query, List<string> searchIds);
     Task<IReadOnlyList<QaClaim>> Document(HttpContext http, QaCustomer customer, string version);
     Task<IReadOnlyList<QaClaim>> Calculate(HttpContext http, QaCustomer customer, string position, string operation);
+    Task<IReadOnlyList<QaClaim>> Summary(HttpContext http, QaCustomer customer, string netWorthCalculation, string cashflowCalculation);
     Task Validate(HttpContext http, QaCustomer customer, IEnumerable<QaClaim> claims);
 }
-public sealed class QaOwners(CustomerOwnerClient identity, TenantAccessClient access, IConfiguration configuration, HttpClient client) : IQaOwners, IDisposable
+public sealed partial class QaOwners(CustomerOwnerClient identity, TenantAccessClient access, IConfiguration configuration, HttpClient client) : IQaOwners, IDisposable
 {
     public async Task<QaCustomer> Authorize(HttpContext http)
     {
@@ -69,6 +70,7 @@ public sealed class QaOwners(CustomerOwnerClient identity, TenantAccessClient ac
             var first = group.First();
             IReadOnlyList<QaClaim> canonical;
             if (first.Kind == "DocumentExcerpt") canonical = await Document(http, customer, first.DocumentVersionId);
+            else if (first.Kind == "MonthlyCalculation") canonical = await CashflowClaims(http, customer, first.CalculationId!);
             else if (first.Kind == "Calculation") canonical = await CalculationClaims(http, customer, first.CalculationId!);
             else if (first.Kind == "FinancialFact") canonical = [await Fact(http, customer, first.SourceId, first.Revision)];
             else throw Invalid();
@@ -103,7 +105,7 @@ public sealed class QaOwners(CustomerOwnerClient identity, TenantAccessClient ac
         if (!NetWorthData.Calculation(result, customer.Workspace.CustomerId) || result.OperationId != operation || result.RecordedBy != customer.Session.ActorId || !NetWorthData.Same(result.Position, input)) throw Invalid();
         return await CalculationClaims(http, customer, result.CalculationId);
     }
-    private async Task<IReadOnlyList<QaClaim>> CalculationClaims(HttpContext http, QaCustomer customer, string id)
+    private async Task<NetWorthCalculation> NetWorthResult(HttpContext http, QaCustomer customer, string id)
     {
         if (!TenantAccessClient.Identifier(id, 80)) throw Invalid();
         await RequireCalculation(http, customer);
@@ -113,6 +115,12 @@ public sealed class QaOwners(CustomerOwnerClient identity, TenantAccessClient ac
         var position = await Position(http, customer, result.Position.PositionId);
         if (!NetWorthData.Same(result.Position, position)) throw Invalid();
         await RequireCalculation(http, customer);
+        return result;
+    }
+    private async Task<IReadOnlyList<QaClaim>> CalculationClaims(HttpContext http,QaCustomer customer,string id) => NetWorthClaims(await NetWorthResult(http,customer,id));
+    private static IReadOnlyList<QaClaim> NetWorthClaims(NetWorthCalculation result)
+    {
+        var position=result.Position;
         if (result.State != "CALCULATED") return [new QaClaim("calculation-incomplete",
             "Financial Rules could not calculate from this inventory. Missing or incompatible inputs: " + string.Join(", ", result.Issues),
             "Calculation", position.PositionId, 1, result.DefinitionHash, "", null, position.Position.AsOfDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), result.CalculationId, result.RuleVersion)];
