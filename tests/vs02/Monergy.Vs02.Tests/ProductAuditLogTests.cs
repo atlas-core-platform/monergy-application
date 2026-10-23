@@ -15,6 +15,18 @@ using Xunit;
 namespace Monergy.Vs02.Tests;
 public sealed class ProductAuditLogTests
 {
+ [Theory]
+ [InlineData("SELECT count(*) FROM ledger")]
+ [InlineData("SELECT entry::text FROM ledger")]
+ [InlineData("SELECT EXISTS(SELECT 1 FROM ledger")]
+ public void PostgreSqlAuditSearchSeparatesLedgerProjectionAndFilter(string projection)
+ {
+  var method=typeof(PostgresTenantAccessAudit).GetMethod("SearchStatement",
+   System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static);
+  Assert.NotNull(method);
+  var sql=Assert.IsType<string>(method!.Invoke(null,[projection]));
+  Assert.Contains(")\n" + projection + "\nWHERE",sql.Replace("\r\n","\n"));
+ }
  private static ProductAuditRecord Row(string tenant="T001",string action="API_ACCESS",string? id=null)=>new(tenant,"",id??Guid.NewGuid().ToString("N"),"REQUESTED","A900","USER","C001",action,"Product Gateway","api",null,null,DateTimeOffset.UtcNow,"REQUESTED","GET");
  private static ProductAuditRecord Begin(ProductAuditRecord r)=>r with{EventId=r.RequestId+":REQUESTED"};
  [Fact]public async Task AppendIsImmutableExactReplayAndResultRemainsSeparateFromRequest()
