@@ -139,7 +139,7 @@ public sealed class OneDriveJourneyTests
         await fixture.Store.ExecuteAsync(records => { records[0].Tokens = records[0].Tokens! with { ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(-1) }; return Task.FromResult(true); }, default);
         await fixture.App.ListAsync(fixture.Http, false, null);
         Assert.Equal(1, fixture.Provider.Refreshes);
-        await Assert.ThrowsAsync<TenantBoundaryException>(() => fixture.App.BindAsync(fixture.Http, new(view.Version - 1, "folder-1", null, true)));
+        await Assert.ThrowsAsync<TenantBoundaryException>(() => fixture.App.SelectFolderAsync(fixture.Http, new(view.Version - 1, "folder-1", null, true)));
     }
     [Theory]
     [InlineData("application/vnd.google-apps.document", 25)]
@@ -177,7 +177,7 @@ public sealed class OneDriveJourneyTests
         {
             var state = await Begin(); Assert.True(await App.CallbackAsync(state, "code", false, default));
             var view = await App.StatusAsync(Http);
-            return await App.BindAsync(Http, new(view.Version, "folder-1", null, true));
+            return await App.SelectFolderAsync(Http, new(view.Version, "folder-1", null, true));
         }
         public void Dispose() { Store.Dispose(); System.IO.Directory.Delete(Directory, true); (Configuration as IDisposable)?.Dispose(); }
     }

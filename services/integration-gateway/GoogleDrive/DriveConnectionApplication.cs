@@ -121,7 +121,7 @@ public sealed class DriveConnectionApplication(DriveConnectionStore store, IDriv
             return result;
         }, http.RequestAborted);
     }
-    public async Task<DriveView> BindAsync(HttpContext http, DriveSelection input)
+    public async Task<DriveView> SelectFolderAsync(HttpContext http, DriveSelection input)
     {
         if (!input.AcceptFolderImport || input.FileVersion is not null) throw new TenantBoundaryException("DRIVE_FOLDER_PERMISSION_REQUIRED", 400);
         GoogleDriveProvider.Id(input.Id);
