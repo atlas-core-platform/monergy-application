@@ -45,15 +45,17 @@ public sealed partial class PostgresTenantAccessAudit:IProductAuditLog
  OR strpos(lower(COALESCE(entry->>'resourceId','')),lower(@Search))>0 OR strpos(lower(COALESCE(entry->>'documentId','')),lower(@Search))>0
  OR strpos(lower(COALESCE(entry->>'correlationId','')),lower(@Search))>0 OR strpos(lower(entry->>'source'),lower(@Search))>0)
  """;
+ // Ensure raw SQL fragments cannot concatenate into invalid tokens (ledgerWHERE, )SELECT).
+ private static string SearchStatement(string projection) => Ledger + "\n" + projection + "\n" + Filter;
  public async Task<AuditLogPage> SearchAsync(string tenant,AuditLogQuery q,CancellationToken ct)
  {
   ProductAuditLog.Query(q);await using var db=await OpenAsync(tenant,ct);await Guard(db,ct);await using var tx=await db.BeginTransactionAsync(IsolationLevel.RepeatableRead,ct);
   var args=new{Tenant=tenant,q.Action,q.Outcome,Actor=q.ActorId,Customer=q.CustomerId,From=q.From is null?(DateTimeOffset?)null:ProductAuditLog.Parse(q.From),To=q.To is null?(DateTimeOffset?)null:ProductAuditLog.Parse(q.To),q.Search,After=q.After};
-  if(q.After is not null&&!await db.ExecuteScalarAsync<bool>(new CommandDefinition(Ledger+"SELECT EXISTS(SELECT 1 FROM ledger"+Filter+" AND id=@After);",args,tx,cancellationToken:ct)))throw new TenantBoundaryException("AUDIT_CURSOR_INVALID",400);
-  var count=await db.ExecuteScalarAsync<long>(new CommandDefinition(Ledger+"SELECT count(*) FROM ledger"+Filter,args,tx,cancellationToken:ct));
-  var rows=(await db.QueryAsync<string>(new CommandDefinition(Ledger+"SELECT entry::text FROM ledger"+Filter+" AND (CAST(@After AS text) IS NULL OR (at,id COLLATE \"C\")<(SELECT at,id COLLATE \"C\" FROM ledger WHERE id=@After)) ORDER BY at DESC,id COLLATE \"C\" DESC LIMIT 51;",args,tx,cancellationToken:ct))).Select(x=>JsonSerializer.Deserialize<AuditLogEntry>(x,ActivityJson)!).ToArray();await tx.CommitAsync(ct);
+  if(q.After is not null&&!await db.ExecuteScalarAsync<bool>(new CommandDefinition(SearchStatement("SELECT EXISTS(SELECT 1 FROM ledger")+" AND id=@After);",args,tx,cancellationToken:ct)))throw new TenantBoundaryException("AUDIT_CURSOR_INVALID",400);
+  var count=await db.ExecuteScalarAsync<long>(new CommandDefinition(SearchStatement("SELECT count(*) FROM ledger"),args,tx,cancellationToken:ct));
+  var rows=(await db.QueryAsync<string>(new CommandDefinition(SearchStatement("SELECT entry::text FROM ledger")+" AND (CAST(@After AS text) IS NULL OR (at,id COLLATE \"C\")<(SELECT at,id COLLATE \"C\" FROM ledger WHERE id=@After)) ORDER BY at DESC,id COLLATE \"C\" DESC LIMIT 51;",args,tx,cancellationToken:ct))).Select(x=>JsonSerializer.Deserialize<AuditLogEntry>(x,ActivityJson)!).ToArray();await tx.CommitAsync(ct);
   return new(tenant,rows.Take(50).ToArray(),rows.Length>50?rows[49].EvidenceId:null,count,ProductAuditLog.Coverage);
  }
  public async Task<AuditLogEntry?> ReadActivityAsync(string tenant,string id,CancellationToken ct)
- {await using var db=await OpenAsync(tenant,ct);await Guard(db,ct);var json=await db.QuerySingleOrDefaultAsync<string>(new CommandDefinition(Ledger+"SELECT entry::text FROM ledger WHERE id=@Id;",new{Tenant=tenant,Id=id},cancellationToken:ct));return json is null?null:JsonSerializer.Deserialize<AuditLogEntry>(json,ActivityJson);}
+ {await using var db=await OpenAsync(tenant,ct);await Guard(db,ct);var json=await db.QuerySingleOrDefaultAsync<string>(new CommandDefinition(Ledger+"\nSELECT entry::text FROM ledger WHERE id=@Id;",new{Tenant=tenant,Id=id},cancellationToken:ct));return json is null?null:JsonSerializer.Deserialize<AuditLogEntry>(json,ActivityJson);}
 }
