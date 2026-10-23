@@ -40,7 +40,7 @@ public static class DriveConnectionEndpoints
         app.MapPost(root + "/authorize", (DriveBegin input, HttpContext http, DriveConnectionApplication service) => Invoke(http, () => service.BeginAsync(http, input)));
         app.MapGet(root + "/folders", (string? page, HttpContext http, DriveConnectionApplication service) => Invoke(http, () => service.ListAsync(http, true, page)));
         app.MapGet(root + "/files", (string? page, HttpContext http, DriveConnectionApplication service) => Invoke(http, () => service.ListAsync(http, false, page)));
-        app.MapPost(root + "/folder", (DriveSelection input, HttpContext http, DriveConnectionApplication service) => Invoke(http, () => service.BindAsync(http, input)));
+        app.MapPost(root + "/folder", (DriveSelection input, HttpContext http, DriveConnectionApplication service) => Invoke(http, () => service.SelectFolderAsync(http, input)));
         app.MapPost(root + "/import", (DriveSelection input, HttpContext http, DriveConnectionApplication service) => Invoke(http, () => service.ImportAsync(http, input)));
         app.MapPost(root + "/disconnect", (DriveRevision input, HttpContext http, DriveConnectionApplication service) => Invoke(http, () => service.DisconnectAsync(http, input)));
         app.MapGet(root + "/callback", async (HttpContext http, DriveConnectionApplication service) =>
