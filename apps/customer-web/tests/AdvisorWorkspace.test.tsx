@@ -52,7 +52,7 @@ it('enters only the verified Financial Advisor workspace, without displaying cus
   const requests = owner(); mount(); await connect();
   expect(await screen.findByRole('heading', { name: 'Financial Advisor workspace' })).toBeVisible();
   expect(screen.getAllByText('0').length).toBeGreaterThan(0);
-  expect(screen.getByText(/relationship is not permission/)).toBeVisible();
+  expect(screen.getByText(/relationship does not grant financial access/)).toBeVisible();
   expect(requests.mock.calls.some(([url]) => url.endsWith('/advisor/context'))).toBe(true);
   expect(requests.mock.calls.some(([url]) => url.endsWith('/v1/context'))).toBe(false);
 });
