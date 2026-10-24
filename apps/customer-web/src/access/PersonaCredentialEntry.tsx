@@ -88,12 +88,12 @@ export function PersonaCredentialEntry({
           const result = await personaRequest<{ activated: boolean }>(
             '/activation/confirm', { ...common, password }, controller.signal,
           );
-          if (result.activated !== true) throw new Error('ACTIVATION_NOT_CONFIRMED');
+          if (!result.activated) throw new Error('ACTIVATION_NOT_CONFIRMED');
         } else {
           const result = await personaRequest<{ recovered: boolean }>(
             '/recovery/confirm', { ...common, newPassword: password }, controller.signal,
           );
-          if (result.recovered !== true) throw new Error('RECOVERY_NOT_CONFIRMED');
+          if (!result.recovered) throw new Error('RECOVERY_NOT_CONFIRMED');
         }
         if (id !== epoch.current) return;
         const notice = mode === 'activate'
@@ -151,15 +151,15 @@ export function PersonaCredentialEntry({
     </Form>
     <Space wrap>
       {mode !== 'activate' && <Button disabled={busy || pending}
-        onClick={() => changeMode('activate')}>Activate account</Button>}
+        onClick={() => { changeMode('activate'); }}>Activate account</Button>}
       {mode !== 'recover' && <Button disabled={busy || pending}
-        onClick={() => changeMode('recover')}>Forgot password</Button>}
+        onClick={() => { changeMode('recover'); }}>Forgot password</Button>}
       {mode !== 'login' && <Button disabled={busy || pending}
-        onClick={() => changeMode('login')}>Back to sign in</Button>}
+        onClick={() => { changeMode('login'); }}>Back to sign in</Button>}
       <Button onClick={() => { changeMode('login'); onCancel(); }}>
         Use another sign-in method
       </Button>
-      {challenge && <Button disabled={busy || pending} onClick={() => changeMode(mode)}>
+      {challenge && <Button disabled={busy || pending} onClick={() => { changeMode(mode); }}>
         Request a new code
       </Button>}
     </Space>
