@@ -19,7 +19,10 @@ function RestrictedFeature() {
   const [message, setMessage] = useState('');
   return <><h2>Private customer information</h2>
     <button onClick={() => {
-      void api?.product('v1/financial-profile').catch((failure: Error) => setMessage(failure.message));
+      if (!api) return;
+      void api.product('v1/financial-profile').catch((failure: unknown) => {
+        setMessage(failure instanceof Error ? failure.message : 'The request was denied.');
+      });
     }}>Try restricted feature</button>
     {message && <p role="alert">{message}</p>}
   </>;
