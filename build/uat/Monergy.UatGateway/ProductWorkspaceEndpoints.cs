@@ -179,7 +179,7 @@ public static class ProductWorkspaceEndpoints
                 null,
                 new TrustedSecurityContext(
                     new ActorContext(session.ActorId, "Customer", now, session.AuthenticationContextId),
-                    new WorkloadContext("customer-web", "local-uat-workspace"),
+                    new WorkloadContext("customer-web", "local-uat-workspace:" + session.TenantId),
                     new AccessContext("customer-advice", null, decision.DecisionId, customer.CustomerId)),
                 null,
                 new ListCustomerEvidence(customer.CustomerId, 100));
@@ -346,7 +346,7 @@ public static class ProductWorkspaceEndpoints
                 null,
                 new TrustedSecurityContext(
                     new ActorContext(session.ActorId, "Customer", now, session.AuthenticationContextId),
-                    new WorkloadContext("customer-web", "local-uat-workspace"),
+                    new WorkloadContext("customer-web", "local-uat-workspace:" + session.TenantId),
                     new AccessContext("customer-advice", null, decision.DecisionId, customer.CustomerId)),
                 submission.OperationId,
                 new CreateDocumentVersion(
