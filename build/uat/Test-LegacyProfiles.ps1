@@ -79,10 +79,13 @@ try { & $scriptPath -Action Prepare -Profile onboarding -EnablePersonaLogin }
 catch { $personaMissingSmtp = $_.Exception.Message -like '*requires a named onboarding profile and authenticated SMTP*' }
 if (-not $personaMissingSmtp) { throw 'Persona activation allowed without required SMTP.' }
 $personaMailPath = Join-Path $testRoot 'persona-smtp-fixture.json'
-@{ SmtpHost='localhost';SmtpPort=2525;SmtpUser='uat-operator';SmtpPassword='fixture-only';From='no-reply@example.test' } |
+@{ SmtpHost='smtp.gmail.com';SmtpPort=587;SmtpUser='uat-owner@gmail.com';SmtpPassword='fixture-only';From='uat-owner@gmail.com';LocalPersonaTestInbox='uat-owner@gmail.com' } |
     ConvertTo-Json -Depth 5 | Set-Content $personaMailPath
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EnableEmailAccess -EnablePersonaLogin -EmailConfigurationFile $personaMailPath
 $identityPersona = Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
+if ($identityPersona.Monergy.CustomerEmailAccess.LocalPersonaTestInbox -ne 'uat-owner@gmail.com') {
+    throw 'Gmail LOCAL reference inbox not protected in the persona profile.'
+}
 if ($identityPersona.Monergy.PersonaCredentials.Enabled -ne 'true' -or
     $identityPersona.Monergy.CustomerEmailAccess.Enabled -ne 'true') {
     throw 'Activated-persona owner configuration did not select guarded email access.'
