@@ -28,6 +28,55 @@ interface FinancialReview {
 }
 
 const identifier = (value: string) => /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value);
+const record = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('UNVERIFIED_OWNER_RESPONSE');
+  return value as Record<string, unknown>;
+};
+const validCustomer = (value: unknown): value is NamedCustomer => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.customerId === 'string' && identifier(item.customerId) &&
+    typeof item.displayName === 'string' && !!item.displayName.trim() &&
+    item.displayName.length <= 120 &&
+    ![...item.displayName].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
+};
+function authorizedClients(value: unknown, tenantId: string, actorId: string,
+  policyVersion: number, subjectVersion: number): NamedCustomer[] {
+  const data = record(value);
+  if (data.tenantId !== tenantId || data.actorId !== actorId ||
+      data.policyVersion !== policyVersion || data.subjectVersion !== subjectVersion ||
+      !Array.isArray(data.customers) || data.customers.length > 50)
+    throw new Error('ADVISOR_LIST_INVALID');
+  const values: unknown[] = data.customers;
+  if (!values.every(validCustomer)) throw new Error('ADVISOR_LIST_INVALID');
+  const customers: NamedCustomer[] = values;
+  if (new Set(customers.map(customer => customer.customerId)).size !== customers.length)
+    throw new Error('ADVISOR_LIST_INVALID');
+  return customers;
+}
+const validFact = (value: unknown): value is ReviewedFact => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const fact = value as Record<string, unknown>;
+  if (typeof fact.source !== 'object' || fact.source === null || Array.isArray(fact.source)) return false;
+  const source = fact.source as Record<string, unknown>;
+  return typeof fact.financialFactId === 'string' && identifier(fact.financialFactId) &&
+    typeof fact.factType === 'string' && typeof fact.label === 'string' && !!fact.label.trim() &&
+    typeof fact.value === 'number' && Number.isFinite(fact.value) &&
+    typeof fact.currency === 'string' && typeof fact.effectiveDate === 'string' &&
+    typeof fact.revision === 'number' && Number.isSafeInteger(fact.revision) &&
+    typeof source.sourceName === 'string';
+};
+function financialReview(value: unknown): FinancialReview {
+  const raw = record(value);
+  if (typeof raw.revision !== 'number' || !Number.isSafeInteger(raw.revision) ||
+      !Array.isArray(raw.facts) || raw.facts.length > 1000)
+    throw new Error('ADVISOR_PROFILE_INVALID');
+  const facts: unknown[] = raw.facts;
+  if (!facts.every(validFact)) throw new Error('ADVISOR_PROFILE_INVALID');
+  return { revision: raw.revision, facts };
+}
+
 const categories: Record<string, string> = {
   INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information',
   ASSET: 'Asset information', INVESTMENT: 'Investments',
@@ -64,20 +113,11 @@ export default function AdvisorWorkspace() {
     setSelection(null);
     setReview(null);
     setNotice('');
-    void api.product<AuthorizedClients>('v1/advisor/customers', 'GET', undefined, abort.signal)
+    void api.product<unknown>('v1/advisor/customers', 'GET', undefined, abort.signal)
       .then(data => {
         if (abort.signal.aborted) return;
-        if (data.tenantId !== session.tenantId || data.actorId !== session.actorId ||
-            data.policyVersion !== advisor.policyVersion || data.subjectVersion !== advisor.subjectVersion ||
-            !Array.isArray(data.customers) || data.customers.length > 50 ||
-            data.customers.some(customer => !customer ||
-              typeof customer.customerId !== 'string' || !identifier(customer.customerId) ||
-              typeof customer.displayName !== 'string' ||
-              !customer.displayName.trim() || customer.displayName.length > 120 ||
-              customer.displayName.split('').some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) ||
-            new Set(data.customers.map(customer => customer.customerId)).size !== data.customers.length)
-          throw new Error('ADVISOR_LIST_INVALID');
-        setClients(data.customers);
+        setClients(authorizedClients(data, session.tenantId, session.actorId,
+          advisor.policyVersion, advisor.subjectVersion));
       })
       .catch(() => { if (!abort.signal.aborted) setNotice('Authorized customer names could not be verified. Refresh to try again.'); })
       .finally(() => { if (!abort.signal.aborted) setLoading(false); });
@@ -93,16 +133,9 @@ export default function AdvisorWorkspace() {
     setReview(null);
     setSelection(null);
     try {
-      const value = await api.product<FinancialReview>(
+      const received = await api.product<unknown>(
         'v1/advisor/customers/' + encodeURIComponent(customer.customerId) + '/financial-profile');
-      if (!value || !Array.isArray(value.facts) || !Number.isSafeInteger(value.revision) ||
-          value.facts.length > 1000 || value.facts.some(fact => !fact ||
-            typeof fact.label !== 'string' || !fact.label.trim() ||
-            typeof fact.value !== 'number' || !Number.isFinite(fact.value) ||
-            typeof fact.currency !== 'string' || typeof fact.factType !== 'string' ||
-            typeof fact.effectiveDate !== 'string' ||
-            typeof fact.source?.sourceName !== 'string'))
-        throw new Error('ADVISOR_PROFILE_INVALID');
+      const value = financialReview(received);
       setSelection(customer);
       setReview(value);
     } catch {
