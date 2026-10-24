@@ -59,10 +59,13 @@ describe('tenant administration trust boundaries', () => {
   });
 
   it('keeps administration unavailable when the server rejects administrator authority', async () => {
-    const ownerFetch = vi
-      .fn()
-      .mockResolvedValueOnce(json(session))
-      .mockResolvedValue(json({ error: 'ADMIN_REQUIRED' }, 403));
+    let ownerCalls = 0;
+    const ownerFetch = vi.fn((url: string, options?: RequestInit): Promise<Response> => {
+      void url;
+      void options;
+      ownerCalls += 1;
+      return Promise.resolve(ownerCalls === 1 ? json(session) : json({ error: 'ADMIN_REQUIRED' }, 403));
+    });
     vi.stubGlobal('fetch', (url: string, options?: RequestInit) =>
       url.endsWith('/persona-credentials')
         ? Promise.resolve(json({ enabled: false }))
