@@ -21,10 +21,13 @@ export function WorkspaceEntry({
   const [method, setMethod] = useState<'auto' | 'password' | 'persona' | 'email' | 'local'>('auto');
   const [registrationAvailable, setRegistrationAvailable] = useState<boolean | null>(null);
   const [personaAvailable, setPersonaAvailable] = useState<boolean | null>(null);
-  const registrationEntry = area === 'product' &&
-    (method === 'password' || method === 'auto' && registrationAvailable === true);
+  // Existing provisioned identities use the common credential entry.
+  // Customer self-registration remains an explicit separate choice.
   const personaEntry = method === 'persona' ||
-    method === 'auto' && personaAvailable === true && !registrationEntry;
+    method === 'auto' && personaAvailable === true;
+  const registrationEntry = area === 'product' &&
+    (method === 'password' || method === 'auto' &&
+      personaAvailable !== true && registrationAvailable === true);
   const emailEntry = method === 'email';
   const loadingMethods = method === 'auto' &&
     (personaAvailable === null || area === 'product' && registrationAvailable === null);
