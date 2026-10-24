@@ -17,6 +17,7 @@ public sealed record CustomerWorkspaceSetupStatus(string TenantId, string ActorI
     bool EmailVerified, bool ProfileReviewed, bool AgreementsPublished, bool AgreementsAccepted, bool Ready, string? Revision);
 public sealed record CustomerOwnerSession(string TenantId, string ActorId, string AuthenticationContextId, long SubjectVersion, DateTimeOffset ExpiresAt);
 public sealed record CustomerOwnerMembership(string TenantId, string ActorId, bool Active, long SubjectVersion, long PolicyVersion);
+public sealed record CustomerDisplayLabel(string TenantId, string CustomerId, string DisplayName, long Version);
 public sealed record CustomerOwnerRecipientLabel(string TenantId, string ActorId, string RecipientLabel);
 
 // LOCAL/CI owner ports only. Workload tokens never come from request headers or
@@ -74,6 +75,22 @@ public sealed class CustomerOwnerClient : IDisposable
         if (value.TenantId != tenant || value.CustomerId != customer || value.Version < 1 || !value.Active)
             throw new TenantBoundaryException("CUSTOMER_UNAVAILABLE", 503);
         return value;
+    }
+
+    // C&I is authoritative for display names. This owner port is used only
+    // after a current Access Management Advisor authorization decision.
+    public async Task<CustomerDisplayLabel> CustomerLabelAsync(string tenant, string customer, CancellationToken ct)
+    {
+        if (!TenantAccessClient.Identifier(customer, 128))
+            throw new TenantBoundaryException("INVALID_CUSTOMER", 400);
+        var result = await SendAsync<CustomerDisplayLabel>(identity,
+            "internal/v1/customer-display/" + Uri.EscapeDataString(customer),
+            tenant, contextToken, null, ct).ConfigureAwait(false);
+        if (result.TenantId != tenant || result.CustomerId != customer ||
+            result.Version < 1 || string.IsNullOrWhiteSpace(result.DisplayName) ||
+            result.DisplayName.Length > 120 || result.DisplayName.Any(char.IsControl))
+            throw new TenantBoundaryException("CUSTOMER_LABEL_INVALID", 503);
+        return result;
     }
 
     public async Task<CustomerOwnerWorkspace?> OwnedCustomerAsync(string tenant, string actor, CancellationToken ct)
