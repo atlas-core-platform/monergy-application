@@ -73,6 +73,26 @@ $kycPath=Join-Path $testRoot 'kyc-fixture.json'
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -KycConfigurationFile $kycPath
 $identity=Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
 if ($identity.Monergy.BasicKyc.Tenants.T001.Reviewers[0].ActorId -ne 'A300' -or $identity.Monergy.BasicKyc.EvidenceBaseUrl -ne 'http://127.0.0.1:5111/') { throw 'KYC configuration was not preserved.' }
+# Identity activation is opt-in and never silently enabled by a normal start.
+$personaMissingSmtp = $false
+try { & $scriptPath -Action Prepare -Profile onboarding -EnablePersonaLogin }
+catch { $personaMissingSmtp = $_.Exception.Message -like '*requires a named onboarding profile and authenticated SMTP*' }
+if (-not $personaMissingSmtp) { throw 'Persona activation allowed without required SMTP.' }
+$personaMailPath = Join-Path $testRoot 'persona-smtp-fixture.json'
+@{ SmtpHost='localhost';SmtpPort=2525;SmtpUser='uat-operator';SmtpPassword='fixture-only';From='no-reply@example.test' } |
+    ConvertTo-Json -Depth 5 | Set-Content $personaMailPath
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EnableEmailAccess -EnablePersonaLogin -EmailConfigurationFile $personaMailPath
+$identityPersona = Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
+if ($identityPersona.Monergy.PersonaCredentials.Enabled -ne 'true' -or
+    $identityPersona.Monergy.CustomerEmailAccess.Enabled -ne 'true') {
+    throw 'Activated-persona owner configuration did not select guarded email access.'
+}
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
+$identityWithoutPersona = Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
+if ($null -ne $identityWithoutPersona.Monergy.PSObject.Properties['PersonaCredentials']) {
+    throw 'Normal test profile unexpectedly enabled credential activation.'
+}
+'PASS: persona credentials require LOCAL SMTP opt-in and do not replace default test-key profile.'
 $durablePath=Join-Path $testRoot 'evidence-fixture.json'
 @{ RuntimeConnections=@{T001='Host=127.0.0.1;Database=fixture_evidence;Username=fixture'}; S3=@{ Endpoint='http://127.0.0.1:9000';Bucket='fixture';AccessKey='fixture';SecretKey='fixture'} } | ConvertTo-Json -Depth 10 | Set-Content $durablePath
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EvidencePersistenceConfigurationFile $durablePath
