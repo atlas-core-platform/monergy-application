@@ -58,7 +58,10 @@ public sealed class TenantAccessClient : IDisposable
     {
         var (tenant, session) = Headers(http);
         using var request = Request(HttpMethod.Get, "v1/advisor/context", tenant, session);
-        var value = await SendAsync<AdvisorEntryContext>(request, http.RequestAborted).ConfigureAwait(false);
+        AdvisorEntryContext value;
+        try { value = await SendAsync<AdvisorEntryContext>(request, http.RequestAborted).ConfigureAwait(false); }
+        catch (TenantBoundaryException error) when (error.Status == 403)
+        { throw new TenantBoundaryException("ADVISOR_ROLE_REQUIRED", 403); }
         if (value.TenantId != tenant || !Identifier(value.ActorId, 128) ||
             value.Authority != "FinancialAdvisor" || value.PolicyVersion < 1 ||
             value.SubjectVersion < 1 || value.RecordedRelationshipCount < 0)
