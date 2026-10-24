@@ -75,7 +75,7 @@ it('shows a read-only reviewed financial fact only after a consent-authorized cu
       return Promise.resolve(json({
         revision: 1,
         facts: [{ financialFactId: 'f1', factType: 'INCOME', label: 'Reviewed income',
-          value: 50000, currency: 'INR', effectiveDate: '2026-10-01',
+          value: 50000, currency: 'INR', effectiveDate: '2026-10-01', revision: 1,
           source: { sourceName: 'Reviewed income document' } }],
       }));
     return mock(url);
