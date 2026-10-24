@@ -818,7 +818,7 @@ public sealed partial class ProductEvidenceClient : IDisposable
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, "internal/local/v1/evidence/content"));
         request.Headers.Add("X-Monergy-Product-Token", token);
         request.Content = JsonContent.Create(new { operationId, contentBase64, contentType });
-        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        using var response = await SendStageRequestAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
         {
             string? ownerCode = null;
@@ -839,7 +839,8 @@ public sealed partial class ProductEvidenceClient : IDisposable
                             ownerCode = error.GetString();
                     }
                 }
-                catch (JsonException) { /* An invalid owner reply remains a generic 503. */ }
+                catch (Exception failure) when (failure is JsonException or IOException or HttpRequestException)
+                { /* An invalid/unavailable owner reply remains a generic 503. */ }
             }
             var status = response.StatusCode switch
             {
@@ -863,6 +864,16 @@ public sealed partial class ProductEvidenceClient : IDisposable
             descriptor.Sha256.Length != 64 || descriptor.ContentLength is < 1 or > 1_048_576)
             throw new TenantBoundaryException("EVIDENCE_STAGING_RESPONSE_INVALID", 503);
         return descriptor;
+    }
+
+    private async Task<HttpResponseMessage> SendStageRequestAsync(
+        HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        try { return await client.SendAsync(request, cancellationToken).ConfigureAwait(false); }
+        catch (Exception failure) when (failure is HttpRequestException or IOException)
+        { throw new TenantBoundaryException("EVIDENCE_STAGING_UNAVAILABLE", 503); }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        { throw new TenantBoundaryException("EVIDENCE_STAGING_UNAVAILABLE", 503); }
     }
 
     public async Task<ContractResult<DocumentVersionCreatedResult>> RegisterAsync(
