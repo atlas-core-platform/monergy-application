@@ -101,7 +101,7 @@ it('fails closed when the owner revokes financial access after listing the assig
   });
   mount(); await connect();
   await userEvent.click(await screen.findByRole('button', { name: 'Review information' }));
-  await waitFor(() => expect(requests.mock.calls.some(([url]) => url.endsWith('/advisor/customers/C001/financial-profile'))).toBe(true));
+  await waitFor(() => { expect(requests.mock.calls.some(([url]) => url.endsWith('/advisor/customers/C001/financial-profile'))).toBe(true); });
   expect(screen.queryByText('Financial information (read only)')).not.toBeInTheDocument();
   expect(screen.queryByText('Reviewed income')).not.toBeInTheDocument();
 });
@@ -119,12 +119,12 @@ it('never displays an invalid owner customer label', async () => {
 });
 it('rejects a non-advisor without rendering a workspace', async () => {
   const requests = owner(403); mount(); await connect();
-  await waitFor(() => expect(requests.mock.calls.some(([url]) => url.endsWith('/revoke'))).toBe(true));
+  await waitFor(() => { expect(requests.mock.calls.some(([url]) => url.endsWith('/revoke'))).toBe(true); });
   expect(screen.queryByRole('heading', { name: 'Financial Advisor workspace' })).not.toBeInTheDocument();
 });
 it('rejects a mismatched owner response before revealing the workspace', async () => {
   const requests = owner(200, true); mount(); await connect();
-  await waitFor(() => expect(requests.mock.calls.some(([url]) => url.endsWith('/revoke'))).toBe(true));
+  await waitFor(() => { expect(requests.mock.calls.some(([url]) => url.endsWith('/revoke'))).toBe(true); });
   expect(screen.queryByRole('heading', { name: 'Financial Advisor workspace' })).not.toBeInTheDocument();
   expect(sessionMemory.current).toBeNull();
 });
