@@ -7,6 +7,8 @@ using Microsoft.Extensions.Configuration;
 namespace Monergy.Platform;
 
 public sealed record TenantAdminContext(string TenantId, string ActorId, long PolicyVersion, string Authority);
+public sealed record AdvisorAuthorizedCustomers(string TenantId, string ActorId,
+    long PolicyVersion, long SubjectVersion, IReadOnlyList<string> CustomerIds);
 public sealed record AdvisorEntryContext(string TenantId, string ActorId, string Authority,
     long PolicyVersion, long SubjectVersion, long RecordedRelationshipCount);
 public sealed record TenantAccessRequest(string CapabilityId, string? ResourceType, string? ResourceId);
@@ -67,6 +69,20 @@ public sealed class TenantAccessClient : IDisposable
             value.SubjectVersion < 1 || value.RecordedRelationshipCount < 0)
             throw new TenantBoundaryException("ACCESS_OWNER_RESPONSE_INVALID", 503);
         return value;
+    }
+
+    public async Task<AdvisorAuthorizedCustomers> AdvisorCustomersAsync(HttpContext http)
+    {
+        var (tenant, session) = Headers(http);
+        using var request = Request(HttpMethod.Get, "v1/advisor/customers", tenant, session);
+        var result = await SendAsync<AdvisorAuthorizedCustomers>(request, http.RequestAborted).ConfigureAwait(false);
+        if (result.TenantId != tenant || !Identifier(result.ActorId, 128) ||
+            result.PolicyVersion < 1 || result.SubjectVersion < 1 ||
+            result.CustomerIds is null || result.CustomerIds.Count > 50 ||
+            result.CustomerIds.Any(id => !Identifier(id, 128)) ||
+            result.CustomerIds.Distinct(StringComparer.Ordinal).Count() != result.CustomerIds.Count)
+            throw new TenantBoundaryException("ADVISOR_CUSTOMERS_INVALID", 503);
+        return result;
     }
 
     public async Task<TenantAdminContext> RequireAdministratorAsync(HttpContext http)

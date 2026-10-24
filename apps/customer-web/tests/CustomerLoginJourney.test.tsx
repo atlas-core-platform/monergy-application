@@ -1,4 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
+import { useState } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -12,6 +13,24 @@ const context = { tenantId: 'T001', actorId: 'A100', customerId: 'C001', custome
 function Private() {
   const { signOut } = useWorkspaceSession();
   return <><h2>Private customer information</h2><button onClick={() => { void signOut(); }}>Sign out</button></>;
+}
+function RestrictedFeature() {
+  const { api } = useWorkspaceSession();
+  const [message, setMessage] = useState('');
+  return <><h2>Private customer information</h2>
+    <button onClick={() => {
+      if (!api) return;
+      void api.product('v1/financial-profile').catch((failure: unknown) => {
+        setMessage(failure instanceof Error ? failure.message : 'The request was denied.');
+      });
+    }}>Try restricted feature</button>
+    {message && <p role="alert">{message}</p>}
+  </>;
+}
+function mountRestricted() {
+  return render(<FoundationProvider appearance="midnight"><WorkspaceSessionProvider area="product">
+    <WorkspaceEntry area="product"><RestrictedFeature /></WorkspaceEntry>
+  </WorkspaceSessionProvider></FoundationProvider>);
 }
 function mount() {
   return render(<FoundationProvider appearance="midnight"><WorkspaceSessionProvider area="product"><WorkspaceEntry area="product"><Private /></WorkspaceEntry></WorkspaceSessionProvider></FoundationProvider>);
@@ -54,6 +73,23 @@ it.each([403, 503])('revokes the issued session when workspace authorization fai
   const request = owner(200, status); mount(); await signIn();
   await waitFor(() => { expect(request.mock.calls.some(([url]) => url.endsWith('/revoke'))).toBe(true); });
   expect(screen.queryByText('Private customer information')).not.toBeInTheDocument(); expect(sessionMemory.current).toBeNull();
+});
+it('keeps an authenticated customer workspace open after a feature-level 403 denial', async () => {
+  const request = owner();
+  const original = request.getMockImplementation();
+  if (!original) throw Error('Missing request handler');
+  request.mockImplementation((url, options) =>
+    url.endsWith('/v1/financial-profile')
+      ? Promise.resolve(json({ error: 'ACCESS_DENIED' }, 403))
+      : original(url, options));
+  mountRestricted();
+  await signIn();
+  expect(await screen.findByText('Private customer information')).toBeVisible();
+  await userEvent.click(screen.getByRole('button', { name: 'Try restricted feature' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(/not included in your current access/i);
+  expect(screen.getByText('Private customer information')).toBeVisible();
+  expect(sessionMemory.current?.actorId).toBe('A100');
+  expect(request.mock.calls.some(([url]) => url.endsWith('/revoke'))).toBe(false);
 });
 it('allows cancellation during password issuance and revokes a late session', async () => {
   const request = owner(); const fallback = request.getMockImplementation(); if (!fallback) throw new Error('Missing mock'); let finish: (value: Response) => void = () => undefined;

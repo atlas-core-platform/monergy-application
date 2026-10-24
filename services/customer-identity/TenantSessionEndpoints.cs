@@ -51,6 +51,35 @@ public static class TenantSessionEndpoints
                 catch (TenantAccessException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }
                 catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
             });
+            // Internal C&I-owned display label; public administrators cannot call
+            // this owner port without the isolated LOCAL customer-context credential.
+            // No email, KYC data or other profile fields leave this endpoint.
+            app.MapGet("/internal/v1/customer-display/{customerId}", async (
+                string customerId, HttpContext http, ICustomerAdministrationRepository directory) =>
+            {
+                if (!TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Owner-Token"].ToString(), contextToken))
+                    return (IResult)Results.StatusCode(403);
+                try
+                {
+                    var tenant = http.Request.Headers["X-Monergy-Tenant"].ToString();
+                    if (!TenantAccessClient.Identifier(tenant, 64) ||
+                        !TenantAccessClient.Identifier(customerId, 128))
+                        return Results.BadRequest();
+                    var row = await directory.ReadAsync(tenant, customerId, http.RequestAborted).ConfigureAwait(false);
+                    if (row is not { Active: true, Version: > 0 })
+                        return Results.NotFound();
+                    if (row.TenantId != tenant || row.CustomerId != customerId ||
+                        string.IsNullOrWhiteSpace(row.DisplayName) || row.DisplayName.Length > 120 ||
+                        row.DisplayName.Any(char.IsControl))
+                        throw new TenantBoundaryException("CUSTOMER_LABEL_INVALID", 503);
+                    return Results.Ok(new { tenantId = tenant, customerId, displayName = row.DisplayName, version = row.Version });
+                }
+                catch (TenantBoundaryException failure)
+                { return Results.Json(new { error = failure.Code }, statusCode: failure.Status); }
+                catch (TenantAccessException failure)
+                { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }
+                catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
+            });
             // Optional bounded LOCAL owner integration: never reuse the general
             // customer-context credential as an actor-label lookup credential.
             if (app.Configuration["Monergy:AccessIntegration:RecipientLabelToken"] is
