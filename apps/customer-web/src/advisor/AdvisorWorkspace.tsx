@@ -55,7 +55,7 @@ export default function AdvisorWorkspace() {
       }).catch(() => { if (!abort.signal.aborted) setNotice('Authorized customer assignments could not be verified. Refresh to try again.'); })
       .finally(() => { if (!abort.signal.aborted) setLoading(false); });
     return () => abort.abort();
-  }, [advisor?.policyVersion, advisor?.subjectVersion, api, session?.actorId, session?.tenantId]);
+  }, [advisor, api, session]);
 
   if (!advisor) return null;
 
