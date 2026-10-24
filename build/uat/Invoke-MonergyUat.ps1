@@ -9,6 +9,7 @@ param(
     [switch]$EnableOnboarding,
     [switch]$EnableEmailAccess,
     [switch]$EnableCustomerRegistration,
+    [switch]$EnablePersonaLogin,
     [string]$AccountAgreementFile,
     [string]$EmailConfigurationFile,
     [string]$GoogleDriveConfigurationFile,
@@ -23,6 +24,7 @@ param(
     [switch]$EnableCustomerPan
 )
 $ErrorActionPreference = 'Stop'
+if ($EnablePersonaLogin -and (-not $EnableEmailAccess -or -not $EnableOnboarding)) { throw 'Persona email/password activation requires a named onboarding profile and authenticated SMTP email access.' }
 if ($EnableCustomerRegistration -and (-not $EnableEmailAccess -or -not $EnableOnboarding -or [string]::IsNullOrWhiteSpace($AccountAgreementFile))) { throw 'Customer registration requires onboarding, email access and published account agreements.' }
 if ($EnableCustomerRegistration) { $RequireCustomerSetup=$true }
 if ($RequireCustomerSetup -and (-not $EnableEmailAccess -or -not $EnableOnboarding)) { throw 'Required customer setup needs -EnableOnboarding and -EnableEmailAccess.' }
@@ -412,6 +414,7 @@ if ($Action -in @('Prepare','Start')) {
                     $config.Monergy.AccountAgreements = $publication
                 }
                 if ($EnableCustomerRegistration) { $config.Monergy.CustomerRegistration=@{ Enabled='true'; EnrollmentToken=$state.tokens.customerEnrollment } }
+                if ($EnablePersonaLogin) { $config.Monergy.PersonaCredentials=@{ Enabled='true' } }
                 if ($EnableEmailAccess) {
                     $smtpPort = 587
                     if ($null -ne $emailConfiguration.PSObject.Properties['SmtpPort'] -and -not [string]::IsNullOrWhiteSpace([string]$emailConfiguration.SmtpPort)) { $smtpPort = [int]$emailConfiguration.SmtpPort }
