@@ -40,6 +40,9 @@ if (tenantIntegration)
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);
 var customerEmailAccess = tenantIntegration && builder.Services.AddCustomerEmailAccess(builder.Configuration);
 var customerRegistration = tenantIntegration && builder.Services.AddCustomerRegistration(builder.Configuration, customerEmailAccess);
+var personaCredentials = tenantIntegration && builder.Services.AddPersonaCredentials(builder.Configuration, customerEmailAccess);
+if (personaCredentials && !customerRegistration)
+    builder.Services.AddHostedService<Monergy.Services.CustomerIdentity.Infrastructure.CustomerRegistrationDelivery>();
 if (referenceAdapters)
 {
     builder.Services.AddCustomerIdentityReferenceAdapters(builder.Configuration);
@@ -59,6 +62,7 @@ if (tenantIntegration)
     app.MapSelfSessions();
     app.MapCustomerEmailAccess(customerEmailAccess);
     app.MapCustomerRegistration(customerRegistration);
+    app.MapPersonaCredentials(personaCredentials);
     app.MapCustomerAdministration();
     if (app.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
     {
