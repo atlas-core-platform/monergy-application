@@ -16,6 +16,8 @@ param(
     [string]$AiModelConfigurationFile,
     [string]$KycConfigurationFile,
     [string]$EvidencePersistenceConfigurationFile,
+    [string]$FinancialPersistenceConfigurationFile,
+    [switch]$RequireRetainedEvidenceAndFinancialProfile,
     [string]$ClassificationConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
@@ -179,6 +181,40 @@ if (Test-Path -LiteralPath $evidenceConfigPath) {
     }
     if ($Action -in @('Prepare','Start')) { Save-Json 'evidence-persistence.json' $evidencePersistence; Protect-Files }
 } elseif (-not [string]::IsNullOrWhiteSpace($EvidencePersistenceConfigurationFile)) { throw 'Evidence persistence configuration file was not found.' }
+# Optional physical Financial Profile uses the existing D09 PostgreSQL
+# repository and an operator-provisioned, migrated, least-privilege database.
+# The default onboarding profile deliberately remains in-memory.
+$financialPersistence = $null
+$financialConfigPath = Join-Path $folder 'financial-persistence.json'
+if (-not [string]::IsNullOrWhiteSpace($FinancialPersistenceConfigurationFile)) { $financialConfigPath = $FinancialPersistenceConfigurationFile }
+if (Test-Path -LiteralPath $financialConfigPath) {
+    if (-not $onboarding) { throw 'Financial Profile persistence requires an onboarding profile.' }
+    $financialFile = Get-Item -LiteralPath $financialConfigPath -ErrorAction Stop
+    if ($financialFile.PSIsContainer -or $financialFile.Length -gt 16384) { throw 'Invalid Financial Profile persistence file.' }
+    $financialPersistence = Get-Content -LiteralPath $financialFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($null -eq $financialPersistence -or @($financialPersistence.PSObject.Properties.Name).Count -ne 1 -or
+        $financialPersistence.PSObject.Properties.Name -notcontains 'RuntimeConnection' -or
+        $financialPersistence.RuntimeConnection -isnot [string] -or
+        [string]::IsNullOrWhiteSpace([string]$financialPersistence.RuntimeConnection)) {
+        throw 'Financial Profile persistence requires only a nonempty RuntimeConnection.'
+    }
+    if ($Action -in @('Prepare','Start')) {
+        $currentFinancial = Join-Path $folder 'financial-profile.json'
+        if (Test-Path -LiteralPath $currentFinancial) {
+            $priorFinancial = Get-Content -LiteralPath $currentFinancial -Raw -Encoding utf8 | ConvertFrom-Json
+            if ($priorFinancial.Monergy.ReferenceAdapters -eq 'true') {
+                throw 'Cannot convert a retained in-memory Financial Profile to durable storage in place. Create a new named UAT profile; temporary facts are not migrated.'
+            }
+        }
+        Save-Json 'financial-persistence.json' $financialPersistence
+        Protect-Files
+    }
+} elseif (-not [string]::IsNullOrWhiteSpace($FinancialPersistenceConfigurationFile)) {
+    throw 'Financial Profile persistence configuration file was not found.'
+}
+if ($RequireRetainedEvidenceAndFinancialProfile -and ($null -eq $evidencePersistence -or $null -eq $financialPersistence)) {
+    throw 'Restart-retained Evidence AND Financial Profile requires both configured durable owner stores. Named Docker volumes alone do not preserve in-memory business records. Supply protected storage configurations in a new named profile; do not reset the retained profile.'
+}
 # Classification owner connections and explicit reviewer assignments remain operator supplied.
 $classificationConfiguration = $null
 $classificationConfigPath = Join-Path $folder 'classification.json'
@@ -400,6 +436,10 @@ if ($Action -in @('Prepare','Start')) {
                     PdfInfoExecutable='/opt/monergy-ocr/pdfinfo'; PdfRenderExecutable='/opt/monergy-ocr/pdftoppm'
                 }
             } elseif ($onboarding -and $service -eq 'financial-profile') {
+                if ($null -ne $financialPersistence) {
+                    $config.Monergy.ReferenceAdapters='false'
+                    $config.Monergy.Persistence=@{ Provider='POSTGRESQL_S3'; FinancialProfile=@{ RuntimeConnection=[string]$financialPersistence.RuntimeConnection } }
+                }
                 $config.Monergy.AuditDelivery=@{
                     Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.financialAuditEvent
                 }
