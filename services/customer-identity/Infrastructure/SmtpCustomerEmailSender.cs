@@ -6,7 +6,8 @@ using Monergy.Services.CustomerIdentity.Application;
 
 namespace Monergy.Services.CustomerIdentity.Infrastructure;
 
-public sealed record CustomerEmailDeliveryOptions(string Host, int Port, string From, string User, string Password, string[] Tenants)
+public sealed record CustomerEmailDeliveryOptions(string Host, int Port, string From, string User, string Password,
+    string[] Tenants, string? LocalPersonaTestInbox = null)
 {
     public static CustomerEmailDeliveryOptions Read(IConfiguration configuration)
     {
@@ -21,18 +22,44 @@ public sealed record CustomerEmailDeliveryOptions(string Host, int Port, string 
             string.IsNullOrWhiteSpace(user) || user.Length > 320 || user.Any(char.IsControl) ||
             string.IsNullOrEmpty(password) || tenants.Length is < 1 or > 100)
             throw new InvalidOperationException("Customer email delivery configuration is incomplete.");
-        return new(host, port, from, user, password, tenants);
+        var testInboxRaw = configuration[prefix + "LocalPersonaTestInbox"];
+        string? testInbox = null;
+        if (!string.IsNullOrWhiteSpace(testInboxRaw))
+        {
+            // Deliberate LOCAL-only exception for the fixed A100/A200/A300/A900
+            // reference personas. It is NOT email ownership proof for production.
+            if (configuration["Monergy:ExecutionZone"] != "LOCAL" ||
+                configuration["Monergy:PersonaCredentials:Enabled"] != "true" ||
+                !host.Equals("smtp.gmail.com", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Persona test mailbox redirection is LOCAL-only with Gmail SMTP.");
+            testInbox = CustomerEmailAccess.NormalizeEmail(testInboxRaw);
+            if (!testInbox.EndsWith("@gmail.com", StringComparison.OrdinalIgnoreCase) &&
+                !testInbox.EndsWith("@googlemail.com", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("LOCAL Gmail test inbox requires a Gmail recipient.");
+        }
+        return new(host, port, from, user, password, tenants, testInbox);
     }
 }
 
 public sealed class SmtpCustomerEmailSender(CustomerEmailDeliveryOptions options) : ICustomerEmailSender
 {
+    public static string ResolveRecipient(string email, string? localTestInbox)
+    {
+        if (localTestInbox is null) return email;
+        // Match ONLY the local bootstrap references. Imported user addresses
+        // are always delivered to their actual registered email.
+        return email is "a100@example.test" or "a200@example.test" or
+            "a300@example.test" or "a900@example.test"
+            ? localTestInbox : email;
+    }
     public async Task SendAsync(string email, string code, CancellationToken ct)
     {
-        using var message = new MailMessage(options.From, email)
+        var recipient = ResolveRecipient(email, options.LocalPersonaTestInbox);
+        using var message = new MailMessage(options.From, recipient)
         {
             Subject = "Your Monergy verification code",
-            Body = $"Your Monergy verification code is {code}. It expires five minutes after your request and can be used once. If you did not request this code, ignore this email.",
+            Body = $"Your Monergy verification code is {code}. It expires five minutes after your request and can be used once. If you did not request this code, ignore this email." +
+                (recipient != email ? $"\\nLOCAL UAT reference identity: {email}" : ""),
             IsBodyHtml = false,
         };
         using var client = new SmtpClient(options.Host, options.Port)
