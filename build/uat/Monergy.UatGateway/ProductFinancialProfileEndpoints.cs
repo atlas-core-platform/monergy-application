@@ -62,6 +62,61 @@ public static class ProductFinancialProfileEndpoints
     {
         if (!app.Configuration.GetValue<bool>("Monergy:Product:Enabled")) return;
 
+        // Advisor-specific read path. Never substitute the customer's owner
+        // identity, infer assignment from a name, or reuse the self-owned route.
+        app.MapGet("/product-api/v1/advisor/customers/{customerId}/financial-profile", (
+            string customerId, HttpContext http, CustomerOwnerClient owners,
+            TenantAccessClient access, ProductFinancialProfileClient financial,
+            ProductEvidenceClient evidence) => InvokeAsync(async () =>
+        {
+            if (!TenantAccessClient.Identifier(customerId, 128))
+                throw new TenantBoundaryException("INVALID_CUSTOMER", 400);
+            var session = await owners.SessionAsync(http).ConfigureAwait(false);
+            var advisor = await access.RequireAdvisorAsync(http).ConfigureAwait(false);
+            if (advisor.TenantId != session.TenantId || advisor.ActorId != session.ActorId ||
+                advisor.SubjectVersion != session.SubjectVersion)
+                throw new TenantBoundaryException("ADVISOR_CONTEXT_CHANGED", 403);
+
+            async Task<CustomerAccessDecision> RequireDelegatedAsync(string capability)
+            {
+                var decision = await access.EvaluateCustomerAsync(http, capability, customerId).ConfigureAwait(false);
+                if (decision is not { Outcome: "Allow", AccessBasis: "Advisor", ConsentVersion: > 0 } ||
+                    decision.PolicyVersion != advisor.PolicyVersion ||
+                    decision.SubjectVersion != advisor.SubjectVersion)
+                    throw new TenantBoundaryException("ADVISOR_CUSTOMER_ACCESS_DENIED", 403);
+                return decision;
+            }
+
+            var read = await RequireDelegatedAsync("financial-profile.profile.read").ConfigureAwait(false);
+            var evidenceRead = await RequireDelegatedAsync("evidence.document.read").ConfigureAwait(false);
+            if (read.CustomerVersion != evidenceRead.CustomerVersion ||
+                read.ConsentVersion != evidenceRead.ConsentVersion)
+                throw new TenantBoundaryException("ADVISOR_ACCESS_CHANGED", 409);
+            var owner = await owners.CustomerAsync(session.TenantId, customerId, http.RequestAborted).ConfigureAwait(false);
+            if (owner.OwnerActorId == session.ActorId || owner.Version != read.CustomerVersion)
+                throw new TenantBoundaryException("ADVISOR_CUSTOMER_ACCESS_DENIED", 403);
+
+            var profile = await ReadProductProfileAsync(
+                http, session, customerId, read, access, financial, evidence).ConfigureAwait(false);
+
+            // A revocation during an owner read cannot become a stale Allow.
+            var advisorNow = await access.RequireAdvisorAsync(http).ConfigureAwait(false);
+            var ownerNow = await owners.CustomerAsync(session.TenantId, customerId, http.RequestAborted).ConfigureAwait(false);
+            var readNow = await access.EvaluateCustomerAsync(http,
+                "financial-profile.profile.read", customerId).ConfigureAwait(false);
+            var evidenceNow = await access.EvaluateCustomerAsync(http,
+                "evidence.document.read", customerId).ConfigureAwait(false);
+            if (advisorNow != advisor || ownerNow != owner ||
+                readNow is not { Outcome: "Allow", AccessBasis: "Advisor", ConsentVersion: > 0 } ||
+                evidenceNow is not { Outcome: "Allow", AccessBasis: "Advisor", ConsentVersion: > 0 } ||
+                readNow.PolicyVersion != read.PolicyVersion || evidenceNow.PolicyVersion != evidenceRead.PolicyVersion ||
+                readNow.SubjectVersion != read.SubjectVersion || evidenceNow.SubjectVersion != evidenceRead.SubjectVersion ||
+                readNow.CustomerVersion != read.CustomerVersion || evidenceNow.CustomerVersion != evidenceRead.CustomerVersion ||
+                readNow.ConsentVersion != read.ConsentVersion || evidenceNow.ConsentVersion != evidenceRead.ConsentVersion)
+                throw new TenantBoundaryException("ADVISOR_ACCESS_CHANGED", 409);
+            return profile;
+        }));
+
         app.MapGet("/product-api/v1/financial-profile", (
             HttpContext http,
             CustomerOwnerClient owners,
@@ -80,7 +135,7 @@ public static class ProductFinancialProfileEndpoints
                 if (read.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
 
                 return await ReadProductProfileAsync(
-                    http, session, customer, read, access, financial, evidence).ConfigureAwait(false);
+                    http, session, customer.CustomerId, read, access, financial, evidence).ConfigureAwait(false);
             }));
 
         app.MapGet("/product-api/v1/financial-profile/facts/{financialFactId}", (
@@ -230,7 +285,7 @@ public static class ProductFinancialProfileEndpoints
                 }
 
                 var profile = await ReadProductProfileAsync(
-                    http, session, customer, read, access, financial, evidence).ConfigureAwait(false);
+                    http, session, customer.CustomerId, read, access, financial, evidence).ConfigureAwait(false);
                 return new ProductFinancialPromotionResult(
                     profile,
                     normalized.Data.Facts.Count);
@@ -240,7 +295,7 @@ public static class ProductFinancialProfileEndpoints
     private static async Task<ProductFinancialProfileView> ReadProductProfileAsync(
         HttpContext http,
         CustomerOwnerSession session,
-        CustomerOwnerWorkspace customer,
+        string customerId,
         CustomerAccessDecision profileDecision,
         TenantAccessClient access,
         ProductFinancialProfileClient financial,
@@ -252,22 +307,22 @@ public static class ProductFinancialProfileEndpoints
             "request-financial-profile-" + Guid.NewGuid().ToString("N"),
             "correlation-financial-profile-" + Guid.NewGuid().ToString("N"),
             null,
-            Security(session, customer.CustomerId, profileDecision, null),
+            Security(session, customerId, profileDecision, null),
             null,
-            new GetFinancialProfile(ProfileId(customer.CustomerId), customer.CustomerId));
+            new GetFinancialProfile(ProfileId(customerId), customerId));
 
         var profileResult = await financial.ProfileAsync(
             request, http.RequestAborted).ConfigureAwait(false);
         if (profileResult.Outcome == ContractOutcome.Rejected &&
             profileResult.Error?.Category == ContractErrorCategory.NotFound)
             return new ProductFinancialProfileView(
-                ProfileId(customer.CustomerId), 0, null, [], "Temporary data");
+                ProfileId(customerId), 0, null, [], "Temporary data");
 
         if (profileResult.Outcome != ContractOutcome.Success || profileResult.Data is null)
             throw new TenantBoundaryException("FINANCIAL_PROFILE_OWNER_UNAVAILABLE", 503);
 
         var evidenceDecision = await access.EvaluateCustomerAsync(
-            http, "evidence.document.read", customer.CustomerId).ConfigureAwait(false);
+            http, "evidence.document.read", customerId).ConfigureAwait(false);
         if (evidenceDecision.Outcome != "Allow")
             throw new TenantBoundaryException("ACCESS_DENIED", 403);
 
@@ -285,9 +340,9 @@ public static class ProductFinancialProfileEndpoints
                 "request-financial-source-" + Guid.NewGuid().ToString("N"),
                 "correlation-financial-source-" + Guid.NewGuid().ToString("N"),
                 null,
-                Security(session, customer.CustomerId, profileDecision, null),
+                Security(session, customerId, profileDecision, null),
                 null,
-                new GetFinancialProvenance(fact.FinancialProvenanceId, customer.CustomerId));
+                new GetFinancialProvenance(fact.FinancialProvenanceId, customerId));
             var provenance = await financial.ProvenanceAsync(
                 provenanceRequest, http.RequestAborted).ConfigureAwait(false);
             if (provenance.Outcome != ContractOutcome.Success || provenance.Data is null)
@@ -320,7 +375,7 @@ public static class ProductFinancialProfileEndpoints
 
     private static async Task<IReadOnlyDictionary<string, string>> ReadEvidenceNamesAsync(
         CustomerOwnerSession session,
-        CustomerOwnerWorkspace customer,
+        string customerId,
         CustomerAccessDecision evidenceDecision,
         ProductEvidenceClient evidence,
         CancellationToken ct)
@@ -331,9 +386,9 @@ public static class ProductFinancialProfileEndpoints
             "request-financial-sources-" + Guid.NewGuid().ToString("N"),
             "correlation-financial-sources-" + Guid.NewGuid().ToString("N"),
             null,
-            Security(session, customer.CustomerId, evidenceDecision, null),
+            Security(session, customerId, evidenceDecision, null),
             null,
-            new ListCustomerEvidence(customer.CustomerId, 100));
+            new ListCustomerEvidence(customerId, 100));
         var library = await evidence.ListAsync(
             session.TenantId,
             session.AuthenticationContextId,
@@ -494,7 +549,7 @@ public static class ProductFinancialProfileEndpoints
         string customerId,
         CustomerAccessDecision decision,
         string? consentReferenceId) => new(
-        new ActorContext(session.ActorId, "Customer", DateTimeOffset.UtcNow, session.AuthenticationContextId),
+        new ActorContext(session.ActorId, decision.AccessBasis == "Advisor" ? "FinancialAdvisor" : "Customer", DateTimeOffset.UtcNow, session.AuthenticationContextId),
         new WorkloadContext("customer-web", "local-uat-workspace:" + session.TenantId),
         new AccessContext("customer-advice", consentReferenceId, decision.DecisionId, customerId));
 
