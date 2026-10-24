@@ -4,10 +4,10 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "b1163a6936f493d447a126c11a0fefa0daab55bc",
-  "sourceTree": "452c35de14d9fec0492c8fe33f8516efacee2e43",
-  "verificationStatus": "ID_A02_ADVISOR_CONSENTED_READ_CANDIDATE_LOCAL_UAT_PENDING",
-  "candidatePullRequest": 18,
+  "commit": "e34287dbcefd8bb3b8cf41cf04415bd83dbe19d2",
+  "sourceTree": "3a60c3543e361b710e79fa399bf8de55b574a520",
+  "verificationStatus": "ID_A03_CUSTOMER_JOB_READ_CANDIDATE_LOCAL_UAT_PENDING",
+  "candidatePullRequest": 19,
   "files": [
     {
       "path": "Directory.Build.props",
@@ -59,7 +59,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerAccess.cs",
-      "gitBlobSha": "3932b782e6d8ff7b1583c4eb3f68f54e737af415"
+      "gitBlobSha": "126e1a42cb63bc14581849c2a5020370f4f2800c"
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerEnrollment.cs",
