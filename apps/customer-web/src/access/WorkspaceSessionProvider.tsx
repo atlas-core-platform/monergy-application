@@ -252,6 +252,16 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
   const connect = useCallback((tenant: string, key: string) =>
     connectUsing(tenant, (signal) => establishSession(tenant, key, signal)), [connectUsing]);
   const connectPassword = useCallback((tenant: string, email: string, password: string) => connectUsing(tenant, signal => registrationRequest<TenantSession>('/sign-in', { tenantId: tenant, email, password }, signal), 'password'), [connectUsing]);
+  const connectPersonaPassword = useCallback((tenant: string, email: string, password: string) =>
+    connectUsing(tenant, async signal => {
+      const response = await fetch('/identity-api/local/v1/persona-credentials/sign-in', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: tenant, email, password }), cache: 'no-store',
+        redirect: 'error', signal,
+      });
+      if (!response.ok) throw new AccessApiError(response.status, 'PERSONA_SIGN_IN_FAILED');
+      return await response.json() as TenantSession;
+    }, 'password'), [connectUsing]);
   const connectEmail = useCallback((tenant: string, challengeId: string, code: string) =>
     connectUsing(tenant, (signal) => confirmCustomerEmailCode(tenant, challengeId, code, signal), 'email'), [connectUsing]);
   const refreshContext = useCallback(async () => {
@@ -362,7 +372,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     };
   }, [state.session, leave, retry]);
   return (
-    <Context.Provider value={{ ...state, connect, connectEmail, connectPassword, refreshContext, retry, signOut, cancel }}>
+    <Context.Provider value={{ ...state, connect, connectEmail, connectPassword, connectPersonaPassword, refreshContext, retry, signOut, cancel }}>
       {children}
     </Context.Provider>
   );
