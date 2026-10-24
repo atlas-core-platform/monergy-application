@@ -74,7 +74,7 @@ export default function AdvisorWorkspace() {
               typeof customer.customerId !== 'string' || !identifier(customer.customerId) ||
               typeof customer.displayName !== 'string' ||
               !customer.displayName.trim() || customer.displayName.length > 120 ||
-              /[\\u0000-\\u001f\\u007f]/.test(customer.displayName)) ||
+              customer.displayName.split('').some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127)) ||
             new Set(data.customers.map(customer => customer.customerId)).size !== data.customers.length)
           throw new Error('ADVISOR_LIST_INVALID');
         setClients(data.customers);
