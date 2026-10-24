@@ -5,13 +5,6 @@ import { useWorkspaceSession } from '../access/workspaceSession';
 const { Title, Paragraph, Text } = Typography;
 
 interface NamedCustomer { customerId: string; displayName: string }
-interface AuthorizedClients {
-  tenantId: string;
-  actorId: string;
-  policyVersion: number;
-  subjectVersion: number;
-  customers: NamedCustomer[];
-}
 interface ReviewedFact {
   financialFactId: string;
   factType: string;
