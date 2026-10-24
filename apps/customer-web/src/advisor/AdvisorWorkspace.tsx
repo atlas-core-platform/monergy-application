@@ -21,14 +21,15 @@ interface FinancialReview {
 }
 
 const identifier = (value: string) => /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value);
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 const record = (value: unknown): Record<string, unknown> => {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    throw new Error('UNVERIFIED_OWNER_RESPONSE');
-  return value as Record<string, unknown>;
+  if (!isRecord(value)) throw new Error('UNVERIFIED_OWNER_RESPONSE');
+  return value;
 };
 const validCustomer = (value: unknown): value is NamedCustomer => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const item = value as Record<string, unknown>;
+  if (!isRecord(value)) return false;
+  const item = value;
   return typeof item.customerId === 'string' && identifier(item.customerId) &&
     typeof item.displayName === 'string' && !!item.displayName.trim() &&
     item.displayName.length <= 120 &&
@@ -49,10 +50,9 @@ function authorizedClients(value: unknown, tenantId: string, actorId: string,
   return customers;
 }
 const validFact = (value: unknown): value is ReviewedFact => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
-  const fact = value as Record<string, unknown>;
-  if (typeof fact.source !== 'object' || fact.source === null || Array.isArray(fact.source)) return false;
-  const source = fact.source as Record<string, unknown>;
+  if (!isRecord(value) || !isRecord(value.source)) return false;
+  const fact = value;
+  const source = value.source;
   return typeof fact.financialFactId === 'string' && identifier(fact.financialFactId) &&
     typeof fact.factType === 'string' && typeof fact.label === 'string' && !!fact.label.trim() &&
     typeof fact.value === 'number' && Number.isFinite(fact.value) &&
