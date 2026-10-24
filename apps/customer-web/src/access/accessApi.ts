@@ -172,7 +172,10 @@ export class AccessApi {
       if (
         !this.lifecycle?.signal.aborted &&
         failure instanceof AccessApiError &&
-        failure.status === 401
+        (failure.status === 401 ||
+          failure.status === 403 &&
+          ['TENANT_ADMIN_REQUIRED', 'ADVISOR_ROLE_REQUIRED',
+           'PRODUCT_CUSTOMER_REQUIRED', 'KYC_REVIEW_DENIED'].includes(failure.code))
       )
         this.lifecycle?.onFailure(failure);
       throw failure;
