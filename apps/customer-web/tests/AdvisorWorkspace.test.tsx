@@ -30,9 +30,9 @@ function mount() {
 function owner(contextStatus = 200, foreignActor = false) {
   const fetch = vi.fn((url: string) => {
     if (url.endsWith('/tenant-sessions')) return Promise.resolve(json(session()));
-    if (url.endsWith('/advisor/customers')) return Promise.resolve(json({
+    if (url.endsWith('/v1/advisor/customers')) return Promise.resolve(json({
       tenantId: 'T001', actorId: 'A300', policyVersion: 4,
-      subjectVersion: 3, customerIds: [],
+      subjectVersion: 3, customers: [],
     }));
     if (url.endsWith('/advisor/context')) return Promise.resolve(json(
       contextStatus === 200 ? { ...advisor(), ...(foreignActor ? { actorId: 'A100' } : {}) }
@@ -67,9 +67,9 @@ it('shows a read-only reviewed financial fact only after a consent-authorized cu
   const mock = requests.getMockImplementation();
   if (!mock) throw Error('Missing owner mock');
   requests.mockImplementation((url: string) => {
-    if (url.endsWith('/advisor/customers')) return Promise.resolve(json({
+    if (url.endsWith('/v1/advisor/customers')) return Promise.resolve(json({
       tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
-      customerIds: ['C001'],
+      customers: [{ customerId: 'C001', displayName: 'Verified Customer' }],
     }));
     if (url.endsWith('/advisor/customers/C001/financial-profile'))
       return Promise.resolve(json({
@@ -83,7 +83,8 @@ it('shows a read-only reviewed financial fact only after a consent-authorized cu
   mount(); await connect();
   await userEvent.click(await screen.findByRole('button', { name: 'Review information' }));
   expect(await screen.findByText('Reviewed income')).toBeVisible();
-  expect(screen.getByText('Source: Reviewed income document')).toBeVisible();
+  expect(screen.getByText(/Source: Reviewed income document/)).toBeVisible();
+  expect(screen.getAllByText('Verified Customer').length).toBeGreaterThan(0);
   expect(screen.queryByText('C001')).not.toBeInTheDocument();
 });
 it('fails closed when the owner revokes financial access after listing the assigned customer', async () => {
@@ -91,8 +92,8 @@ it('fails closed when the owner revokes financial access after listing the assig
   const fallback = requests.getMockImplementation();
   if (!fallback) throw Error('Missing owner mock');
   requests.mockImplementation((url: string) => {
-    if (url.endsWith('/advisor/customers')) return Promise.resolve(json({
-      tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3, customerIds: ['C001'],
+    if (url.endsWith('/v1/advisor/customers')) return Promise.resolve(json({
+      tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3, customers: [{ customerId: 'C001', displayName: 'Verified Customer' }],
     }));
     if (url.endsWith('/advisor/customers/C001/financial-profile'))
       return Promise.resolve(json({ error: 'ADVISOR_CUSTOMER_ACCESS_DENIED' }, 403));
@@ -103,6 +104,18 @@ it('fails closed when the owner revokes financial access after listing the assig
   await waitFor(() => expect(requests.mock.calls.some(([url]) => url.endsWith('/advisor/customers/C001/financial-profile'))).toBe(true));
   expect(screen.queryByText('Financial information (read only)')).not.toBeInTheDocument();
   expect(screen.queryByText('Reviewed income')).not.toBeInTheDocument();
+});
+it('never displays an invalid owner customer label', async () => {
+  const requests = owner();
+  const fallback = requests.getMockImplementation();
+  if (!fallback) throw Error('Missing mock');
+  requests.mockImplementation((url: string) => url.endsWith('/v1/advisor/customers')
+    ? Promise.resolve(json({ tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
+      customers: [{ customerId: ' invalid', displayName: 'Should not be visible' }] }))
+    : fallback(url));
+  mount(); await connect();
+  expect(await screen.findByText(/Authorized customer names could not be verified/)).toBeVisible();
+  expect(screen.queryByText('Should not be visible')).not.toBeInTheDocument();
 });
 it('rejects a non-advisor without rendering a workspace', async () => {
   const requests = owner(403); mount(); await connect();
