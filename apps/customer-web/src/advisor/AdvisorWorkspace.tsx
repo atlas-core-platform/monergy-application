@@ -21,6 +21,13 @@ interface FinancialReview {
 }
 
 const identifier = (value: string) => /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value);
+const containsControlCharacter = (value: string): boolean => {
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 32 || code === 127) return true;
+  }
+  return false;
+};
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const record = (value: unknown): Record<string, unknown> => {
@@ -33,7 +40,7 @@ const validCustomer = (value: unknown): value is NamedCustomer => {
   return typeof item.customerId === 'string' && identifier(item.customerId) &&
     typeof item.displayName === 'string' && !!item.displayName.trim() &&
     item.displayName.length <= 120 &&
-    ![...item.displayName].some(character => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
+    !containsControlCharacter(item.displayName);
 };
 function authorizedClients(value: unknown, tenantId: string, actorId: string,
   policyVersion: number, subjectVersion: number): NamedCustomer[] {
@@ -101,20 +108,27 @@ export default function AdvisorWorkspace() {
   useEffect(() => {
     if (!advisor || !api || !session) return;
     const abort = new AbortController();
-    setLoading(true);
-    setClients([]);
-    setSelection(null);
-    setReview(null);
-    setNotice('');
-    void api.product<unknown>('v1/advisor/customers', 'GET', undefined, abort.signal)
-      .then(data => {
-        if (abort.signal.aborted) return;
-        setClients(authorizedClients(data, session.tenantId, session.actorId,
-          advisor.policyVersion, advisor.subjectVersion));
-      })
-      .catch(() => { if (!abort.signal.aborted) setNotice('Authorized customer names could not be verified. Refresh to try again.'); })
-      .finally(() => { if (!abort.signal.aborted) setLoading(false); });
-    return () => abort.abort();
+    // Defer the refresh transition until the request begins. Keep effects
+    // limited to external synchronization rather than synchronous state updates.
+    void Promise.resolve().then(() => {
+      if (abort.signal.aborted) return null;
+      setLoading(true);
+      setClients([]);
+      setSelection(null);
+      setReview(null);
+      setNotice('');
+      return api.product<unknown>('v1/advisor/customers', 'GET', undefined, abort.signal);
+    }).then(data => {
+      if (abort.signal.aborted || data === null) return;
+      setClients(authorizedClients(data, session.tenantId, session.actorId,
+        advisor.policyVersion, advisor.subjectVersion));
+    }).catch(() => {
+      if (!abort.signal.aborted)
+        setNotice('Authorized customer names could not be verified. Refresh to try again.');
+    }).finally(() => {
+      if (!abort.signal.aborted) setLoading(false);
+    });
+    return () => { abort.abort(); };
   }, [advisor, api, session, refresh]);
 
   if (!advisor) return null;
@@ -153,7 +167,7 @@ export default function AdvisorWorkspace() {
       </Card>
 
       <Card title="Customers available for review" className="mt-4"
-        extra={<Button type="link" disabled={loading} onClick={() => setRefresh(value => value + 1)}>Refresh access</Button>}>
+        extra={<Button type="link" disabled={loading} onClick={() => { setRefresh(value => value + 1); }}>Refresh access</Button>}>
         {loading && <Spin aria-label="Checking customer access" />}
         {notice && <Alert type="warning" showIcon title={notice} />}
         {!loading && clients.length === 0 && <Empty description="No customer reviews are authorized yet. Your organization must assign the customer and approve read permissions, and the customer must grant consent." />}
