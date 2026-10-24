@@ -30,7 +30,7 @@ const mount = (path = '/access/users') =>
   );
 async function connect() {
   const user = userEvent.setup();
-  fireEvent.change(screen.getByLabelText('Local access key'), {
+  fireEvent.change(await screen.findByLabelText('Local access key'), {
     target: { value: 'test-key-not-a-real-credential' },
   });
   await user.click(screen.getByRole('button', { name: 'Connect workspace' }));
@@ -59,13 +59,14 @@ describe('tenant administration trust boundaries', () => {
   });
 
   it('keeps administration unavailable when the server rejects administrator authority', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce(json(session))
-        .mockResolvedValue(json({ error: 'ADMIN_REQUIRED' }, 403)),
-    );
+    const ownerFetch = vi
+      .fn()
+      .mockResolvedValueOnce(json(session))
+      .mockResolvedValue(json({ error: 'ADMIN_REQUIRED' }, 403));
+    vi.stubGlobal('fetch', (url: string, options?: RequestInit) =>
+      url.endsWith('/persona-credentials')
+        ? Promise.resolve(json({ enabled: false }))
+        : ownerFetch(url, options));
     mount();
     await connect();
     expect(await screen.findByText('Organization Administrator access is required.')).toBeVisible();
