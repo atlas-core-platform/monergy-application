@@ -76,6 +76,31 @@ function processingFailureMessage(code: string | null): string {
   }
 }
 
+function evidenceUploadFailureMessage(failure: unknown): string {
+  if (!(failure instanceof AccessApiError))
+    return "We couldn't confirm the upload. Try again to check the same request.";
+  switch (failure.code) {
+    case 'EVIDENCE_SCAN_REJECTED':
+      return 'This file failed the security check and was not accepted. Close this review and choose another file.';
+    case 'EVIDENCE_SCAN_UNAVAILABLE':
+      return 'The file security check is temporarily unavailable or its signatures need updating. This file has not been accepted. Try again later.';
+    case 'EVIDENCE_STORAGE_UNAVAILABLE':
+      return 'Secure document storage is temporarily unavailable. This file has not been stored or accepted. Try again later.';
+    case 'EVIDENCE_STAGING_UNAVAILABLE':
+    case 'EVIDENCE_OWNER_UNAVAILABLE':
+    case 'OWNER_UNAVAILABLE':
+    case 'CONNECTION_UNAVAILABLE':
+    case 'RESPONSE_UNAVAILABLE':
+      return 'The document service is temporarily unavailable. This upload has not been confirmed. Retry this same review when the service is available.';
+    default:
+      if (failure.status === 403)
+        return "You don't have permission to upload documents. Contact your organization administrator.";
+      if (failure.status === 409)
+        return "We couldn't confirm this upload because the same request was used for different content. Choose the file again.";
+      return "We couldn't confirm the upload. Try again to check the same request.";
+  }
+}
+
 const typeName = (value: string) =>
   ({
     'application/pdf': 'PDF document',
@@ -462,17 +487,7 @@ export default function EvidenceExperience() {
       if (receipt.documentVersionId) await loadLibrary();
       window.setTimeout(close, 250);
     } catch (failure) {
-      setError(
-        failure instanceof AccessApiError && failure.code === 'EVIDENCE_SCAN_REJECTED'
-          ? "This file failed the security check and was not accepted. Close this review and choose another file."
-          : failure instanceof AccessApiError && failure.code === 'EVIDENCE_SCAN_UNAVAILABLE'
-            ? "The file security check is unavailable. This file has not been accepted. Try again when the check is available."
-            : failure instanceof AccessApiError && failure.status === 403
-          ? "You don't have permission to upload documents. Contact your organization administrator."
-          : failure instanceof AccessApiError && failure.status === 409
-            ? "We couldn't confirm this upload because the same request was used for different content. Choose the file again."
-            : "We couldn't confirm the upload. Try again to check the same request.",
-      );
+      setError(evidenceUploadFailureMessage(failure));
     } finally {
       setBusy(false);
     }
