@@ -49,18 +49,18 @@ public sealed class PostgresPersonaCredentialTests
                 SET delivered=true,protected_code=NULL WHERE challenge_hash=@Hash;
                 """, new { Hash = activation });
 
-            Assert.Null(await repo.ActivateAsync("T002", activation, verifier, "stored-hash", default));
-            Assert.Null(await repo.ActivateAsync("T001", activation, "invalid", "stored-hash", default));
+            Assert.Null(await repo.ActivateAsync("T002", activation, verifier, new string('s', 72), default));
+            Assert.Null(await repo.ActivateAsync("T001", activation, "invalid", new string('s', 72), default));
             Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
                 SELECT attempts FROM customer_identity.registration_challenges WHERE challenge_hash=@Hash;
                 """, new { Hash = activation }));
 
-            Assert.Equal(actor, await repo.ActivateAsync("T001", activation, verifier, "stored-hash", default));
+            Assert.Equal(actor, await repo.ActivateAsync("T001", activation, verifier, new string('s', 72), default));
             Assert.Null(await repo.ActivateAsync("T001", activation, verifier, "replay", default));
             var first = Assert.IsType<PersonaCredentialIdentity>(
                 await repo.ReadAsync("T001", email, default));
             Assert.Equal(actor, first.ActorId);
-            Assert.Equal("stored-hash", first.PasswordHash);
+            Assert.Equal(new string('s', 72), first.PasswordHash);
             Assert.True(await repo.IsCurrentAsync(first, default));
             Assert.Null(await repo.ReadAsync("T002", email, default));
 
@@ -75,11 +75,11 @@ public sealed class PostgresPersonaCredentialTests
                 UPDATE customer_identity.registration_challenges
                 SET delivered=true,protected_code=NULL WHERE challenge_hash=@Hash;
                 """, new { Hash = recovery });
-            Assert.False(await repo.RecoverAsync("T002", recovery, verifier, "new-hash", default));
-            Assert.True(await repo.RecoverAsync("T001", recovery, verifier, "new-hash", default));
+            Assert.False(await repo.RecoverAsync("T002", recovery, verifier, new string('n', 72), default));
+            Assert.True(await repo.RecoverAsync("T001", recovery, verifier, new string('n', 72), default));
             Assert.False(await repo.IsCurrentAsync(first, default));
             Assert.Null(await sessions.ReadCurrentAsync("T001", sessionId, default));
-            Assert.False(await repo.RecoverAsync("T001", recovery, verifier, "replay-hash", default));
+            Assert.False(await repo.RecoverAsync("T001", recovery, verifier, new string('r', 72), default));
         }
         finally
         {
