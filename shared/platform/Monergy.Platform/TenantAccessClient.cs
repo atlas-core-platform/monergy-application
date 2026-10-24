@@ -7,6 +7,8 @@ using Microsoft.Extensions.Configuration;
 namespace Monergy.Platform;
 
 public sealed record TenantAdminContext(string TenantId, string ActorId, long PolicyVersion, string Authority);
+public sealed record AdvisorEntryContext(string TenantId, string ActorId, string Authority,
+    long PolicyVersion, long SubjectVersion, long RecordedRelationshipCount);
 public sealed record TenantAccessRequest(string CapabilityId, string? ResourceType, string? ResourceId);
 public sealed record CustomerAccessRequest(string CapabilityId, string CustomerId, string Purpose);
 public sealed record CustomerAccessDecision(string DecisionId, string Outcome, string TenantId, string ActorId,
@@ -49,6 +51,22 @@ public sealed class TenantAccessClient : IDisposable
         client = httpClient;
         client.Timeout = TimeSpan.FromSeconds(5);
         client.MaxResponseContentBufferSize = 65_536;
+    }
+
+    // An Advisor route is distinct from Tenant Administration and customer ownership.
+    public async Task<AdvisorEntryContext> RequireAdvisorAsync(HttpContext http)
+    {
+        var (tenant, session) = Headers(http);
+        using var request = Request(HttpMethod.Get, "v1/advisor/context", tenant, session);
+        AdvisorEntryContext value;
+        try { value = await SendAsync<AdvisorEntryContext>(request, http.RequestAborted).ConfigureAwait(false); }
+        catch (TenantBoundaryException error) when (error.Status == 403)
+        { throw new TenantBoundaryException("ADVISOR_ROLE_REQUIRED", 403); }
+        if (value.TenantId != tenant || !Identifier(value.ActorId, 128) ||
+            value.Authority != "FinancialAdvisor" || value.PolicyVersion < 1 ||
+            value.SubjectVersion < 1 || value.RecordedRelationshipCount < 0)
+            throw new TenantBoundaryException("ACCESS_OWNER_RESPONSE_INVALID", 503);
+        return value;
     }
 
     public async Task<TenantAdminContext> RequireAdministratorAsync(HttpContext http)
