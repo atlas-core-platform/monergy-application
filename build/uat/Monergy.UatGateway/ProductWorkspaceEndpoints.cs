@@ -819,14 +819,39 @@ public sealed partial class ProductEvidenceClient : IDisposable
         request.Headers.Add("X-Monergy-Product-Token", token);
         request.Content = JsonContent.Create(new { operationId, contentBase64, contentType });
         using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (response.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
-            throw new TenantBoundaryException("EVIDENCE_SCAN_REJECTED", 422);
-        if (response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
-            throw new TenantBoundaryException("EVIDENCE_SCAN_UNAVAILABLE", 503);
         if (!response.IsSuccessStatusCode)
-            throw new TenantBoundaryException(response.StatusCode == System.Net.HttpStatusCode.Conflict
-                ? "EVIDENCE_OPERATION_CONFLICT" : "EVIDENCE_STAGING_FAILED",
-                response.StatusCode == System.Net.HttpStatusCode.Conflict ? 409 : response.StatusCode == System.Net.HttpStatusCode.BadRequest ? 400 : 503);
+        {
+            string? ownerCode = null;
+            if (response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable &&
+                response.Content.Headers.ContentLength is null or <= 1024)
+            {
+                // The private Evidence endpoint returns only a typed {error}
+                // code. Bound the payload and ignore unrecognized diagnostics.
+                try
+                {
+                    var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                    if (payload.Length <= 1024)
+                    {
+                        using var document = JsonDocument.Parse(payload);
+                        if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                            document.RootElement.TryGetProperty("error", out var error) &&
+                            error.ValueKind == JsonValueKind.String)
+                            ownerCode = error.GetString();
+                    }
+                }
+                catch (JsonException) { /* An invalid owner reply remains a generic 503. */ }
+            }
+            var status = response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.UnprocessableEntity => 422,
+                System.Net.HttpStatusCode.ServiceUnavailable => 503,
+                System.Net.HttpStatusCode.Conflict => 409,
+                System.Net.HttpStatusCode.BadRequest => 400,
+                _ => 503,
+            };
+            throw new TenantBoundaryException(
+                ProductEvidenceDependencyFailure.StageCode(response.StatusCode, ownerCode), status);
+        }
         EvidenceContentDescriptor descriptor;
         try
         {
