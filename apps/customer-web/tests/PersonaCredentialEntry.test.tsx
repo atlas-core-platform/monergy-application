@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { PersonaCredentialEntry } from '../src/access/PersonaCredentialEntry';
 
 const password = 'a secure test password 2026';
-function renderEntry(onSignIn = vi.fn(async () => undefined)) {
+function renderEntry(onSignIn = vi.fn(() => Promise.resolve())) {
   render(<FoundationProvider appearance="midnight"><PersonaCredentialEntry
     busy={false} onSignIn={onSignIn} onCancel={() => undefined} /></FoundationProvider>);
   return onSignIn;
