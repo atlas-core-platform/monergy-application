@@ -56,17 +56,19 @@ export default function ProductReportsExperience() {
   useEffect(() => {
     if (!api || !canRead || !requestedReportId) return;
     const controller = new AbortController();
-    setBusy(true);
-    setError('');
-    void getBasicFinancialReport(api, requestedReportId, controller.signal)
-      .then(setReport)
-      .catch((failure) => {
-        if (!controller.signal.aborted) setError(message(failure));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setBusy(false);
-      });
-    return () => controller.abort();
+    void Promise.resolve().then(() => {
+      if (controller.signal.aborted) return null;
+      setBusy(true);
+      setError('');
+      return getBasicFinancialReport(api, requestedReportId, controller.signal);
+    }).then((result) => {
+      if (!controller.signal.aborted && result !== null) setReport(result);
+    }).catch((failure: unknown) => {
+      if (!controller.signal.aborted) setError(message(failure));
+    }).finally(() => {
+      if (!controller.signal.aborted) setBusy(false);
+    });
+    return () => { controller.abort(); };
   }, [api, canRead, message, requestedReportId]);
 
   const generate = async () => {

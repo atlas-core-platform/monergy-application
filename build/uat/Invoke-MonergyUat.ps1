@@ -16,6 +16,8 @@ param(
     [string]$AiModelConfigurationFile,
     [string]$KycConfigurationFile,
     [string]$EvidencePersistenceConfigurationFile,
+    [string]$FinancialPersistenceConfigurationFile,
+    [switch]$RequireRetainedEvidenceAndFinancialProfile,
     [string]$ClassificationConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
@@ -177,8 +179,66 @@ if (Test-Path -LiteralPath $evidenceConfigPath) {
     foreach ($name in @('Endpoint','Bucket','AccessKey','SecretKey')) {
         if ($null -eq $evidencePersistence.S3.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$evidencePersistence.S3.$name)) { throw "Evidence S3 configuration requires $name." }
     }
-    if ($Action -in @('Prepare','Start')) { Save-Json 'evidence-persistence.json' $evidencePersistence; Protect-Files }
+    if ($Action -in @('Prepare','Start') -and -not $RequireRetainedEvidenceAndFinancialProfile) {
+        Save-Json 'evidence-persistence.json' $evidencePersistence
+        Protect-Files
+    }
 } elseif (-not [string]::IsNullOrWhiteSpace($EvidencePersistenceConfigurationFile)) { throw 'Evidence persistence configuration file was not found.' }
+# Optional physical Financial Profile uses the existing D09 PostgreSQL
+# repository and an operator-provisioned, migrated, least-privilege database.
+# The default onboarding profile deliberately remains in-memory.
+$financialPersistence = $null
+$financialConfigPath = Join-Path $folder 'financial-persistence.json'
+if (-not [string]::IsNullOrWhiteSpace($FinancialPersistenceConfigurationFile)) { $financialConfigPath = $FinancialPersistenceConfigurationFile }
+if (Test-Path -LiteralPath $financialConfigPath) {
+    if (-not $onboarding) { throw 'Financial Profile persistence requires an onboarding profile.' }
+    $financialFile = Get-Item -LiteralPath $financialConfigPath -ErrorAction Stop
+    if ($financialFile.PSIsContainer -or $financialFile.Length -gt 16384) { throw 'Invalid Financial Profile persistence file.' }
+    $financialPersistence = Get-Content -LiteralPath $financialFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($null -eq $financialPersistence -or @($financialPersistence.PSObject.Properties.Name).Count -ne 1 -or
+        $financialPersistence.PSObject.Properties.Name -notcontains 'RuntimeConnection' -or
+        $financialPersistence.RuntimeConnection -isnot [string] -or
+        [string]::IsNullOrWhiteSpace([string]$financialPersistence.RuntimeConnection)) {
+        throw 'Financial Profile persistence requires only a nonempty RuntimeConnection.'
+    }
+    if ($Action -in @('Prepare','Start')) {
+        $currentFinancial = Join-Path $folder 'financial-profile.json'
+        if (Test-Path -LiteralPath $currentFinancial) {
+            $priorFinancial = Get-Content -LiteralPath $currentFinancial -Raw -Encoding utf8 | ConvertFrom-Json
+            if ($priorFinancial.Monergy.ReferenceAdapters -eq 'true') {
+                throw 'Cannot convert a retained in-memory Financial Profile to durable storage in place. Create a new named UAT profile; temporary facts are not migrated.'
+            }
+        }
+        if (-not $RequireRetainedEvidenceAndFinancialProfile) {
+            Save-Json 'financial-persistence.json' $financialPersistence
+            Protect-Files
+        }
+    }
+} elseif (-not [string]::IsNullOrWhiteSpace($FinancialPersistenceConfigurationFile)) {
+    throw 'Financial Profile persistence configuration file was not found.'
+}
+if ($RequireRetainedEvidenceAndFinancialProfile) {
+    if ($null -eq $evidencePersistence -or $null -eq $financialPersistence) {
+        throw 'Restart-retained Evidence AND Financial Profile requires both configured durable owner stores. Named Docker volumes alone do not preserve in-memory business records. Supply protected storage configurations in a new named profile; do not reset the retained profile.'
+    }
+    if ($Action -in @('Prepare','Start')) {
+        # Do not leave a half-selected durable configuration when the caller
+        # requests both stores but one validation or profile transition fails.
+        Save-Json 'evidence-persistence.json' $evidencePersistence
+        Save-Json 'financial-persistence.json' $financialPersistence
+        Protect-Files
+    }
+    if ($Action -eq 'Verify') {
+        foreach ($service in @('evidence','financial-profile')) {
+            $configFile = Join-Path $folder "$service.json"
+            if (-not (Test-Path -LiteralPath $configFile)) { throw "Missing protected $service runtime configuration." }
+            $runtimeConfig = Get-Content -LiteralPath $configFile -Raw -Encoding utf8 | ConvertFrom-Json
+            if ($runtimeConfig.Monergy.ReferenceAdapters -ne 'false' -or $runtimeConfig.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3') {
+                throw "Retained $service runtime still uses a non-durable business adapter. No restart-retention acceptance may be claimed."
+            }
+        }
+    }
+}
 # Classification owner connections and explicit reviewer assignments remain operator supplied.
 $classificationConfiguration = $null
 $classificationConfigPath = Join-Path $folder 'classification.json'
@@ -400,6 +460,10 @@ if ($Action -in @('Prepare','Start')) {
                     PdfInfoExecutable='/opt/monergy-ocr/pdfinfo'; PdfRenderExecutable='/opt/monergy-ocr/pdftoppm'
                 }
             } elseif ($onboarding -and $service -eq 'financial-profile') {
+                if ($null -ne $financialPersistence) {
+                    $config.Monergy.ReferenceAdapters='false'
+                    $config.Monergy.Persistence=@{ Provider='POSTGRESQL_S3'; FinancialProfile=@{ RuntimeConnection=[string]$financialPersistence.RuntimeConnection } }
+                }
                 $config.Monergy.AuditDelivery=@{
                     Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.financialAuditEvent
                 }

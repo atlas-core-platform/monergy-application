@@ -91,6 +91,36 @@ if ($classification.Monergy.Classification.Reviewers.T001[0] -ne 'A900' -or $cla
 $classificationAgain=Get-Content (Join-Path (Split-Path $onboardPath) 'document-intelligence.json') -Raw | ConvertFrom-Json
 if ($classificationAgain.Monergy.Classification.Reviewers.T001[0] -ne 'A900') { throw 'Classification silently fell back on repeat start.' }
 'PASS: classification persistence and explicit reviewer configuration retained.'
+# A retained PostgreSQL volume cannot preserve in-memory Evidence/Financial Profile.
+$missingDurabilityRejected = $false
+try { & $scriptPath -Action Verify -RequireRetainedEvidenceAndFinancialProfile }
+catch { $missingDurabilityRejected = $_.Exception.Message -like '*requires both configured durable owner stores*' }
+if (-not $missingDurabilityRejected) { throw 'Temporary default UAT incorrectly passed retained-business-history preflight.' }
+# Partial configuration must fail before creating a protected selection.
+$halfSelectedRejected=$false
+try { & $scriptPath -Action Prepare -Profile halfprofile -Port 4192 -EnableOnboarding -EvidencePersistenceConfigurationFile $durablePath -RequireRetainedEvidenceAndFinancialProfile }
+catch { $halfSelectedRejected=$_.Exception.Message -like '*requires both configured durable owner stores*' }
+if (-not $halfSelectedRejected -or (Test-Path (Join-Path $testRoot '.artifacts/uat/halfprofile/evidence-persistence.json'))) {
+    throw 'Incomplete paired physical owner configuration was persisted.'
+}
+$financialPath=Join-Path $testRoot 'financial-fixture.json'
+@{ RuntimeConnection='Host=127.0.0.1;Database=fixture_financial;Username=fixture_financial_runtime;Password=fixture-only' } | ConvertTo-Json -Depth 10 | Set-Content $financialPath
+$conversionBlocked=$false
+try { & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -FinancialPersistenceConfigurationFile $financialPath }
+catch { $conversionBlocked=$_.Exception.Message -like '*Cannot convert a retained in-memory Financial Profile*' }
+if (-not $conversionBlocked) { throw 'Existing temporary profile was permitted to convert silently.' }
+$retainedFinancialConfig=Get-Content (Join-Path (Split-Path $onboardPath) 'financial-profile.json') -Raw | ConvertFrom-Json
+if ($retainedFinancialConfig.Monergy.ReferenceAdapters -ne 'true') { throw 'Rejected storage conversion mutated retained Financial Profile configuration.' }
+& $scriptPath -Action Prepare -Profile retained -Port 4191 -EnableOnboarding -EvidencePersistenceConfigurationFile $durablePath -FinancialPersistenceConfigurationFile $financialPath -RequireRetainedEvidenceAndFinancialProfile
+$retainedDir=Join-Path $testRoot '.artifacts/uat/retained'
+$financial=Get-Content (Join-Path $retainedDir 'financial-profile.json') -Raw | ConvertFrom-Json
+if ($financial.Monergy.ReferenceAdapters -ne 'false' -or $financial.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3' -or $financial.Monergy.Persistence.FinancialProfile.RuntimeConnection -notlike '*fixture_financial*') { throw 'Physical Financial Profile opt-in missing.' }
+& $scriptPath -Action Prepare -Profile retained -EnableOnboarding -RequireRetainedEvidenceAndFinancialProfile
+$financeAgain=Get-Content (Join-Path $retainedDir 'financial-profile.json') -Raw | ConvertFrom-Json
+$evidenceAgain=Get-Content (Join-Path $retainedDir 'evidence.json') -Raw | ConvertFrom-Json
+if ($financeAgain.Monergy.ReferenceAdapters -ne 'false' -or $evidenceAgain.Monergy.ReferenceAdapters -ne 'false') { throw 'Durable profile silently fell back to reference adapters.' }
+'PASS: temporary-profile continuity gate denies, conversion blocked, dual durable opt-in persists on repeated Prepare.'
+
 'PASS: Basic KYC onboarding configuration; syntax; fresh/default/legacy/onboarding configuration; retained membership repair; all non-destructive actions with mocked Docker/readiness; credential preservation; repeat-run stability; encryption conversion.'
 
 } finally { Remove-Item -LiteralPath $testRoot -Recurse -Force }
