@@ -96,6 +96,13 @@ $missingDurabilityRejected = $false
 try { & $scriptPath -Action Verify -RequireRetainedEvidenceAndFinancialProfile }
 catch { $missingDurabilityRejected = $_.Exception.Message -like '*requires both configured durable owner stores*' }
 if (-not $missingDurabilityRejected) { throw 'Temporary default UAT incorrectly passed retained-business-history preflight.' }
+# Partial configuration must fail before creating a protected selection.
+$halfSelectedRejected=$false
+try { & $scriptPath -Action Prepare -Profile halfprofile -Port 4192 -EnableOnboarding -EvidencePersistenceConfigurationFile $durablePath -RequireRetainedEvidenceAndFinancialProfile }
+catch { $halfSelectedRejected=$_.Exception.Message -like '*requires both configured durable owner stores*' }
+if (-not $halfSelectedRejected -or (Test-Path (Join-Path $testRoot '.artifacts/uat/halfprofile/evidence-persistence.json'))) {
+    throw 'Incomplete paired physical owner configuration was persisted.'
+}
 $financialPath=Join-Path $testRoot 'financial-fixture.json'
 @{ RuntimeConnection='Host=127.0.0.1;Database=fixture_financial;Username=fixture_financial_runtime;Password=fixture-only' } | ConvertTo-Json -Depth 10 | Set-Content $financialPath
 $conversionBlocked=$false
