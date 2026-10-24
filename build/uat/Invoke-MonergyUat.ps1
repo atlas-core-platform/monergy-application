@@ -212,8 +212,20 @@ if (Test-Path -LiteralPath $financialConfigPath) {
 } elseif (-not [string]::IsNullOrWhiteSpace($FinancialPersistenceConfigurationFile)) {
     throw 'Financial Profile persistence configuration file was not found.'
 }
-if ($RequireRetainedEvidenceAndFinancialProfile -and ($null -eq $evidencePersistence -or $null -eq $financialPersistence)) {
-    throw 'Restart-retained Evidence AND Financial Profile requires both configured durable owner stores. Named Docker volumes alone do not preserve in-memory business records. Supply protected storage configurations in a new named profile; do not reset the retained profile.'
+if ($RequireRetainedEvidenceAndFinancialProfile) {
+    if ($null -eq $evidencePersistence -or $null -eq $financialPersistence) {
+        throw 'Restart-retained Evidence AND Financial Profile requires both configured durable owner stores. Named Docker volumes alone do not preserve in-memory business records. Supply protected storage configurations in a new named profile; do not reset the retained profile.'
+    }
+    if ($Action -eq 'Verify') {
+        foreach ($service in @('evidence','financial-profile')) {
+            $configFile = Join-Path $folder "$service.json"
+            if (-not (Test-Path -LiteralPath $configFile)) { throw "Missing protected $service runtime configuration." }
+            $runtimeConfig = Get-Content -LiteralPath $configFile -Raw -Encoding utf8 | ConvertFrom-Json
+            if ($runtimeConfig.Monergy.ReferenceAdapters -ne 'false' -or $runtimeConfig.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3') {
+                throw "Retained $service runtime still uses a non-durable business adapter. No restart-retention acceptance may be claimed."
+            }
+        }
+    }
 }
 # Classification owner connections and explicit reviewer assignments remain operator supplied.
 $classificationConfiguration = $null
