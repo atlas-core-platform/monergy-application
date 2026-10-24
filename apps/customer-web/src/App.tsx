@@ -307,6 +307,12 @@ function WorkspaceApplication() {
       const link = event.target instanceof Element ? event.target.closest('a') : null;
       if (!link || link.target || link.hasAttribute('download')) return;
       const url = new URL(link.href);
+      // Crossing into/out of the Advisor security area must remount the
+      // WorkspaceSessionProvider; a client-side history push would retain
+      // the previous area's verified authorization until a full reload.
+      if (url.origin === window.location.origin &&
+          (window.location.pathname === '/advisor') !== (url.pathname === '/advisor'))
+        return;
       if (
         url.origin !== window.location.origin ||
         !(
