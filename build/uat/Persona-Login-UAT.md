@@ -31,7 +31,28 @@ Existing `t105` and the isolated durable profile `4191` must not be reconfigured
   -EmailConfigurationFile E:\Private\monergy-persona-smtp.json
 ```
 
-The SMTP settings are the same protected `SmtpHost`, `SmtpPort`, `SmtpUser`, `SmtpPassword`, `From` documented in `build/governance/t1-95-customer-registration.md`. C&I's email sender uses authenticated STARTTLS and must be able to deliver to your **captured test recipients**; do not assume a plain-text local SMTP sink supports the required transport. Prefer an operator-controlled local mail service with private, authorized viewing of messages and compatible STARTTLS/authentication. Do not weaken certificate validation or put an OTP in the browser to make the test pass. Never paste SMTP credentials, verification codes, activation links, or generated profile JSON into chat or GitHub.
+### Approved Gmail SMTP for local testing
+
+The operator selected Gmail SMTP for Development-only persona validation. Generate a **new Google App Password** after enabling Google 2-Step Verification, if the account supports App Passwords. Do not use the normal Gmail password, hardcode credentials in Git, or disable TLS/certificate validation. Store the private configuration at `E:\\Private\\monergy-persona-smtp.json` (the exact local path can differ):
+
+```json
+{
+  "SmtpHost": "smtp.gmail.com",
+  "SmtpPort": 587,
+  "SmtpUser": "YOUR_ACCOUNT@gmail.com",
+  "SmtpPassword": "YOUR_PRIVATE_GOOGLE_APP_PASSWORD",
+  "From": "YOUR_ACCOUNT@gmail.com",
+  "LocalPersonaTestInbox": "YOUR_ACCOUNT@gmail.com"
+}
+```
+
+The values above are placeholders, NOT credentials. Secure the file to the current Windows user/authorized Docker operator before starting the profile. Use a real Gmail address owned by the operator for all three Gmail fields. Gmail SMTP uses authenticated TLS/STARTTLS; Gmail may refuse App Passwords for certain Workspace/Advanced Protection settings.
+
+LOCAL persona reference emails `a100@example.test`, `a200@example.test`, `a300@example.test`, `a900@example.test` are intentionally non-routable. **With explicit `-EnablePersonaLogin` and `LocalPersonaTestInbox`, only those fixed local reference addresses are delivered to the Gmail inbox.** The challenge remains bound to the original C&I email and tenant, and its purpose and single-use checks remain unchanged. The email body identifies the LOCAL reference recipient. Other imported/registered people receive mail at their actual C&I email and are not redirected.
+
+This is a consciously shared development test mailbox, **not genuine separate-person email ownership verification** and never authorized outside `Monergy:ExecutionZone=LOCAL`. Do not use it to assert production identity verification or real-person invitation acceptance. Turn off the override for real multi-person tests. Neither Gmail App Password nor OTP should appear in chat, PRs, source logs, screenshots or example output. If an App Password is unavailable, use a different approved authenticated SMTP provider rather than weakening TLS.
+
+
 
 Default LOCAL reference principals use emails like `a100@example.test`, `a200@example.test`, `a300@example.test`, `a900@example.test`, all tenant-specific (T001/T002) and **not routable public inboxes**. The mail receiver must capture these addresses securely. New imported people may use separately verified emails, but their AM membership must be active before sign-in.
 
