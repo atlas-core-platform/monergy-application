@@ -100,9 +100,10 @@ public sealed class PersonaCredentialTests
                 TimeProvider.System);
         }
     }
-    private sealed class Repository(PersonaCredentialIdentity identity) : IPersonaCredentialRepository
+    private sealed class Repository : IPersonaCredentialRepository
     {
-        public PersonaCredentialIdentity? Identity = identity;
+        public PersonaCredentialIdentity? Identity;
+        public Repository(PersonaCredentialIdentity identity) { Identity = identity; }
         public RegistrationCode? Queued;
         public bool Current = true;
         public bool LastValid;
@@ -116,7 +117,8 @@ public sealed class PersonaCredentialTests
             return Task.FromResult<string?>(Identity.ActorId);
         }
         public Task<PersonaCredentialIdentity?> ReadAsync(string tenant, string email, CancellationToken ct) =>
-            Task.FromResult(tenant == identity.TenantId && email == identity.Email ? Identity : null);
+            Task.FromResult<PersonaCredentialIdentity?>(
+                Identity is not null && tenant == Identity.TenantId && email == Identity.Email ? Identity : null);
         public Task<bool> RecordAttemptAsync(PersonaCredentialIdentity current, bool valid, CancellationToken ct)
         { LastValid = valid; return Task.FromResult(true); }
         public Task<bool> IsCurrentAsync(PersonaCredentialIdentity current, CancellationToken ct) =>
