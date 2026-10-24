@@ -30,6 +30,10 @@ function mount() {
 function owner(contextStatus = 200, foreignActor = false) {
   const fetch = vi.fn((url: string) => {
     if (url.endsWith('/tenant-sessions')) return Promise.resolve(json(session()));
+    if (url.endsWith('/advisor/customers')) return Promise.resolve(json({
+      tenantId: 'T001', actorId: 'A300', policyVersion: 4,
+      subjectVersion: 3, customerIds: [],
+    }));
     if (url.endsWith('/advisor/context')) return Promise.resolve(json(
       contextStatus === 200 ? { ...advisor(), ...(foreignActor ? { actorId: 'A100' } : {}) }
         : { error: 'ADVISOR_ROLE_REQUIRED' }, contextStatus));
@@ -47,10 +51,40 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it('enters only the verified Financial Advisor workspace, without displaying customer financial data', async () => {
   const requests = owner(); mount(); await connect();
   expect(await screen.findByRole('heading', { name: 'Financial Advisor workspace' })).toBeVisible();
-  expect(screen.getByText('0')).toBeVisible();
+  expect(screen.getAllByText('0').length).toBeGreaterThan(0);
   expect(screen.getByText(/relationship is not permission/)).toBeVisible();
   expect(requests.mock.calls.some(([url]) => url.endsWith('/advisor/context'))).toBe(true);
   expect(requests.mock.calls.some(([url]) => url.endsWith('/v1/context'))).toBe(false);
+});
+it('does not expose an unconsented financial profile when no customers are authorized', async () => {
+  const requests = owner(); mount(); await connect();
+  expect(await screen.findByText(/No customer reviews are authorized yet/)).toBeVisible();
+  expect(requests.mock.calls.some(([url]) => url.includes('/financial-profile'))).toBe(false);
+  expect(screen.queryByText('Financial information (read only)')).not.toBeInTheDocument();
+});
+it('shows a read-only reviewed financial fact only after a consent-authorized customer selection', async () => {
+  const requests = owner();
+  const mock = requests.getMockImplementation();
+  if (!mock) throw Error('Missing owner mock');
+  requests.mockImplementation((url: string) => {
+    if (url.endsWith('/advisor/customers')) return Promise.resolve(json({
+      tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
+      customerIds: ['C001'],
+    }));
+    if (url.endsWith('/advisor/customers/C001/financial-profile'))
+      return Promise.resolve(json({
+        revision: 1,
+        facts: [{ financialFactId: 'f1', factType: 'INCOME', label: 'Reviewed income',
+          value: 50000, currency: 'INR', effectiveDate: '2026-10-01',
+          source: { sourceName: 'Reviewed income document' } }],
+      }));
+    return mock(url);
+  });
+  mount(); await connect();
+  await userEvent.click(await screen.findByRole('button', { name: 'Review information' }));
+  expect(await screen.findByText('Reviewed income')).toBeVisible();
+  expect(screen.getByText('Source: Reviewed income document')).toBeVisible();
+  expect(screen.queryByText('C001')).not.toBeInTheDocument();
 });
 it('rejects a non-advisor without rendering a workspace', async () => {
   const requests = owner(403); mount(); await connect();
