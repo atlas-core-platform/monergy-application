@@ -33,11 +33,11 @@ it('submits email/password without asking for an actor ID or LOCAL access key', 
 
 it('activates a pre-provisioned account through a purpose-bound email challenge without issuing a session', async () => {
   const signIn = renderEntry();
-  const fetch = vi.fn(async (url: string) => new Response(JSON.stringify(
+  const fetch = vi.fn((url: string) => Promise.resolve(new Response(JSON.stringify(
     url.endsWith('/activation/request')
       ? { challengeId: 'a'.repeat(64), expiresAt: '2099-01-01T00:00:00Z' }
       : { activated: true }),
-  { status: 200, headers: { 'Content-Type': 'application/json' } }));
+  { status: 200, headers: { 'Content-Type': 'application/json' } })));
   vi.stubGlobal('fetch', fetch);
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: 'Activate account' }));
