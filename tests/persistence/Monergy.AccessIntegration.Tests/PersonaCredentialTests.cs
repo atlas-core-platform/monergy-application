@@ -73,6 +73,44 @@ public sealed class PersonaCredentialTests
         Assert.Equal(1, fixture.Sessions.Revoked);
     }
 
+    [Theory]
+    [InlineData("a100@example.test", "uat-owner@gmail.com")]
+    [InlineData("a200@example.test", "uat-owner@gmail.com")]
+    [InlineData("a300@example.test", "uat-owner@gmail.com")]
+    [InlineData("a900@example.test", "uat-owner@gmail.com")]
+    [InlineData("someone@public.example", "someone@public.example")]
+    public void LocalGmailTestReceiverRedirectsOnlyKnownBootstrapIdentities(string original, string expected)
+    {
+        Assert.Equal(expected, Monergy.Services.CustomerIdentity.Infrastructure.SmtpCustomerEmailSender
+            .ResolveRecipient(original, "uat-owner@gmail.com"));
+        Assert.Equal(original, Monergy.Services.CustomerIdentity.Infrastructure.SmtpCustomerEmailSender
+            .ResolveRecipient(original, null));
+    }
+
+    [Fact]
+    public void LocalGmailOverrideRequiresExplicitPersonaFlagAndRejectsNonLocalProfile()
+    {
+        var args = new Dictionary<string, string?> {
+            ["Monergy:ExecutionZone"] = "LOCAL",
+            ["Monergy:CustomerEmailAccess:SmtpHost"] = "smtp.gmail.com",
+            ["Monergy:CustomerEmailAccess:SmtpUser"] = "uat-owner@gmail.com",
+            ["Monergy:CustomerEmailAccess:SmtpPassword"] = "not-a-working-test-secret",
+            ["Monergy:CustomerEmailAccess:From"] = "uat-owner@gmail.com",
+            ["Monergy:CustomerEmailAccess:LocalPersonaTestInbox"] = "uat-owner@gmail.com",
+            ["Monergy:AccessIntegration:CustomerIdentityDatabases:T001"] = "fixture",
+        };
+        var config = new ConfigurationBuilder().AddInMemoryCollection(args).Build();
+        Assert.Throws<InvalidOperationException>(() =>
+            Monergy.Services.CustomerIdentity.Infrastructure.CustomerEmailDeliveryOptions.Read(config));
+        args["Monergy:PersonaCredentials:Enabled"] = "true";
+        Assert.Equal("uat-owner@gmail.com", Monergy.Services.CustomerIdentity.Infrastructure.CustomerEmailDeliveryOptions
+            .Read(new ConfigurationBuilder().AddInMemoryCollection(args).Build()).LocalPersonaTestInbox);
+        args["Monergy:ExecutionZone"] = "PRODUCTION";
+        Assert.Throws<InvalidOperationException>(() =>
+            Monergy.Services.CustomerIdentity.Infrastructure.CustomerEmailDeliveryOptions
+                .Read(new ConfigurationBuilder().AddInMemoryCollection(args).Build()));
+    }
+
     private sealed class Fixture
     {
         internal const string Password = "a long password value";
