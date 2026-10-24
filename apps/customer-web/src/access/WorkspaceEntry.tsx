@@ -198,13 +198,13 @@ export function WorkspaceEntry({
             </Form>
           )}
           {!registrationEntry && registrationAvailable === true && area === 'product' && status !== 'disconnected' &&
-            <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('password'); }}>Customer sign-in or registration</Button>}
+            <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('password'); }}>Sign in or create an account</Button>}
           {!personaEntry && personaAvailable === true && status !== 'disconnected' &&
             <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('persona'); }}>Sign in with an activated account</Button>}
           {!emailEntry && emailAvailable && area === 'product' && status !== 'disconnected' &&
             <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('email'); }}>Use an email code</Button>}
-          {(registrationEntry || personaEntry || emailEntry) && status !== 'disconnected' &&
-            <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('local'); }}>Use a LOCAL test key (development only)</Button>}
+          {(loadingMethods || registrationEntry || personaEntry || emailEntry) && status !== 'disconnected' &&
+            <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('local'); }}>Use a local test key</Button>}
           {!loadingMethods && !registrationEntry && !personaEntry && !emailEntry && <p className="access-connect-footnote">
             Your key is cleared after use. Test-environment keys do not configure production
             sign-in.
