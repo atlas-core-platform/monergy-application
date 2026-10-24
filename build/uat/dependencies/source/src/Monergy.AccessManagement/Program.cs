@@ -112,6 +112,7 @@ app.MapGet("/health/ready", async (IAccessPolicyStore store, ITrustedSecurityCon
         await connections.CheckReadyAsync(http.RequestAborted).ConfigureAwait(false))
         ? (IResult)Results.Ok(new { status = "ready" })
         : Results.Json(new { status = "not-ready" }, statusCode: StatusCodes.Status503ServiceUnavailable));
+app.MapAdvisorWorkspace();
 app.MapAccessAdministration();
 if (usePostgresReference && builder.Configuration["Monergy:AccessManagement:MembershipToken"] is { } membershipToken)
     app.MapMembershipPort(membershipToken);

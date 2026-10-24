@@ -4,6 +4,13 @@ namespace Monergy.AccessManagement;
 
 public static class AdministrationEndpoints
 {
+    // Distinct financial-advisor entry; does not grant customer business access.
+    public static void MapAdvisorWorkspace(this WebApplication app)
+    {
+        app.MapGet("/v1/advisor/context", (Func<HttpContext, Task<IResult>>)(http =>
+            ExecuteAsync(http, (service, context, ct) => service.AdvisorContextAsync(context, ct))));
+    }
+
     public static void MapCustomerRelationships(this WebApplication app)
     {
         var routes = app.MapGroup("/v1/administration/customer-relationships");
