@@ -85,7 +85,7 @@ export class AccessApiError extends Error {
       status === 401
         ? 'Your session has ended. Connect again to continue.'
         : status === 403
-          ? 'Organization Administrator access is required.'
+          ? 'This action is not included in your current access. Review your permissions and try again.'
           : status === 409
             ? 'The workspace changed or this operation conflicts with current access. Refresh and review before retrying.'
             : status === 503
@@ -172,7 +172,7 @@ export class AccessApi {
       if (
         !this.lifecycle?.signal.aborted &&
         failure instanceof AccessApiError &&
-        [401, 403].includes(failure.status)
+        failure.status === 401
       )
         this.lifecycle?.onFailure(failure);
       throw failure;
