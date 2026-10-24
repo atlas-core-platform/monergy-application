@@ -226,7 +226,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
             failure instanceof AccessApiError && failure.status === 403
               ? area === 'administration'
                 ? 'Organization Administrator access is required.'
-                : area === 'kyc-review' ? 'Current named KYC reviewer assignment is required.' : 'A customer workspace and product role are required.'
+                : area === 'kyc-review' ? 'Current named KYC reviewer assignment is required.' : area === 'advisor' ? 'An active Financial Advisor / Relationship Manager role is required.' : 'A customer workspace and product role are required.'
               : failure instanceof AccessApiError && failure.status === 401
                 ? method === 'password'
                   ? 'Unable to sign in. Check your organization, email and password, or use Forgot password.'
