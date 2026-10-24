@@ -12,7 +12,7 @@ export function WorkspaceEntry({
   area = 'administration',
 }: {
   children: ReactNode;
-  area?: 'administration' | 'product' | 'kyc-review';
+  area?: 'administration' | 'product' | 'kyc-review' | 'advisor';
 }) {
   const { status, session, message, connect, connectEmail, connectPassword, retry, cancel } = useWorkspaceSession();
   const [form] = Form.useForm<{ tenantId: string; key: string }>();
@@ -51,24 +51,24 @@ export function WorkspaceEntry({
       <main className="access-public-body">
         <section className="access-public-intro">
           <p className="workspace-eyebrow">
-            {area === 'administration' ? 'ORGANIZATION SETTINGS' : 'FINANCIAL WORKSPACE'}
+            {area === 'administration' ? 'ORGANIZATION SETTINGS' : area === 'advisor' ? 'FINANCIAL ADVISOR WORKSPACE' : 'FINANCIAL WORKSPACE'}
           </p>
           <h1>
-            {area === 'administration' ? 'Clear access.' : 'Financial clarity.'}
+            {area === 'administration' ? 'Clear access.' : area === 'advisor' ? 'Support clients.' : 'Financial clarity.'}
             <br />
-            {area === 'administration' ? 'Confident decisions.' : 'Grounded in your information.'}
+            {area === 'administration' ? 'Confident decisions.' : area === 'advisor' ? 'Respect consent.' : 'Grounded in your information.'}
           </h1>
           <p>
             {area === 'administration'
               ? 'Manage the people, roles and access permissions that keep your organization in control.'
-              : 'Bring your financial information together in a private, traceable workspace.'}
+              : area === 'advisor' ? 'Review your own role and permitted assignments. Customer information remains private until access and consent are verified.' : 'Bring your financial information together in a private, traceable workspace.'}
           </p>
           <div className="access-public-assurance">
             <WorkspaceIcon name="shield" size={18} />
             <span>
               {area === 'administration'
                 ? 'Administration becomes available after your identity and organization authority have been verified.'
-                : 'Your workspace becomes available after your identity, customer ownership and product access have been verified.'}
+                : area === 'advisor' ? 'Advisor access requires your active Financial Advisor role. Customer-specific work also requires assignment, permitted business capabilities and current consent.' : 'Your workspace becomes available after your identity, customer ownership and product access have been verified.'}
             </span>
           </div>
         </section>
