@@ -327,7 +327,7 @@ public static class ProductFinancialProfileEndpoints
             throw new TenantBoundaryException("ACCESS_DENIED", 403);
 
         var names = await ReadEvidenceNamesAsync(
-            session, customer, evidenceDecision, evidence, http.RequestAborted).ConfigureAwait(false);
+            session, customerId, evidenceDecision, evidence, http.RequestAborted).ConfigureAwait(false);
 
         var facts = new List<ProductFinancialFactView>();
         foreach (var fact in profileResult.Data.Facts.OrderBy(
