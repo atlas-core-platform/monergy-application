@@ -130,6 +130,56 @@ public static class ProductWorkspaceEndpoints
     public static void MapProductWorkspace(this WebApplication app)
     {
         if (!app.Configuration.GetValue<bool>("Monergy:Product:Enabled")) return;
+
+        // The customer IDs originate with AM's current dual-permission,
+        // relationship and Consent evaluation. C&I owns the display labels.
+        // Never reuse the Tenant Admin directory or trust a browser customer list.
+        app.MapGet("/product-api/v1/advisor/customers", async (
+            HttpContext http, CustomerOwnerClient owners, TenantAccessClient access) =>
+        {
+            var session = await owners.SessionAsync(http).ConfigureAwait(false);
+            var advisor = await access.RequireAdvisorAsync(http).ConfigureAwait(false);
+            if (advisor.TenantId != session.TenantId || advisor.ActorId != session.ActorId ||
+                advisor.SubjectVersion != session.SubjectVersion)
+                throw new TenantBoundaryException("ADVISOR_CONTEXT_CHANGED", 403);
+            var eligible = await access.AdvisorCustomersAsync(http).ConfigureAwait(false);
+            if (eligible.TenantId != session.TenantId || eligible.ActorId != session.ActorId ||
+                eligible.PolicyVersion != advisor.PolicyVersion || eligible.SubjectVersion != advisor.SubjectVersion)
+                throw new TenantBoundaryException("ADVISOR_CONTEXT_CHANGED", 409);
+            var named = new List<CustomerDisplayLabel>();
+            foreach (var customerId in eligible.CustomerIds)
+            {
+                var label = await owners.CustomerLabelAsync(session.TenantId, customerId, http.RequestAborted).ConfigureAwait(false);
+                var owner = await owners.CustomerAsync(session.TenantId, customerId, http.RequestAborted).ConfigureAwait(false);
+                if (label.Version != owner.Version || owner.OwnerActorId == session.ActorId)
+                    throw new TenantBoundaryException("ADVISOR_CUSTOMER_CHANGED", 409);
+                named.Add(label);
+            }
+
+            // Fail closed if permissions, relationships, Consent, tenant state,
+            // or any C&I display record changes while names are being collected.
+            var advisorNow = await access.RequireAdvisorAsync(http).ConfigureAwait(false);
+            var eligibleNow = await access.AdvisorCustomersAsync(http).ConfigureAwait(false);
+            if (advisorNow != advisor ||
+                eligibleNow.TenantId != eligible.TenantId || eligibleNow.ActorId != eligible.ActorId ||
+                eligibleNow.PolicyVersion != eligible.PolicyVersion ||
+                eligibleNow.SubjectVersion != eligible.SubjectVersion ||
+                !eligible.CustomerIds.SequenceEqual(eligibleNow.CustomerIds, StringComparer.Ordinal))
+                throw new TenantBoundaryException("ADVISOR_CONTEXT_CHANGED", 409);
+            foreach (var row in named)
+            {
+                var latest = await owners.CustomerLabelAsync(session.TenantId, row.CustomerId, http.RequestAborted).ConfigureAwait(false);
+                if (latest != row)
+                    throw new TenantBoundaryException("ADVISOR_CUSTOMER_CHANGED", 409);
+            }
+            return Results.Ok(new
+            {
+                eligible.TenantId, eligible.ActorId, eligible.PolicyVersion, eligible.SubjectVersion,
+                customers = named.OrderBy(row => row.DisplayName, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(row => row.CustomerId, StringComparer.Ordinal)
+                    .Select(row => new { row.CustomerId, row.DisplayName }).ToArray()
+            });
+        });
         app.MapGet("/product-api/v1/context", async (
             HttpContext http,
             CustomerOwnerClient owners,
