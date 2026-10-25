@@ -216,7 +216,7 @@ export function WorkspaceEntry({
             <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('persona'); }}>Sign in with an activated account</Button>}
           {!emailEntry && emailAvailable && area === 'product' && status !== 'disconnected' &&
             <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('email'); }}>Use an email code</Button>}
-          {(loadingMethods || registrationEntry || personaEntry || emailEntry) && status !== 'disconnected' &&
+          {(registrationEntry || personaEntry || emailEntry) && status !== 'disconnected' &&
             <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('local'); }}>Use a local test key</Button>}
           {!loadingMethods && !registrationEntry && !personaEntry && !emailEntry && <p className="access-connect-footnote">
             Your key is cleared after use. Test-environment keys do not configure production
