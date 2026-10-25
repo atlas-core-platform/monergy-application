@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PersonaCredentialEntry } from '../src/access/PersonaCredentialEntry';
@@ -32,7 +32,7 @@ it('never requests an invitation or reveals a ticket without protected tester au
 });
 
 it('posts the tester credential in a header and binds the welcome destination to the Advisor route', async () => {
-  const fetcher = vi.fn((_url: string, _options?: RequestInit) =>
+  const fetcher = vi.fn((url: string, options?: RequestInit) =>
     Promise.resolve(json({
       welcomePath: '/welcome#tenant=T001&ticket=' + 'a'.repeat(64) + '&return=%2Fadvisor',
       expiresAt: '2099-01-01T00:00:00Z',
@@ -47,15 +47,17 @@ it('posts the tester credential in a header and binds the welcome destination to
     { target: { value: 'test-authorized-value' } });
   await user.click(screen.getByRole('button', { name: 'Request protected welcome link' }));
   expect(await screen.findByRole('button', { name: 'Open activation page' })).toBeVisible();
-  await waitFor(() => {
-    expect(screen.getByLabelText('Protected LOCAL tester authorization')).toHaveValue('');
-  });
+  // Successful issuance replaces the form; no credential input remains mounted.
+  expect(screen.queryByLabelText('Protected LOCAL tester authorization')).not.toBeInTheDocument();
   const call = fetcher.mock.calls[0];
   expect(call?.[0]).toBe('/identity-api/local/v1/persona-credentials/tester/welcome-link');
-  const options = call?.[1];
-  expect(options?.headers).toMatchObject({ 'X-Monergy-Tester-Activation': 'test-authorized-value' });
-  expect(JSON.parse(String(options?.body))).toEqual({
+  const requestOptions = call?.[1];
+  expect(requestOptions?.headers).toMatchObject({ 'X-Monergy-Tester-Activation': 'test-authorized-value' });
+  expect(typeof requestOptions?.body).toBe('string');
+  if (typeof requestOptions?.body !== 'string') throw new Error('Expected JSON request body');
+  expect(JSON.parse(requestOptions.body) as unknown).toEqual({
     tenantId: 'T001', email: 'a300@example.test', returnPath: '/advisor',
   });
   expect(screen.queryByText('test-authorized-value')).not.toBeInTheDocument();
+  expect(fetcher).toHaveBeenCalledOnce();
 });
