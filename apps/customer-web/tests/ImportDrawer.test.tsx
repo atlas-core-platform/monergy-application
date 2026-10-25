@@ -149,6 +149,9 @@ it('creates one user through reviewed, versioned onboarding and recovers an unce
   await user.click(screen.getByRole('button', { name: 'Review and retry' }));
   await user.click(screen.getByRole('button', { name: 'Retry onboarding' }));
   expect(await screen.findByText('Person created.')).toBeVisible();
+  expect(screen.getByText('Next step: the person activates their own account')).toBeVisible();
+  expect(screen.getByText(/No password or signed-in session has been created/)).toBeVisible();
+  expect(screen.getByText(/Do not use your administrator session/)).toBeVisible();
   expect(changed).toHaveBeenCalledOnce();
   expect(calls.filter((call) => call.url.endsWith('/commit'))).toHaveLength(1);
   expect(calls.filter((call) => call.url.endsWith('/process')).map((call) => call.body)).toEqual([
