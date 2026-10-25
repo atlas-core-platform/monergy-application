@@ -683,10 +683,25 @@ export function ImportDrawer({
               <p>
                 {result.status === 'Activated'
                   ? single
-                    ? 'This person’s organization membership and assigned access are active. Sign-in setup is managed separately.'
-                    : 'All people in this batch were activated together.'
+                    ? 'This person’s organization membership and assigned access are active. The person must complete their own account activation before signing in.'
+                    : 'All people in this batch have organization access. Each person must activate their own sign-in credentials.'
                   : 'This batch has not activated any access. Verified identities are retained for safe recovery.'}
               </p>
+              {result.status === 'Activated' && (
+                <Alert
+                  showIcon
+                  type="info"
+                  className="access-notice"
+                  title="Next step: the person activates their own account"
+                  description={
+                    <div>
+                      <p>Organization access is ready. No password or signed-in session has been created for this person.</p>
+                      <p>In the LOCAL/UAT test environment, the invited person opens Monergy, identifies their own account, and uses the protected tester welcome flow to set their password. In higher environments, they follow their own verified email invitation.</p>
+                      <p>Do not use your administrator session to activate the person’s account. Sign-in and workspace authorization remain separate.</p>
+                    </div>
+                  }
+                />
+              )}
               <Progress
                 percent={Math.round((verified / Math.max(result.rowCount, 1)) * 100)}
                 status={
