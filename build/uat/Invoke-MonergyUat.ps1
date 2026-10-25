@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','Status','Stop','Verify','Credentials','RepairPermissions','Reset')][string]$Action = 'Start',
+    [ValidateSet('Prepare','Start','Status','Stop','Verify','Credentials','Welcome','RepairPermissions','Reset')][string]$Action = 'Start',
     [ValidatePattern('^[a-z][a-z0-9-]{0,30}$')][string]$Profile = 'default',
     [ValidateRange(1024,65535)][int]$Port = 4173,
     [ValidateSet('T001','T002')][string]$Tenant = 'T001',
@@ -9,6 +9,8 @@ param(
     [switch]$EnableOnboarding,
     [switch]$EnableEmailAccess,
     [switch]$EnableCustomerRegistration,
+    [switch]$EnablePersonaLogin,
+    [switch]$EnablePersonaTesterActivation,
     [string]$AccountAgreementFile,
     [string]$EmailConfigurationFile,
     [string]$GoogleDriveConfigurationFile,
@@ -23,6 +25,9 @@ param(
     [switch]$EnableCustomerPan
 )
 $ErrorActionPreference = 'Stop'
+if ($EnablePersonaLogin -and (-not $EnableOnboarding -or (-not $EnableEmailAccess -and -not $EnablePersonaTesterActivation))) { throw 'Persona login requires a named onboarding profile and either email activation or protected tester activation.' }
+if ($EnablePersonaTesterActivation -and (-not $EnablePersonaLogin -or -not $EnableOnboarding)) { throw 'Tester activation requires -EnableOnboarding and -EnablePersonaLogin.' }
+if ($EnablePersonaTesterActivation -and $EnableEmailAccess) { throw 'Select either tester activation without SMTP or the production-like email activation flow.' }
 if ($EnableCustomerRegistration -and (-not $EnableEmailAccess -or -not $EnableOnboarding -or [string]::IsNullOrWhiteSpace($AccountAgreementFile))) { throw 'Customer registration requires onboarding, email access and published account agreements.' }
 if ($EnableCustomerRegistration) { $RequireCustomerSetup=$true }
 if ($RequireCustomerSetup -and (-not $EnableEmailAccess -or -not $EnableOnboarding)) { throw 'Required customer setup needs -EnableOnboarding and -EnableEmailAccess.' }
@@ -324,6 +329,7 @@ if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
     $requiredTokens = @('jobAuditEvent','financialAuditEvent','productAuditEvent')
     if ($EnableEmailAccess) { $requiredTokens += 'emailAccess' }
+    if ($EnablePersonaTesterActivation) { $requiredTokens += @('personaTesterAccess','personaTesterChallenge') }
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
@@ -412,6 +418,16 @@ if ($Action -in @('Prepare','Start')) {
                     $config.Monergy.AccountAgreements = $publication
                 }
                 if ($EnableCustomerRegistration) { $config.Monergy.CustomerRegistration=@{ Enabled='true'; EnrollmentToken=$state.tokens.customerEnrollment } }
+                if ($EnablePersonaLogin) {
+                    $config.Monergy.PersonaCredentials=@{ Enabled='true' }
+                    if ($EnablePersonaTesterActivation) {
+                        $config.Monergy.PersonaCredentials.TesterActivation=@{
+                            Enabled='true'
+                            AccessSecret=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess))
+                            ChallengeSecret=(Convert-HexToBase64 ([string]$state.tokens.personaTesterChallenge))
+                        }
+                    }
+                }
                 if ($EnableEmailAccess) {
                     $smtpPort = 587
                     if ($null -ne $emailConfiguration.PSObject.Properties['SmtpPort'] -and -not [string]::IsNullOrWhiteSpace([string]$emailConfiguration.SmtpPort)) { $smtpPort = [int]$emailConfiguration.SmtpPort }
@@ -620,3 +636,24 @@ Write-Host 'Administration, identities, sessions and access audit persist across
 Write-Host 'Business reference data is illustrative and may reset. Production readiness remains blocked.'
 Write-Host "Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A900"
 if ($onboarding) { Write-Host "Show the customer key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A100" }
+if ($Action -eq 'Welcome') {
+    foreach ($name in @('personaTesterAccess','personaTesterChallenge')) {
+        if ($null -eq $state.tokens.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$state.tokens.$name)) {
+            throw 'This profile does not contain protected tester activation credentials.'
+        }
+    }
+    $email = $Actor.ToLowerInvariant() + '@example.test'
+    $returnPath = switch ($Actor) { 'A900' { '/access' } 'A300' { '/advisor' } default { '/' } }
+    $request = @{ tenantId=$Tenant; email=$email; returnPath=$returnPath } | ConvertTo-Json -Compress
+    $headers = @{ 'X-Monergy-Tester-Activation'=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess)) }
+    $welcome = Invoke-RestMethod "$url/identity-api/local/v1/persona-credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
+    if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/welcome#tenant=[A-Za-z0-9_.:-]+&ticket=[0-9a-f]{64}&return=%2F') {
+        throw 'The identity owner did not return a valid protected welcome path.'
+    }
+    $target = $url + $welcome.welcomePath
+    if ($windows) { Start-Process $target }
+    else { & xdg-open $target | Out-Null }
+    Write-Host "Opened a single-use five-minute welcome page for $Tenant/$Actor. The activation credential was not printed."
+    return
+}
+if ($EnablePersonaTesterActivation) { Write-Host "Open an invited user's protected welcome page: ./build/uat/Invoke-MonergyUat.ps1 -Action Welcome -Profile $Profile -Tenant T001 -Actor A300" }

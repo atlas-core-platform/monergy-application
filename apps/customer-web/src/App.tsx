@@ -10,6 +10,7 @@ import './workspace/workspace-home.css';
 import { localUat, useWorkspaceSession } from './access/workspaceSession';
 import { WorkspaceSessionProvider } from './access/WorkspaceSessionProvider';
 import { WorkspaceEntry } from './access/WorkspaceEntry';
+import { PersonaWelcomeEntry } from './access/PersonaWelcomeEntry';
 const TenantSetupGate = lazy(() =>
   import('./access/TenantSetup').then((module) => ({ default: module.TenantSetupGate })),
 );
@@ -252,6 +253,8 @@ function RouteContent() {
 }
 
 export function App() {
+  if (window.location.pathname === '/welcome')
+    return <FoundationProvider appearance="midnight"><PersonaWelcomeEntry /></FoundationProvider>;
   const area = window.location.pathname === '/advisor' ? 'advisor' :
     window.location.pathname === '/kyc/reviews' ? 'kyc-review' :
     window.location.pathname === '/access' ||

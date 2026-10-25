@@ -175,7 +175,7 @@ export class AccessApi {
         (failure.status === 401 ||
           failure.status === 403 &&
           ['TENANT_ADMIN_REQUIRED', 'ADVISOR_ROLE_REQUIRED',
-           'PRODUCT_CUSTOMER_REQUIRED', 'KYC_REVIEW_DENIED'].includes(failure.code))
+           'PRODUCT_CUSTOMER_REQUIRED', 'KYC_REVIEW_DENIED', 'AUTHORITY_ENDED'].includes(failure.code))
       )
         this.lifecycle?.onFailure(failure);
       throw failure;

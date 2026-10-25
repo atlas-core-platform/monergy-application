@@ -7,6 +7,7 @@ public sealed class SpaRouteAllowlistTests
 {
     [Theory]
     [InlineData("/advisor")]
+    [InlineData("/welcome")]
     [InlineData("/")]
     [InlineData("/access")]
     [InlineData("/access/users")]
@@ -21,6 +22,7 @@ public sealed class SpaRouteAllowlistTests
     [InlineData("/advisor/")]
     [InlineData("/advisor/private")]
     [InlineData("/Advisor")]
+    [InlineData("/welcome/anything")]
     [InlineData("/access-api/v1/advisor/context")]
     [InlineData("/product-api/v1/context")]
     [InlineData("/uat-api/v1/setup")]

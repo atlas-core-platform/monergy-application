@@ -11,7 +11,7 @@ public static class SpaRouteAllowlist
         "/access/permissions", "/access/groups", "/access/resources", "/access/activity",
         "/access/audit", "/access/sessions", "/access/customers", "/access/processing",
         "/access/documents", "/operations",
-        "/advisor",
+        "/advisor", "/welcome",
         "/kyc", "/kyc/reviews", "/monthly-cashflow", "/net-worth",
         "/financial-qa", "/search", "/reports", "/finances", "/consent",
         "/connections", "/connections/onedrive", "/profile",

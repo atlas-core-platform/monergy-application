@@ -73,6 +73,35 @@ $kycPath=Join-Path $testRoot 'kyc-fixture.json'
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -KycConfigurationFile $kycPath
 $identity=Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
 if ($identity.Monergy.BasicKyc.Tenants.T001.Reviewers[0].ActorId -ne 'A300' -or $identity.Monergy.BasicKyc.EvidenceBaseUrl -ne 'http://127.0.0.1:5111/') { throw 'KYC configuration was not preserved.' }
+# Identity activation is opt-in and never silently enabled by a normal start.
+$personaMissingActivation = $false
+try { & $scriptPath -Action Prepare -Profile onboarding -EnablePersonaLogin }
+catch { $personaMissingActivation = $_.Exception.Message -like '*either email activation or protected tester activation*' }
+if (-not $personaMissingActivation) { throw 'Persona login allowed without any activation owner.' }
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EnablePersonaLogin -EnablePersonaTesterActivation
+$identityTester = Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
+if ($identityTester.Monergy.PersonaCredentials.Enabled -ne 'true' -or
+    $identityTester.Monergy.PersonaCredentials.TesterActivation.Enabled -ne 'true' -or
+    $null -ne $identityTester.Monergy.PSObject.Properties['CustomerEmailAccess'] -or
+    [Convert]::FromBase64String($identityTester.Monergy.PersonaCredentials.TesterActivation.AccessSecret).Length -ne 32 -or
+    [Convert]::FromBase64String($identityTester.Monergy.PersonaCredentials.TesterActivation.ChallengeSecret).Length -ne 32) {
+    throw 'Protected tester activation did not configure a no-SMTP Development owner.'
+}
+$personaMailPath = Join-Path $testRoot 'persona-smtp-fixture.json'
+@{ SmtpHost='mail.example.test';SmtpPort=587;SmtpUser='uat-owner@example.test';SmtpPassword='fixture-only';From='uat-owner@example.test' } |
+    ConvertTo-Json -Depth 5 | Set-Content $personaMailPath
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EnableEmailAccess -EnablePersonaLogin -EmailConfigurationFile $personaMailPath
+$identityPersona = Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
+if ($identityPersona.Monergy.PersonaCredentials.Enabled -ne 'true' -or
+    $identityPersona.Monergy.CustomerEmailAccess.Enabled -ne 'true') {
+    throw 'Activated-persona owner configuration did not select guarded email access.'
+}
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
+$identityWithoutPersona = Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
+if ($null -ne $identityWithoutPersona.Monergy.PSObject.Properties['PersonaCredentials']) {
+    throw 'Normal test profile unexpectedly enabled credential activation.'
+}
+'PASS: persona credentials require an explicit activation owner; tester activation uses no SMTP and production-like email configuration is unchanged.'
 $durablePath=Join-Path $testRoot 'evidence-fixture.json'
 @{ RuntimeConnections=@{T001='Host=127.0.0.1;Database=fixture_evidence;Username=fixture'}; S3=@{ Endpoint='http://127.0.0.1:9000';Bucket='fixture';AccessKey='fixture';SecretKey='fixture'} } | ConvertTo-Json -Depth 10 | Set-Content $durablePath
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EvidencePersistenceConfigurationFile $durablePath
