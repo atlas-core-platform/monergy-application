@@ -197,6 +197,15 @@ static string? Route(string path, string method)
     if (path == "/identity-api/local/v1/customer-email-access" && method == "GET" ||
         path is "/identity-api/local/v1/customer-email-access/request" or "/identity-api/local/v1/customer-email-access/confirm" && method == "POST")
         return "http://127.0.0.1:5101" + path[13..];
+    if (path == "/identity-api/local/v1/persona-credentials" && method == "GET" ||
+        path is "/identity-api/local/v1/persona-credentials/activation/request" or
+                "/identity-api/local/v1/persona-credentials/activation/confirm" or
+                "/identity-api/local/v1/persona-credentials/sign-in" or
+                "/identity-api/local/v1/persona-credentials/recovery/request" or
+                "/identity-api/local/v1/persona-credentials/recovery/confirm" or
+                "/identity-api/local/v1/persona-credentials/tester/welcome-link" or
+                "/identity-api/local/v1/persona-credentials/tester/activation/confirm" && method == "POST")
+        return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/me/workspace-setup" && method == "GET")
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/me/account-agreements" && method is "GET" or "POST")
@@ -250,6 +259,13 @@ static async Task ProxyAsync(HttpContext http, HttpClient client, Uri target)
         var value = http.Request.Headers[name];
         if (value.Count > 1 || value.ToString().Length > 256) throw new TenantBoundaryException("INVALID_HEADER", 400);
         if (value.Count == 1) request.Headers.Add(name, value.ToString());
+    }
+    if (http.Request.Path == "/identity-api/local/v1/persona-credentials/tester/welcome-link")
+    {
+        var value = http.Request.Headers["X-Monergy-Tester-Activation"];
+        if (value.Count > 1 || value.ToString().Length > 256)
+            throw new TenantBoundaryException("INVALID_HEADER", 400);
+        if (value.Count == 1) request.Headers.Add("X-Monergy-Tester-Activation", value.ToString());
     }
     if (http.Request.Method is "POST" or "PUT" or "DELETE")
     {

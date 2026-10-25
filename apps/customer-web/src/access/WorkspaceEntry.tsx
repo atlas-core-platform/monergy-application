@@ -21,6 +21,7 @@ export function WorkspaceEntry({
   const [method, setMethod] = useState<'auto' | 'password' | 'persona' | 'email' | 'local'>('auto');
   const [registrationAvailable, setRegistrationAvailable] = useState<boolean | null>(null);
   const [personaAvailable, setPersonaAvailable] = useState<boolean | null>(null);
+  const [personaActivation, setPersonaActivation] = useState<'email' | 'tester-link'>('email');
   // Existing provisioned identities use the common credential entry.
   // Customer self-registration remains an explicit separate choice.
   const personaEntry = method === 'persona' ||
@@ -38,8 +39,11 @@ export function WorkspaceEntry({
       cache: 'no-store', redirect: 'error', signal: controller.signal,
     }).then(async response => {
       const value: unknown = response.ok ? await response.json() : null;
-      if (!controller.signal.aborted)
+      if (!controller.signal.aborted) {
         setPersonaAvailable(!!value && typeof value === 'object' && 'enabled' in value && value.enabled === true);
+        setPersonaActivation(!!value && typeof value === 'object' && 'activation' in value &&
+          value.activation === 'tester-link' ? 'tester-link' : 'email');
+      }
     }).catch(() => {
       if (!controller.signal.aborted) setPersonaAvailable(false);
     });
@@ -129,11 +133,17 @@ export function WorkspaceEntry({
               </Button>
             </>
           ) : loadingMethods ? (
-            <p role="status">Checking available sign-in methods…</p>
+            <>
+              <p role="status">Checking available sign-in methods…</p>
+              <Button block type="text" onClick={() => { setMethod('local'); }}>
+                Use a local test key
+              </Button>
+            </>
           ) : registrationEntry && connectPassword ? (
             <CustomerRegistrationEntry busy={busy} onSignIn={connectPassword} onCancel={() => { cancel(); setMethod('local'); }} />
           ) : personaEntry && connectPersonaPassword ? (
             <PersonaCredentialEntry busy={busy} onSignIn={connectPersonaPassword}
+              activationMode={personaActivation}
               onCancel={() => { cancel(); setMethod('local'); }} />
           ) : emailEntry && connectEmail ? (
             <CustomerEmailEntry busy={busy} onVerify={connectEmail} onCancel={() => { cancel(); setMethod('local'); }} />

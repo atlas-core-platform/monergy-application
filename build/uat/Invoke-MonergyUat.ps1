@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','Status','Stop','Verify','Credentials','RepairPermissions','Reset')][string]$Action = 'Start',
+    [ValidateSet('Prepare','Start','Status','Stop','Verify','Credentials','Welcome','RepairPermissions','Reset')][string]$Action = 'Start',
     [ValidatePattern('^[a-z][a-z0-9-]{0,30}$')][string]$Profile = 'default',
     [ValidateRange(1024,65535)][int]$Port = 4173,
     [ValidateSet('T001','T002')][string]$Tenant = 'T001',
@@ -10,6 +10,7 @@ param(
     [switch]$EnableEmailAccess,
     [switch]$EnableCustomerRegistration,
     [switch]$EnablePersonaLogin,
+    [switch]$EnablePersonaTesterActivation,
     [string]$AccountAgreementFile,
     [string]$EmailConfigurationFile,
     [string]$GoogleDriveConfigurationFile,
@@ -24,7 +25,9 @@ param(
     [switch]$EnableCustomerPan
 )
 $ErrorActionPreference = 'Stop'
-if ($EnablePersonaLogin -and (-not $EnableEmailAccess -or -not $EnableOnboarding)) { throw 'Persona email/password activation requires a named onboarding profile and authenticated SMTP email access.' }
+if ($EnablePersonaLogin -and (-not $EnableOnboarding -or (-not $EnableEmailAccess -and -not $EnablePersonaTesterActivation))) { throw 'Persona login requires a named onboarding profile and either email activation or protected tester activation.' }
+if ($EnablePersonaTesterActivation -and (-not $EnablePersonaLogin -or -not $EnableOnboarding)) { throw 'Tester activation requires -EnableOnboarding and -EnablePersonaLogin.' }
+if ($EnablePersonaTesterActivation -and $EnableEmailAccess) { throw 'Select either tester activation without SMTP or the production-like email activation flow.' }
 if ($EnableCustomerRegistration -and (-not $EnableEmailAccess -or -not $EnableOnboarding -or [string]::IsNullOrWhiteSpace($AccountAgreementFile))) { throw 'Customer registration requires onboarding, email access and published account agreements.' }
 if ($EnableCustomerRegistration) { $RequireCustomerSetup=$true }
 if ($RequireCustomerSetup -and (-not $EnableEmailAccess -or -not $EnableOnboarding)) { throw 'Required customer setup needs -EnableOnboarding and -EnableEmailAccess.' }
@@ -326,6 +329,7 @@ if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
     $requiredTokens = @('jobAuditEvent','financialAuditEvent','productAuditEvent')
     if ($EnableEmailAccess) { $requiredTokens += 'emailAccess' }
+    if ($EnablePersonaTesterActivation) { $requiredTokens += @('personaTesterAccess','personaTesterChallenge') }
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
@@ -414,232 +418,17 @@ if ($Action -in @('Prepare','Start')) {
                     $config.Monergy.AccountAgreements = $publication
                 }
                 if ($EnableCustomerRegistration) { $config.Monergy.CustomerRegistration=@{ Enabled='true'; EnrollmentToken=$state.tokens.customerEnrollment } }
-                if ($EnablePersonaLogin) { $config.Monergy.PersonaCredentials=@{ Enabled='true' } }
+                if ($EnablePersonaLogin) {
+                    $config.Monergy.PersonaCredentials=@{ Enabled='true' }
+                    if ($EnablePersonaTesterActivation) {
+                        $config.Monergy.PersonaCredentials.TesterActivation=@{
+                            Enabled='true'
+                            AccessSecret=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess))
+                            ChallengeSecret=(Convert-HexToBase64 ([string]$state.tokens.personaTesterChallenge))
+                        }
+                    }
+                }
                 if ($EnableEmailAccess) {
-                    if ($null -ne $emailConfiguration.PSObject.Properties['LocalPersonaTestInbox'] -and
-                        -not [string]::IsNullOrWhiteSpace([string]$emailConfiguration.LocalPersonaTestInbox)) {
-                        if (-not $EnablePersonaLogin -or [string]$emailConfiguration.SmtpHost -ine 'smtp.gmail.com') {
-                            throw 'LOCAL test mailbox routing requires explicit Persona Login and authenticated Gmail SMTP.'
-                        }
-                        $recipient = [string]$emailConfiguration.LocalPersonaTestInbox
-                        try { $mailbox = [System.Net.Mail.MailAddress]::new($recipient) }
-                        catch { throw 'Invalid LOCAL persona test Gmail recipient.' }
-                        if ($mailbox.Address -ne $recipient -or
-                            ($recipient -notmatch '(?i)@(gmail|googlemail)\.com
-                    if ($null -ne $emailConfiguration.PSObject.Properties['SmtpPort'] -and -not [string]::IsNullOrWhiteSpace([string]$emailConfiguration.SmtpPort)) { $smtpPort = [int]$emailConfiguration.SmtpPort }
-                    $config.Monergy.CustomerEmailAccess = @{
-                        Enabled='true'; SmtpHost=$emailConfiguration.SmtpHost; SmtpPort=$smtpPort
-                        SmtpUser=$emailConfiguration.SmtpUser; SmtpPassword=$emailConfiguration.SmtpPassword
-                        From=$emailConfiguration.From; Secret=(Convert-HexToBase64 ([string]$state.tokens.emailAccess))
-                        LocalPersonaTestInbox= $(if ($EnablePersonaLogin -and
-                            $null -ne $emailConfiguration.PSObject.Properties['LocalPersonaTestInbox']) {
-                            [string]$emailConfiguration.LocalPersonaTestInbox
-                        } else { $null })
-                    }
-                }
-            } elseif ($service -eq 'consent') {
-                $integration.ConsentDatabases=@{}
-                foreach ($db in $state.databases | Where-Object service -eq 'consent') { $integration.ConsentDatabases[$db.tenant] = Connection $db 'runtime' }
-            } else {
-                $integration.AuditEventToken=$state.tokens.auditEvent; $integration.JobAuditEventToken=$state.tokens.jobAuditEvent; $integration.FinancialAuditEventToken=$state.tokens.financialAuditEvent; $integration.ProductAuditEventToken=$state.tokens.productAuditEvent; $integration.AuditDatabases=@{}
-                foreach ($db in $state.databases | Where-Object service -eq $service) { $integration.AuditDatabases[$db.tenant] = Connection $db 'runtime' }
-            }
-            $config.Monergy.AccessIntegration=$integration
-        } elseif ($service -in @('evidence','document-intelligence','financial-profile','financial-rules','search-retrieval','reporting','integration-gateway','job-management')) {
-            $config.Monergy.ReferenceAdapters='true'
-            if ($onboarding -and $service -eq 'integration-gateway') {
-                $config.Monergy.ReferenceAdapters='false'
-                $config.Monergy.AccessIntegration=@{ Enabled='true'; CustomerRelationships='true';
-                    AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
-                    CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
-                $config.Monergy.GoogleDrive=@{ Enabled='true'; StoreDirectory='/var/lib/monergy-drive/connections';
-                    EncryptionKey=(Convert-HexToBase64 ([string]$state.tokens.googleDriveProtection));
-                    EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake; Tenants=$googleDriveTenants }
-                $config.Monergy.OneDrive=@{ Enabled='true'; StoreDirectory='/var/lib/monergy-drive/onedrive-connections';
-                    EncryptionKey=(Convert-HexToBase64 ([string]$state.tokens.oneDriveProtection));
-                    EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake; Tenants=$oneDriveTenants }
-            }
-            if ($onboarding -and $service -eq 'evidence') {
-                $config.Monergy.OnboardingFixtures='true'
-                if ($null -ne $evidencePersistence) {
-                    $config.Monergy.ReferenceAdapters='false'
-                    $config.Monergy.OnboardingFixtures='false'
-                    $config.Monergy.Persistence=@{ Provider='POSTGRESQL_S3'; Evidence=$evidencePersistence }
-                }
-                $config.Monergy.ProductIntake=@{ Enabled='true'; EvidenceToken=$state.tokens.evidenceIntake; ProcessingToken=$state.tokens.evidenceProcessing; ClamdPort=3310 }
-            } elseif ($onboarding -and $service -eq 'document-intelligence') {
-                if ($null -ne $classificationConfiguration) { $config.Monergy.Classification=$classificationConfiguration }
-                $config.Monergy.DocumentProcessing=@{
-                    EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceProcessing
-                    ControlToken=$state.tokens.documentControl
-                    OcrExecutable='/opt/monergy-ocr/tesseract'; OcrDataDirectory='/opt/monergy-ocr/tessdata'; OcrLibraryDirectory='/opt/monergy-ocr/lib'
-                    PdfInfoExecutable='/opt/monergy-ocr/pdfinfo'; PdfRenderExecutable='/opt/monergy-ocr/pdftoppm'
-                }
-            } elseif ($onboarding -and $service -eq 'financial-profile') {
-                if ($null -ne $financialPersistence) {
-                    $config.Monergy.ReferenceAdapters='false'
-                    $config.Monergy.Persistence=@{ Provider='POSTGRESQL_S3'; FinancialProfile=@{ RuntimeConnection=[string]$financialPersistence.RuntimeConnection } }
-                }
-                $config.Monergy.AuditDelivery=@{
-                    Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.financialAuditEvent
-                }
-            } elseif ($onboarding -and $service -eq 'financial-rules') {
-                $config.Monergy.NetWorth=@{ Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'; RuleVersion='1.0.0'; Formula='TOTAL_ASSETS_MINUS_TOTAL_LIABILITIES' }
-                $config.Monergy.MonthlyCashflow=@{ Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'; RuleVersion='1.0.0' }
-            } elseif ($onboarding -and $service -eq 'reporting') {
-                $config.Monergy.ProductReporting=@{
-                    Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'
-                }
-            } elseif ($onboarding -and $service -eq 'search-retrieval') {
-                $config.Monergy.ProductSearch=@{
-                    Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'
-                    FinancialProfileUrl='http://127.0.0.1:5113/'
-                }
-            } elseif ($onboarding -and $service -eq 'job-management') {
-                $config.Monergy.DocumentProcessing=@{
-                    Enabled='true'; DocumentIntelligenceUrl='http://127.0.0.1:5112/'
-                    DocumentIntelligenceToken=$state.tokens.documentControl; ControlToken=$state.tokens.jobControl
-                }
-                $config.Monergy.AuditDelivery=@{
-                    Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.jobAuditEvent
-                }
-            }
-        }
-        if ($onboarding -and $service -eq 'integration-gateway') {
-            $config.Monergy.AiModel=@{ Enabled='true'; InternalToken=$state.tokens.aiModelInternal; Tenants=$aiModelTenants }
-        }
-        if ($onboarding -and $service -eq 'ai-intelligence') {
-            $config.Monergy.AccessIntegration=@{ Enabled='true'; CustomerRelationships='true';
-                AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
-                CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
-            $config.Monergy.FinancialQa=@{ Enabled='true'; DocumentIntelligenceUrl='http://127.0.0.1:5112/'; FinancialRulesUrl='http://127.0.0.1:5114/'; IntegrationGatewayUrl='http://127.0.0.1:5117/';
-                FinancialProfileUrl='http://127.0.0.1:5113/'; EvidenceUrl='http://127.0.0.1:5111/'; SearchRetrievalUrl='http://127.0.0.1:5115/';
-                InternalToken=$state.tokens.aiModelInternal; StoreDirectory='/var/lib/monergy-drive/financial-qa';
-                EncryptionKey=(Convert-HexToBase64 ([string]$state.tokens.financialQaProtection)) }
-        }
-        Save-Json "$service.json" $config
-    }
-    foreach ($tenantId in @('T001','T002')) {
-        $delivery = @{}
-        $database = $state.databases | Where-Object { $_.service -eq 'am' -and $_.tenant -eq $tenantId }
-        $delivery["MONERGY_AM_${tenantId}_DELIVERY"] = Connection $database 'delivery'
-        foreach ($destination in @('AUTHORIZATION','SESSIONS','AUDIT')) {
-            $audit = $destination -eq 'AUDIT'
-            $delivery["MONERGY_AM_REFERENCE_${destination}_URL"] = $(if ($audit) { 'http://127.0.0.1:5102/' } else { 'http://127.0.0.1:5101/' })
-            $delivery["MONERGY_AM_REFERENCE_${destination}_TOKEN"] = $(if ($audit) { $state.tokens.auditEvent } else { $state.tokens.identityEvent })
-        }
-        Save-Json "delivery-$tenantId.json" $delivery
-    }
-    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' } } }
-    if ($onboarding) {
-        $workspace.Monergy.AccessIntegration=@{
-            Enabled='true'; CustomerRelationships='true'; AccessManagementUrl='http://127.0.0.1:5088/'
-            CustomerIdentityUrl='http://127.0.0.1:5101/'; CustomerContextToken=$state.tokens.customerContext
-            CustomerIdentityToken=$state.tokens.context; MembershipToken=$state.tokens.membership
-        }
-        $workspace.Monergy.ProductAudit=@{ Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.productAuditEvent }
-        $workspace.Monergy.Product=@{
-            Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'; EvidenceToken=$state.tokens.evidenceIntake
-            JobManagementUrl='http://127.0.0.1:5118/'; JobManagementToken=$state.tokens.jobControl
-            FinancialProfileUrl='http://127.0.0.1:5113/'
-            FinancialRulesUrl='http://127.0.0.1:5114/'
-            SearchRetrievalUrl='http://127.0.0.1:5115/'
-            ReportingUrl='http://127.0.0.1:5116/'
-        }
-    }
-    Save-Json 'workspace.json' $workspace
-    $runtimeUid = if ($windows) { '1654' } else { (& id -u).Trim() }
-    $path = $folder.Replace('\','/')
-    Save-Text 'compose.env' "UAT_CONFIG_ROOT='$path'`nUAT_PORT=$($state.port)`nUAT_UID=$runtimeUid`n"
-    Protect-Files
-}
-if ($Action -eq 'Prepare') { Write-Host "Local profile prepared. Credentials: -Action Credentials -Tenant T001 -Actor A900"; return }
-if ($Action -eq 'Stop') { Compose @('down','--remove-orphans'); Write-Host 'Stopped. Tenant databases and credentials retained.'; return }
-if ($Action -eq 'Status') { Compose @('ps','--all'); return }
-if ($Action -eq 'Start') {
-    $os = & docker info --format '{{.OSType}}'
-    if ($LASTEXITCODE -ne 0 -or $os -ne 'linux') { throw 'Start Docker Desktop with Linux containers, then retry.' }
-    Compose @('config','--quiet')
-    Compose @('up','-d','--build','--remove-orphans')
-}
-$url = "http://127.0.0.1:$($state.port)"
-$ready = $false
-for ($attempt=0; $attempt -lt 90; $attempt++) {
-    try { $response = Invoke-WebRequest "$url/health/ready" -UseBasicParsing -TimeoutSec 5; if ($response.StatusCode -eq 200) { $ready=$true; break } } catch { }
-    Start-Sleep -Seconds 2
-}
-if (-not $ready) { Compose @('ps','--all'); throw 'UAT readiness timed out. Inspect docker compose service logs using this profile; do not share credentials.' }
-# Fixture membership is created through AM once per bootstrap revision; subsequent
-# starts preserve operator changes. The revisioned marker repairs retained profiles
-# whose older marker exists while one or more advertised local identities are absent.
-$memberBootstrapMarker = Join-Path $folder 'reference-members-v2-initialized'
-if ($Action -eq 'Start' -and -not (Test-Path $memberBootstrapMarker)) {
-    foreach ($tenantId in @('T001','T002')) {
-        $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
-        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
-        try {
-            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
-            $memberActors = @('A100','A300')
-            if ($onboarding) { $memberActors += 'A200' }
-            foreach ($actorId in $memberActors) {
-                $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
-                if (-not @($members.items | Where-Object actorId -eq $actorId).Count) {
-                    Invoke-RestMethod "$url/access-api/v1/administration/members" -Method Post -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;actorId=$actorId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
-                }
-            }
-            $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
-            foreach ($actorId in $memberActors) {
-                if (-not @($members.items | Where-Object actorId -eq $actorId).Count) {
-                    throw "Local reference membership reconciliation failed for $tenantId/$actorId."
-                }
-            }
-        } finally {
-            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
-        }
-    }
-    Save-Text 'reference-members-v2-initialized' $state.instanceId
-    Protect-Files
-}
-if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'app03-processing-policy-initialized'))) {
-    foreach ($tenantId in @('T001','T002')) {
-        $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
-        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
-        try {
-            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
-            $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4','2.5')) {
-                throw 'The Access Management owner has not confirmed a supported Default Access Pack.'
-            }
-
-            $roles = Invoke-RestMethod "$url/access-api/v1/administration/roles?limit=100" -Headers $headers -TimeoutSec 15
-            $customerRole = $roles.items | Where-Object code -eq 'customer'
-            $advisorRole = $roles.items | Where-Object code -eq 'financial-advisor'
-            if ($null -eq $customerRole -or $null -eq $advisorRole) { throw 'The owner-confirmed Default Access Pack role set is incomplete.' }
-
-            foreach ($binding in @(@{ actor='A100'; role=$customerRole.id },@{ actor='A200'; role=$customerRole.id },@{ actor='A300'; role=$advisorRole.id })) {
-                $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
-                $member = $members.items | Where-Object actorId -eq $binding.actor
-                if ($null -ne $member -and $null -eq $member.businessRoleId) {
-                    Invoke-RestMethod "$url/access-api/v1/administration/members/$($binding.actor)" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;businessRoleId=$binding.role;active=$true;tenantAdmin=$false}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
-                }
-            }
-        } finally {
-            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
-        }
-    }
-    Save-Text 'app03-processing-policy-initialized' $state.instanceId
-    Protect-Files
-}
-Write-Host "Local customer workspace is ready: $url/"
-Write-Host "Local access administration is ready: $url/access"
-Write-Host 'Administration, identities, sessions and access audit persist across Stop/Start.'
-Write-Host 'Business reference data is illustrative and may reset. Production readiness remains blocked.'
-Write-Host "Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A900"
-if ($onboarding) { Write-Host "Show the customer key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A100" }
-)) {
-                            throw 'LOCAL persona test mailbox must be an exact Gmail address.'
-                        }
-                    }
                     $smtpPort = 587
                     if ($null -ne $emailConfiguration.PSObject.Properties['SmtpPort'] -and -not [string]::IsNullOrWhiteSpace([string]$emailConfiguration.SmtpPort)) { $smtpPort = [int]$emailConfiguration.SmtpPort }
                     $config.Monergy.CustomerEmailAccess = @{
@@ -847,3 +636,24 @@ Write-Host 'Administration, identities, sessions and access audit persist across
 Write-Host 'Business reference data is illustrative and may reset. Production readiness remains blocked.'
 Write-Host "Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A900"
 if ($onboarding) { Write-Host "Show the customer key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A100" }
+if ($Action -eq 'Welcome') {
+    foreach ($name in @('personaTesterAccess','personaTesterChallenge')) {
+        if ($null -eq $state.tokens.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$state.tokens.$name)) {
+            throw 'This profile does not contain protected tester activation credentials.'
+        }
+    }
+    $email = $Actor.ToLowerInvariant() + '@example.test'
+    $returnPath = switch ($Actor) { 'A900' { '/access' } 'A300' { '/advisor' } default { '/' } }
+    $request = @{ tenantId=$Tenant; email=$email; returnPath=$returnPath } | ConvertTo-Json -Compress
+    $headers = @{ 'X-Monergy-Tester-Activation'=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess)) }
+    $welcome = Invoke-RestMethod "$url/identity-api/local/v1/persona-credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
+    if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/welcome#tenant=[A-Za-z0-9_.:-]+&ticket=[0-9a-f]{64}&return=%2F') {
+        throw 'The identity owner did not return a valid protected welcome path.'
+    }
+    $target = $url + $welcome.welcomePath
+    if ($windows) { Start-Process $target }
+    else { & xdg-open $target | Out-Null }
+    Write-Host "Opened a single-use five-minute welcome page for $Tenant/$Actor. The activation credential was not printed."
+    return
+}
+if ($EnablePersonaTesterActivation) { Write-Host "Open an invited user's protected welcome page: ./build/uat/Invoke-MonergyUat.ps1 -Action Welcome -Profile $Profile -Tenant T001 -Actor A300" }

@@ -40,6 +40,34 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
             """, challenge, cancellationToken: ct)).ConfigureAwait(false);
     }
 
+    public async Task<bool> QueueTesterAsync(string tenant, RegistrationCode challenge, CancellationToken ct)
+    {
+        await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
+        var written = await db.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO customer_identity.registration_challenges AS c
+            (purpose,email,challenge_hash,code_hash,protected_code,requested_at,expires_at,
+             window_at,requests,delivered)
+            SELECT @Purpose,@Email,@ChallengeHash,@CodeHash,NULL,@RequestedAt,
+                @RequestedAt+interval '5 minutes',@RequestedAt,1,true
+            WHERE @Purpose='persona-activation' AND EXISTS (
+                SELECT 1 FROM customer_identity.tenant_principals p
+                WHERE p.normalized_email=@Email
+                  AND NOT EXISTS (SELECT 1 FROM customer_identity.registered_credentials r WHERE r.actor_id=p.actor_id)
+                  AND NOT EXISTS (SELECT 1 FROM customer_identity.persona_credentials pc WHERE pc.actor_id=p.actor_id)
+            )
+            ON CONFLICT(purpose,email) DO UPDATE
+            SET challenge_hash=EXCLUDED.challenge_hash,code_hash=EXCLUDED.code_hash,
+                protected_code=NULL,requested_at=EXCLUDED.requested_at,
+                expires_at=EXCLUDED.expires_at,
+                window_at=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN @RequestedAt ELSE c.window_at END,
+                requests=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN 1 ELSE c.requests+1 END,
+                attempts=0,consumed=false,delivered=true,delivery_attempt=0,lease_until=NULL
+            WHERE c.requested_at<=@RequestedAt-interval '1 minute'
+              AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5);
+            """, challenge, cancellationToken: ct)).ConfigureAwait(false);
+        return written == 1;
+    }
+
     private static async Task<string?> ConsumeAsync(NpgsqlConnection db, NpgsqlTransaction tx,
         string purpose, string hash, string verifier, CancellationToken ct)
     {

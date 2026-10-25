@@ -73,42 +73,24 @@ public sealed class PersonaCredentialTests
         Assert.Equal(1, fixture.Sessions.Revoked);
     }
 
-    [Theory]
-    [InlineData("a100@example.test", "uat-owner@gmail.com")]
-    [InlineData("a200@example.test", "uat-owner@gmail.com")]
-    [InlineData("a300@example.test", "uat-owner@gmail.com")]
-    [InlineData("a900@example.test", "uat-owner@gmail.com")]
-    [InlineData("someone@public.example", "someone@public.example")]
-    public void LocalGmailTestReceiverRedirectsOnlyKnownBootstrapIdentities(string original, string expected)
-    {
-        Assert.Equal(expected, Monergy.Services.CustomerIdentity.Infrastructure.SmtpCustomerEmailSender
-            .ResolveRecipient(original, "uat-owner@gmail.com"));
-        Assert.Equal(original, Monergy.Services.CustomerIdentity.Infrastructure.SmtpCustomerEmailSender
-            .ResolveRecipient(original, null));
-    }
-
     [Fact]
-    public void LocalGmailOverrideRequiresExplicitPersonaFlagAndRejectsNonLocalProfile()
+    public async Task TesterWelcomeLinkIsOpaqueSingleUseAndNeverIssuesASession()
     {
-        var args = new Dictionary<string, string?> {
-            ["Monergy:ExecutionZone"] = "LOCAL",
-            ["Monergy:CustomerEmailAccess:SmtpHost"] = "smtp.gmail.com",
-            ["Monergy:CustomerEmailAccess:SmtpUser"] = "uat-owner@gmail.com",
-            ["Monergy:CustomerEmailAccess:SmtpPassword"] = "not-a-working-test-secret",
-            ["Monergy:CustomerEmailAccess:From"] = "uat-owner@gmail.com",
-            ["Monergy:CustomerEmailAccess:LocalPersonaTestInbox"] = "uat-owner@gmail.com",
-            ["Monergy:AccessIntegration:CustomerIdentityDatabases:T001"] = "fixture",
-        };
-        var config = new ConfigurationBuilder().AddInMemoryCollection(args).Build();
-        Assert.Throws<InvalidOperationException>(() =>
-            Monergy.Services.CustomerIdentity.Infrastructure.CustomerEmailDeliveryOptions.Read(config));
-        args["Monergy:PersonaCredentials:Enabled"] = "true";
-        Assert.Equal("uat-owner@gmail.com", Monergy.Services.CustomerIdentity.Infrastructure.CustomerEmailDeliveryOptions
-            .Read(new ConfigurationBuilder().AddInMemoryCollection(args).Build()).LocalPersonaTestInbox);
-        args["Monergy:ExecutionZone"] = "PRODUCTION";
-        Assert.Throws<InvalidOperationException>(() =>
-            Monergy.Services.CustomerIdentity.Infrastructure.CustomerEmailDeliveryOptions
-                .Read(new ConfigurationBuilder().AddInMemoryCollection(args).Build()));
+        var fixture = new Fixture();
+        var owner = new PersonaTesterActivation(fixture.Repository, fixture.Protector,
+            fixture.Passwords, TimeProvider.System);
+        var created = await owner.CreateWelcomeLinkAsync(
+            new("T001", "a300@example.test", "/advisor"), default);
+        var path = Assert.IsType<string>(created.GetType().GetProperty("welcomePath")!.GetValue(created));
+        Assert.StartsWith("/welcome#tenant=T001&ticket=", path, StringComparison.Ordinal);
+        Assert.DoesNotContain("a300@example.test", path, StringComparison.Ordinal);
+        var ticket = path.Split("ticket=", StringSplitOptions.None)[1].Split('&')[0];
+
+        var activated = await owner.ActivateAsync(new("T001", ticket, Fixture.Password), default);
+        Assert.Equal(true, activated.GetType().GetProperty("activated")!.GetValue(activated));
+        Assert.Equal(0, fixture.Sessions.Created);
+        await Assert.ThrowsAsync<TenantAccessException>(() =>
+            owner.ActivateAsync(new("T001", ticket, Fixture.Password), default));
     }
 
     private sealed class Fixture
@@ -147,11 +129,14 @@ public sealed class PersonaCredentialTests
         public bool LastValid;
         public Task QueueAsync(string tenant, RegistrationCode challenge, CancellationToken ct)
         { Queued = challenge; return Task.CompletedTask; }
+        public Task<bool> QueueTesterAsync(string tenant, RegistrationCode challenge, CancellationToken ct)
+        { Queued = challenge; return Task.FromResult(tenant == "T001"); }
         public Task<string?> ActivateAsync(string tenant, string hash, string verifier, string passwordHash, CancellationToken ct)
         {
             if (Queued is null || Queued.ChallengeHash != hash || Queued.CodeHash != verifier || tenant != "T001")
                 return Task.FromResult<string?>(null);
             Identity = Identity! with { PasswordHash = passwordHash };
+            Queued = null;
             return Task.FromResult<string?>(Identity.ActorId);
         }
         public Task<PersonaCredentialIdentity?> ReadAsync(string tenant, string email, CancellationToken ct) =>

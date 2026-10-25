@@ -22,11 +22,12 @@ async function personaRequest<T>(path: string, body: object, signal: AbortSignal
 }
 
 export function PersonaCredentialEntry({
-  busy, onSignIn, onCancel,
+  busy, onSignIn, onCancel, activationMode = 'email',
 }: {
   busy: boolean;
   onSignIn: (tenant: string, email: string, password: string) => Promise<void>;
   onCancel: () => void;
+  activationMode?: 'email' | 'tester-link';
 }) {
   const [form] = Form.useForm<Values>();
   const [mode, setMode] = useState<Mode>('login');
@@ -114,6 +115,8 @@ export function PersonaCredentialEntry({
     <h2>{mode === 'login' ? 'Sign in to Monergy' : mode === 'activate'
       ? 'Activate your account' : 'Reset your password'}</h2>
     {message && <Alert showIcon type="info" title={message} />}
+    {activationMode === 'tester-link' && <Alert showIcon type="info"
+      title="New accounts are activated from a protected LOCAL UAT welcome link. Ask your tester if you have not received one." />}
     <Form form={form} layout="vertical" initialValues={{ tenantId: 'T001' }}
       onFinish={(values) => { void submit(values); }}>
       {!challenge && <>
@@ -150,9 +153,9 @@ export function PersonaCredentialEntry({
       </Button>
     </Form>
     <Space wrap>
-      {mode !== 'activate' && <Button disabled={busy || pending}
+      {activationMode === 'email' && mode !== 'activate' && <Button disabled={busy || pending}
         onClick={() => { changeMode('activate'); }}>Activate account</Button>}
-      {mode !== 'recover' && <Button disabled={busy || pending}
+      {activationMode === 'email' && mode !== 'recover' && <Button disabled={busy || pending}
         onClick={() => { changeMode('recover'); }}>Forgot password</Button>}
       {mode !== 'login' && <Button disabled={busy || pending}
         onClick={() => { changeMode('login'); }}>Back to sign in</Button>}

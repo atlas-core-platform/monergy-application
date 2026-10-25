@@ -64,6 +64,19 @@ public sealed class PostgresPersonaCredentialTests
             Assert.True(await repo.IsCurrentAsync(first, default));
             Assert.Null(await repo.ReadAsync("T002", email, default));
 
+            await owner.ExecuteAsync("""
+                DELETE FROM customer_identity.persona_credentials WHERE actor_id=@Actor;
+                DELETE FROM customer_identity.registration_challenges WHERE email=@Email;
+                """, new { Actor = actor, Email = email });
+            var testerTicket = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+            var testerHash = CustomerEmailCodeProtector.ChallengeHash(testerTicket);
+            var testerVerifier = new string('b', 64);
+            Assert.True(await repo.QueueTesterAsync("T001", new("persona-activation", email,
+                testerHash, testerVerifier, [], DateTimeOffset.UtcNow), default));
+            Assert.Equal(actor, await repo.ActivateAsync("T001", testerHash, testerVerifier,
+                new string('t', 72), default));
+            Assert.Null(await repo.ActivateAsync("T001", testerHash, testerVerifier, "replay", default));
+
             sessionId = "persona-session-" + unique;
             await sessions.CreateAsync("T001", actor, sessionId, 1, default);
             Assert.NotNull(await sessions.ReadCurrentAsync("T001", sessionId, default));

@@ -1,4 +1,6 @@
+using System.Threading.RateLimiting;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.AspNetCore.RateLimiting;
 using Monergy.Contracts;
 using Monergy.Platform;
 using Monergy.Services.CustomerIdentity.Application;
@@ -8,22 +10,53 @@ namespace Monergy.Services.CustomerIdentity;
 
 public static class PersonaCredentialEndpoints
 {
-    public static bool AddPersonaCredentials(this IServiceCollection services, IConfiguration config, bool emailEnabled)
+    public static bool AddPersonaCredentials(this IServiceCollection services, IConfiguration config,
+        bool emailEnabled, bool isDevelopment)
     {
         if (config["Monergy:PersonaCredentials:Enabled"] != "true") return false;
-        if (!emailEnabled || config["Monergy:AccessIntegration:CustomerRelationships"] != "true")
-            throw new InvalidOperationException("Persona login requires owner-backed tenant identity and authenticated SMTP.");
+        var testerEnabled = config["Monergy:PersonaCredentials:TesterActivation:Enabled"] == "true";
+        if (config["Monergy:AccessIntegration:CustomerRelationships"] != "true")
+            throw new InvalidOperationException("Persona login requires owner-backed tenant identity.");
+        if (!emailEnabled && !testerEnabled)
+            throw new InvalidOperationException("Persona login requires email activation or explicit Development tester activation.");
         TenantAccessIntegration.EnsureAllowed(config);
+        if (testerEnabled)
+        {
+            var options = PersonaTesterActivationOptions.Read(config, isDevelopment);
+            services.AddSingleton(options);
+            services.AddSingleton<PersonaTesterActivation>();
+            if (!emailEnabled)
+            {
+                services.TryAddSingleton(new CustomerEmailCodeProtector(
+                    config["Monergy:PersonaCredentials:TesterActivation:ChallengeSecret"] ?? ""));
+                services.TryAddSingleton(TimeProvider.System);
+                services.AddRateLimiter(options =>
+                {
+                    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+                    options.AddFixedWindowLimiter("customer-email", limiter =>
+                    {
+                        limiter.PermitLimit = 120;
+                        limiter.Window = TimeSpan.FromMinutes(1);
+                        limiter.QueueLimit = 0;
+                    });
+                });
+            }
+        }
         services.TryAddSingleton<CustomerPasswordPolicy>();
         services.AddSingleton<IPersonaCredentialRepository, PostgresPersonaCredentials>();
         services.AddSingleton<PersonaCredentialAccess>();
         return true;
     }
 
-    public static void MapPersonaCredentials(this WebApplication app, bool enabled)
+    public static void MapPersonaCredentials(this WebApplication app, bool enabled, bool emailEnabled)
     {
-        app.MapGet("/local/v1/persona-credentials", () => Results.Ok(new { enabled }));
+        var testerEnabled = enabled &&
+            app.Configuration["Monergy:PersonaCredentials:TesterActivation:Enabled"] == "true";
+        app.MapGet("/local/v1/persona-credentials", () => testerEnabled
+            ? Results.Ok(new { enabled, activation = "tester-link" })
+            : Results.Ok(new { enabled }));
         if (!enabled) return;
+        if (!emailEnabled) app.UseRateLimiter();
         var routes = app.MapGroup("/local/v1/persona-credentials").RequireRateLimiting("customer-email");
         routes.AddEndpointFilter(async (context, next) =>
         {
@@ -49,5 +82,18 @@ public static class PersonaCredentialEndpoints
             owner.RequestAsync(r, true, h.RequestAborted));
         routes.MapPost("/recovery/confirm", (PersonaRecoveryConfirm r, PersonaCredentialAccess owner, HttpContext h) =>
             owner.RecoverAsync(r, h.RequestAborted));
+        if (testerEnabled)
+        {
+            routes.MapPost("/tester/welcome-link", (PersonaTesterWelcomeRequest r,
+                PersonaTesterActivation owner, PersonaTesterActivationOptions options, HttpContext h) =>
+            {
+                if (!h.Request.Headers.TryGetValue("X-Monergy-Tester-Activation", out var supplied) ||
+                    supplied.Count != 1 || !options.Authorize(supplied.ToString()))
+                    return Task.FromResult<object>(Results.StatusCode(403));
+                return owner.CreateWelcomeLinkAsync(r, h.RequestAborted);
+            });
+            routes.MapPost("/tester/activation/confirm", (PersonaTesterActivationConfirm r,
+                PersonaTesterActivation owner, HttpContext h) => owner.ActivateAsync(r, h.RequestAborted));
+        }
     }
 }

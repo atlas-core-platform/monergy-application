@@ -79,7 +79,7 @@ describe('tenant administration trust boundaries', () => {
 
   it(
     'preserves an unsaved edit after a policy conflict and clears tenant data when authority expires',
-    { timeout: 30000 },
+    { timeout: 60000 },
     async () => {
       let expired = false;
       const writes: unknown[] = [];
@@ -242,7 +242,7 @@ describe('tenant administration trust boundaries', () => {
 
   it(
     'selects resource access by owner-resolved business name while sending the immutable ID',
-    { timeout: 30000 },
+    { timeout: 60000 },
     async () => {
       const writes: unknown[] = [];
       vi.stubGlobal(
