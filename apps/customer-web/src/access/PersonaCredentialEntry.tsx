@@ -1,6 +1,7 @@
 import { Alert, Button, Form, Input, Space } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { AccessApiError } from './accessApi';
+import { PersonaTesterWelcomeRequestEntry } from './PersonaTesterWelcomeRequestEntry';
 
 type Mode = 'login' | 'activate' | 'recover';
 interface Values {
@@ -22,15 +23,17 @@ async function personaRequest<T>(path: string, body: object, signal: AbortSignal
 }
 
 export function PersonaCredentialEntry({
-  busy, onSignIn, onCancel, activationMode = 'email',
+  busy, onSignIn, onCancel, activationMode = 'email', returnPath = '/',
 }: {
   busy: boolean;
   onSignIn: (tenant: string, email: string, password: string) => Promise<void>;
   onCancel: () => void;
   activationMode?: 'email' | 'tester-link';
+  returnPath?: '/' | '/access' | '/advisor';
 }) {
   const [form] = Form.useForm<Values>();
   const [mode, setMode] = useState<Mode>('login');
+  const [testerWelcome, setTesterWelcome] = useState(false);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
@@ -111,12 +114,21 @@ export function PersonaCredentialEntry({
     }
   }
 
+  if (activationMode === 'tester-link' && testerWelcome)
+    return <PersonaTesterWelcomeRequestEntry returnPath={returnPath}
+      onBack={() => { setTesterWelcome(false); }} />;
+
   return <>
     <h2>{mode === 'login' ? 'Sign in to Monergy' : mode === 'activate'
       ? 'Activate your account' : 'Reset your password'}</h2>
     {message && <Alert showIcon type="info" title={message} />}
     {activationMode === 'tester-link' && <Alert showIcon type="info"
-      title="New accounts are activated from a protected LOCAL UAT welcome link. Ask your tester if you have not received one." />}
+      title="First time here? Your invited account needs activation."
+      description="A protected LOCAL/UAT tester can open a simulated invitation. This does not prove mailbox ownership." />}
+    {activationMode === 'tester-link' && <Button block
+      onClick={() => { setTesterWelcome(true); }}>
+      Activate your invited account (LOCAL/UAT)
+    </Button>}
     <Form form={form} layout="vertical" initialValues={{ tenantId: 'T001' }}
       onFinish={(values) => { void submit(values); }}>
       {!challenge && <>
