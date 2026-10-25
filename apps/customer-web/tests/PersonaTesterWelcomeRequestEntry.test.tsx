@@ -32,11 +32,14 @@ it('never requests an invitation or reveals a ticket without protected tester au
 });
 
 it('posts the tester credential in a header and binds the welcome destination to the Advisor route', async () => {
-  const fetcher = vi.fn((url: string, options?: RequestInit) =>
-    Promise.resolve(json({
+  const fetcher = vi.fn((url: string, options?: RequestInit) => {
+    void url;
+    void options;
+    return Promise.resolve(json({
       welcomePath: '/welcome#tenant=T001&ticket=' + 'a'.repeat(64) + '&return=%2Fadvisor',
       expiresAt: '2099-01-01T00:00:00Z',
-    })));
+    }));
+  });
   vi.stubGlobal('fetch', fetcher);
   mount();
   const user = userEvent.setup();
