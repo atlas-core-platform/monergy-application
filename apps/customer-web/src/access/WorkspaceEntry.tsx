@@ -144,6 +144,7 @@ export function WorkspaceEntry({
           ) : personaEntry && connectPersonaPassword ? (
             <PersonaCredentialEntry busy={busy} onSignIn={connectPersonaPassword}
               activationMode={personaActivation}
+              returnPath={area === 'administration' ? '/access' : area === 'advisor' ? '/advisor' : '/'}
               onCancel={() => { cancel(); setMethod('local'); }} />
           ) : emailEntry && connectEmail ? (
             <CustomerEmailEntry busy={busy} onVerify={connectEmail} onCancel={() => { cancel(); setMethod('local'); }} />
