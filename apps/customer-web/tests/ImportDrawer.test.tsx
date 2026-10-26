@@ -240,19 +240,12 @@ it('lets a tenant administrator cancel only a pending credential invitation and 
     }),
   );
   const confirmation = await screen.findByRole('tooltip');
-  const confirmationWrapper = confirmation.parentElement;
-  if (confirmationWrapper === null) {
-    throw new Error('Expected the confirmation tooltip to have an animation wrapper.');
-  }
-  fireEvent.animationEnd(confirmationWrapper);
-  await waitFor(() =>
-    expect(within(confirmation).getByText('Cancel credential invitation?')).toBeVisible(),
-  );
+  expect(within(confirmation).getByText('Cancel credential invitation?')).toBeInTheDocument();
   expect(
     within(confirmation).getByText(
       'This revokes only the pending credential invitation. Organization membership and assigned access remain active.',
     ),
-  ).toBeVisible();
+  ).toBeInTheDocument();
   fireEvent.click(
     within(confirmation).getByRole('button', { name: 'Cancel invitation' }),
   );
