@@ -1,10 +1,12 @@
 using Dapper;
 using Monergy.Contracts;
+using Npgsql;
 
 namespace Monergy.Services.CustomerIdentity.Infrastructure;
 
-// Read-only projection of the C&I-owned invitation ledger. This does not
-// grant membership, issue credentials, or expose invitation bearer hashes.
+// Projection of the C&I-owned invitation ledger. Expiry is materialized as an
+// immutable terminal event before status is returned. This does not grant
+// membership, issue credentials, or expose invitation bearer hashes.
 public sealed record PersonaInvitationStatus(string ActorId, string Email, string State,
     DateTimeOffset IssuedAt, DateTimeOffset? ConsumedAt);
 public sealed record PersonaInvitationCancelResult(string ActorId, string State);
@@ -19,6 +21,8 @@ public sealed class PostgresPersonaInvitationStatus(PostgresTenantSessions conne
         if (after is not null && (after.Length > 128 || after.Length == 0 || after.Any(char.IsControl)))
             throw new TenantAccessException("INVITATION_CURSOR_INVALID", 400);
         await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
+        await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await MaterializeExpiredAsync(db, tx, null, ct).ConfigureAwait(false);
         // Latest issuance per actor is the current invitation attempt. Previous
         // attempts remain in the immutable ledger. Do not return the hash.
         var rows = (await db.QueryAsync<Row>(new CommandDefinition("""
@@ -35,6 +39,7 @@ public sealed class PostgresPersonaInvitationStatus(PostgresTenantSessions conne
               consumed.occurred_at AS ConsumedAt,
               CASE WHEN consumed.event_id IS NOT NULL THEN 'Completed'
                    WHEN cancelled.event_id IS NOT NULL THEN 'Cancelled'
+                   WHEN expired.event_id IS NOT NULL THEN 'Expired'
                    WHEN l.issued_at<=clock_timestamp()-interval '5 minutes'
                       THEN 'Expired'
                    ELSE 'Pending' END AS State,
@@ -45,12 +50,15 @@ public sealed class PostgresPersonaInvitationStatus(PostgresTenantSessions conne
               ON consumed.invitation_hash=l.invitation_hash AND consumed.action='CONSUMED'
             LEFT JOIN customer_identity.persona_invitation_events cancelled
               ON cancelled.invitation_hash=l.invitation_hash AND cancelled.action='CANCELLED'
+            LEFT JOIN customer_identity.persona_invitation_events expired
+              ON expired.invitation_hash=l.invitation_hash AND expired.action='EXPIRED'
             WHERE (@After IS NULL OR l.actor_id>@After)
             ORDER BY l.actor_id LIMIT 51;
-            """, new { After = after }, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
+            """, new { After = after }, tx, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
         // Actor ID is used as a stable page cursor; the owner limits disclosure.
         var items = rows.Take(50).Select(r =>
             new PersonaInvitationStatus(r.ActorId, r.Email, r.State, r.IssuedAt, r.ConsumedAt)).ToArray();
+        await tx.CommitAsync(ct).ConfigureAwait(false);
         return new(tenant, items, rows.Length > 50 ? rows[49].ActorId : null);
     }
 
@@ -63,6 +71,7 @@ public sealed class PostgresPersonaInvitationStatus(PostgresTenantSessions conne
         TenantAccessProtocol.Identifier(actorId, 128);
         await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
         await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await MaterializeExpiredAsync(db, tx, actorId, ct).ConfigureAwait(false);
         var hash = await db.QuerySingleOrDefaultAsync<string>(new CommandDefinition("""
             UPDATE customer_identity.registration_challenges c
             SET consumed=true,protected_code=NULL
@@ -95,6 +104,60 @@ public sealed class PostgresPersonaInvitationStatus(PostgresTenantSessions conne
         // Repeated cancellation is a safe no-op, not proof of changed credentials.
         return new(actorId, hash is null ? "NotCancelled" : "Cancelled");
     }
+
+    private static async Task MaterializeExpiredAsync(
+        NpgsqlConnection db, NpgsqlTransaction tx, string? actorId, CancellationToken ct)
+    {
+        // Lock currently expired, still-unconsumed challenges before writing the
+        // terminal ledger event. A racing activation/cancellation either commits
+        // first (and is re-evaluated out) or waits until expiry owns the row.
+        var candidates = (await db.QueryAsync<ExpiredInvitation>(new CommandDefinition("""
+            SELECT p.actor_id AS ActorId,c.challenge_hash AS InvitationHash
+            FROM customer_identity.registration_challenges c
+            JOIN customer_identity.tenant_principals p
+              ON p.normalized_email=c.email
+            WHERE c.purpose='persona-activation'
+              AND c.delivered AND NOT c.consumed
+              AND c.expires_at<=clock_timestamp()
+              AND (@Actor IS NULL OR p.actor_id=@Actor)
+              AND EXISTS(
+                SELECT 1 FROM customer_identity.persona_invitation_events issued
+                WHERE issued.actor_id=p.actor_id
+                  AND issued.invitation_hash=c.challenge_hash
+                  AND issued.action='ISSUED'
+              )
+            FOR UPDATE OF c;
+            """, new { Actor = actorId }, tx, cancellationToken: ct))
+            .ConfigureAwait(false)).ToArray();
+
+        foreach (var candidate in candidates)
+        {
+            // Each INSERT gets a fresh READ COMMITTED snapshot after any row-lock
+            // wait. Do not create EXPIRED when activation/cancellation already
+            // committed a terminal event or a credential.
+            await db.ExecuteAsync(new CommandDefinition("""
+                INSERT INTO customer_identity.persona_invitation_events
+                  (event_id,actor_id,invitation_hash,action)
+                SELECT @Event,@Actor,@Hash,'EXPIRED'
+                WHERE NOT EXISTS(
+                    SELECT 1 FROM customer_identity.persona_invitation_events terminal
+                    WHERE terminal.invitation_hash=@Hash
+                      AND terminal.action IN ('CONSUMED','CANCELLED','EXPIRED')
+                )
+                  AND NOT EXISTS(
+                    SELECT 1 FROM customer_identity.persona_credentials pc
+                    WHERE pc.actor_id=@Actor
+                )
+                ON CONFLICT(invitation_hash,action) DO NOTHING;
+                """, new {
+                    Event = Guid.NewGuid(),
+                    Actor = candidate.ActorId,
+                    Hash = candidate.InvitationHash
+                }, tx, cancellationToken: ct)).ConfigureAwait(false);
+        }
+    }
+
+    private sealed record ExpiredInvitation(string ActorId, string InvitationHash);
 
     private sealed class Row
     {
