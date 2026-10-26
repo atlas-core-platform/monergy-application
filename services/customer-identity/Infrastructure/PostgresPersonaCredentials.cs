@@ -44,6 +44,19 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
     {
         await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
         await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
+        // Serialize renewals against the previous challenge, so successful
+        // replacement cannot leave an earlier welcome ticket usable.
+        var previous = await db.QuerySingleOrDefaultAsync<string>(new CommandDefinition("""
+            SELECT c.challenge_hash FROM customer_identity.registration_challenges c
+            WHERE c.purpose='persona-activation' AND c.email=@Email
+              AND c.delivered AND NOT c.consumed
+              AND c.expires_at>clock_timestamp()
+              AND EXISTS(
+                SELECT 1 FROM customer_identity.persona_invitation_events e
+                WHERE e.invitation_hash=c.challenge_hash AND e.action='ISSUED'
+              )
+            FOR UPDATE OF c;
+            """, new { challenge.Email }, tx, cancellationToken: ct)).ConfigureAwait(false);
         var written = await db.ExecuteAsync(new CommandDefinition("""
             INSERT INTO customer_identity.registration_challenges AS c
             (purpose,email,challenge_hash,code_hash,protected_code,requested_at,expires_at,
@@ -66,6 +79,20 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
             WHERE c.requested_at<=@RequestedAt-interval '1 minute'
               AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5);
             """, challenge, transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
+        if (written == 1 && previous is not null && previous != challenge.ChallengeHash)
+        {
+            // A successful renewal supersedes the former live ticket. Preserve
+            // the terminal lifecycle in the immutable C&I ledger.
+            await db.ExecuteAsync(new CommandDefinition("""
+                INSERT INTO customer_identity.persona_invitation_events
+                  (event_id,actor_id,invitation_hash,action)
+                SELECT @Event,e.actor_id,@Previous,'CANCELLED'
+                  FROM customer_identity.persona_invitation_events e
+                 WHERE e.invitation_hash=@Previous AND e.action='ISSUED'
+                ON CONFLICT(invitation_hash,action) DO NOTHING;
+                """, new { Event = Guid.NewGuid(), Previous = previous },
+                tx, cancellationToken: ct)).ConfigureAwait(false);
+        }
         if (written == 1)
         {
             // Recorded only after the challenge was actually accepted. No OTP,
