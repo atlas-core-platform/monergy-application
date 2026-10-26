@@ -134,7 +134,7 @@ public sealed class PostgresPersonaInvitationStatus(PostgresTenantSessions conne
         {
             // Each INSERT gets a fresh READ COMMITTED snapshot after any row-lock
             // wait. Do not create EXPIRED when activation/cancellation already
-            // committed a terminal event or a credential.
+            // committed a terminal event.
             await db.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO customer_identity.persona_invitation_events
                   (event_id,actor_id,invitation_hash,action)
@@ -143,10 +143,6 @@ public sealed class PostgresPersonaInvitationStatus(PostgresTenantSessions conne
                     SELECT 1 FROM customer_identity.persona_invitation_events terminal
                     WHERE terminal.invitation_hash=@Hash
                       AND terminal.action IN ('CONSUMED','CANCELLED','EXPIRED')
-                )
-                  AND NOT EXISTS(
-                    SELECT 1 FROM customer_identity.persona_credentials pc
-                    WHERE pc.actor_id=@Actor
                 )
                 ON CONFLICT(invitation_hash,action) DO NOTHING;
                 """, new {
