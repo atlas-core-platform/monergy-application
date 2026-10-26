@@ -14,6 +14,7 @@ The Customer Web calls the existing C&I cancellation route using the authenticat
 
 The cancellation response is not treated as the final display authority.
 
+- A synchronous in-flight guard prevents repeated or double confirmation from submitting another cancellation request while the owner response is pending.
 - `Cancelled`: the row is immediately made non-actionable, then C&I status is re-read.
 - `NotCancelled`: the UI does **not** claim cancellation. It re-reads C&I and shows the authoritative terminal state such as `Expired` or `Completed`.
 - If the mutation succeeds but the follow-up status refresh fails, the UI distinguishes the accepted cancellation from the failed refresh.
@@ -25,7 +26,7 @@ This keeps browser behavior aligned with the database race guarantees already ac
 
 Focused `ImportDrawer` tests cover:
 
-1. Pending invitation -> confirmation -> POST cancellation -> refreshed `Cancelled`; unrelated invitation rows remain hidden and organization access is explicitly preserved.
+1. Pending invitation -> confirmation -> one POST cancellation even after a double confirmation -> refreshed `Cancelled`; unrelated invitation rows remain hidden and organization access is explicitly preserved.
 2. Pending invitation -> cancellation loses a terminal-state race -> `NotCancelled` -> refreshed `Expired`; no false cancellation success is displayed.
 
 ## Still outstanding

@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ImportDrawer } from '../src/access/ImportDrawer';
 import { AccessApi } from '../src/access/accessApi';
@@ -246,9 +246,13 @@ it('lets a tenant administrator cancel only a pending credential invitation and 
       'This revokes only the pending credential invitation. Organization membership and assigned access remain active.',
     ),
   ).toBeInTheDocument();
-  fireEvent.click(
-    within(confirmation).getByRole('button', { name: 'Cancel invitation' }),
-  );
+  const confirmCancellation = within(confirmation).getByRole('button', {
+    name: 'Cancel invitation',
+  });
+  act(() => {
+    confirmCancellation.click();
+    confirmCancellation.click();
+  });
 
   expect(
     await screen.findByText(
@@ -272,6 +276,9 @@ it('lets a tenant administrator cancel only a pending credential invitation and 
     method: 'POST',
     body: '{}',
   });
+  expect(
+    calls.filter((call) => call.url.endsWith('/persona-invitations/A123/cancel')),
+  ).toHaveLength(1);
   expect(
     calls.filter(
       (call) => call.url === '/identity-api/local/v1/administration/persona-invitations',

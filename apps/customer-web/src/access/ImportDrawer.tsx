@@ -70,6 +70,7 @@ export function ImportDrawer({
   const [invitationNotice, setInvitationNotice] = useState('');
   const [invitationBusy, setInvitationBusy] = useState(false);
   const [invitationActionActor, setInvitationActionActor] = useState<string | null>(null);
+  const invitationActionInFlight = useRef(false);
   const loadInvitationStatus = async () => {
     const response = await api.owner<{ tenantId: string; items: InvitationStatus[] }>(
       'identity',
@@ -95,6 +96,8 @@ export function ImportDrawer({
     }
   };
   const cancelInvitation = async (item: InvitationStatus) => {
+    if (invitationActionInFlight.current) return;
+    invitationActionInFlight.current = true;
     setInvitationActionActor(item.actorId);
     setInvitationError('');
     setInvitationNotice('');
@@ -143,6 +146,7 @@ export function ImportDrawer({
       if (failure instanceof AccessApiError && [401, 403].includes(failure.status))
         onExpired(failure);
     } finally {
+      invitationActionInFlight.current = false;
       setInvitationActionActor(null);
     }
   };
