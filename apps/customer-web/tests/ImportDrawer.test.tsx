@@ -239,13 +239,19 @@ it('lets a tenant administrator cancel only a pending credential invitation and 
       name: 'Cancel invitation for pending@example.test',
     }),
   );
-  expect(await screen.findByText('Cancel credential invitation?')).toBeVisible();
+  const confirmation = await screen.findByRole('tooltip');
+  fireEvent.animationEnd(confirmation.parentElement!);
+  await waitFor(() =>
+    expect(within(confirmation).getByText('Cancel credential invitation?')).toBeVisible(),
+  );
   expect(
-    screen.getByText(
+    within(confirmation).getByText(
       'This revokes only the pending credential invitation. Organization membership and assigned access remain active.',
     ),
   ).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel invitation', exact: true }));
+  fireEvent.click(
+    within(confirmation).getByRole('button', { name: 'Cancel invitation', exact: true }),
+  );
 
   expect(
     await screen.findByText(
@@ -339,7 +345,10 @@ it('refreshes the authoritative invitation state when cancellation loses a termi
       name: 'Cancel invitation for race@example.test',
     }),
   );
-  fireEvent.click(await screen.findByRole('button', { name: 'Cancel invitation', exact: true }));
+  const confirmation = await screen.findByRole('tooltip');
+  fireEvent.click(
+    within(confirmation).getByRole('button', { name: 'Cancel invitation', exact: true }),
+  );
 
   expect(
     await screen.findByText(
