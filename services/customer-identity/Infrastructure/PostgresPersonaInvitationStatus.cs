@@ -15,7 +15,7 @@ public sealed class PostgresPersonaInvitationStatus(PostgresTenantSessions conne
     public async Task<PersonaInvitationStatusPage> ListAsync(string tenant, string? after, CancellationToken ct)
     {
         TenantAccessProtocol.Identifier(tenant, 64);
-        if (after is not null && (after.Length != 32 || after.Any(c => !char.IsAsciiHexDigitLower(c))))
+        if (after is not null && (after.Length > 128 || after.Length == 0 || after.Any(char.IsControl)))
             throw new TenantAccessException("INVITATION_CURSOR_INVALID", 400);
         await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
         // Latest issuance per actor is the current invitation attempt. Previous
