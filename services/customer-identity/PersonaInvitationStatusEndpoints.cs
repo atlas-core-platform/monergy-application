@@ -35,5 +35,31 @@ public static class PersonaInvitationStatusEndpoints
                     return Results.Json(new { error = "INVITATION_STATUS_UNAVAILABLE" }, statusCode: 503);
                 }
             });
+        app.MapPost("/local/v1/administration/persona-invitations/{actorId}/cancel",
+            async (string actorId, HttpContext http, TenantAccessClient access,
+                PostgresPersonaInvitationStatus owner) =>
+            {
+                http.Response.Headers.CacheControl = "no-store";
+                try
+                {
+                    // Recheck the same administrator session before the mutation.
+                    var admin = await access.RequireAdministratorAsync(http);
+                    await access.RequireAdministratorAsync(http);
+                    var result = await owner.CancelAsync(admin.TenantId, actorId, http.RequestAborted);
+                    return Results.Ok(result);
+                }
+                catch (TenantBoundaryException failure)
+                {
+                    return Results.Json(new { error = failure.Code }, statusCode: failure.Status);
+                }
+                catch (TenantAccessException failure)
+                {
+                    return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode);
+                }
+                catch (Exception failure) when (failure is System.Data.Common.DbException or HttpRequestException)
+                {
+                    return Results.Json(new { error = "INVITATION_CANCEL_UNAVAILABLE" }, statusCode: 503);
+                }
+            });
     }
 }
