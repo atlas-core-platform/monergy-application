@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ImportDrawer } from '../src/access/ImportDrawer';
 import { AccessApi } from '../src/access/accessApi';
@@ -159,3 +159,214 @@ it('creates one user through reviewed, versioned onboarding and recovers an unce
   ]);
   expect(expired).not.toHaveBeenCalled();
 }, 30000);
+
+it('lets a tenant administrator cancel only a pending credential invitation and preserves organization access', async () => {
+  let cancelled = false;
+  const calls: { url: string; method?: string; body?: string | null }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, options?: RequestInit) => {
+      calls.push({
+        url,
+        method: options?.method,
+        body: typeof options?.body === 'string' ? options.body : null,
+      });
+      if (url === '/access-api/v1/administration/imports/op-cancel')
+        return Promise.resolve(
+          json({
+            id: 'op-cancel',
+            status: 'Activated',
+            policyVersion: 31,
+            rowCount: 1,
+            identities: [
+              { rowNumber: 2, normalizedEmail: 'pending@example.test', actorId: 'A123' },
+            ],
+          }),
+        );
+      if (url === '/identity-api/local/v1/administration/persona-invitations')
+        return Promise.resolve(
+          json({
+            tenantId: 'T001',
+            items: [
+              {
+                actorId: 'A123',
+                email: 'pending@example.test',
+                state: cancelled ? 'Cancelled' : 'Pending',
+                issuedAt: '2026-10-26T18:00:00Z',
+                consumedAt: null,
+              },
+              {
+                actorId: 'A999',
+                email: 'unrelated@example.test',
+                state: 'Pending',
+                issuedAt: '2026-10-26T18:00:00Z',
+                consumedAt: null,
+              },
+            ],
+          }),
+        );
+      if (
+        url === '/identity-api/local/v1/administration/persona-invitations/A123/cancel' &&
+        options?.method === 'POST'
+      ) {
+        cancelled = true;
+        return Promise.resolve(json({ actorId: 'A123', state: 'Cancelled' }));
+      }
+      return Promise.resolve(json({ error: 'NOT_FOUND' }, 404));
+    }),
+  );
+
+  render(
+    <FoundationProvider>
+      <ImportDrawer
+        api={new AccessApi(session)}
+        importId="op-cancel"
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+        onExpired={vi.fn()}
+      />
+    </FoundationProvider>,
+  );
+
+  expect(await screen.findByText('Person access activated.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Check invitation status' }));
+  const invitationStatus = await screen.findByRole('region', { name: 'Credential invitation status' });
+  expect(within(invitationStatus).getByText('Pending', { exact: true })).toBeVisible();
+  expect(within(invitationStatus).queryByText('unrelated@example.test')).toBeNull();
+
+  fireEvent.click(
+    within(invitationStatus).getByRole('button', {
+      name: 'Cancel invitation for pending@example.test',
+    }),
+  );
+  const confirmation = await screen.findByRole('tooltip');
+  expect(within(confirmation).getByText('Cancel credential invitation?')).toBeInTheDocument();
+  expect(
+    within(confirmation).getByText(
+      'This revokes only the pending credential invitation. Organization membership and assigned access remain active.',
+    ),
+  ).toBeInTheDocument();
+  const confirmCancellation = within(confirmation).getByRole('button', {
+    name: 'Cancel invitation',
+  });
+  act(() => {
+    confirmCancellation.click();
+    confirmCancellation.click();
+  });
+
+  expect(
+    await screen.findByText(
+      'Credential invitation for pending@example.test was cancelled. Organization membership and assigned access remain active.',
+    ),
+  ).toBeVisible();
+  await waitFor(() => {
+    expect(within(invitationStatus).getByText('Cancelled', { exact: true })).toBeVisible();
+  });
+  expect(
+    within(invitationStatus).queryByRole('button', {
+      name: 'Cancel invitation for pending@example.test',
+    }),
+  ).toBeNull();
+
+  const mutation = calls.find((call) =>
+    call.url.endsWith('/persona-invitations/A123/cancel'),
+  );
+  expect(mutation).toEqual({
+    url: '/identity-api/local/v1/administration/persona-invitations/A123/cancel',
+    method: 'POST',
+    body: '{}',
+  });
+  expect(
+    calls.filter((call) => call.url.endsWith('/persona-invitations/A123/cancel')),
+  ).toHaveLength(1);
+  expect(
+    calls.filter(
+      (call) => call.url === '/identity-api/local/v1/administration/persona-invitations',
+    ),
+  ).toHaveLength(2);
+}, 30000);
+
+it('refreshes the authoritative invitation state when cancellation loses a terminal-state race', async () => {
+  let terminal = false;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, options?: RequestInit) => {
+      if (url === '/access-api/v1/administration/imports/op-race')
+        return Promise.resolve(
+          json({
+            id: 'op-race',
+            status: 'Activated',
+            policyVersion: 32,
+            rowCount: 1,
+            identities: [
+              { rowNumber: 2, normalizedEmail: 'race@example.test', actorId: 'A124' },
+            ],
+          }),
+        );
+      if (url === '/identity-api/local/v1/administration/persona-invitations')
+        return Promise.resolve(
+          json({
+            tenantId: 'T001',
+            items: [
+              {
+                actorId: 'A124',
+                email: 'race@example.test',
+                state: terminal ? 'Expired' : 'Pending',
+                issuedAt: '2026-10-26T18:00:00Z',
+                consumedAt: null,
+              },
+            ],
+          }),
+        );
+      if (
+        url === '/identity-api/local/v1/administration/persona-invitations/A124/cancel' &&
+        options?.method === 'POST'
+      ) {
+        terminal = true;
+        return Promise.resolve(json({ actorId: 'A124', state: 'NotCancelled' }));
+      }
+      return Promise.resolve(json({ error: 'NOT_FOUND' }, 404));
+    }),
+  );
+
+  render(
+    <FoundationProvider>
+      <ImportDrawer
+        api={new AccessApi(session)}
+        importId="op-race"
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+        onExpired={vi.fn()}
+      />
+    </FoundationProvider>,
+  );
+
+  expect(await screen.findByText('Person access activated.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Check invitation status' }));
+  const invitationStatus = await screen.findByRole('region', { name: 'Credential invitation status' });
+  fireEvent.click(
+    within(invitationStatus).getByRole('button', {
+      name: 'Cancel invitation for race@example.test',
+    }),
+  );
+  const confirmation = await screen.findByRole('tooltip');
+  fireEvent.click(
+    within(confirmation).getByRole('button', { name: 'Cancel invitation' }),
+  );
+
+  expect(
+    await screen.findByText(
+      'The credential invitation for race@example.test was no longer pending. Current status was refreshed.',
+    ),
+  ).toBeVisible();
+  expect(within(invitationStatus).getByText('Expired', { exact: true })).toBeVisible();
+  expect(
+    within(invitationStatus).queryByRole('button', {
+      name: 'Cancel invitation for race@example.test',
+    }),
+  ).toBeNull();
+  expect(
+    screen.queryByText(/Credential invitation for race@example.test was cancelled/),
+  ).toBeNull();
+}, 30000);
+

@@ -7,6 +7,7 @@ import {
   Drawer,
   Input,
   Form,
+  Popconfirm,
   Select,
   Progress,
   Space,
@@ -34,6 +35,17 @@ interface Props {
   onChanged: (message: string) => void;
   onExpired: (failure: unknown) => void;
 }
+interface InvitationStatus {
+  actorId: string;
+  email: string;
+  state: string;
+  issuedAt: string;
+  consumedAt: string | null;
+}
+interface InvitationCancelResult {
+  actorId: string;
+  state: 'Cancelled' | 'NotCancelled';
+}
 const template = 'email,role_code,group_codes\nperson@example.test,,\n';
 
 export function ImportDrawer({
@@ -53,23 +65,89 @@ export function ImportDrawer({
   const [fileName, setFileName] = useState('');
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
-  const [invitations, setInvitations] = useState<{ actorId: string; email: string; state: string; issuedAt: string; consumedAt: string | null }[] | null>(null);
+  const [invitations, setInvitations] = useState<InvitationStatus[] | null>(null);
   const [invitationError, setInvitationError] = useState('');
+  const [invitationNotice, setInvitationNotice] = useState('');
   const [invitationBusy, setInvitationBusy] = useState(false);
+  const [invitationActionActor, setInvitationActionActor] = useState<string | null>(null);
+  const invitationActionInFlight = useRef(false);
+  const loadInvitationStatus = async () => {
+    const response = await api.owner<{ tenantId: string; items: InvitationStatus[] }>(
+      'identity',
+      'local/v1/administration/persona-invitations',
+    );
+    setInvitations(response.items);
+  };
   const readInvitationStatus = async () => {
     setInvitationBusy(true);
     setInvitationError('');
+    setInvitationNotice('');
     try {
-      const result = await api.owner<{ tenantId: string; items: {
-        actorId: string; email: string; state: string; issuedAt: string; consumedAt: string | null;
-      }[] }>('identity', 'local/v1/administration/persona-invitations');
-      setInvitations(result.items);
+      await loadInvitationStatus();
     } catch (failure) {
       setInvitations(null);
-      setInvitationError('Invitation status could not be verified. Retry when the identity service is available.');
-      if (failure instanceof AccessApiError && [401, 403].includes(failure.status)) onExpired(failure);
+      setInvitationError(
+        'Invitation status could not be verified. Retry when the identity service is available.',
+      );
+      if (failure instanceof AccessApiError && [401, 403].includes(failure.status))
+        onExpired(failure);
     } finally {
       setInvitationBusy(false);
+    }
+  };
+  const cancelInvitation = async (item: InvitationStatus) => {
+    if (invitationActionInFlight.current) return;
+    invitationActionInFlight.current = true;
+    setInvitationActionActor(item.actorId);
+    setInvitationError('');
+    setInvitationNotice('');
+    try {
+      const outcome = await api.cancelPersonaInvitation<InvitationCancelResult>(item.actorId);
+      if (
+        outcome.actorId !== item.actorId ||
+        !['Cancelled', 'NotCancelled'].includes(outcome.state)
+      )
+        throw new AccessApiError(503, 'INVITATION_CANCEL_RESPONSE_INVALID');
+      const cancelled = outcome.state === 'Cancelled';
+      if (cancelled) {
+        setInvitations((current) =>
+          current?.map((candidate) =>
+            candidate.actorId === item.actorId
+              ? { ...candidate, state: 'Cancelled' }
+              : candidate,
+          ) ?? current,
+        );
+        setInvitationNotice(
+          `Credential invitation for ${item.email} was cancelled. Organization membership and assigned access remain active.`,
+        );
+      }
+      try {
+        await loadInvitationStatus();
+        if (!cancelled)
+          setInvitationNotice(
+            `The credential invitation for ${item.email} was no longer pending. Current status was refreshed.`,
+          );
+      } catch (refreshFailure) {
+        setInvitationError(
+          cancelled
+            ? 'The credential invitation was cancelled, but its current status could not be refreshed.'
+            : 'Cancellation was not confirmed because the invitation was no longer pending, and its current status could not be refreshed.',
+        );
+        if (
+          refreshFailure instanceof AccessApiError &&
+          [401, 403].includes(refreshFailure.status)
+        )
+          onExpired(refreshFailure);
+      }
+    } catch (failure) {
+      setInvitationError(
+        'The credential invitation could not be cancelled. Refresh status before trying again.',
+      );
+      if (failure instanceof AccessApiError && [401, 403].includes(failure.status))
+        onExpired(failure);
+    } finally {
+      invitationActionInFlight.current = false;
+      setInvitationActionActor(null);
     }
   };
   const [busy, setBusy] = useState(false);
@@ -708,26 +786,73 @@ export function ImportDrawer({
               </p>
               {result.status === 'Activated' && (
                 <section aria-label="Credential invitation status">
-                  <Button loading={invitationBusy} onClick={() => { void readInvitationStatus(); }}>
+                  <Button
+                    loading={invitationBusy}
+                    disabled={invitationActionActor !== null}
+                    onClick={() => {
+                      void readInvitationStatus();
+                    }}
+                  >
                     Check invitation status
                   </Button>
+                  {invitationNotice && <Alert type="success" showIcon title={invitationNotice} />}
                   {invitationError && <Alert type="warning" showIcon title={invitationError} />}
                   {invitations && (
-                    <Table
+                    <Table<InvitationStatus>
                       size="small"
                       rowKey="actorId"
                       pagination={{ pageSize: 10 }}
-                      dataSource={invitations.filter(item => result.identities.some(
-                        identity => identity.actorId === item.actorId))}
+                      dataSource={invitations.filter((item) =>
+                        result.identities.some((identity) => identity.actorId === item.actorId),
+                      )}
                       columns={[
                         { title: 'Person', dataIndex: 'email' },
                         { title: 'Credential invitation', dataIndex: 'state' },
                         { title: 'Issued', dataIndex: 'issuedAt' },
-                        { title: 'Activated', dataIndex: 'consumedAt', render: (value: string | null) => value ?? 'Not yet' },
+                        {
+                          title: 'Activated',
+                          dataIndex: 'consumedAt',
+                          render: (value: string | null) => value ?? 'Not yet',
+                        },
+                        {
+                          title: 'Action',
+                          key: 'action',
+                          render: (_: unknown, item: InvitationStatus) =>
+                            item.state === 'Pending' ? (
+                              <Popconfirm
+                                title="Cancel credential invitation?"
+                                description="This revokes only the pending credential invitation. Organization membership and assigned access remain active."
+                                okText="Cancel invitation"
+                                cancelText="Keep invitation"
+                                okButtonProps={{
+                                  danger: true,
+                                  loading: invitationActionActor === item.actorId,
+                                }}
+                                onConfirm={() => {
+                                  void cancelInvitation(item);
+                                }}
+                              >
+                                <Button
+                                  danger
+                                  size="small"
+                                  aria-label={`Cancel invitation for ${item.email}`}
+                                  disabled={invitationBusy || invitationActionActor !== null}
+                                >
+                                  Cancel invitation
+                                </Button>
+                              </Popconfirm>
+                            ) : (
+                              <span className="access-form-hint">No action</span>
+                            ),
+                        },
                       ]}
                     />
                   )}
-                  <p className="access-form-hint">Invitation status is separate from active organization membership. No invitation links or passwords are shown.</p>
+                  <p className="access-form-hint">
+                    Invitation status is separate from active organization membership. Cancelling a
+                    pending credential invitation does not remove organization access. No invitation
+                    links or passwords are shown.
+                  </p>
                 </section>
               )}
               {result.status === 'Activated' && (
