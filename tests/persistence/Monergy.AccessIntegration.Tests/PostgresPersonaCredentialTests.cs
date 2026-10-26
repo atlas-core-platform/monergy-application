@@ -120,6 +120,64 @@ public sealed class PostgresPersonaCredentialTests
         }
     }
 
+    [Fact]
+    public async Task CancelledInvitationCannotActivateAndRepeatedCancelIsNoOp()
+    {
+        var settings = new Dictionary<string, string?> {
+            ["Monergy:ExecutionZone"] = "CI_EPHEMERAL",
+            ["Monergy:AccessIntegration:Enabled"] = "true",
+            ["Monergy:AccessIntegration:CustomerIdentityDatabases:T001"] = Required("AM05_CI_T001_RUNTIME"),
+        };
+        await using var sessions = new PostgresTenantSessions(
+            new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
+        var repo = new PostgresPersonaCredentials(sessions);
+        var invitations = new PostgresPersonaInvitationStatus(sessions);
+        await using var owner = new NpgsqlConnection(Required("AM05_CI_T001_OWNER"));
+        await owner.OpenAsync();
+        var nonce = Guid.NewGuid().ToString("N");
+        var actor = "ci-" + nonce;
+        var email = "cancel-" + nonce + "@example.test";
+        var ticket = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+        var hash = CustomerEmailCodeProtector.ChallengeHash(ticket);
+        var verifier = new string('c', 64);
+        try
+        {
+            await owner.ExecuteAsync("""
+                INSERT INTO customer_identity.tenant_principals(actor_id,normalized_email)
+                VALUES(@Actor,@Email);
+                """, new { Actor = actor, Email = email });
+            Assert.True(await repo.QueueTesterAsync("T001", new(
+                "persona-activation", email, hash, verifier, [], DateTimeOffset.UtcNow), default));
+            Assert.Equal("Cancelled", (await invitations.CancelAsync("T001", actor, default)).State);
+            Assert.Equal("NotCancelled", (await invitations.CancelAsync("T001", actor, default)).State);
+            Assert.Null(await repo.ActivateAsync("T001", hash, verifier, new string('x', 72), default));
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CANCELLED';
+                """, new { Actor = actor, Hash = hash }));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CONSUMED';
+                """, new { Actor = actor, Hash = hash }));
+            // Query by cursor so this remains stable when the isolated tenant
+            // has more than 50 existing invitation actors.
+            var page = await invitations.ListAsync("T001", actor, default);
+            Assert.DoesNotContain(page.Items, item => item.ActorId == actor);
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
+                """, new { Actor = actor, Hash = hash }));
+        }
+        finally
+        {
+            await owner.ExecuteAsync("""
+                DELETE FROM customer_identity.persona_invitation_events WHERE actor_id=@Actor;
+                DELETE FROM customer_identity.registration_challenges WHERE email=@Email;
+                DELETE FROM customer_identity.tenant_principals WHERE actor_id=@Actor;
+                """, new { Actor = actor, Email = email });
+        }
+    }
+
     private static string Required(string key) =>
         Environment.GetEnvironmentVariable(key)
         ?? throw new InvalidOperationException("A dedicated LOCAL/CI identity test database is required.");

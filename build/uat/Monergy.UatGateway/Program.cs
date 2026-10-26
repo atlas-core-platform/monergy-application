@@ -182,6 +182,16 @@ static string? Route(string path, string method)
           (method=="GET"&&(parts.Length==1||parts.Length==2&&parts[1] is "attempts" or "history"||parts.Length==3&&parts[1]=="changes"&&Guid.TryParseExact(parts[2],"N",out _))||
            method=="POST"&&parts.Length==2&&parts[1]=="changes"))return "http://127.0.0.1:5118"+path[9..];
     }
+    const string invitationCancel="/identity-api/local/v1/administration/persona-invitations/";
+    if (method=="POST" && path.StartsWith(invitationCancel,StringComparison.Ordinal)
+        && path.EndsWith("/cancel",StringComparison.Ordinal))
+    {
+        var actor=path[invitationCancel.Length..^"/cancel".Length];
+        if (actor.EndsWith('/'))
+            actor=actor[..^1];
+        if (TenantAccessClient.Identifier(actor,128))
+            return "http://127.0.0.1:5101"+path[13..];
+    }
     if (path == "/identity-api/local/v1/administration/persona-invitations" && method == "GET")
         return "http://127.0.0.1:5101" + path[13..];
     const string customers="/identity-api/local/v1/administration/customers";
