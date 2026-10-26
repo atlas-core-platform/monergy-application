@@ -43,6 +43,7 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
     public async Task<bool> QueueTesterAsync(string tenant, RegistrationCode challenge, CancellationToken ct)
     {
         await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
+        await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
         var written = await db.ExecuteAsync(new CommandDefinition("""
             INSERT INTO customer_identity.registration_challenges AS c
             (purpose,email,challenge_hash,code_hash,protected_code,requested_at,expires_at,
@@ -64,7 +65,21 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                 attempts=0,consumed=false,delivered=true,delivery_attempt=0,lease_until=NULL
             WHERE c.requested_at<=@RequestedAt-interval '1 minute'
               AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5);
-            """, challenge, cancellationToken: ct)).ConfigureAwait(false);
+            """, challenge, transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
+        if (written == 1)
+        {
+            // Recorded only after the challenge was actually accepted. No OTP,
+            // bearer link, recipient email or unhashed secret is retained here.
+            await db.ExecuteAsync(new CommandDefinition("""
+                INSERT INTO customer_identity.persona_invitation_events
+                  (event_id,actor_id,invitation_hash,action)
+                SELECT @Event,p.actor_id,@Hash,'ISSUED'
+                  FROM customer_identity.tenant_principals p
+                 WHERE p.normalized_email=@Email;
+                """, new { Event = Guid.NewGuid(), Hash = challenge.ChallengeHash, challenge.Email },
+                transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
+        }
+        await tx.CommitAsync(ct).ConfigureAwait(false);
         return written == 1;
     }
 
@@ -99,10 +114,25 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                 """, new { Email = email, PasswordHash = passwordHash }, tx, cancellationToken: ct))
                 .ConfigureAwait(false);
         if (actor is not null)
+        {
             await db.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO customer_identity.registration_events(event_id,action,actor_id)
                 VALUES(@Id,'PERSONA_ACTIVATED',@Actor);
                 """, new { Id = Guid.NewGuid(), Actor = actor }, tx, cancellationToken: ct)).ConfigureAwait(false);
+            // Existing production email activation may have no tester invitation;
+            // ledger writes are conditional, and share the credential transaction.
+            await db.ExecuteAsync(new CommandDefinition("""
+                INSERT INTO customer_identity.persona_invitation_events
+                  (event_id,actor_id,invitation_hash,action)
+                SELECT @Event,@Actor,@Hash,'CONSUMED'
+                WHERE EXISTS (
+                  SELECT 1 FROM customer_identity.persona_invitation_events
+                  WHERE invitation_hash=@Hash AND actor_id=@Actor AND action='ISSUED'
+                )
+                ON CONFLICT(invitation_hash,action) DO NOTHING;
+                """, new { Event = Guid.NewGuid(), Actor = actor, Hash = hash },
+                tx, cancellationToken: ct)).ConfigureAwait(false);
+        }
         await tx.CommitAsync(ct).ConfigureAwait(false);
         return actor;
     }

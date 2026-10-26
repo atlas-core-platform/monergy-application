@@ -73,8 +73,16 @@ public sealed class PostgresPersonaCredentialTests
             var testerVerifier = new string('b', 64);
             Assert.True(await repo.QueueTesterAsync("T001", new("persona-activation", email,
                 testerHash, testerVerifier, [], DateTimeOffset.UtcNow), default));
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
+                """, new { Actor = actor, Hash = testerHash }));
             Assert.Equal(actor, await repo.ActivateAsync("T001", testerHash, testerVerifier,
                 new string('t', 72), default));
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CONSUMED';
+                """, new { Actor = actor, Hash = testerHash }));
             Assert.Null(await repo.ActivateAsync("T001", testerHash, testerVerifier, "replay", default));
 
             sessionId = "persona-session-" + unique;
@@ -101,6 +109,8 @@ public sealed class PostgresPersonaCredentialTests
             if (sessionId is not null)
                 await owner.ExecuteAsync("DELETE FROM customer_identity.trusted_sessions WHERE actor_id=@Actor;",
                     new { Actor = actor });
+            await owner.ExecuteAsync("DELETE FROM customer_identity.persona_invitation_events WHERE actor_id=@Actor;",
+                new { Actor = actor });
             await owner.ExecuteAsync("DELETE FROM customer_identity.persona_credentials WHERE actor_id=@Actor;",
                 new { Actor = actor });
             await owner.ExecuteAsync("DELETE FROM customer_identity.registration_challenges WHERE email=@Email;",
