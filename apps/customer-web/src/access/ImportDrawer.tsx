@@ -53,6 +53,25 @@ export function ImportDrawer({
   const [fileName, setFileName] = useState('');
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [invitations, setInvitations] = useState<{ actorId: string; email: string; state: string; issuedAt: string; consumedAt: string | null }[] | null>(null);
+  const [invitationError, setInvitationError] = useState('');
+  const [invitationBusy, setInvitationBusy] = useState(false);
+  const readInvitationStatus = async () => {
+    setInvitationBusy(true);
+    setInvitationError('');
+    try {
+      const result = await api.owner<{ tenantId: string; items: {
+        actorId: string; email: string; state: string; issuedAt: string; consumedAt: string | null;
+      }[] }>('identity', 'local/v1/administration/persona-invitations');
+      setInvitations(result.items);
+    } catch (failure) {
+      setInvitations(null);
+      setInvitationError('Invitation status could not be verified. Retry when the identity service is available.');
+      if (failure instanceof AccessApiError && [401, 403].includes(failure.status)) onExpired(failure);
+    } finally {
+      setInvitationBusy(false);
+    }
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [dragging, setDragging] = useState(false);
@@ -687,6 +706,30 @@ export function ImportDrawer({
                     : 'All people in this batch have organization access. Each person must activate their own sign-in credentials.'
                   : 'This batch has not activated any access. Verified identities are retained for safe recovery.'}
               </p>
+              {result.status === 'Activated' && (
+                <section aria-label="Credential invitation status">
+                  <Button loading={invitationBusy} onClick={() => { void readInvitationStatus(); }}>
+                    Check invitation status
+                  </Button>
+                  {invitationError && <Alert type="warning" showIcon title={invitationError} />}
+                  {invitations && (
+                    <Table
+                      size="small"
+                      rowKey="actorId"
+                      pagination={{ pageSize: 10 }}
+                      dataSource={invitations.filter(item => result.identities.some(
+                        identity => identity.actorId === item.actorId))}
+                      columns={[
+                        { title: 'Person', dataIndex: 'email' },
+                        { title: 'Credential invitation', dataIndex: 'state' },
+                        { title: 'Issued', dataIndex: 'issuedAt' },
+                        { title: 'Activated', dataIndex: 'consumedAt', render: (value: string | null) => value ?? 'Not yet' },
+                      ]}
+                    />
+                  )}
+                  <p className="access-form-hint">Invitation status is separate from active organization membership. No invitation links or passwords are shown.</p>
+                </section>
+              )}
               {result.status === 'Activated' && (
                 <Alert
                   showIcon
