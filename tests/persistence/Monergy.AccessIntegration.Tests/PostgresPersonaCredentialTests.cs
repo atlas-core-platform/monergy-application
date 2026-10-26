@@ -159,8 +159,14 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CONSUMED';
                 """, new { Actor = actor, Hash = hash }));
-            var page = await invitations.ListAsync("T001", null, default);
-            Assert.Contains(page.Items, item => item.ActorId == actor && item.State == "Cancelled");
+            // Query by cursor so this remains stable when the isolated tenant
+            // has more than 50 existing invitation actors.
+            var page = await invitations.ListAsync("T001", actor, default);
+            Assert.DoesNotContain(page.Items, item => item.ActorId == actor);
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
+                """, new { Actor = actor, Hash = hash }));
         }
         finally
         {
