@@ -46,11 +46,12 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
         await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
         // Serialize renewals against the previous challenge, so successful
         // replacement cannot leave an earlier welcome ticket usable.
-        var previous = await db.QuerySingleOrDefaultAsync<string>(new CommandDefinition("""
-            SELECT c.challenge_hash FROM customer_identity.registration_challenges c
+        var previous = await db.QuerySingleOrDefaultAsync<PreviousInvitation>(new CommandDefinition("""
+            SELECT c.challenge_hash AS ChallengeHash,
+                   c.expires_at<=clock_timestamp() AS Expired
+            FROM customer_identity.registration_challenges c
             WHERE c.purpose='persona-activation' AND c.email=@Email
               AND c.delivered AND NOT c.consumed
-              AND c.expires_at>clock_timestamp()
               AND EXISTS(
                 SELECT 1 FROM customer_identity.persona_invitation_events e
                 WHERE e.invitation_hash=c.challenge_hash AND e.action='ISSUED'
@@ -79,18 +80,26 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
             WHERE c.requested_at<=@RequestedAt-interval '1 minute'
               AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5);
             """, challenge, transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
-        if (written == 1 && previous is not null && previous != challenge.ChallengeHash)
+        if (written == 1 && previous is not null && previous.ChallengeHash != challenge.ChallengeHash)
         {
-            // A successful renewal supersedes the former live ticket. Preserve
-            // the terminal lifecycle in the immutable C&I ledger.
+            // A successful renewal supersedes the former ticket. If its
+            // five-minute lifetime already elapsed, preserve EXPIRED rather
+            // than mislabelling the terminal event as administrator/user
+            // cancellation.
+            var action = previous.Expired ? "EXPIRED" : "CANCELLED";
             await db.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO customer_identity.persona_invitation_events
                   (event_id,actor_id,invitation_hash,action)
-                SELECT @Event,e.actor_id,@Previous,'CANCELLED'
+                SELECT @Event,e.actor_id,@Previous,@Action
                   FROM customer_identity.persona_invitation_events e
                  WHERE e.invitation_hash=@Previous AND e.action='ISSUED'
+                   AND NOT EXISTS(
+                     SELECT 1 FROM customer_identity.persona_invitation_events terminal
+                     WHERE terminal.invitation_hash=@Previous
+                       AND terminal.action IN ('CONSUMED','CANCELLED','EXPIRED')
+                   )
                 ON CONFLICT(invitation_hash,action) DO NOTHING;
-                """, new { Event = Guid.NewGuid(), Previous = previous },
+                """, new { Event = Guid.NewGuid(), Previous = previous.ChallengeHash, Action = action },
                 tx, cancellationToken: ct)).ConfigureAwait(false);
         }
         if (written == 1)
@@ -236,5 +245,6 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
         await tx.CommitAsync(ct).ConfigureAwait(false);
         return actor is not null;
     }
+    private sealed record PreviousInvitation(string ChallengeHash, bool Expired);
     private sealed record Challenge(string Email, bool Valid);
 }

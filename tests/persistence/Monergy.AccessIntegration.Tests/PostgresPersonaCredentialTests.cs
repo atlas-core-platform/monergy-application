@@ -232,6 +232,80 @@ public sealed class PostgresPersonaCredentialTests
         }
     }
 
+    [Fact]
+    public async Task ExpiredInvitationIsMaterializedExactlyOnceAndRenewalPreservesTerminalHistory()
+    {
+        var settings = new Dictionary<string, string?> {
+            ["Monergy:ExecutionZone"] = "CI_EPHEMERAL",
+            ["Monergy:AccessIntegration:Enabled"] = "true",
+            ["Monergy:AccessIntegration:CustomerIdentityDatabases:T001"] = Required("AM05_CI_T001_RUNTIME"),
+        };
+        await using var sessions = new PostgresTenantSessions(
+            new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
+        var repo = new PostgresPersonaCredentials(sessions);
+        var invitations = new PostgresPersonaInvitationStatus(sessions);
+        await using var owner = new NpgsqlConnection(Required("AM05_CI_T001_OWNER"));
+        await owner.OpenAsync();
+
+        var id = Guid.NewGuid().ToString("N");
+        var actor = "ci-" + id;
+        var email = "expired-" + id + "@example.test";
+        var first = CustomerEmailCodeProtector.ChallengeHash(
+            Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
+        var replacement = CustomerEmailCodeProtector.ChallengeHash(
+            Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32)));
+        var verifier = new string('e', 64);
+        try
+        {
+            await owner.ExecuteAsync("""
+                INSERT INTO customer_identity.tenant_principals(actor_id,normalized_email)
+                VALUES(@Actor,@Email);
+                """, new { Actor = actor, Email = email });
+
+            Assert.True(await repo.QueueTesterAsync("T001", new("persona-activation", email,
+                first, verifier, [], DateTimeOffset.UtcNow.AddMinutes(-6)), default));
+
+            _ = await invitations.ListAsync("T001", null, default);
+            _ = await invitations.ListAsync("T001", null, default);
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='EXPIRED';
+                """, new { Actor = actor, Hash = first }));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CANCELLED';
+                """, new { Actor = actor, Hash = first }));
+            Assert.Null(await repo.ActivateAsync("T001", first, verifier, new string('x', 72), default));
+            Assert.Equal("NotCancelled", (await invitations.CancelAsync("T001", actor, default)).State);
+
+            Assert.True(await repo.QueueTesterAsync("T001", new("persona-activation", email,
+                replacement, verifier, [], DateTimeOffset.UtcNow), default));
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='EXPIRED';
+                """, new { Actor = actor, Hash = first }));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CANCELLED';
+                """, new { Actor = actor, Hash = first }));
+            Assert.Equal(actor, await repo.ActivateAsync("T001", replacement, verifier,
+                new string('y', 72), default));
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CONSUMED';
+                """, new { Actor = actor, Hash = replacement }));
+        }
+        finally
+        {
+            await owner.ExecuteAsync("""
+                DELETE FROM customer_identity.persona_invitation_events WHERE actor_id=@Actor;
+                DELETE FROM customer_identity.persona_credentials WHERE actor_id=@Actor;
+                DELETE FROM customer_identity.registration_challenges WHERE email=@Email;
+                DELETE FROM customer_identity.tenant_principals WHERE actor_id=@Actor;
+                """, new { Actor = actor, Email = email });
+        }
+    }
+
     private static string Required(string key) =>
         Environment.GetEnvironmentVariable(key)
         ?? throw new InvalidOperationException("A dedicated LOCAL/CI identity test database is required.");
