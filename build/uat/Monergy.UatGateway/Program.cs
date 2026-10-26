@@ -187,7 +187,7 @@ static string? Route(string path, string method)
         && path.EndsWith("/cancel",StringComparison.Ordinal))
     {
         var actor=path[invitationCancel.Length..^"/cancel".Length];
-        if (actor.EndsWith("/",StringComparison.Ordinal))
+        if (actor.EndsWith('/'))
             actor=actor[..^1];
         if (TenantAccessClient.Identifier(actor,128))
             return "http://127.0.0.1:5101"+path[13..];
