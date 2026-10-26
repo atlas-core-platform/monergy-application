@@ -824,7 +824,9 @@ export function ImportDrawer({
                                   danger: true,
                                   loading: invitationActionActor === item.actorId,
                                 }}
-                                onConfirm={() => cancelInvitation(item)}
+                                onConfirm={() => {
+                                  void cancelInvitation(item);
+                                }}
                               >
                                 <Button
                                   danger
