@@ -830,11 +830,7 @@ export function ImportDrawer({
                                   danger
                                   size="small"
                                   aria-label={`Cancel invitation for ${item.email}`}
-                                  disabled={
-                                    invitationBusy ||
-                                    (invitationActionActor !== null &&
-                                      invitationActionActor !== item.actorId)
-                                  }
+                                  disabled={invitationBusy || invitationActionActor !== null}
                                 >
                                   Cancel invitation
                                 </Button>
