@@ -22,6 +22,10 @@ public static class PersonaInvitationStatusEndpoints
                         throw new TenantAccessException("ADMINISTRATION_CHANGED", 401);
                     return Results.Ok(result);
                 }
+                catch (TenantBoundaryException failure)
+                {
+                    return Results.Json(new { error = failure.Code }, statusCode: failure.Status);
+                }
                 catch (TenantAccessException failure)
                 {
                     return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode);
