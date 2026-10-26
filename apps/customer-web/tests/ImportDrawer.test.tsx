@@ -1,6 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ImportDrawer } from '../src/access/ImportDrawer';
 import { AccessApi } from '../src/access/accessApi';
@@ -100,34 +99,34 @@ it('creates one user through reviewed, versioned onboarding and recovers an unce
       />
     </FoundationProvider>,
   );
-  const user = userEvent.setup();
   await waitFor(() => {
     expect(screen.getByLabelText('Email address')).toBeEnabled();
   });
   fireEvent.change(screen.getByLabelText('Email address'), {
     target: { value: 'new@example.test' },
   });
-  await user.click(screen.getByRole('combobox', { name: 'Business role' }));
-  await user.click(
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Business role' }));
+  fireEvent.click(
     await screen.findByText('Financial analyst', { selector: '.ant-select-item-option-content' }),
   );
-  await user.click(screen.getByRole('combobox', { name: 'Teams' }));
-  await user.click(
+  const teams = screen.getByRole('combobox', { name: 'Teams' });
+  fireEvent.mouseDown(teams);
+  fireEvent.click(
     await screen.findByText('Advisory team', { selector: '.ant-select-item-option-content' }),
   );
-  await user.keyboard('{Escape}');
-  await user.click(screen.getByRole('button', { name: 'Review person' }));
+  fireEvent.keyDown(teams, { key: 'Escape', code: 'Escape' });
+  fireEvent.click(screen.getByRole('button', { name: 'Review person' }));
   expect(await screen.findByText('duplicate email')).toBeVisible();
   expect(calls.some((call) => call.url.endsWith('/commit'))).toBe(false);
   valid = true;
-  await user.click(screen.getByRole('button', { name: 'Review person' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review person' }));
   await screen.findByRole('region', { name: 'Review onboarding' });
   const review = within(screen.getByRole('region', { name: 'Review onboarding' }));
   expect(review.getByText('new@example.test')).toBeVisible();
   expect(review.getByText('Financial analyst')).toBeVisible();
   expect(review.getByText('Advisory team')).toBeVisible();
   expect(review.getByText('No', { exact: true })).toBeVisible();
-  await user.click(screen.getByRole('button', { name: 'Create person' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create person' }));
   expect(await screen.findByText(/Your request has not been confirmed/)).toBeVisible();
   expect(screen.getByRole('button', { name: 'Review person' })).toBeDisabled();
   expect(screen.getByLabelText('Email address')).toBeDisabled();
@@ -137,17 +136,17 @@ it('creates one user through reviewed, versioned onboarding and recovers an unce
     contentHash: 'server-hash',
     csv: 'email,role_code,group_codes\n"new@example.test","analyst","advisory"\n',
   });
-  await user.click(screen.getByRole('button', { name: 'Check status' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Check status' }));
   expect(await screen.findByText('Onboarding is not complete.')).toBeVisible();
   expect(
     calls.some((call) => call.url === commit?.url.replace('/commit', '') && call.method === 'GET'),
   ).toBe(true);
-  await user.click(screen.getByRole('button', { name: 'Review and retry' }));
-  await user.click(screen.getByRole('button', { name: 'Retry onboarding' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review and retry' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry onboarding' }));
   expect(await screen.findByText('Failed', { exact: true })).toBeVisible();
   expect(changed).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button', { name: 'Review and retry' }));
-  await user.click(screen.getByRole('button', { name: 'Retry onboarding' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review and retry' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry onboarding' }));
   expect(await screen.findByText('Person created.')).toBeVisible();
   expect(screen.getByText('Next step: the person activates their own account')).toBeVisible();
   expect(screen.getByText(/No password or signed-in session has been created/)).toBeVisible();
