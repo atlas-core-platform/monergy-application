@@ -254,7 +254,7 @@ it('lets a tenant administrator cancel only a pending credential invitation and 
     ),
   ).toBeVisible();
   fireEvent.click(
-    within(confirmation).getByRole('button', { name: 'Cancel invitation', exact: true }),
+    within(confirmation).getByRole('button', { name: 'Cancel invitation' }),
   );
 
   expect(
@@ -351,7 +351,7 @@ it('refreshes the authoritative invitation state when cancellation loses a termi
   );
   const confirmation = await screen.findByRole('tooltip');
   fireEvent.click(
-    within(confirmation).getByRole('button', { name: 'Cancel invitation', exact: true }),
+    within(confirmation).getByRole('button', { name: 'Cancel invitation' }),
   );
 
   expect(
