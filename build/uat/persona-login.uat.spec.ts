@@ -40,8 +40,10 @@ async function activate(page: Page, person: typeof people[number]) {
   const confirmation = page.waitForResponse((response) =>
     new URL(response.url()).pathname.endsWith('/tester/activation/confirm'));
   await page.getByRole('button', { name: 'Set password' }).click();
-  expect((await confirmation).status(), `${person.actor} activation`).toBe(200);
+  const activated = await confirmation;
+  expect(activated.status(), `${person.actor} activation`).toBe(200);
   await expect(page.getByText('Your password is set.')).toBeVisible();
+  await expect(page.locator('.mw-shell')).toHaveCount(0);
   await expect(page.getByRole('link', { name: 'Continue to sign in' }))
     .toHaveAttribute('href', person.path);
   const replay = await page.request.post(
@@ -84,6 +86,16 @@ test('Development profile exposes tester activation without an email server', as
     data: { tenantId, email: 'a300@example.test', returnPath: '/advisor' },
   });
   expect(denied.status()).toBe(403);
+  const incorrect = await request.post('/identity-api/local/v1/persona-credentials/tester/welcome-link', {
+    headers: { 'X-Monergy-Tester-Activation': 'incorrect-tester-authorization' },
+    data: { tenantId, email: 'a300@example.test', returnPath: '/advisor' },
+  });
+  expect(incorrect.status()).toBe(403);
+  const arbitrary = await request.post('/identity-api/local/v1/persona-credentials/tester/welcome-link', {
+    headers: { 'X-Monergy-Tester-Activation': testerSecret },
+    data: { tenantId, email: 'not-provisioned@example.test', returnPath: '/advisor' },
+  });
+  expect(arbitrary.status()).toBe(409);
 });
 
 test('invited users choose their own password from a stripped, single-use welcome link', async ({ page }) => {
