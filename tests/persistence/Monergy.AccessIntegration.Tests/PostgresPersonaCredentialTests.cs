@@ -463,6 +463,23 @@ public sealed class PostgresPersonaCredentialTests
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
                 """, new { Actor = actor, Hash = firstHash }));
 
+            var throttledId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+            var throttledHash = CustomerEmailCodeProtector.ChallengeHash(throttledId);
+            const string throttledCode = "222333";
+            await repo.QueueAsync("T001", new(
+                "persona-activation", email, throttledHash,
+                protector.Verifier("T001:persona-activation", throttledId, throttledCode),
+                protector.Protect("T001:persona-activation", throttledHash, throttledCode),
+                firstRequested.AddSeconds(10)), default);
+            Assert.Equal(firstHash, await owner.ExecuteScalarAsync<string>("""
+                SELECT challenge_hash FROM customer_identity.registration_challenges
+                WHERE purpose='persona-activation' AND email=@Email;
+                """, new { Email = email }));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CANCELLED';
+                """, new { Actor = actor, Hash = firstHash }));
+
             var secondId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
             var secondHash = CustomerEmailCodeProtector.ChallengeHash(secondId);
             const string secondCode = "654321";
