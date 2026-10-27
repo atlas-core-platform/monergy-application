@@ -20,8 +20,12 @@ export function PersonaTesterWelcomeRequestEntry({
   const [error, setError] = useState('');
   const [welcome, setWelcome] = useState<string | null>(null);
   const active = useRef<AbortController | null>(null);
+  const request = useRef<{ fingerprint: string; id: string } | null>(null);
+  const issuing = useRef(false);
   useEffect(() => () => { active.current?.abort(); }, []);
   async function requestWelcome(values: Values) {
+    if (issuing.current) return;
+    issuing.current = true;
     active.current?.abort();
     const controller = new AbortController();
     active.current = controller;
@@ -29,6 +33,12 @@ export function PersonaTesterWelcomeRequestEntry({
     setError('');
     setWelcome(null);
     const secret = values.testerSecret;
+    const tenantId = values.tenantId.trim();
+    const email = values.email.trim();
+    const fingerprint = tenantId + '\n' + email.toLowerCase() + '\n' + returnPath;
+    if (!request.current || request.current.fingerprint !== fingerprint)
+      request.current = { fingerprint, id: crypto.randomUUID().replaceAll('-', '') };
+    const requestId = request.current.id;
     form.setFieldValue('testerSecret', '');
     try {
       const response = await fetch('/identity-api/local/v1/persona-credentials/tester/welcome-link', {
@@ -38,9 +48,10 @@ export function PersonaTesterWelcomeRequestEntry({
           'X-Monergy-Tester-Activation': secret,
         },
         body: JSON.stringify({
-          tenantId: values.tenantId.trim(),
-          email: values.email.trim(),
+          tenantId,
+          email,
           returnPath,
+          requestId,
         }),
         cache: 'no-store', redirect: 'error', signal: controller.signal,
       });
@@ -55,6 +66,7 @@ export function PersonaTesterWelcomeRequestEntry({
       if (!controller.signal.aborted)
         setError('The protected tester welcome link is unavailable. Confirm your LOCAL tester authorization and the pre-provisioned account, or ask the test operator.');
     } finally {
+      issuing.current = false;
       if (!controller.signal.aborted) setPending(false);
     }
   }
@@ -70,7 +82,10 @@ export function PersonaTesterWelcomeRequestEntry({
       <Button block type="primary" onClick={() => { window.location.assign(welcome); }}>
         Open activation page
       </Button>
-      <Button block onClick={() => { setWelcome(null); }}>Request another link</Button>
+      <Button block onClick={() => {
+        request.current = null;
+        setWelcome(null);
+      }}>Request another link</Button>
     </> : <Form<Values> form={form} layout="vertical" initialValues={{ tenantId: 'T001' }}
       onFinish={values => { void requestWelcome(values); }}>
       <Form.Item name="tenantId" label="Organization"
@@ -92,6 +107,7 @@ export function PersonaTesterWelcomeRequestEntry({
     </Form>}
     <Button block type="text" disabled={pending} onClick={() => {
       active.current?.abort();
+      request.current = null;
       setWelcome(null);
       onBack();
     }}>Back to sign in</Button>
