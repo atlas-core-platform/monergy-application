@@ -70,7 +70,7 @@ it('posts the tester credential in a header and binds the welcome destination to
 });
 
 it('reuses the same request id after an uncertain transport failure', async () => {
-  const bodies: Array<{ requestId: string }> = [];
+  const bodies: { requestId: string }[] = [];
   let attempt = 0;
   const fetcher = vi.fn((_url: string, options?: RequestInit) => {
     if (typeof options?.body === 'string')

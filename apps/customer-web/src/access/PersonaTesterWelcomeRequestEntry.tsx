@@ -36,7 +36,7 @@ export function PersonaTesterWelcomeRequestEntry({
     const tenantId = values.tenantId.trim();
     const email = values.email.trim();
     const fingerprint = tenantId + '\n' + email.toLowerCase() + '\n' + returnPath;
-    if (!request.current || request.current.fingerprint !== fingerprint)
+    if (request.current?.fingerprint !== fingerprint)
       request.current = { fingerprint, id: crypto.randomUUID().replaceAll('-', '') };
     const requestId = request.current.id;
     form.setFieldValue('testerSecret', '');
