@@ -591,7 +591,36 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE invitation_hash=@Hash;
                 """, new { Hash = recoveryHash }));
-            Assert.True(sender.Calls >= 4);
+
+            foreach (var purpose in new[] { "registration", "recovery" })
+            {
+                var nonPersonaId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+                var nonPersonaHash = CustomerEmailCodeProtector.ChallengeHash(nonPersonaId);
+                const string nonPersonaCode = "333222";
+                await owner.ExecuteAsync("""
+                    INSERT INTO customer_identity.registration_challenges
+                      (purpose,email,challenge_hash,code_hash,protected_code,requested_at,
+                       expires_at,window_at,requests)
+                    VALUES(@Purpose,@Email,@Hash,@Verifier,@Protected,clock_timestamp(),
+                           clock_timestamp()+interval '5 minutes',clock_timestamp(),1);
+                    """, new {
+                        Purpose = purpose,
+                        Email = email,
+                        Hash = nonPersonaHash,
+                        Verifier = protector.Verifier("T001:" + purpose, nonPersonaId, nonPersonaCode),
+                        Protected = protector.Protect("T001:" + purpose, nonPersonaHash, nonPersonaCode)
+                    });
+                await delivery.DeliverAsync(default);
+                Assert.True(await owner.ExecuteScalarAsync<bool>("""
+                    SELECT delivered FROM customer_identity.registration_challenges
+                    WHERE challenge_hash=@Hash;
+                    """, new { Hash = nonPersonaHash }));
+                Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                    SELECT count(*) FROM customer_identity.persona_invitation_events
+                    WHERE invitation_hash=@Hash;
+                    """, new { Hash = nonPersonaHash }));
+            }
+            Assert.True(sender.Calls >= 6);
         }
         finally
         {
