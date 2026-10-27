@@ -21,20 +21,23 @@ test.beforeAll(() => {
 });
 
 async function activate(page: Page, person: typeof people[number]) {
+  const requestId = randomUUID().replaceAll('-', '');
+  const welcomeRequest = {
+    headers: { 'X-Monergy-Tester-Activation': testerSecret },
+    data: { tenantId, email: person.email, returnPath: person.path, requestId },
+  };
   const issued = await page.request.post(
     '/identity-api/local/v1/persona-credentials/tester/welcome-link',
-    {
-      headers: { 'X-Monergy-Tester-Activation': testerSecret },
-      data: {
-        tenantId,
-        email: person.email,
-        returnPath: person.path,
-        requestId: randomUUID().replaceAll('-', ''),
-      },
-    },
+    welcomeRequest,
   );
   expect(issued.status(), `${person.actor} welcome link`).toBe(200);
   const result = await issued.json() as { welcomePath: string; expiresAt: string };
+  const retried = await page.request.post(
+    '/identity-api/local/v1/persona-credentials/tester/welcome-link',
+    welcomeRequest,
+  );
+  expect(retried.status(), `${person.actor} idempotent welcome retry`).toBe(200);
+  expect(await retried.json()).toEqual(result);
   const link = new URL(result.welcomePath, 'http://local.test');
   const ticket = new URLSearchParams(link.hash.slice(1)).get('ticket');
   expect(ticket).toMatch(/^[0-9a-f]{64}$/);
@@ -100,6 +103,17 @@ test('Development profile exposes tester activation without an email server', as
     data: { tenantId, email: 'a300@example.test', returnPath: '/advisor' },
   });
   expect(incorrect.status()).toBe(403);
+  const invalidRequestId = await request.post(
+    '/identity-api/local/v1/persona-credentials/tester/welcome-link',
+    {
+      headers: { 'X-Monergy-Tester-Activation': testerSecret },
+      data: {
+        tenantId, email: 'a300@example.test', returnPath: '/advisor',
+        requestId: 'not-a-valid-request-id',
+      },
+    },
+  );
+  expect(invalidRequestId.status()).toBe(400);
   const arbitrary = await request.post('/identity-api/local/v1/persona-credentials/tester/welcome-link', {
     headers: { 'X-Monergy-Tester-Activation': testerSecret },
     data: {
