@@ -20,6 +20,10 @@ if (tenantIntegration)
 {
     if (!builder.Environment.IsDevelopment()) throw new InvalidOperationException("Tenant integration is Development-only.");
     builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 65_536);
+    // LOCAL/UAT intentionally runs in Development, where minimal API binding
+    // otherwise throws malformed-body failures instead of returning HTTP 400.
+    builder.Services.Configure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(
+        options => options.ThrowOnBadRequest = false);
     builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectRequiredConstructorParameters = true);
     builder.Services.AddTenantSessionAuthority(builder.Configuration);
     builder.Services.AddSingleton<Monergy.Services.CustomerIdentity.Infrastructure.PostgresPersonaInvitationStatus>();

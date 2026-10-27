@@ -12,7 +12,33 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
     public async Task QueueAsync(string tenant, RegistrationCode challenge, CancellationToken ct)
     {
         await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
-        await db.ExecuteAsync(new CommandDefinition("""
+        await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        PreviousInvitation? previous = null;
+        if (challenge.Purpose == "persona-activation")
+        {
+            // The production-like email path shares the same per-recipient
+            // renewal serialization as the LOCAL tester path. A replacement
+            // request must terminally close a previously delivered invitation
+            // before the new email can become the active issuance.
+            await db.ExecuteAsync(new CommandDefinition("""
+                SELECT pg_advisory_xact_lock(hashtextextended(@Email, 705904));
+                """, new { challenge.Email }, tx, cancellationToken: ct)).ConfigureAwait(false);
+            previous = await db.QuerySingleOrDefaultAsync<PreviousInvitation>(new CommandDefinition("""
+                SELECT c.challenge_hash AS ChallengeHash,
+                       c.expires_at<=clock_timestamp() AS Expired
+                FROM customer_identity.registration_challenges c
+                WHERE c.purpose='persona-activation' AND c.email=@Email
+                  AND c.delivered AND NOT c.consumed
+                  AND EXISTS(
+                    SELECT 1 FROM customer_identity.persona_invitation_events e
+                    WHERE e.invitation_hash=c.challenge_hash AND e.action='ISSUED'
+                  )
+                FOR UPDATE OF c;
+                """, new { challenge.Email }, tx, cancellationToken: ct)).ConfigureAwait(false);
+        }
+
+        var written = await db.ExecuteAsync(new CommandDefinition("""
             INSERT INTO customer_identity.registration_challenges AS c
             (purpose,email,challenge_hash,code_hash,protected_code,requested_at,expires_at,window_at,requests)
             SELECT @Purpose,@Email,@ChallengeHash,@CodeHash,@ProtectedCode,@RequestedAt,
@@ -37,7 +63,32 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                 attempts=0,consumed=false,delivered=false,delivery_attempt=0,lease_until=NULL
             WHERE c.requested_at<=@RequestedAt-interval '1 minute'
               AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5);
-            """, challenge, cancellationToken: ct)).ConfigureAwait(false);
+            """, challenge, transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
+
+        if (written == 1 && previous is not null &&
+            previous.ChallengeHash != challenge.ChallengeHash)
+        {
+            var action = previous.Expired ? "EXPIRED" : "CANCELLED";
+            await db.ExecuteAsync(new CommandDefinition("""
+                INSERT INTO customer_identity.persona_invitation_events
+                  (event_id,actor_id,invitation_hash,action)
+                SELECT @Event,e.actor_id,@Previous,@Action
+                  FROM customer_identity.persona_invitation_events e
+                 WHERE e.invitation_hash=@Previous AND e.action='ISSUED'
+                   AND NOT EXISTS(
+                     SELECT 1 FROM customer_identity.persona_invitation_events terminal
+                     WHERE terminal.invitation_hash=@Previous
+                       AND terminal.action IN ('CONSUMED','CANCELLED','EXPIRED')
+                   )
+                ON CONFLICT(invitation_hash,action) DO NOTHING;
+                """, new {
+                    Event = Guid.NewGuid(),
+                    Previous = previous.ChallengeHash,
+                    Action = action
+                }, tx, cancellationToken: ct)).ConfigureAwait(false);
+        }
+
+        await tx.CommitAsync(ct).ConfigureAwait(false);
     }
 
     public async Task<DateTimeOffset?> QueueTesterAsync(
@@ -236,8 +287,9 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                 INSERT INTO customer_identity.registration_events(event_id,action,actor_id)
                 VALUES(@Id,'PERSONA_ACTIVATED',@Actor);
                 """, new { Id = Guid.NewGuid(), Actor = actor }, tx, cancellationToken: ct)).ConfigureAwait(false);
-            // Existing production email activation may have no tester invitation;
-            // ledger writes are conditional, and share the credential transaction.
+            // LOCAL tester and successfully delivered persona-email invitations
+            // both enter the ledger. Keep this conditional for any legacy/non-ledger
+            // activation path, and commit consumption with the credential.
             await db.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO customer_identity.persona_invitation_events
                   (event_id,actor_id,invitation_hash,action)
