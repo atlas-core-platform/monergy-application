@@ -398,6 +398,7 @@ public sealed class PostgresPersonaCredentialTests
         await using var sessions = new PostgresTenantSessions(
             new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
         var repo = new PostgresPersonaCredentials(sessions);
+        var invitations = new PostgresPersonaInvitationStatus(sessions);
         await using var owner = new NpgsqlConnection(Required("AM05_CI_T001_OWNER"));
         await owner.OpenAsync();
 
@@ -435,6 +436,9 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
                 """, new { Actor = actor, Hash = firstHash }));
+            Assert.DoesNotContain(
+                (await invitations.ListAsync("T001", null, default)).Items,
+                item => item.ActorId == actor);
 
             sender.Fail = true;
             await delivery.DeliverAsync(default);
@@ -462,6 +466,9 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
                 """, new { Actor = actor, Hash = firstHash }));
+            Assert.Equal("Pending",
+                Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
+                    item => item.ActorId == actor).State);
 
             var throttledId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
             var throttledHash = CustomerEmailCodeProtector.ChallengeHash(throttledId);
@@ -479,6 +486,9 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CANCELLED';
                 """, new { Actor = actor, Hash = firstHash }));
+            Assert.Equal("Pending",
+                Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
+                    item => item.ActorId == actor).State);
 
             var secondId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
             var secondHash = CustomerEmailCodeProtector.ChallengeHash(secondId);
@@ -498,12 +508,18 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
                 """, new { Actor = actor, Hash = secondHash }));
+            Assert.Equal("Cancelled",
+                Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
+                    item => item.ActorId == actor).State);
 
             await delivery.DeliverAsync(default);
             Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
                 """, new { Actor = actor, Hash = secondHash }));
+            Assert.Equal("Pending",
+                Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
+                    item => item.ActorId == actor).State);
             Assert.Null(await repo.ActivateAsync(
                 "T001", firstHash, firstVerifier, new string('x', 72), default));
             Assert.Equal(actor, await repo.ActivateAsync(
@@ -512,6 +528,9 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CONSUMED';
                 """, new { Actor = actor, Hash = secondHash }));
+            Assert.Equal("Completed",
+                Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
+                    item => item.ActorId == actor).State);
 
             var recoveryId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
             var recoveryHash = CustomerEmailCodeProtector.ChallengeHash(recoveryId);
