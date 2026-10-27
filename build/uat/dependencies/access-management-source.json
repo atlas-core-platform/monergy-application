@@ -4,10 +4,10 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "d8d9d80d955ec741d7afaf3e0ffccba9d3a03f18",
-  "sourceTree": "37feeba86ba0eea70e0cdd957d8c84496305a3ac",
-  "verificationStatus": "T1_96_MERGED_PACK_TESTED_PHYSICAL_UAT_NOT_RUN",
-  "candidatePullRequest": 16,
+  "commit": "e34287dbcefd8bb3b8cf41cf04415bd83dbe19d2",
+  "sourceTree": "3a60c3543e361b710e79fa399bf8de55b574a520",
+  "verificationStatus": "ID_A03_CUSTOMER_JOB_READ_CANDIDATE_LOCAL_UAT_PENDING",
+  "candidatePullRequest": 19,
   "files": [
     {
       "path": "Directory.Build.props",
@@ -35,11 +35,19 @@
     },
     {
       "path": "src/Monergy.AccessManagement/AdministrationEndpoints.cs",
-      "gitBlobSha": "4554122b9987572accc13b3b2a74b9993b3b7a92"
+      "gitBlobSha": "b53bdd891e5d57c2627bc3f49c7cd0a6bb6059df"
     },
     {
       "path": "src/Monergy.AccessManagement/AdministrationModels.cs",
       "gitBlobSha": "f8b3079b0d2c43c579cf20b039f58fcca25a1ade"
+    },
+    {
+      "path": "src/Monergy.AccessManagement/AdvisorContext.cs",
+      "gitBlobSha": "9e6ae4fd41a90e06dda092309ec2127ffb9f89b6"
+    },
+    {
+      "path": "src/Monergy.AccessManagement/AdvisorCustomers.cs",
+      "gitBlobSha": "01bdaeb2688f4db6df70623b82158256693849bd"
     },
     {
       "path": "src/Monergy.AccessManagement/BulkImportAdministration.cs",
@@ -51,7 +59,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerAccess.cs",
-      "gitBlobSha": "3932b782e6d8ff7b1583c4eb3f68f54e737af415"
+      "gitBlobSha": "126e1a42cb63bc14581849c2a5020370f4f2800c"
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerEnrollment.cs",
@@ -103,7 +111,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/Program.cs",
-      "gitBlobSha": "3fa15c95b1b50fcbca1ad77a802227952066c7e3"
+      "gitBlobSha": "73dca2998400bb9ab4add1c6cac8cb743f6beb9a"
     },
     {
       "path": "src/Monergy.AccessManagement/ReferenceAdapters.cs",

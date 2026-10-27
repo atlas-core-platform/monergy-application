@@ -29,8 +29,13 @@ public interface ICustomerRelationshipStore
 public static class CustomerAccessPolicy
 {
     public const string AdvicePurpose = "customer-advice";
+    public const string CustomerJobRead = "job-management.job.read";
+    // Job Management defines job.read as a tenant-scoped capability; it is
+    // allowed by this customer-bound evaluator only for verified SELF ownership.
+    // It is never delegated to advisors through a customer relationship.
     public static bool Supports(CapabilityDefinition capability) =>
-        capability.ResourceType is "customer" or "document" or "report" || capability.CapabilityId == "search.query.execute";
+        capability.ResourceType is "customer" or "document" or "report" ||
+        capability.CapabilityId is "search.query.execute" or CustomerJobRead;
 }
 
 // This is a customer-scope precondition, never proof that a document/report belongs
@@ -55,11 +60,14 @@ public sealed class CustomerAccessEvaluator(IAccessPolicyStore policies, ICustom
             if (string.IsNullOrWhiteSpace(roleId)) return Decision("NoBusinessRole");
             var role = await policies.GetRolePolicyAsync(actor.TenantId, roleId, state.PolicyVersion, ct).ConfigureAwait(false);
             if (role is null || role.RoleId != roleId || role.PolicyVersion != state.PolicyVersion) return Decision("PolicyUnavailable");
-            if (!role.Grants.Any(grant => grant.CapabilityId == request.CapabilityId && Enum.IsDefined(grant.Scope)))
+            if (!role.Grants.Any(grant => grant.CapabilityId == request.CapabilityId && Enum.IsDefined(grant.Scope) &&
+                (request.CapabilityId != CustomerAccessPolicy.CustomerJobRead || grant.Scope == AuthorizationScope.Tenant)))
                 return Decision("CapabilityNotGranted");
             customer = await customers.ReadAsync(actor.TenantId, request.CustomerId, ct).ConfigureAwait(false);
             if (!Valid(customer)) return Decision("CustomerUnavailable");
             var self = customer!.OwnerActorId == actor.ActorId;
+            if (!self && request.CapabilityId == CustomerAccessPolicy.CustomerJobRead)
+                return Decision("CustomerCapabilityUnsupported");
             if (!self && !await relationships.IsAssignedAsync(actor.TenantId, actor.ActorId, request.CustomerId, ct).ConfigureAwait(false))
                 return Decision("CustomerRelationshipRequired");
             if (!self)

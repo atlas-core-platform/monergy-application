@@ -85,7 +85,7 @@ export class AccessApiError extends Error {
       status === 401
         ? 'Your session has ended. Connect again to continue.'
         : status === 403
-          ? 'Organization Administrator access is required.'
+          ? 'This action is not included in your current access. Review your permissions and try again.'
           : status === 409
             ? 'The workspace changed or this operation conflicts with current access. Refresh and review before retrying.'
             : status === 503
@@ -172,7 +172,10 @@ export class AccessApi {
       if (
         !this.lifecycle?.signal.aborted &&
         failure instanceof AccessApiError &&
-        [401, 403].includes(failure.status)
+        (failure.status === 401 ||
+          failure.status === 403 &&
+          ['TENANT_ADMIN_REQUIRED', 'ADVISOR_ROLE_REQUIRED',
+           'PRODUCT_CUSTOMER_REQUIRED', 'KYC_REVIEW_DENIED', 'AUTHORITY_ENDED'].includes(failure.code))
       )
         this.lifecycle?.onFailure(failure);
       throw failure;
@@ -245,6 +248,25 @@ export class AccessApi {
         'X-Monergy-Session': this.session.authenticationContextId,
       },
     });
+  }
+  cancelPersonaInvitation<T>(actorId: string, signal?: AbortSignal): Promise<T> {
+    if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(actorId))
+      return Promise.reject(new AccessApiError(400, 'INVALID_ACTOR_ID'));
+    return this.guarded<T>(
+      '/identity-api/local/v1/administration/persona-invitations/' +
+        encodeURIComponent(actorId) +
+        '/cancel',
+      {
+        method: 'POST',
+        signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Monergy-Tenant': this.session.tenantId,
+          'X-Monergy-Session': this.session.authenticationContextId,
+        },
+        body: '{}',
+      },
+    );
   }
   product<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
     return this.guarded<T>('/product-api/' + path, {

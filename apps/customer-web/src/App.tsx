@@ -10,6 +10,7 @@ import './workspace/workspace-home.css';
 import { localUat, useWorkspaceSession } from './access/workspaceSession';
 import { WorkspaceSessionProvider } from './access/WorkspaceSessionProvider';
 import { WorkspaceEntry } from './access/WorkspaceEntry';
+import { PersonaWelcomeEntry } from './access/PersonaWelcomeEntry';
 const TenantSetupGate = lazy(() =>
   import('./access/TenantSetup').then((module) => ({ default: module.TenantSetupGate })),
 );
@@ -32,6 +33,7 @@ const MonthlyCashflowExperience = lazy(() => import('./product/MonthlyCashflowEx
 const NetWorthExperience = lazy(() => import('./product/NetWorthExperience'));
 const ProductActionCentreExperience = lazy(() => import('./product/ProductActionCentreExperience'));
 const AccessExperience = lazy(() => import('./access/AccessExperience'));
+const AdvisorWorkspace = lazy(() => import('./advisor/AdvisorWorkspace'));
 const { Paragraph, Text, Title } = Typography;
 
 function ToolchainFoundation() {
@@ -121,6 +123,7 @@ function ToolchainFoundation() {
 }
 
 function RouteContent() {
+  if (window.location.pathname === '/advisor') return <Suspense fallback={<main aria-busy="true">Loading Advisor workspace…</main>}><AdvisorWorkspace /></Suspense>;
   if (window.location.pathname === '/financial-qa') return <Suspense fallback={<main aria-busy="true">Loading Q&A…</main>}><FinancialQaExperience /></Suspense>;
   if (window.location.pathname === '/settings/sessions')
     return <Suspense fallback={<main aria-busy="true">Loading sessions…</main>}><SelfSessionsExperience /></Suspense>;
@@ -250,7 +253,10 @@ function RouteContent() {
 }
 
 export function App() {
-  const area = window.location.pathname === '/kyc/reviews' ? 'kyc-review' :
+  if (window.location.pathname === '/welcome')
+    return <FoundationProvider appearance="midnight"><PersonaWelcomeEntry /></FoundationProvider>;
+  const area = window.location.pathname === '/advisor' ? 'advisor' :
+    window.location.pathname === '/kyc/reviews' ? 'kyc-review' :
     window.location.pathname === '/access' ||
     window.location.pathname.startsWith('/access/') ||
     window.location.pathname === '/operations'
@@ -268,7 +274,7 @@ function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
   return (
     <WorkspaceShell
       {...props}
-      context={product?.customerName ?? (session ? 'Organization Settings' : undefined)}
+      context={product?.customerName ?? (authorization?.area === 'advisor' ? 'Financial Advisor' : session ? 'Organization Settings' : undefined)}
       actions={
         session ? (
           <Button
@@ -304,6 +310,12 @@ function WorkspaceApplication() {
       const link = event.target instanceof Element ? event.target.closest('a') : null;
       if (!link || link.target || link.hasAttribute('download')) return;
       const url = new URL(link.href);
+      // Crossing into/out of the Advisor security area must remount the
+      // WorkspaceSessionProvider; a client-side history push would retain
+      // the previous area's verified authorization until a full reload.
+      if (url.origin === window.location.origin &&
+          (window.location.pathname === '/advisor') !== (url.pathname === '/advisor'))
+        return;
       if (
         url.origin !== window.location.origin ||
         !(
@@ -314,6 +326,7 @@ function WorkspaceApplication() {
             '/net-worth', '/monthly-cashflow',
             '/actions',
             '/access',
+            '/advisor',
             '/reports',
             '/search',
             '/financial-qa',
@@ -341,7 +354,9 @@ function WorkspaceApplication() {
   }, []);
   const inAdministration =
     path === '/access' || path.startsWith('/access/') || path === '/operations';
-  const navigation = path==='/kyc/reviews' ? [{id:'kyc-reviews',label:'KYC reviews',icon:'shield' as const,href:'/kyc/reviews'}] : inAdministration ? accessDestinations : destinations;
+  const inAdvisor = path === '/advisor';
+  const advisorNavigation = [{id:'advisor-overview', label:'Overview', icon:'home' as const, href:'/advisor'}];
+  const navigation = inAdvisor ? advisorNavigation : path==='/kyc/reviews' ? [{id:'kyc-reviews',label:'KYC reviews',icon:'shield' as const,href:'/kyc/reviews'}] : inAdministration ? accessDestinations : destinations;
   const current =
     navigation.find(
       (destination) =>
@@ -354,7 +369,7 @@ function WorkspaceApplication() {
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
   const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/monthly-cashflow', '/financial-qa', '/search', '/reports', '/consent', '/connections', '/profile', '/kyc', '/kyc/reviews', '/settings/sessions', '/settings/agreements'].includes(path);
-  const gated = inAdministration || productProtected || localUat;
+  const gated = inAdvisor || inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';
   }, []);
@@ -366,7 +381,10 @@ function WorkspaceApplication() {
     <SessionShell
       appearance="midnight"
       destinations={navigation}
-      module={inAdministration ? accessModule : productModule}
+      module={inAdvisor ? {
+         name: 'Financial Advisor', homeHref: '/advisor',
+         guide: <p>Advisor work requires an active role, permitted capability, named customer assignment and current customer consent. Workspace entry does not grant financial access.</p>,
+       } : inAdministration ? accessModule : productModule}
       onNavigate={(id) => {
         const href = navigation.find((item) => item.id === id)?.href;
         if (!href) return;
@@ -387,7 +405,7 @@ function WorkspaceApplication() {
   return (
     <FoundationProvider appearance="midnight">
       {gated ? (
-        <WorkspaceEntry area={path==='/kyc/reviews'?'kyc-review':inAdministration ? 'administration' : 'product'}>
+        <WorkspaceEntry area={inAdvisor ? 'advisor' : path==='/kyc/reviews'?'kyc-review':inAdministration ? 'administration' : 'product'}>
           {inAdministration ? (
             <Suspense
               fallback={

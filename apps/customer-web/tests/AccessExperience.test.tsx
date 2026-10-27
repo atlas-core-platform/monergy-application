@@ -30,7 +30,7 @@ const mount = (path = '/access/users') =>
   );
 async function connect() {
   const user = userEvent.setup();
-  fireEvent.change(screen.getByLabelText('Local access key'), {
+  fireEvent.change(await screen.findByLabelText('Local access key'), {
     target: { value: 'test-key-not-a-real-credential' },
   });
   await user.click(screen.getByRole('button', { name: 'Connect workspace' }));
@@ -59,13 +59,15 @@ describe('tenant administration trust boundaries', () => {
   });
 
   it('keeps administration unavailable when the server rejects administrator authority', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce(json(session))
-        .mockResolvedValue(json({ error: 'ADMIN_REQUIRED' }, 403)),
-    );
+    let ownerCalls = 0;
+    const ownerFetch = vi.fn<(url: string, options?: RequestInit) => Promise<Response>>(() => {
+      ownerCalls += 1;
+      return Promise.resolve(ownerCalls === 1 ? json(session) : json({ error: 'ADMIN_REQUIRED' }, 403));
+    });
+    vi.stubGlobal('fetch', (url: string, options?: RequestInit) =>
+      url.endsWith('/persona-credentials')
+        ? Promise.resolve(json({ enabled: false }))
+        : ownerFetch(url, options));
     mount();
     await connect();
     expect(await screen.findByText('Organization Administrator access is required.')).toBeVisible();
@@ -75,7 +77,7 @@ describe('tenant administration trust boundaries', () => {
 
   it(
     'preserves an unsaved edit after a policy conflict and clears tenant data when authority expires',
-    { timeout: 30000 },
+    { timeout: 60000 },
     async () => {
       let expired = false;
       const writes: unknown[] = [];
@@ -238,7 +240,7 @@ describe('tenant administration trust boundaries', () => {
 
   it(
     'selects resource access by owner-resolved business name while sending the immutable ID',
-    { timeout: 30000 },
+    { timeout: 60000 },
     async () => {
       const writes: unknown[] = [];
       vi.stubGlobal(

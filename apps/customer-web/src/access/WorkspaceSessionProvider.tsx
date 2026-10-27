@@ -11,7 +11,7 @@ import type {
   WorkspaceSessionState,
 } from './workspaceSession';
 
-type WorkspaceArea = 'administration' | 'product' | 'kyc-review';
+type WorkspaceArea = 'administration' | 'product' | 'kyc-review' | 'advisor';
 type Snapshot = Pick<
   WorkspaceSessionState,
   'status' | 'session' | 'api' | 'authorization' | 'message' | 'recovery'
@@ -52,6 +52,24 @@ async function verify(
     const context = await new AccessApi(current).basicKyc<{tenantId:string;actorId:string;authority:string}>('reviewer-context','GET',undefined,signal);
     if(context.tenantId!==current.tenantId || context.actorId!==current.actorId || context.authority!=='KycReviewer') throw new AccessApiError(403,'KYC_REVIEW_DENIED');
     return {area:'kyc-review',authority:'KycReviewer'};
+  }
+  if (area === 'advisor') {
+    const context = await new AccessApi(current).request<{
+      tenantId: string; actorId: string; authority: string;
+      policyVersion: number; subjectVersion: number; recordedRelationshipCount: number;
+    }>('advisor/context', 'GET', undefined, signal);
+    if (!validSession(current, current.tenantId) ||
+        context.tenantId !== current.tenantId || context.actorId !== current.actorId ||
+        context.authority !== 'FinancialAdvisor' ||
+        !Number.isSafeInteger(context.policyVersion) || context.policyVersion < 1 ||
+        !Number.isSafeInteger(context.subjectVersion) || context.subjectVersion !== current.subjectVersion ||
+        !Number.isSafeInteger(context.recordedRelationshipCount) || context.recordedRelationshipCount < 0)
+      throw new AccessApiError(503, 'ADVISOR_CONTEXT_INVALID');
+    return {
+      area: 'advisor', authority: 'FinancialAdvisor',
+      policyVersion: context.policyVersion, subjectVersion: context.subjectVersion,
+      recordedRelationshipCount: context.recordedRelationshipCount,
+    };
   }
   if (area === 'product') {
     const context = await new AccessApi(current).product<ProductWorkspaceContext | null>(
@@ -208,7 +226,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
             failure instanceof AccessApiError && failure.status === 403
               ? area === 'administration'
                 ? 'Organization Administrator access is required.'
-                : area === 'kyc-review' ? 'Current named KYC reviewer assignment is required.' : 'A customer workspace and product role are required.'
+                : area === 'kyc-review' ? 'Current named KYC reviewer assignment is required.' : area === 'advisor' ? 'An active Financial Advisor / Relationship Manager role is required.' : 'A customer workspace and product role are required.'
               : failure instanceof AccessApiError && failure.status === 401
                 ? method === 'password'
                   ? 'Unable to sign in. Check your organization, email and password, or use Forgot password.'
@@ -234,6 +252,16 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
   const connect = useCallback((tenant: string, key: string) =>
     connectUsing(tenant, (signal) => establishSession(tenant, key, signal)), [connectUsing]);
   const connectPassword = useCallback((tenant: string, email: string, password: string) => connectUsing(tenant, signal => registrationRequest<TenantSession>('/sign-in', { tenantId: tenant, email, password }, signal), 'password'), [connectUsing]);
+  const connectPersonaPassword = useCallback((tenant: string, email: string, password: string) =>
+    connectUsing(tenant, async signal => {
+      const response = await fetch('/identity-api/local/v1/persona-credentials/sign-in', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: tenant, email, password }), cache: 'no-store',
+        redirect: 'error', signal,
+      });
+      if (!response.ok) throw new AccessApiError(response.status, 'PERSONA_SIGN_IN_FAILED');
+      return await response.json() as TenantSession;
+    }, 'password'), [connectUsing]);
   const connectEmail = useCallback((tenant: string, challengeId: string, code: string) =>
     connectUsing(tenant, (signal) => confirmCustomerEmailCode(tenant, challengeId, code, signal), 'email'), [connectUsing]);
   const refreshContext = useCallback(async () => {
@@ -344,7 +372,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     };
   }, [state.session, leave, retry]);
   return (
-    <Context.Provider value={{ ...state, connect, connectEmail, connectPassword, refreshContext, retry, signOut, cancel }}>
+    <Context.Provider value={{ ...state, connect, connectEmail, connectPassword, connectPersonaPassword, refreshContext, retry, signOut, cancel }}>
       {children}
     </Context.Provider>
   );

@@ -143,10 +143,7 @@ app.Map("/{**path}", async (HttpContext http, HttpClient client, IWebHostEnviron
     if (!HttpMethods.IsGet(http.Request.Method) || path.StartsWith("/uat-api/", StringComparison.Ordinal) || path.StartsWith("/product-api/", StringComparison.Ordinal) || path.Contains("api/", StringComparison.Ordinal) || path.StartsWith("/contracts/", StringComparison.Ordinal))
     { http.Response.StatusCode = 404; return; }
     // Static files are handled earlier; only known SPA destinations get the shell.
-    if (path is not ("/" or "/actions" or "/evidence" or "/access" or "/access/users" or "/access/users/history" or
-        "/access/roles" or "/access/permissions" or "/access/groups" or "/access/resources" or
-        "/access/activity" or "/access/audit" or "/access/sessions" or "/access/customers" or "/access/processing" or "/access/documents" or "/operations" or
-        "/kyc" or "/kyc/reviews" or "/monthly-cashflow" or "/net-worth" or "/financial-qa" or "/search" or "/reports" or "/finances" or "/consent" or "/connections" or "/connections/onedrive" or "/profile" or "/settings/sessions" or "/settings/agreements" or "/vs02" or "/foundation"))
+    if (!SpaRouteAllowlist.Contains(path))
     { http.Response.StatusCode = 404; return; }
     http.Response.ContentType = "text/html; charset=utf-8";
     await http.Response.SendFileAsync(Path.Combine(environment.WebRootPath, "index.html"), http.RequestAborted).ConfigureAwait(false);
@@ -185,6 +182,18 @@ static string? Route(string path, string method)
           (method=="GET"&&(parts.Length==1||parts.Length==2&&parts[1] is "attempts" or "history"||parts.Length==3&&parts[1]=="changes"&&Guid.TryParseExact(parts[2],"N",out _))||
            method=="POST"&&parts.Length==2&&parts[1]=="changes"))return "http://127.0.0.1:5118"+path[9..];
     }
+    const string invitationCancel="/identity-api/local/v1/administration/persona-invitations/";
+    if (method=="POST" && path.StartsWith(invitationCancel,StringComparison.Ordinal)
+        && path.EndsWith("/cancel",StringComparison.Ordinal))
+    {
+        var actor=path[invitationCancel.Length..^"/cancel".Length];
+        if (actor.EndsWith('/'))
+            actor=actor[..^1];
+        if (TenantAccessClient.Identifier(actor,128))
+            return "http://127.0.0.1:5101"+path[13..];
+    }
+    if (path == "/identity-api/local/v1/administration/persona-invitations" && method == "GET")
+        return "http://127.0.0.1:5101" + path[13..];
     const string customers="/identity-api/local/v1/administration/customers";
     if((path==customers&&method=="GET"||path==customers+"/labels"&&method=="POST"))return "http://127.0.0.1:5101"+path[13..];
     if(path.StartsWith(customers+"/",StringComparison.Ordinal))
@@ -199,6 +208,15 @@ static string? Route(string path, string method)
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/customer-email-access" && method == "GET" ||
         path is "/identity-api/local/v1/customer-email-access/request" or "/identity-api/local/v1/customer-email-access/confirm" && method == "POST")
+        return "http://127.0.0.1:5101" + path[13..];
+    if (path == "/identity-api/local/v1/persona-credentials" && method == "GET" ||
+        path is "/identity-api/local/v1/persona-credentials/activation/request" or
+                "/identity-api/local/v1/persona-credentials/activation/confirm" or
+                "/identity-api/local/v1/persona-credentials/sign-in" or
+                "/identity-api/local/v1/persona-credentials/recovery/request" or
+                "/identity-api/local/v1/persona-credentials/recovery/confirm" or
+                "/identity-api/local/v1/persona-credentials/tester/welcome-link" or
+                "/identity-api/local/v1/persona-credentials/tester/activation/confirm" && method == "POST")
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/me/workspace-setup" && method == "GET")
         return "http://127.0.0.1:5101" + path[13..];
@@ -253,6 +271,13 @@ static async Task ProxyAsync(HttpContext http, HttpClient client, Uri target)
         var value = http.Request.Headers[name];
         if (value.Count > 1 || value.ToString().Length > 256) throw new TenantBoundaryException("INVALID_HEADER", 400);
         if (value.Count == 1) request.Headers.Add(name, value.ToString());
+    }
+    if (http.Request.Path == "/identity-api/local/v1/persona-credentials/tester/welcome-link")
+    {
+        var value = http.Request.Headers["X-Monergy-Tester-Activation"];
+        if (value.Count > 1 || value.ToString().Length > 256)
+            throw new TenantBoundaryException("INVALID_HEADER", 400);
+        if (value.Count == 1) request.Headers.Add("X-Monergy-Tester-Activation", value.ToString());
     }
     if (http.Request.Method is "POST" or "PUT" or "DELETE")
     {

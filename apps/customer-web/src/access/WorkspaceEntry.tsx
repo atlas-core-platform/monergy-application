@@ -5,6 +5,7 @@ import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { useWorkspaceSession } from './workspaceSession';
 import { CustomerRegistrationEntry } from './CustomerRegistrationEntry';
 import { CustomerEmailEntry } from './CustomerEmailEntry';
+import { PersonaCredentialEntry } from './PersonaCredentialEntry';
 import './access.css';
 
 export function WorkspaceEntry({
@@ -12,16 +13,42 @@ export function WorkspaceEntry({
   area = 'administration',
 }: {
   children: ReactNode;
-  area?: 'administration' | 'product' | 'kyc-review';
+  area?: 'administration' | 'product' | 'kyc-review' | 'advisor';
 }) {
-  const { status, session, message, connect, connectEmail, connectPassword, retry, cancel } = useWorkspaceSession();
+  const { status, session, message, connect, connectEmail, connectPassword, connectPersonaPassword, retry, cancel } = useWorkspaceSession();
   const [form] = Form.useForm<{ tenantId: string; key: string }>();
   const [emailAvailable, setEmailAvailable] = useState(false);
-  const [method, setMethod] = useState<'auto' | 'password' | 'email' | 'local'>('auto');
+  const [method, setMethod] = useState<'auto' | 'password' | 'persona' | 'email' | 'local'>('auto');
   const [registrationAvailable, setRegistrationAvailable] = useState<boolean | null>(null);
-  const registrationEntry = method === 'password' || method === 'auto' && registrationAvailable === true;
+  const [personaAvailable, setPersonaAvailable] = useState<boolean | null>(null);
+  const [personaActivation, setPersonaActivation] = useState<'email' | 'tester-link'>('email');
+  // Existing provisioned identities use the common credential entry.
+  // Customer self-registration remains an explicit separate choice.
+  const personaEntry = method === 'persona' ||
+    method === 'auto' && personaAvailable === true;
+  const registrationEntry = area === 'product' &&
+    (method === 'password' || method === 'auto' &&
+      personaAvailable !== true && registrationAvailable === true);
   const emailEntry = method === 'email';
-  const loadingMethods = area === 'product' && !!connectPassword && method === 'auto' && registrationAvailable === null;
+  const loadingMethods = method === 'auto' &&
+    (personaAvailable === null || area === 'product' && registrationAvailable === null);
+  useEffect(() => {
+    if (!connectPersonaPassword) return;
+    const controller = new AbortController();
+    void fetch('/identity-api/local/v1/persona-credentials', {
+      cache: 'no-store', redirect: 'error', signal: controller.signal,
+    }).then(async response => {
+      const value: unknown = response.ok ? await response.json() : null;
+      if (!controller.signal.aborted) {
+        setPersonaAvailable(!!value && typeof value === 'object' && 'enabled' in value && value.enabled === true);
+        setPersonaActivation(!!value && typeof value === 'object' && 'activation' in value &&
+          value.activation === 'tester-link' ? 'tester-link' : 'email');
+      }
+    }).catch(() => {
+      if (!controller.signal.aborted) setPersonaAvailable(false);
+    });
+    return () => { controller.abort(); };
+  }, [connectPersonaPassword]);
   useEffect(() => { if (area !== 'product' || !connectPassword) return; const controller = new AbortController(); void fetch('/identity-api/local/v1/customer-registration', { cache: 'no-store', redirect: 'error', signal: controller.signal }).then(async r => { const v: unknown = r.ok ? await r.json() : null; if (!controller.signal.aborted) setRegistrationAvailable(!!v && typeof v === 'object' && 'enabled' in v && v.enabled === true); }).catch(() => { if (!controller.signal.aborted) setRegistrationAvailable(false); }); return () => { controller.abort(); }; }, [area, connectPassword]);
   useEffect(() => {
     if (area !== 'product' || !connectEmail) return;
@@ -51,24 +78,24 @@ export function WorkspaceEntry({
       <main className="access-public-body">
         <section className="access-public-intro">
           <p className="workspace-eyebrow">
-            {area === 'administration' ? 'ORGANIZATION SETTINGS' : 'FINANCIAL WORKSPACE'}
+            {area === 'administration' ? 'ORGANIZATION SETTINGS' : area === 'advisor' ? 'FINANCIAL ADVISOR WORKSPACE' : 'FINANCIAL WORKSPACE'}
           </p>
           <h1>
-            {area === 'administration' ? 'Clear access.' : 'Financial clarity.'}
+            {area === 'administration' ? 'Clear access.' : area === 'advisor' ? 'Support clients.' : 'Financial clarity.'}
             <br />
-            {area === 'administration' ? 'Confident decisions.' : 'Grounded in your information.'}
+            {area === 'administration' ? 'Confident decisions.' : area === 'advisor' ? 'Respect consent.' : 'Grounded in your information.'}
           </h1>
           <p>
             {area === 'administration'
               ? 'Manage the people, roles and access permissions that keep your organization in control.'
-              : 'Bring your financial information together in a private, traceable workspace.'}
+              : area === 'advisor' ? 'Review your own role and permitted assignments. Customer information remains private until access and consent are verified.' : 'Bring your financial information together in a private, traceable workspace.'}
           </p>
           <div className="access-public-assurance">
             <WorkspaceIcon name="shield" size={18} />
             <span>
               {area === 'administration'
                 ? 'Administration becomes available after your identity and organization authority have been verified.'
-                : 'Your workspace becomes available after your identity, customer ownership and product access have been verified.'}
+                : area === 'advisor' ? 'Advisor access requires your active Financial Advisor role. Customer-specific work also requires assignment, permitted business capabilities and current consent.' : 'Your workspace becomes available after your identity, customer ownership and product access have been verified.'}
             </span>
           </div>
         </section>
@@ -77,7 +104,7 @@ export function WorkspaceEntry({
             <WorkspaceIcon name="shield" size={20} />
           </span>
           <h2 id="access-connect-title">Connect to your workspace</h2>
-          {!loadingMethods && !registrationEntry && !emailEntry && <p>Enter the organization and local key provided by your administrator.</p>}
+          {!loadingMethods && !registrationEntry && !personaEntry && !emailEntry && <p>Enter the organization and local key provided by your administrator.</p>}
           {message && (
             <Alert
               showIcon
@@ -106,9 +133,19 @@ export function WorkspaceEntry({
               </Button>
             </>
           ) : loadingMethods ? (
-            <p role="status">Checking available sign-in methods…</p>
+            <>
+              <p role="status">Checking available sign-in methods…</p>
+              <Button block type="text" onClick={() => { setMethod('local'); }}>
+                Use a local test key
+              </Button>
+            </>
           ) : registrationEntry && connectPassword ? (
             <CustomerRegistrationEntry busy={busy} onSignIn={connectPassword} onCancel={() => { cancel(); setMethod('local'); }} />
+          ) : personaEntry && connectPersonaPassword ? (
+            <PersonaCredentialEntry busy={busy} onSignIn={connectPersonaPassword}
+              activationMode={personaActivation}
+              returnPath={area === 'administration' ? '/access' : area === 'advisor' ? '/advisor' : '/'}
+              onCancel={() => { cancel(); setMethod('local'); }} />
           ) : emailEntry && connectEmail ? (
             <CustomerEmailEntry busy={busy} onVerify={connectEmail} onCancel={() => { cancel(); setMethod('local'); }} />
           ) : (
@@ -174,10 +211,15 @@ export function WorkspaceEntry({
               )}
             </Form>
           )}
-          {!registrationEntry && !emailEntry && registrationAvailable === true && status !== 'disconnected' && <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('password'); }}>Sign in or create an account</Button>}
-          {!registrationEntry && !emailEntry && emailAvailable && status !== 'disconnected' && <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('email'); }}>Use an email code</Button>}
-          {area === 'product' && (loadingMethods || registrationEntry || emailEntry) && status !== 'disconnected' && <Button block type="link" onClick={() => { cancel(); setMethod('local'); }}>Use a local test key</Button>}
-          {!loadingMethods && !registrationEntry && !emailEntry && <p className="access-connect-footnote">
+          {!registrationEntry && registrationAvailable === true && area === 'product' && status !== 'disconnected' &&
+            <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('password'); }}>Sign in or create an account</Button>}
+          {!personaEntry && personaAvailable === true && status !== 'disconnected' &&
+            <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('persona'); }}>Sign in with an activated account</Button>}
+          {!emailEntry && emailAvailable && area === 'product' && status !== 'disconnected' &&
+            <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('email'); }}>Use an email code</Button>}
+          {(registrationEntry || personaEntry || emailEntry) && status !== 'disconnected' &&
+            <Button block type="link" disabled={busy} onClick={() => { cancel(); setMethod('local'); }}>Use a local test key</Button>}
+          {!loadingMethods && !registrationEntry && !personaEntry && !emailEntry && <p className="access-connect-footnote">
             Your key is cleared after use. Test-environment keys do not configure production
             sign-in.
           </p>}

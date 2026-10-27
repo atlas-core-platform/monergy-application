@@ -1,6 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ImportDrawer } from '../src/access/ImportDrawer';
 import { AccessApi } from '../src/access/accessApi';
@@ -100,34 +99,34 @@ it('creates one user through reviewed, versioned onboarding and recovers an unce
       />
     </FoundationProvider>,
   );
-  const user = userEvent.setup();
   await waitFor(() => {
     expect(screen.getByLabelText('Email address')).toBeEnabled();
   });
   fireEvent.change(screen.getByLabelText('Email address'), {
     target: { value: 'new@example.test' },
   });
-  await user.click(screen.getByRole('combobox', { name: 'Business role' }));
-  await user.click(
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: 'Business role' }));
+  fireEvent.click(
     await screen.findByText('Financial analyst', { selector: '.ant-select-item-option-content' }),
   );
-  await user.click(screen.getByRole('combobox', { name: 'Teams' }));
-  await user.click(
+  const teams = screen.getByRole('combobox', { name: 'Teams' });
+  fireEvent.mouseDown(teams);
+  fireEvent.click(
     await screen.findByText('Advisory team', { selector: '.ant-select-item-option-content' }),
   );
-  await user.keyboard('{Escape}');
-  await user.click(screen.getByRole('button', { name: 'Review person' }));
+  fireEvent.keyDown(teams, { key: 'Escape', code: 'Escape' });
+  fireEvent.click(screen.getByRole('button', { name: 'Review person' }));
   expect(await screen.findByText('duplicate email')).toBeVisible();
   expect(calls.some((call) => call.url.endsWith('/commit'))).toBe(false);
   valid = true;
-  await user.click(screen.getByRole('button', { name: 'Review person' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review person' }));
   await screen.findByRole('region', { name: 'Review onboarding' });
   const review = within(screen.getByRole('region', { name: 'Review onboarding' }));
   expect(review.getByText('new@example.test')).toBeVisible();
   expect(review.getByText('Financial analyst')).toBeVisible();
   expect(review.getByText('Advisory team')).toBeVisible();
   expect(review.getByText('No', { exact: true })).toBeVisible();
-  await user.click(screen.getByRole('button', { name: 'Create person' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create person' }));
   expect(await screen.findByText(/Your request has not been confirmed/)).toBeVisible();
   expect(screen.getByRole('button', { name: 'Review person' })).toBeDisabled();
   expect(screen.getByLabelText('Email address')).toBeDisabled();
@@ -137,18 +136,21 @@ it('creates one user through reviewed, versioned onboarding and recovers an unce
     contentHash: 'server-hash',
     csv: 'email,role_code,group_codes\n"new@example.test","analyst","advisory"\n',
   });
-  await user.click(screen.getByRole('button', { name: 'Check status' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Check status' }));
   expect(await screen.findByText('Onboarding is not complete.')).toBeVisible();
   expect(
     calls.some((call) => call.url === commit?.url.replace('/commit', '') && call.method === 'GET'),
   ).toBe(true);
-  await user.click(screen.getByRole('button', { name: 'Review and retry' }));
-  await user.click(screen.getByRole('button', { name: 'Retry onboarding' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review and retry' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry onboarding' }));
   expect(await screen.findByText('Failed', { exact: true })).toBeVisible();
   expect(changed).not.toHaveBeenCalled();
-  await user.click(screen.getByRole('button', { name: 'Review and retry' }));
-  await user.click(screen.getByRole('button', { name: 'Retry onboarding' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Review and retry' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry onboarding' }));
   expect(await screen.findByText('Person created.')).toBeVisible();
+  expect(screen.getByText('Next step: the person activates their own account')).toBeVisible();
+  expect(screen.getByText(/No password or signed-in session has been created/)).toBeVisible();
+  expect(screen.getByText(/Do not use your administrator session/)).toBeVisible();
   expect(changed).toHaveBeenCalledOnce();
   expect(calls.filter((call) => call.url.endsWith('/commit'))).toHaveLength(1);
   expect(calls.filter((call) => call.url.endsWith('/process')).map((call) => call.body)).toEqual([
@@ -157,3 +159,214 @@ it('creates one user through reviewed, versioned onboarding and recovers an unce
   ]);
   expect(expired).not.toHaveBeenCalled();
 }, 30000);
+
+it('lets a tenant administrator cancel only a pending credential invitation and preserves organization access', async () => {
+  let cancelled = false;
+  const calls: { url: string; method?: string; body?: string | null }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, options?: RequestInit) => {
+      calls.push({
+        url,
+        method: options?.method,
+        body: typeof options?.body === 'string' ? options.body : null,
+      });
+      if (url === '/access-api/v1/administration/imports/op-cancel')
+        return Promise.resolve(
+          json({
+            id: 'op-cancel',
+            status: 'Activated',
+            policyVersion: 31,
+            rowCount: 1,
+            identities: [
+              { rowNumber: 2, normalizedEmail: 'pending@example.test', actorId: 'A123' },
+            ],
+          }),
+        );
+      if (url === '/identity-api/local/v1/administration/persona-invitations')
+        return Promise.resolve(
+          json({
+            tenantId: 'T001',
+            items: [
+              {
+                actorId: 'A123',
+                email: 'pending@example.test',
+                state: cancelled ? 'Cancelled' : 'Pending',
+                issuedAt: '2026-10-26T18:00:00Z',
+                consumedAt: null,
+              },
+              {
+                actorId: 'A999',
+                email: 'unrelated@example.test',
+                state: 'Pending',
+                issuedAt: '2026-10-26T18:00:00Z',
+                consumedAt: null,
+              },
+            ],
+          }),
+        );
+      if (
+        url === '/identity-api/local/v1/administration/persona-invitations/A123/cancel' &&
+        options?.method === 'POST'
+      ) {
+        cancelled = true;
+        return Promise.resolve(json({ actorId: 'A123', state: 'Cancelled' }));
+      }
+      return Promise.resolve(json({ error: 'NOT_FOUND' }, 404));
+    }),
+  );
+
+  render(
+    <FoundationProvider>
+      <ImportDrawer
+        api={new AccessApi(session)}
+        importId="op-cancel"
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+        onExpired={vi.fn()}
+      />
+    </FoundationProvider>,
+  );
+
+  expect(await screen.findByText('Person access activated.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Check invitation status' }));
+  const invitationStatus = await screen.findByRole('region', { name: 'Credential invitation status' });
+  expect(within(invitationStatus).getByText('Pending', { exact: true })).toBeVisible();
+  expect(within(invitationStatus).queryByText('unrelated@example.test')).toBeNull();
+
+  fireEvent.click(
+    within(invitationStatus).getByRole('button', {
+      name: 'Cancel invitation for pending@example.test',
+    }),
+  );
+  const confirmation = await screen.findByRole('tooltip');
+  expect(within(confirmation).getByText('Cancel credential invitation?')).toBeInTheDocument();
+  expect(
+    within(confirmation).getByText(
+      'This revokes only the pending credential invitation. Organization membership and assigned access remain active.',
+    ),
+  ).toBeInTheDocument();
+  const confirmCancellation = within(confirmation).getByRole('button', {
+    name: 'Cancel invitation',
+  });
+  act(() => {
+    confirmCancellation.click();
+    confirmCancellation.click();
+  });
+
+  expect(
+    await screen.findByText(
+      'Credential invitation for pending@example.test was cancelled. Organization membership and assigned access remain active.',
+    ),
+  ).toBeVisible();
+  await waitFor(() => {
+    expect(within(invitationStatus).getByText('Cancelled', { exact: true })).toBeVisible();
+  });
+  expect(
+    within(invitationStatus).queryByRole('button', {
+      name: 'Cancel invitation for pending@example.test',
+    }),
+  ).toBeNull();
+
+  const mutation = calls.find((call) =>
+    call.url.endsWith('/persona-invitations/A123/cancel'),
+  );
+  expect(mutation).toEqual({
+    url: '/identity-api/local/v1/administration/persona-invitations/A123/cancel',
+    method: 'POST',
+    body: '{}',
+  });
+  expect(
+    calls.filter((call) => call.url.endsWith('/persona-invitations/A123/cancel')),
+  ).toHaveLength(1);
+  expect(
+    calls.filter(
+      (call) => call.url === '/identity-api/local/v1/administration/persona-invitations',
+    ),
+  ).toHaveLength(2);
+}, 30000);
+
+it('refreshes the authoritative invitation state when cancellation loses a terminal-state race', async () => {
+  let terminal = false;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, options?: RequestInit) => {
+      if (url === '/access-api/v1/administration/imports/op-race')
+        return Promise.resolve(
+          json({
+            id: 'op-race',
+            status: 'Activated',
+            policyVersion: 32,
+            rowCount: 1,
+            identities: [
+              { rowNumber: 2, normalizedEmail: 'race@example.test', actorId: 'A124' },
+            ],
+          }),
+        );
+      if (url === '/identity-api/local/v1/administration/persona-invitations')
+        return Promise.resolve(
+          json({
+            tenantId: 'T001',
+            items: [
+              {
+                actorId: 'A124',
+                email: 'race@example.test',
+                state: terminal ? 'Expired' : 'Pending',
+                issuedAt: '2026-10-26T18:00:00Z',
+                consumedAt: null,
+              },
+            ],
+          }),
+        );
+      if (
+        url === '/identity-api/local/v1/administration/persona-invitations/A124/cancel' &&
+        options?.method === 'POST'
+      ) {
+        terminal = true;
+        return Promise.resolve(json({ actorId: 'A124', state: 'NotCancelled' }));
+      }
+      return Promise.resolve(json({ error: 'NOT_FOUND' }, 404));
+    }),
+  );
+
+  render(
+    <FoundationProvider>
+      <ImportDrawer
+        api={new AccessApi(session)}
+        importId="op-race"
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+        onExpired={vi.fn()}
+      />
+    </FoundationProvider>,
+  );
+
+  expect(await screen.findByText('Person access activated.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Check invitation status' }));
+  const invitationStatus = await screen.findByRole('region', { name: 'Credential invitation status' });
+  fireEvent.click(
+    within(invitationStatus).getByRole('button', {
+      name: 'Cancel invitation for race@example.test',
+    }),
+  );
+  const confirmation = await screen.findByRole('tooltip');
+  fireEvent.click(
+    within(confirmation).getByRole('button', { name: 'Cancel invitation' }),
+  );
+
+  expect(
+    await screen.findByText(
+      'The credential invitation for race@example.test was no longer pending. Current status was refreshed.',
+    ),
+  ).toBeVisible();
+  expect(within(invitationStatus).getByText('Expired', { exact: true })).toBeVisible();
+  expect(
+    within(invitationStatus).queryByRole('button', {
+      name: 'Cancel invitation for race@example.test',
+    }),
+  ).toBeNull();
+  expect(
+    screen.queryByText(/Credential invitation for race@example.test was cancelled/),
+  ).toBeNull();
+}, 30000);
+

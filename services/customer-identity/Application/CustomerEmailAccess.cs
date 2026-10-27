@@ -34,6 +34,7 @@ public sealed class CustomerEmailCodeProtector
 {
     private readonly byte[] encryptionKey;
     private readonly byte[] verifierKey;
+    private readonly byte[] testerTicketKey;
     public CustomerEmailCodeProtector(string secret)
     {
         byte[] key;
@@ -42,11 +43,15 @@ public sealed class CustomerEmailCodeProtector
         if (key.Length != 32) throw new InvalidOperationException("Email access requires a base64 32-byte secret.");
         encryptionKey = HMACSHA256.HashData(key, "monergy.email.delivery.v1"u8);
         verifierKey = HMACSHA256.HashData(key, "monergy.email.verifier.v1"u8);
+        testerTicketKey = HMACSHA256.HashData(key, "monergy.tester.welcome.v1"u8);
         CryptographicOperations.ZeroMemory(key);
     }
 
     public string Verifier(string tenant, string challengeId, string code) => Convert.ToHexStringLower(
         HMACSHA256.HashData(verifierKey, Encoding.UTF8.GetBytes(tenant + "\n" + challengeId + "\n" + code)));
+    public string DeriveTesterTicket(string tenant, string normalizedEmail, string requestId) =>
+        Convert.ToHexStringLower(HMACSHA256.HashData(testerTicketKey,
+            Encoding.UTF8.GetBytes(tenant + "\n" + normalizedEmail + "\n" + requestId)));
     public byte[] Protect(string tenant, string challengeHash, string code)
     {
         var bytes = Encoding.UTF8.GetBytes(code);

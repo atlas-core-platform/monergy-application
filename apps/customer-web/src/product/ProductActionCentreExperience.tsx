@@ -37,16 +37,18 @@ export default function ProductActionCentreExperience() {
   useEffect(() => {
     if (!api || (!canReadDocuments && !canReadFinancial && !canReadProcessingActivity)) return;
     const controller = new AbortController();
-    setBusy(true);
-    setWarnings([]);
-
-    void Promise.allSettled([
-      canReadDocuments ? listEvidence(api, controller.signal) : Promise.resolve(null),
-      canReadFinancial ? getFinancialProfile(api, controller.signal) : Promise.resolve(null),
-      canReadProcessingActivity ? getProcessingActivity(api, controller.signal) : Promise.resolve(null),
-    ])
-      .then(([documents, financial, processing]) => {
-        if (controller.signal.aborted) return;
+    void Promise.resolve().then(() => {
+      if (controller.signal.aborted) return null;
+      setBusy(true);
+      setWarnings([]);
+      return Promise.allSettled([
+        canReadDocuments ? listEvidence(api, controller.signal) : Promise.resolve(null),
+        canReadFinancial ? getFinancialProfile(api, controller.signal) : Promise.resolve(null),
+        canReadProcessingActivity ? getProcessingActivity(api, controller.signal) : Promise.resolve(null),
+      ]);
+    }).then((results) => {
+        if (controller.signal.aborted || results === null) return;
+        const [documents, financial, processing] = results;
 
         const nextWarnings: string[] = [];
 
@@ -77,7 +79,7 @@ export default function ProductActionCentreExperience() {
         if (!controller.signal.aborted) setBusy(false);
       });
 
-    return () => controller.abort();
+    return () => { controller.abort(); };
   }, [api, canReadDocuments, canReadFinancial, canReadProcessingActivity]);
 
   const state = useMemo(() => {
@@ -374,7 +376,7 @@ export default function ProductActionCentreExperience() {
                 <p className="workspace-eyebrow">CURRENT ATTENTION</p>
                 <h2>
                   {attention.length > 0
-                    ? attention.length +
+                    ? String(attention.length) +
                       ' ' +
                       (attention.length === 1 ? 'item' : 'items') +
                       ' from supported journeys'

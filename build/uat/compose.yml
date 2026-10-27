@@ -104,7 +104,7 @@ services:
     profiles: [document-security]
     network_mode: service:workspace
     user: '1000:1000'
-    entrypoint: [/init-unprivileged]
+    entrypoint: [/bin/sh, /opt/monergy/start-clamav.sh]
     read_only: true
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']
@@ -120,6 +120,8 @@ services:
     configs:
       - source: evidence-clamd
         target: /etc/clamav/clamd.conf
+      - source: evidence-clamav-start
+        target: /opt/monergy/start-clamav.sh
     restart: unless-stopped
     depends_on:
       workspace: { condition: service_started }
@@ -239,6 +241,8 @@ volumes:
 configs:
   evidence-clamd:
     file: ./clamd.conf
+  evidence-clamav-start:
+    file: ./start-clamav.sh
 secrets:
   postgres-password:
     file: '${UAT_CONFIG_ROOT}/postgres-password'

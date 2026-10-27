@@ -101,7 +101,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
             },
           },
         ],
-      }) as never;
+      });
     if (path === 'v1/evidence')
       return Promise.resolve({
         dataDurability: 'Runtime only',
@@ -110,7 +110,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
           { documentVersionId: 'document-version-002' },
           { documentVersionId: 'document-version-003' },
         ],
-      }) as never;
+      });
     throw new Error('unexpected product endpoint');
   });
 

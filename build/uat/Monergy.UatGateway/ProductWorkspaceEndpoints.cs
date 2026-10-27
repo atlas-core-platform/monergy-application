@@ -130,6 +130,56 @@ public static class ProductWorkspaceEndpoints
     public static void MapProductWorkspace(this WebApplication app)
     {
         if (!app.Configuration.GetValue<bool>("Monergy:Product:Enabled")) return;
+
+        // The customer IDs originate with AM's current dual-permission,
+        // relationship and Consent evaluation. C&I owns the display labels.
+        // Never reuse the Tenant Admin directory or trust a browser customer list.
+        app.MapGet("/product-api/v1/advisor/customers", async (
+            HttpContext http, CustomerOwnerClient owners, TenantAccessClient access) =>
+        {
+            var session = await owners.SessionAsync(http).ConfigureAwait(false);
+            var advisor = await access.RequireAdvisorAsync(http).ConfigureAwait(false);
+            if (advisor.TenantId != session.TenantId || advisor.ActorId != session.ActorId ||
+                advisor.SubjectVersion != session.SubjectVersion)
+                throw new TenantBoundaryException("ADVISOR_CONTEXT_CHANGED", 403);
+            var eligible = await access.AdvisorCustomersAsync(http).ConfigureAwait(false);
+            if (eligible.TenantId != session.TenantId || eligible.ActorId != session.ActorId ||
+                eligible.PolicyVersion != advisor.PolicyVersion || eligible.SubjectVersion != advisor.SubjectVersion)
+                throw new TenantBoundaryException("ADVISOR_CONTEXT_CHANGED", 409);
+            var named = new List<CustomerDisplayLabel>();
+            foreach (var customerId in eligible.CustomerIds)
+            {
+                var label = await owners.CustomerLabelAsync(session.TenantId, customerId, http.RequestAborted).ConfigureAwait(false);
+                var owner = await owners.CustomerAsync(session.TenantId, customerId, http.RequestAborted).ConfigureAwait(false);
+                if (label.Version != owner.Version || owner.OwnerActorId == session.ActorId)
+                    throw new TenantBoundaryException("ADVISOR_CUSTOMER_CHANGED", 409);
+                named.Add(label);
+            }
+
+            // Fail closed if permissions, relationships, Consent, tenant state,
+            // or any C&I display record changes while names are being collected.
+            var advisorNow = await access.RequireAdvisorAsync(http).ConfigureAwait(false);
+            var eligibleNow = await access.AdvisorCustomersAsync(http).ConfigureAwait(false);
+            if (advisorNow != advisor ||
+                eligibleNow.TenantId != eligible.TenantId || eligibleNow.ActorId != eligible.ActorId ||
+                eligibleNow.PolicyVersion != eligible.PolicyVersion ||
+                eligibleNow.SubjectVersion != eligible.SubjectVersion ||
+                !eligible.CustomerIds.SequenceEqual(eligibleNow.CustomerIds, StringComparer.Ordinal))
+                throw new TenantBoundaryException("ADVISOR_CONTEXT_CHANGED", 409);
+            foreach (var row in named)
+            {
+                var latest = await owners.CustomerLabelAsync(session.TenantId, row.CustomerId, http.RequestAborted).ConfigureAwait(false);
+                if (latest != row)
+                    throw new TenantBoundaryException("ADVISOR_CUSTOMER_CHANGED", 409);
+            }
+            return Results.Ok(new
+            {
+                eligible.TenantId, eligible.ActorId, eligible.PolicyVersion, eligible.SubjectVersion,
+                customers = named.OrderBy(row => row.DisplayName, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(row => row.CustomerId, StringComparer.Ordinal)
+                    .Select(row => new { row.CustomerId, row.DisplayName }).ToArray()
+            });
+        });
         app.MapGet("/product-api/v1/context", async (
             HttpContext http,
             CustomerOwnerClient owners,
@@ -179,7 +229,7 @@ public static class ProductWorkspaceEndpoints
                 null,
                 new TrustedSecurityContext(
                     new ActorContext(session.ActorId, "Customer", now, session.AuthenticationContextId),
-                    new WorkloadContext("customer-web", "local-uat-workspace"),
+                    new WorkloadContext("customer-web", "local-uat-workspace:" + session.TenantId),
                     new AccessContext("customer-advice", null, decision.DecisionId, customer.CustomerId)),
                 null,
                 new ListCustomerEvidence(customer.CustomerId, 100));
@@ -346,7 +396,7 @@ public static class ProductWorkspaceEndpoints
                 null,
                 new TrustedSecurityContext(
                     new ActorContext(session.ActorId, "Customer", now, session.AuthenticationContextId),
-                    new WorkloadContext("customer-web", "local-uat-workspace"),
+                    new WorkloadContext("customer-web", "local-uat-workspace:" + session.TenantId),
                     new AccessContext("customer-advice", null, decision.DecisionId, customer.CustomerId)),
                 submission.OperationId,
                 new CreateDocumentVersion(
@@ -818,15 +868,41 @@ public sealed partial class ProductEvidenceClient : IDisposable
         using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(endpoint, "internal/local/v1/evidence/content"));
         request.Headers.Add("X-Monergy-Product-Token", token);
         request.Content = JsonContent.Create(new { operationId, contentBase64, contentType });
-        using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
-        if (response.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
-            throw new TenantBoundaryException("EVIDENCE_SCAN_REJECTED", 422);
-        if (response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
-            throw new TenantBoundaryException("EVIDENCE_SCAN_UNAVAILABLE", 503);
+        using var response = await SendStageRequestAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
-            throw new TenantBoundaryException(response.StatusCode == System.Net.HttpStatusCode.Conflict
-                ? "EVIDENCE_OPERATION_CONFLICT" : "EVIDENCE_STAGING_FAILED",
-                response.StatusCode == System.Net.HttpStatusCode.Conflict ? 409 : response.StatusCode == System.Net.HttpStatusCode.BadRequest ? 400 : 503);
+        {
+            string? ownerCode = null;
+            if (response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable &&
+                response.Content.Headers.ContentLength is null or <= 1024)
+            {
+                // The private Evidence endpoint returns only a typed {error}
+                // code. Bound the payload and ignore unrecognized diagnostics.
+                try
+                {
+                    var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                    if (payload.Length <= 1024)
+                    {
+                        using var document = JsonDocument.Parse(payload);
+                        if (document.RootElement.ValueKind == JsonValueKind.Object &&
+                            document.RootElement.TryGetProperty("error", out var error) &&
+                            error.ValueKind == JsonValueKind.String)
+                            ownerCode = error.GetString();
+                    }
+                }
+                catch (Exception failure) when (failure is JsonException or IOException or HttpRequestException)
+                { /* An invalid/unavailable owner reply remains a generic 503. */ }
+            }
+            var status = response.StatusCode switch
+            {
+                System.Net.HttpStatusCode.UnprocessableEntity => 422,
+                System.Net.HttpStatusCode.ServiceUnavailable => 503,
+                System.Net.HttpStatusCode.Conflict => 409,
+                System.Net.HttpStatusCode.BadRequest => 400,
+                _ => 503,
+            };
+            throw new TenantBoundaryException(
+                ProductEvidenceDependencyFailure.StageCode(response.StatusCode, ownerCode), status);
+        }
         EvidenceContentDescriptor descriptor;
         try
         {
@@ -838,6 +914,16 @@ public sealed partial class ProductEvidenceClient : IDisposable
             descriptor.Sha256.Length != 64 || descriptor.ContentLength is < 1 or > 1_048_576)
             throw new TenantBoundaryException("EVIDENCE_STAGING_RESPONSE_INVALID", 503);
         return descriptor;
+    }
+
+    private async Task<HttpResponseMessage> SendStageRequestAsync(
+        HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        try { return await client.SendAsync(request, cancellationToken).ConfigureAwait(false); }
+        catch (Exception failure) when (failure is HttpRequestException or IOException)
+        { throw new TenantBoundaryException("EVIDENCE_STAGING_UNAVAILABLE", 503); }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        { throw new TenantBoundaryException("EVIDENCE_STAGING_UNAVAILABLE", 503); }
     }
 
     public async Task<ContractResult<DocumentVersionCreatedResult>> RegisterAsync(

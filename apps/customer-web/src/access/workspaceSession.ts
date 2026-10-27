@@ -20,6 +20,7 @@ export interface ProductWorkspaceContext {
 export type WorkspaceAuthorization =
   | { area: 'kyc-review'; authority: 'KycReviewer' }
   | { area: 'administration'; authority: 'TenantAdmin'; policyVersion: number }
+  | { area: 'advisor'; authority: 'FinancialAdvisor'; policyVersion: number; subjectVersion: number; recordedRelationshipCount: number }
   | { area: 'product'; context: ProductWorkspaceContext };
 export interface WorkspaceSessionState {
   status: 'public' | 'connecting' | 'verifying' | 'authorized' | 'disconnected';
@@ -30,6 +31,7 @@ export interface WorkspaceSessionState {
   recovery: { tenantId: string; actorId: string; operationId: string } | null;
   connect: (tenantId: string, key: string) => Promise<void>;
   connectPassword?: (tenantId: string, email: string, password: string) => Promise<void>;
+  connectPersonaPassword?: (tenantId: string, email: string, password: string) => Promise<void>;
   connectEmail?: (tenantId: string, challengeId: string, code: string) => Promise<void>;
   refreshContext?: () => Promise<void>;
   retry: () => Promise<void>;

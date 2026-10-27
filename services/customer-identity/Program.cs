@@ -22,6 +22,7 @@ if (tenantIntegration)
     builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 65_536);
     builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectRequiredConstructorParameters = true);
     builder.Services.AddTenantSessionAuthority(builder.Configuration);
+    builder.Services.AddSingleton<Monergy.Services.CustomerIdentity.Infrastructure.PostgresPersonaInvitationStatus>();
     builder.Services.AddSelfSessions();
     // Tenant administrators need the customer directory independently of the
     // customer-facing onboarding composition. Keeping this registration behind
@@ -40,6 +41,10 @@ if (tenantIntegration)
 var referenceAdapters = ReferenceAdapterGuard.IsSelected(builder.Configuration);
 var customerEmailAccess = tenantIntegration && builder.Services.AddCustomerEmailAccess(builder.Configuration);
 var customerRegistration = tenantIntegration && builder.Services.AddCustomerRegistration(builder.Configuration, customerEmailAccess);
+var personaCredentials = tenantIntegration && builder.Services.AddPersonaCredentials(
+    builder.Configuration, customerEmailAccess, builder.Environment.IsDevelopment());
+if (personaCredentials && customerEmailAccess && !customerRegistration)
+    builder.Services.AddHostedService<Monergy.Services.CustomerIdentity.Infrastructure.CustomerRegistrationDelivery>();
 if (referenceAdapters)
 {
     builder.Services.AddCustomerIdentityReferenceAdapters(builder.Configuration);
@@ -56,9 +61,11 @@ if (referenceAdapters)
 if (tenantIntegration)
 {
     app.MapTenantSessionAuthority();
+    app.MapPersonaInvitationStatus();
     app.MapSelfSessions();
     app.MapCustomerEmailAccess(customerEmailAccess);
     app.MapCustomerRegistration(customerRegistration);
+    app.MapPersonaCredentials(personaCredentials, customerEmailAccess);
     app.MapCustomerAdministration();
     if (app.Configuration["Monergy:AccessIntegration:CustomerRelationships"] == "true")
     {

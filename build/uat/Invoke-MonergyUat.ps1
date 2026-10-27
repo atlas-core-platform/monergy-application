@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Prepare','Start','Status','Stop','Verify','Credentials','RepairPermissions','Reset')][string]$Action = 'Start',
+    [ValidateSet('Prepare','Start','Status','Stop','Verify','Credentials','Welcome','RepairPermissions','Reset')][string]$Action = 'Start',
     [ValidatePattern('^[a-z][a-z0-9-]{0,30}$')][string]$Profile = 'default',
     [ValidateRange(1024,65535)][int]$Port = 4173,
     [ValidateSet('T001','T002')][string]$Tenant = 'T001',
@@ -9,6 +9,8 @@ param(
     [switch]$EnableOnboarding,
     [switch]$EnableEmailAccess,
     [switch]$EnableCustomerRegistration,
+    [switch]$EnablePersonaLogin,
+    [switch]$EnablePersonaTesterActivation,
     [string]$AccountAgreementFile,
     [string]$EmailConfigurationFile,
     [string]$GoogleDriveConfigurationFile,
@@ -16,11 +18,16 @@ param(
     [string]$AiModelConfigurationFile,
     [string]$KycConfigurationFile,
     [string]$EvidencePersistenceConfigurationFile,
+    [string]$FinancialPersistenceConfigurationFile,
+    [switch]$RequireRetainedEvidenceAndFinancialProfile,
     [string]$ClassificationConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
 )
 $ErrorActionPreference = 'Stop'
+if ($EnablePersonaLogin -and (-not $EnableOnboarding -or (-not $EnableEmailAccess -and -not $EnablePersonaTesterActivation))) { throw 'Persona login requires a named onboarding profile and either email activation or protected tester activation.' }
+if ($EnablePersonaTesterActivation -and (-not $EnablePersonaLogin -or -not $EnableOnboarding)) { throw 'Tester activation requires -EnableOnboarding and -EnablePersonaLogin.' }
+if ($EnablePersonaTesterActivation -and $EnableEmailAccess) { throw 'Select either tester activation without SMTP or the production-like email activation flow.' }
 if ($EnableCustomerRegistration -and (-not $EnableEmailAccess -or -not $EnableOnboarding -or [string]::IsNullOrWhiteSpace($AccountAgreementFile))) { throw 'Customer registration requires onboarding, email access and published account agreements.' }
 if ($EnableCustomerRegistration) { $RequireCustomerSetup=$true }
 if ($RequireCustomerSetup -and (-not $EnableEmailAccess -or -not $EnableOnboarding)) { throw 'Required customer setup needs -EnableOnboarding and -EnableEmailAccess.' }
@@ -177,8 +184,66 @@ if (Test-Path -LiteralPath $evidenceConfigPath) {
     foreach ($name in @('Endpoint','Bucket','AccessKey','SecretKey')) {
         if ($null -eq $evidencePersistence.S3.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$evidencePersistence.S3.$name)) { throw "Evidence S3 configuration requires $name." }
     }
-    if ($Action -in @('Prepare','Start')) { Save-Json 'evidence-persistence.json' $evidencePersistence; Protect-Files }
+    if ($Action -in @('Prepare','Start') -and -not $RequireRetainedEvidenceAndFinancialProfile) {
+        Save-Json 'evidence-persistence.json' $evidencePersistence
+        Protect-Files
+    }
 } elseif (-not [string]::IsNullOrWhiteSpace($EvidencePersistenceConfigurationFile)) { throw 'Evidence persistence configuration file was not found.' }
+# Optional physical Financial Profile uses the existing D09 PostgreSQL
+# repository and an operator-provisioned, migrated, least-privilege database.
+# The default onboarding profile deliberately remains in-memory.
+$financialPersistence = $null
+$financialConfigPath = Join-Path $folder 'financial-persistence.json'
+if (-not [string]::IsNullOrWhiteSpace($FinancialPersistenceConfigurationFile)) { $financialConfigPath = $FinancialPersistenceConfigurationFile }
+if (Test-Path -LiteralPath $financialConfigPath) {
+    if (-not $onboarding) { throw 'Financial Profile persistence requires an onboarding profile.' }
+    $financialFile = Get-Item -LiteralPath $financialConfigPath -ErrorAction Stop
+    if ($financialFile.PSIsContainer -or $financialFile.Length -gt 16384) { throw 'Invalid Financial Profile persistence file.' }
+    $financialPersistence = Get-Content -LiteralPath $financialFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($null -eq $financialPersistence -or @($financialPersistence.PSObject.Properties.Name).Count -ne 1 -or
+        $financialPersistence.PSObject.Properties.Name -notcontains 'RuntimeConnection' -or
+        $financialPersistence.RuntimeConnection -isnot [string] -or
+        [string]::IsNullOrWhiteSpace([string]$financialPersistence.RuntimeConnection)) {
+        throw 'Financial Profile persistence requires only a nonempty RuntimeConnection.'
+    }
+    if ($Action -in @('Prepare','Start')) {
+        $currentFinancial = Join-Path $folder 'financial-profile.json'
+        if (Test-Path -LiteralPath $currentFinancial) {
+            $priorFinancial = Get-Content -LiteralPath $currentFinancial -Raw -Encoding utf8 | ConvertFrom-Json
+            if ($priorFinancial.Monergy.ReferenceAdapters -eq 'true') {
+                throw 'Cannot convert a retained in-memory Financial Profile to durable storage in place. Create a new named UAT profile; temporary facts are not migrated.'
+            }
+        }
+        if (-not $RequireRetainedEvidenceAndFinancialProfile) {
+            Save-Json 'financial-persistence.json' $financialPersistence
+            Protect-Files
+        }
+    }
+} elseif (-not [string]::IsNullOrWhiteSpace($FinancialPersistenceConfigurationFile)) {
+    throw 'Financial Profile persistence configuration file was not found.'
+}
+if ($RequireRetainedEvidenceAndFinancialProfile) {
+    if ($null -eq $evidencePersistence -or $null -eq $financialPersistence) {
+        throw 'Restart-retained Evidence AND Financial Profile requires both configured durable owner stores. Named Docker volumes alone do not preserve in-memory business records. Supply protected storage configurations in a new named profile; do not reset the retained profile.'
+    }
+    if ($Action -in @('Prepare','Start')) {
+        # Do not leave a half-selected durable configuration when the caller
+        # requests both stores but one validation or profile transition fails.
+        Save-Json 'evidence-persistence.json' $evidencePersistence
+        Save-Json 'financial-persistence.json' $financialPersistence
+        Protect-Files
+    }
+    if ($Action -eq 'Verify') {
+        foreach ($service in @('evidence','financial-profile')) {
+            $configFile = Join-Path $folder "$service.json"
+            if (-not (Test-Path -LiteralPath $configFile)) { throw "Missing protected $service runtime configuration." }
+            $runtimeConfig = Get-Content -LiteralPath $configFile -Raw -Encoding utf8 | ConvertFrom-Json
+            if ($runtimeConfig.Monergy.ReferenceAdapters -ne 'false' -or $runtimeConfig.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3') {
+                throw "Retained $service runtime still uses a non-durable business adapter. No restart-retention acceptance may be claimed."
+            }
+        }
+    }
+}
 # Classification owner connections and explicit reviewer assignments remain operator supplied.
 $classificationConfiguration = $null
 $classificationConfigPath = Join-Path $folder 'classification.json'
@@ -264,6 +329,7 @@ if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
     $requiredTokens = @('jobAuditEvent','financialAuditEvent','productAuditEvent')
     if ($EnableEmailAccess) { $requiredTokens += 'emailAccess' }
+    if ($EnablePersonaTesterActivation) { $requiredTokens += @('personaTesterAccess','personaTesterChallenge') }
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
@@ -352,6 +418,16 @@ if ($Action -in @('Prepare','Start')) {
                     $config.Monergy.AccountAgreements = $publication
                 }
                 if ($EnableCustomerRegistration) { $config.Monergy.CustomerRegistration=@{ Enabled='true'; EnrollmentToken=$state.tokens.customerEnrollment } }
+                if ($EnablePersonaLogin) {
+                    $config.Monergy.PersonaCredentials=@{ Enabled='true' }
+                    if ($EnablePersonaTesterActivation) {
+                        $config.Monergy.PersonaCredentials.TesterActivation=@{
+                            Enabled='true'
+                            AccessSecret=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess))
+                            ChallengeSecret=(Convert-HexToBase64 ([string]$state.tokens.personaTesterChallenge))
+                        }
+                    }
+                }
                 if ($EnableEmailAccess) {
                     $smtpPort = 587
                     if ($null -ne $emailConfiguration.PSObject.Properties['SmtpPort'] -and -not [string]::IsNullOrWhiteSpace([string]$emailConfiguration.SmtpPort)) { $smtpPort = [int]$emailConfiguration.SmtpPort }
@@ -400,6 +476,10 @@ if ($Action -in @('Prepare','Start')) {
                     PdfInfoExecutable='/opt/monergy-ocr/pdfinfo'; PdfRenderExecutable='/opt/monergy-ocr/pdftoppm'
                 }
             } elseif ($onboarding -and $service -eq 'financial-profile') {
+                if ($null -ne $financialPersistence) {
+                    $config.Monergy.ReferenceAdapters='false'
+                    $config.Monergy.Persistence=@{ Provider='POSTGRESQL_S3'; FinancialProfile=@{ RuntimeConnection=[string]$financialPersistence.RuntimeConnection } }
+                }
                 $config.Monergy.AuditDelivery=@{
                     Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.financialAuditEvent
                 }
@@ -556,3 +636,24 @@ Write-Host 'Administration, identities, sessions and access audit persist across
 Write-Host 'Business reference data is illustrative and may reset. Production readiness remains blocked.'
 Write-Host "Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A900"
 if ($onboarding) { Write-Host "Show the customer key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A100" }
+if ($Action -eq 'Welcome') {
+    foreach ($name in @('personaTesterAccess','personaTesterChallenge')) {
+        if ($null -eq $state.tokens.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$state.tokens.$name)) {
+            throw 'This profile does not contain protected tester activation credentials.'
+        }
+    }
+    $email = $Actor.ToLowerInvariant() + '@example.test'
+    $returnPath = switch ($Actor) { 'A900' { '/access' } 'A300' { '/advisor' } default { '/' } }
+    $request = @{ tenantId=$Tenant; email=$email; returnPath=$returnPath; requestId=[guid]::NewGuid().ToString('N') } | ConvertTo-Json -Compress
+    $headers = @{ 'X-Monergy-Tester-Activation'=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess)) }
+    $welcome = Invoke-RestMethod "$url/identity-api/local/v1/persona-credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
+    if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/welcome#tenant=[A-Za-z0-9_.:-]+&ticket=[0-9a-f]{64}&return=%2F') {
+        throw 'The identity owner did not return a valid protected welcome path.'
+    }
+    $target = $url + $welcome.welcomePath
+    if ($windows) { Start-Process $target }
+    else { & xdg-open $target | Out-Null }
+    Write-Host "Opened a single-use five-minute welcome page for $Tenant/$Actor. The activation credential was not printed."
+    return
+}
+if ($EnablePersonaTesterActivation) { Write-Host "Open an invited user's protected welcome page: ./build/uat/Invoke-MonergyUat.ps1 -Action Welcome -Profile $Profile -Tenant T001 -Actor A300" }

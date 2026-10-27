@@ -2126,7 +2126,10 @@ it.each([true, false])('enables CSV extraction only with current processing acce
 
 it.each([
   [422, 'EVIDENCE_SCAN_REJECTED', 'This file failed the security check and was not accepted. Close this review and choose another file.'],
-  [503, 'EVIDENCE_SCAN_UNAVAILABLE', 'The file security check is unavailable. This file has not been accepted. Try again when the check is available.'],
+  [503, 'EVIDENCE_SCAN_UNAVAILABLE', 'The file security check is temporarily unavailable or its signatures need updating. This file has not been accepted. Try again later.'],
+  [503, 'EVIDENCE_STORAGE_UNAVAILABLE', 'Secure document storage is temporarily unavailable. This file has not been stored or accepted. Try again later.'],
+  [503, 'EVIDENCE_STAGING_UNAVAILABLE', 'The document service is temporarily unavailable. This upload has not been confirmed. Retry this same review when the service is available.'],
+  [403, 'ACCESS_DENIED', "You don't have permission to upload documents. Contact your organization administrator."],
 ])('shows the precise file-check outcome for %s without confirming an upload', async (status, code, message) => {
   const api = new AccessApi(session);
   const submit = vi.spyOn(api, 'product').mockImplementation((_path, method) => method === 'POST'
