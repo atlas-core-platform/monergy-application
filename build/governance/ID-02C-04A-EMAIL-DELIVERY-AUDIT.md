@@ -50,7 +50,8 @@ A real PostgreSQL regression covers:
 - replacement delivery produces one new `ISSUED`;
 - old challenge activation fails;
 - replacement activation succeeds and records one `CONSUMED`;
-- delivered persona-recovery mail does not create invitation events.
+- delivered persona-recovery mail does not create invitation events;
+- administrator projection follows the real lifecycle: absent before delivery → Pending → Cancelled while replacement awaits delivery → Pending after replacement delivery → Completed after activation.
 
 The test uses only isolated LOCAL/CI database rows and a controlled sender; it does not send external email.
 
