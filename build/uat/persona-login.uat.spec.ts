@@ -100,7 +100,10 @@ test('Development profile exposes tester activation without an email server', as
   expect(denied.status()).toBe(403);
   const incorrect = await request.post('/identity-api/local/v1/persona-credentials/tester/welcome-link', {
     headers: { 'X-Monergy-Tester-Activation': 'incorrect-tester-authorization' },
-    data: { tenantId, email: 'a300@example.test', returnPath: '/advisor' },
+    data: {
+      tenantId, email: 'a300@example.test', returnPath: '/advisor',
+      requestId: randomUUID().replaceAll('-', ''),
+    },
   });
   expect(incorrect.status()).toBe(403);
   const invalidRequestId = await request.post(
