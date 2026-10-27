@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import type { APIRequestContext, Page } from '@playwright/test';
 
@@ -24,7 +25,12 @@ async function activate(page: Page, person: typeof people[number]) {
     '/identity-api/local/v1/persona-credentials/tester/welcome-link',
     {
       headers: { 'X-Monergy-Tester-Activation': testerSecret },
-      data: { tenantId, email: person.email, returnPath: person.path },
+      data: {
+        tenantId,
+        email: person.email,
+        returnPath: person.path,
+        requestId: randomUUID().replaceAll('-', ''),
+      },
     },
   );
   expect(issued.status(), `${person.actor} welcome link`).toBe(200);
@@ -83,7 +89,10 @@ test('Development profile exposes tester activation without an email server', as
   const email = await request.get('/identity-api/local/v1/customer-email-access');
   expect(await email.json()).toEqual({ enabled: false });
   const denied = await request.post('/identity-api/local/v1/persona-credentials/tester/welcome-link', {
-    data: { tenantId, email: 'a300@example.test', returnPath: '/advisor' },
+    data: {
+      tenantId, email: 'a300@example.test', returnPath: '/advisor',
+      requestId: randomUUID().replaceAll('-', ''),
+    },
   });
   expect(denied.status()).toBe(403);
   const incorrect = await request.post('/identity-api/local/v1/persona-credentials/tester/welcome-link', {
@@ -93,7 +102,10 @@ test('Development profile exposes tester activation without an email server', as
   expect(incorrect.status()).toBe(403);
   const arbitrary = await request.post('/identity-api/local/v1/persona-credentials/tester/welcome-link', {
     headers: { 'X-Monergy-Tester-Activation': testerSecret },
-    data: { tenantId, email: 'not-provisioned@example.test', returnPath: '/advisor' },
+    data: {
+      tenantId, email: 'not-provisioned@example.test', returnPath: '/advisor',
+      requestId: randomUUID().replaceAll('-', ''),
+    },
   });
   expect(arbitrary.status()).toBe(409);
 });
