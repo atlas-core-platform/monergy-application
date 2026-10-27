@@ -46,6 +46,15 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
         await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
         await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
 
+        // Serialize tester requests for the same tenant-owned identity before
+        // reading or replacing its challenge. This makes simultaneous retries
+        // converge on one issuance instead of racing the global challenge-hash
+        // uniqueness constraint. The lock is transaction-scoped and each
+        // tenant uses a separate database.
+        await db.ExecuteAsync(new CommandDefinition("""
+            SELECT pg_advisory_xact_lock(hashtextextended(@Email, 705903));
+            """, new { challenge.Email }, tx, cancellationToken: ct)).ConfigureAwait(false);
+
         // A retry of the same protected request reproduces the same challenge
         // hash. Reuse the still-live issuance without incrementing rate-limit
         // counters or appending another event.

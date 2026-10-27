@@ -337,11 +337,11 @@ public sealed class PostgresPersonaCredentialTests
             var requestedAt = DateTimeOffset.UtcNow;
             var challenge = new RegistrationCode(
                 "persona-activation", email, hash, verifier, [], requestedAt);
-            var concurrent = await Task.WhenAll(
-                repo.QueueTesterAsync("T001", challenge, default),
-                repo.QueueTesterAsync("T001", challenge, default));
+            var concurrent = await Task.WhenAll(Enumerable.Range(0, 4)
+                .Select(_ => repo.QueueTesterAsync("T001", challenge, default)));
             var first = Assert.IsType<DateTimeOffset>(concurrent[0]);
-            Assert.Equal(first, Assert.IsType<DateTimeOffset>(concurrent[1]));
+            Assert.All(concurrent, result =>
+                Assert.Equal(first, Assert.IsType<DateTimeOffset>(result)));
 
             var replay = await repo.QueueTesterAsync("T001", new(
                 "persona-activation", email, hash, verifier, [], requestedAt.AddSeconds(5)), default);
