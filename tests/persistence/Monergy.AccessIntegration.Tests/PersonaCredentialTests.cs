@@ -120,6 +120,26 @@ public sealed class PersonaCredentialTests
         Assert.DoesNotContain("a300@example.test", firstPath, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaag")]
+    public async Task TesterWelcomeRejectsMissingOrInvalidRequestIdentity(string? requestId)
+    {
+        var fixture = new Fixture();
+        var owner = new PersonaTesterActivation(fixture.Repository, fixture.Protector,
+            fixture.Passwords, TimeProvider.System);
+
+        var denied = await Assert.ThrowsAsync<TenantAccessException>(() =>
+            owner.CreateWelcomeLinkAsync(new(
+                "T001", "a300@example.test", "/advisor", requestId!), default));
+
+        Assert.Equal("WELCOME_REQUEST_ID_INVALID", denied.Code);
+        Assert.Equal(400, denied.StatusCode);
+        Assert.Equal(0, fixture.Repository.TesterIssues);
+    }
+
     private sealed class Fixture
     {
         internal const string Password = "a long password value";
