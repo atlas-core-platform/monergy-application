@@ -15,6 +15,8 @@ For `persona-activation` only, the delivery worker now commits two owner-side fa
 
 The invitation ledger therefore records recipient delivery, not merely queueing. Failed SMTP attempts do **not** write `ISSUED`. Registration, recovery and persona-recovery delivery remain outside invitation issuance history.
 
+Delivery completion also rechecks the challenge expiry inside the same owner-side transaction. If SMTP returns after the challenge has expired, C&I does not mark it delivered or append `ISSUED`; it removes the protected payload so the stale code cannot be retried or recovered.
+
 The raw verification code, protected payload, password and SMTP credential are never copied into the invitation ledger.
 
 ## Renewal correctness before replacement delivery
@@ -46,11 +48,14 @@ A real PostgreSQL regression covers:
 - queued email activation has `ISSUED=0` before successful delivery;
 - controlled SMTP failure leaves `delivered=false` and `ISSUED=0`;
 - later successful delivery atomically produces `delivered=true` and exactly one `ISSUED`;
+- a delivery that finishes after challenge expiry produces no `ISSUED`, remains undelivered and clears the protected payload;
 - accepted replacement records the old delivered invitation as `CANCELLED` before replacement delivery;
 - replacement delivery produces one new `ISSUED`;
 - old challenge activation fails;
 - replacement activation succeeds and records one `CONSUMED`;
 - delivered persona-recovery mail does not create invitation events;
+- delivery racing renewal cannot issue the superseded challenge;
+- concurrent delivery, activation and cancellation produce at most one terminal outcome;
 - administrator projection follows the real lifecycle: absent before delivery → Pending → Cancelled while replacement awaits delivery → Pending after replacement delivery → Completed after activation.
 
 The test uses only isolated LOCAL/CI database rows and a controlled sender; it does not send external email.

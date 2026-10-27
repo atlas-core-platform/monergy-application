@@ -434,8 +434,20 @@ public sealed class PostgresPersonaCredentialTests
                 firstRequested), default);
             Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
                 SELECT count(*) FROM customer_identity.persona_invitation_events
-                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
+                WHERE actor_id=@Actor AND invitation_hash=@Hash;
                 """, new { Actor = actor, Hash = firstHash }));
+            Assert.False(await owner.ExecuteScalarAsync<bool>("""
+                SELECT delivered FROM customer_identity.registration_challenges
+                WHERE challenge_hash=@Hash;
+                """, new { Hash = firstHash }));
+            Assert.NotNull(await owner.ExecuteScalarAsync<byte[]>("""
+                SELECT protected_code FROM customer_identity.registration_challenges
+                WHERE challenge_hash=@Hash;
+                """, new { Hash = firstHash }));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_credentials
+                WHERE actor_id=@Actor;
+                """, new { Actor = actor }));
             Assert.DoesNotContain(
                 (await invitations.ListAsync("T001", null, default)).Items,
                 item => item.ActorId == actor);
@@ -444,12 +456,16 @@ public sealed class PostgresPersonaCredentialTests
             await delivery.DeliverAsync(default);
             Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
                 SELECT count(*) FROM customer_identity.persona_invitation_events
-                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
+                WHERE actor_id=@Actor AND invitation_hash=@Hash;
                 """, new { Actor = actor, Hash = firstHash }));
             Assert.False(await owner.ExecuteScalarAsync<bool>("""
                 SELECT delivered FROM customer_identity.registration_challenges
                 WHERE challenge_hash=@Hash;
                 """, new { Hash = firstHash }));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_credentials
+                WHERE actor_id=@Actor;
+                """, new { Actor = actor }));
 
             await owner.ExecuteAsync("""
                 UPDATE customer_identity.registration_challenges
@@ -462,6 +478,15 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT delivered FROM customer_identity.registration_challenges
                 WHERE challenge_hash=@Hash;
                 """, new { Hash = firstHash }));
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
+                """, new { Actor = actor, Hash = firstHash }));
+            Assert.Null(await owner.ExecuteScalarAsync<byte[]>("""
+                SELECT protected_code FROM customer_identity.registration_challenges
+                WHERE challenge_hash=@Hash;
+                """, new { Hash = firstHash }));
+            await delivery.DeliverAsync(default);
             Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
@@ -486,6 +511,16 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CANCELLED';
                 """, new { Actor = actor, Hash = firstHash }));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='EXPIRED';
+                """, new { Actor = actor, Hash = firstHash }));
+            Assert.True(await owner.ExecuteScalarAsync<bool>("""
+                SELECT delivered AND NOT consumed AND expires_at>clock_timestamp()
+                    AND code_hash=@Verifier
+                FROM customer_identity.registration_challenges
+                WHERE challenge_hash=@Hash;
+                """, new { Hash = firstHash, Verifier = firstVerifier }));
             Assert.Equal("Pending",
                 Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
                     item => item.ActorId == actor).State);
@@ -508,10 +543,15 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
                 """, new { Actor = actor, Hash = secondHash }));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='EXPIRED';
+                """, new { Actor = actor, Hash = firstHash }));
             Assert.Equal("Cancelled",
                 Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
                     item => item.ActorId == actor).State);
 
+            await delivery.DeliverAsync(default);
             await delivery.DeliverAsync(default);
             Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
                 SELECT count(*) FROM customer_identity.persona_invitation_events
@@ -524,10 +564,16 @@ public sealed class PostgresPersonaCredentialTests
                 "T001", firstHash, firstVerifier, new string('x', 72), default));
             Assert.Equal(actor, await repo.ActivateAsync(
                 "T001", secondHash, secondVerifier, new string('y', 72), default));
+            Assert.Null(await repo.ActivateAsync(
+                "T001", secondHash, secondVerifier, new string('z', 72), default));
             Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CONSUMED';
                 """, new { Actor = actor, Hash = secondHash }));
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_credentials
+                WHERE actor_id=@Actor;
+                """, new { Actor = actor }));
             Assert.Equal("Completed",
                 Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
                     item => item.ActorId == actor).State);
@@ -558,6 +604,268 @@ public sealed class PostgresPersonaCredentialTests
         }
     }
 
+    [Fact]
+    public async Task PersonaInvitationExpiringWhileDeliveryIsInFlightIsNotIssued()
+    {
+        var settings = new Dictionary<string, string?> {
+            ["Monergy:ExecutionZone"] = "CI_EPHEMERAL",
+            ["Monergy:AccessIntegration:Enabled"] = "true",
+            ["Monergy:AccessIntegration:CustomerIdentityDatabases:T001"] = Required("AM05_CI_T001_RUNTIME"),
+        };
+        await using var sessions = new PostgresTenantSessions(
+            new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
+        var repo = new PostgresPersonaCredentials(sessions);
+        await using var owner = new NpgsqlConnection(Required("AM05_CI_T001_OWNER"));
+        await owner.OpenAsync();
+
+        var id = Guid.NewGuid().ToString("N");
+        var actor = "ci-" + id;
+        var email = "delivery-expiry-" + id + "@example.test";
+        var protector = new CustomerEmailCodeProtector(
+            Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+        var sender = new BlockingDeliverySender();
+        var delivery = new CustomerRegistrationDelivery(
+            sessions,
+            new CustomerEmailDeliveryOptions(
+                "smtp.example.test", 587, "noreply@example.test",
+                "local-test-user", "local-test-password", ["T001"]),
+            protector,
+            sender);
+        var challenge = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+        var hash = CustomerEmailCodeProtector.ChallengeHash(challenge);
+        const string code = "987654";
+        var verifier = protector.Verifier("T001:persona-activation", challenge, code);
+        try
+        {
+            await owner.ExecuteAsync("""
+                INSERT INTO customer_identity.tenant_principals(actor_id,normalized_email)
+                VALUES(@Actor,@Email);
+                """, new { Actor = actor, Email = email });
+            await repo.QueueAsync("T001", new(
+                "persona-activation", email, hash, verifier,
+                protector.Protect("T001:persona-activation", hash, code),
+                DateTimeOffset.UtcNow), default);
+
+            var deliveryTask = delivery.DeliverAsync(default);
+            await sender.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await owner.ExecuteAsync("""
+                UPDATE customer_identity.registration_challenges
+                SET expires_at=clock_timestamp()-interval '1 second'
+                WHERE challenge_hash=@Hash;
+                """, new { Hash = hash });
+            sender.Release.TrySetResult();
+            await deliveryTask;
+
+            Assert.False(await owner.ExecuteScalarAsync<bool>("""
+                SELECT delivered FROM customer_identity.registration_challenges
+                WHERE challenge_hash=@Hash;
+                """, new { Hash = hash }));
+            Assert.Null(await owner.ExecuteScalarAsync<byte[]>("""
+                SELECT protected_code FROM customer_identity.registration_challenges
+                WHERE challenge_hash=@Hash;
+                """, new { Hash = hash }));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash;
+                """, new { Actor = actor, Hash = hash }));
+            Assert.Null(await repo.ActivateAsync(
+                "T001", hash, verifier, new string('x', 72), default));
+        }
+        finally
+        {
+            sender.Release.TrySetResult();
+            await owner.ExecuteAsync("""
+                DELETE FROM customer_identity.persona_invitation_events WHERE actor_id=@Actor;
+                DELETE FROM customer_identity.registration_challenges WHERE email=@Email;
+                DELETE FROM customer_identity.tenant_principals WHERE actor_id=@Actor;
+                """, new { Actor = actor, Email = email });
+        }
+    }
+
+    [Fact]
+    public async Task RenewalWhileDeliveryIsInFlightCannotIssueTheSupersededChallenge()
+    {
+        var settings = new Dictionary<string, string?> {
+            ["Monergy:ExecutionZone"] = "CI_EPHEMERAL",
+            ["Monergy:AccessIntegration:Enabled"] = "true",
+            ["Monergy:AccessIntegration:CustomerIdentityDatabases:T001"] = Required("AM05_CI_T001_RUNTIME"),
+        };
+        await using var sessions = new PostgresTenantSessions(
+            new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
+        var repo = new PostgresPersonaCredentials(sessions);
+        await using var owner = new NpgsqlConnection(Required("AM05_CI_T001_OWNER"));
+        await owner.OpenAsync();
+
+        var id = Guid.NewGuid().ToString("N");
+        var actor = "ci-" + id;
+        var email = "delivery-renewal-" + id + "@example.test";
+        var protector = new CustomerEmailCodeProtector(
+            Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+        var sender = new BlockingDeliverySender();
+        var delivery = new CustomerRegistrationDelivery(
+            sessions,
+            new CustomerEmailDeliveryOptions(
+                "smtp.example.test", 587, "noreply@example.test",
+                "local-test-user", "local-test-password", ["T001"]),
+            protector,
+            sender);
+        var firstId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+        var firstHash = CustomerEmailCodeProtector.ChallengeHash(firstId);
+        var firstVerifier = protector.Verifier("T001:persona-activation", firstId, "111222");
+        var secondId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+        var secondHash = CustomerEmailCodeProtector.ChallengeHash(secondId);
+        var secondVerifier = protector.Verifier("T001:persona-activation", secondId, "333444");
+        var requestedAt = DateTimeOffset.UtcNow;
+        try
+        {
+            await owner.ExecuteAsync("""
+                INSERT INTO customer_identity.tenant_principals(actor_id,normalized_email)
+                VALUES(@Actor,@Email);
+                """, new { Actor = actor, Email = email });
+            await repo.QueueAsync("T001", new(
+                "persona-activation", email, firstHash, firstVerifier,
+                protector.Protect("T001:persona-activation", firstHash, "111222"),
+                requestedAt), default);
+
+            var staleDelivery = delivery.DeliverAsync(default);
+            await sender.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await repo.QueueAsync("T001", new(
+                "persona-activation", email, secondHash, secondVerifier,
+                protector.Protect("T001:persona-activation", secondHash, "333444"),
+                requestedAt.AddMinutes(2)), default);
+            sender.Release.TrySetResult();
+            await staleDelivery;
+
+            Assert.Equal(secondHash, await owner.ExecuteScalarAsync<string>("""
+                SELECT challenge_hash FROM customer_identity.registration_challenges
+                WHERE purpose='persona-activation' AND email=@Email;
+                """, new { Email = email }));
+            Assert.False(await owner.ExecuteScalarAsync<bool>("""
+                SELECT delivered FROM customer_identity.registration_challenges
+                WHERE challenge_hash=@Hash;
+                """, new { Hash = secondHash }));
+            Assert.Equal(0, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor;
+                """, new { Actor = actor }));
+            Assert.Null(await repo.ActivateAsync(
+                "T001", firstHash, firstVerifier, new string('x', 72), default));
+
+            await delivery.DeliverAsync(default);
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
+                """, new { Actor = actor, Hash = secondHash }));
+            Assert.Equal(actor, await repo.ActivateAsync(
+                "T001", secondHash, secondVerifier, new string('y', 72), default));
+        }
+        finally
+        {
+            sender.Release.TrySetResult();
+            await owner.ExecuteAsync("""
+                DELETE FROM customer_identity.persona_invitation_events WHERE actor_id=@Actor;
+                DELETE FROM customer_identity.persona_credentials WHERE actor_id=@Actor;
+                DELETE FROM customer_identity.registration_challenges WHERE email=@Email;
+                DELETE FROM customer_identity.tenant_principals WHERE actor_id=@Actor;
+                """, new { Actor = actor, Email = email });
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentDeliveryActivationAndCancellationHaveAtMostOneTerminalOutcome()
+    {
+        var settings = new Dictionary<string, string?> {
+            ["Monergy:ExecutionZone"] = "CI_EPHEMERAL",
+            ["Monergy:AccessIntegration:Enabled"] = "true",
+            ["Monergy:AccessIntegration:CustomerIdentityDatabases:T001"] = Required("AM05_CI_T001_RUNTIME"),
+        };
+        await using var sessions = new PostgresTenantSessions(
+            new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
+        var repo = new PostgresPersonaCredentials(sessions);
+        var invitations = new PostgresPersonaInvitationStatus(sessions);
+        await using var owner = new NpgsqlConnection(Required("AM05_CI_T001_OWNER"));
+        await owner.OpenAsync();
+
+        for (var iteration = 0; iteration < 5; iteration++)
+        {
+            var id = Guid.NewGuid().ToString("N");
+            var actor = "ci-" + id;
+            var email = "delivery-terminal-" + id + "@example.test";
+            var protector = new CustomerEmailCodeProtector(
+                Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
+            var sender = new BlockingDeliverySender();
+            var delivery = new CustomerRegistrationDelivery(
+                sessions,
+                new CustomerEmailDeliveryOptions(
+                    "smtp.example.test", 587, "noreply@example.test",
+                    "local-test-user", "local-test-password", ["T001"]),
+                protector,
+                sender);
+            var challenge = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+            var hash = CustomerEmailCodeProtector.ChallengeHash(challenge);
+            var verifier = protector.Verifier("T001:persona-activation", challenge, "555666");
+            try
+            {
+                await owner.ExecuteAsync("""
+                    INSERT INTO customer_identity.tenant_principals(actor_id,normalized_email)
+                    VALUES(@Actor,@Email);
+                    """, new { Actor = actor, Email = email });
+                await repo.QueueAsync("T001", new(
+                    "persona-activation", email, hash, verifier,
+                    protector.Protect("T001:persona-activation", hash, "555666"),
+                    DateTimeOffset.UtcNow), default);
+
+                var deliveryTask = delivery.DeliverAsync(default);
+                await sender.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                sender.Release.TrySetResult();
+                var activationTask = repo.ActivateAsync(
+                    "T001", hash, verifier, new string('z', 72), default);
+                var cancellationTask = invitations.CancelAsync("T001", actor, default);
+                await Task.WhenAll(deliveryTask, activationTask, cancellationTask);
+                var activation = await activationTask;
+                _ = await cancellationTask;
+
+                Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                    SELECT count(*) FROM customer_identity.persona_invitation_events
+                    WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
+                    """, new { Actor = actor, Hash = hash }));
+                var consumed = await owner.ExecuteScalarAsync<int>("""
+                    SELECT count(*) FROM customer_identity.persona_invitation_events
+                    WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CONSUMED';
+                    """, new { Actor = actor, Hash = hash });
+                var cancelled = await owner.ExecuteScalarAsync<int>("""
+                    SELECT count(*) FROM customer_identity.persona_invitation_events
+                    WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CANCELLED';
+                    """, new { Actor = actor, Hash = hash });
+                var expired = await owner.ExecuteScalarAsync<int>("""
+                    SELECT count(*) FROM customer_identity.persona_invitation_events
+                    WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='EXPIRED';
+                    """, new { Actor = actor, Hash = hash });
+                Assert.InRange(consumed + cancelled + expired, 0, 1);
+
+                if (consumed + cancelled == 0)
+                {
+                    Assert.Equal("Cancelled", (await invitations.CancelAsync(
+                        "T001", actor, default)).State);
+                    cancelled = 1;
+                }
+                Assert.Equal(1, consumed + cancelled);
+                Assert.Equal(consumed == 1, activation == actor);
+                Assert.Equal(cancelled == 1, activation is null);
+            }
+            finally
+            {
+                sender.Release.TrySetResult();
+                await owner.ExecuteAsync("""
+                    DELETE FROM customer_identity.persona_invitation_events WHERE actor_id=@Actor;
+                    DELETE FROM customer_identity.persona_credentials WHERE actor_id=@Actor;
+                    DELETE FROM customer_identity.registration_challenges WHERE email=@Email;
+                    DELETE FROM customer_identity.tenant_principals WHERE actor_id=@Actor;
+                    """, new { Actor = actor, Email = email });
+            }
+        }
+    }
+
     private sealed class DeliverySender : ICustomerEmailSender
     {
         public bool Fail { get; set; }
@@ -567,6 +875,20 @@ public sealed class PostgresPersonaCredentialTests
             Calls++;
             if (Fail) throw new SmtpException("Controlled physical test failure.");
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class BlockingDeliverySender : ICustomerEmailSender
+    {
+        public TaskCompletionSource Entered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public async Task SendAsync(string email, string code, CancellationToken ct)
+        {
+            Entered.TrySetResult();
+            await Release.Task.WaitAsync(ct);
         }
     }
 

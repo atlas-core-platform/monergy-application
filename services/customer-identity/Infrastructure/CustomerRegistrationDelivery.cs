@@ -29,8 +29,10 @@ public sealed class CustomerRegistrationDelivery(PostgresTenantSessions sessions
             catch(Exception e)when(e is SmtpException or CryptographicException or OperationCanceledException){if(ct.IsCancellationRequested)throw;}
             await using var tx=await db.BeginTransactionAsync(ct).ConfigureAwait(false);
             var completed=await db.QuerySingleOrDefaultAsync<CompletedDelivery>(new CommandDefinition("""
-            UPDATE customer_identity.registration_challenges SET delivered=@Sent,
-             protected_code=CASE WHEN @Sent OR delivery_attempt>=3 THEN NULL ELSE protected_code END
+            UPDATE customer_identity.registration_challenges
+            SET delivered=@Sent AND expires_at>clock_timestamp(),
+             protected_code=CASE WHEN @Sent OR delivery_attempt>=3 OR expires_at<=clock_timestamp()
+                 THEN NULL ELSE protected_code END
             WHERE challenge_hash=@Hash AND delivery_attempt=@Attempt
             RETURNING purpose AS Purpose,email AS Email,challenge_hash AS Hash,delivered AS Delivered;
             """,new{row.Hash,row.Attempt,Sent=sent},tx,cancellationToken:ct)).ConfigureAwait(false);
