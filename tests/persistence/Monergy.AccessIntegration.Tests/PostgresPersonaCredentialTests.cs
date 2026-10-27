@@ -317,6 +317,7 @@ public sealed class PostgresPersonaCredentialTests
         await using var sessions = new PostgresTenantSessions(
             new ConfigurationBuilder().AddInMemoryCollection(settings).Build());
         var repo = new PostgresPersonaCredentials(sessions);
+        var invitations = new PostgresPersonaInvitationStatus(sessions);
         await using var owner = new NpgsqlConnection(Required("AM05_CI_T001_OWNER"));
         await owner.OpenAsync();
 
@@ -357,6 +358,18 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT challenge_hash FROM customer_identity.registration_challenges
                 WHERE purpose='persona-activation' AND email=@Email;
                 """, new { Email = email }));
+
+            Assert.Equal("Cancelled", (await invitations.CancelAsync("T001", actor, default)).State);
+            Assert.Null(await repo.QueueTesterAsync("T001", new(
+                "persona-activation", email, hash, verifier, [], DateTimeOffset.UtcNow.AddMinutes(2)), default));
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='CANCELLED';
+                """, new { Actor = actor, Hash = hash }));
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.persona_invitation_events
+                WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='ISSUED';
+                """, new { Actor = actor, Hash = hash }));
         }
         finally
         {
