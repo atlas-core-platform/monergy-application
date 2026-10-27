@@ -70,7 +70,7 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
         if (replay is not null)
         {
             await tx.CommitAsync(ct).ConfigureAwait(false);
-            return replay.ExpiresAt;
+            return Utc(replay.ExpiresAt);
         }
 
         // A deterministic ticket may never be resurrected after reaching
@@ -150,7 +150,7 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                   );
                 """, challenge, tx, cancellationToken: ct)).ConfigureAwait(false);
             await tx.CommitAsync(ct).ConfigureAwait(false);
-            return replay?.ExpiresAt;
+            return replay is null ? null : Utc(replay.ExpiresAt);
         }
 
         if (previous is not null && previous.ChallengeHash != challenge.ChallengeHash)
@@ -188,7 +188,7 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
             transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
 
         await tx.CommitAsync(ct).ConfigureAwait(false);
-        return written.ExpiresAt;
+        return Utc(written.ExpiresAt);
     }
 
     private static async Task<string?> ConsumeAsync(NpgsqlConnection db, NpgsqlTransaction tx,
@@ -317,7 +317,9 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
         await tx.CommitAsync(ct).ConfigureAwait(false);
         return actor is not null;
     }
-    private sealed record TesterQueue(DateTimeOffset ExpiresAt);
+    private static DateTimeOffset Utc(DateTime value) =>
+        new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
+    private sealed record TesterQueue(DateTime ExpiresAt);
     private sealed record PreviousInvitation(string ChallengeHash, bool Expired);
     private sealed record Challenge(string Email, bool Valid);
 }
