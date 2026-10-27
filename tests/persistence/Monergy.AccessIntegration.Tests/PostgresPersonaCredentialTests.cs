@@ -334,13 +334,18 @@ public sealed class PostgresPersonaCredentialTests
                 VALUES(@Actor,@Email);
                 """, new { Actor = actor, Email = email });
 
-            var first = await repo.QueueTesterAsync("T001", new(
-                "persona-activation", email, hash, verifier, [], DateTimeOffset.UtcNow), default);
-            var replay = await repo.QueueTesterAsync("T001", new(
-                "persona-activation", email, hash, verifier, [], DateTimeOffset.UtcNow.AddSeconds(5)), default);
+            var requestedAt = DateTimeOffset.UtcNow;
+            var challenge = new RegistrationCode(
+                "persona-activation", email, hash, verifier, [], requestedAt);
+            var concurrent = await Task.WhenAll(
+                repo.QueueTesterAsync("T001", challenge, default),
+                repo.QueueTesterAsync("T001", challenge, default));
+            var first = Assert.IsType<DateTimeOffset>(concurrent[0]);
+            Assert.Equal(first, Assert.IsType<DateTimeOffset>(concurrent[1]));
 
-            Assert.NotNull(first);
-            Assert.Equal(first, replay);
+            var replay = await repo.QueueTesterAsync("T001", new(
+                "persona-activation", email, hash, verifier, [], requestedAt.AddSeconds(5)), default);
+            Assert.Equal(first, Assert.IsType<DateTimeOffset>(replay));
             Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
                 SELECT requests FROM customer_identity.registration_challenges
                 WHERE purpose='persona-activation' AND email=@Email;
