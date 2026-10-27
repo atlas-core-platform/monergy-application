@@ -52,7 +52,7 @@ public sealed class PersonaTesterActivation(
         var email = CustomerEmailAccess.NormalizeEmail(request.Email);
         if (!ReturnPaths.Contains(request.ReturnPath))
             throw new TenantAccessException("WELCOME_DESTINATION_INVALID", 400);
-        if (request.RequestId.Length != 32 ||
+        if (request.RequestId is null || request.RequestId.Length != 32 ||
             request.RequestId.Any(static value => !char.IsAsciiHexDigitLower(value)))
             throw new TenantAccessException("WELCOME_REQUEST_ID_INVALID", 400);
         // The request ID is not a bearer secret. It is combined with the
