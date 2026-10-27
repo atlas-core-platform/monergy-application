@@ -287,8 +287,9 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                 INSERT INTO customer_identity.registration_events(event_id,action,actor_id)
                 VALUES(@Id,'PERSONA_ACTIVATED',@Actor);
                 """, new { Id = Guid.NewGuid(), Actor = actor }, tx, cancellationToken: ct)).ConfigureAwait(false);
-            // Existing production email activation may have no tester invitation;
-            // ledger writes are conditional, and share the credential transaction.
+            // LOCAL tester and successfully delivered persona-email invitations
+            // both enter the ledger. Keep this conditional for any legacy/non-ledger
+            // activation path, and commit consumption with the credential.
             await db.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO customer_identity.persona_invitation_events
                   (event_id,actor_id,invitation_hash,action)
