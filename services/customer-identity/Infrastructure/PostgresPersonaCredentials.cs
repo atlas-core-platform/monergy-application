@@ -40,10 +40,63 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
             """, challenge, cancellationToken: ct)).ConfigureAwait(false);
     }
 
-    public async Task<bool> QueueTesterAsync(string tenant, RegistrationCode challenge, CancellationToken ct)
+    public async Task<DateTimeOffset?> QueueTesterAsync(
+        string tenant, RegistrationCode challenge, CancellationToken ct)
     {
         await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
         await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
+
+        // Serialize tester requests for the same tenant-owned identity before
+        // reading or replacing its challenge. This makes simultaneous retries
+        // converge on one issuance instead of racing the global challenge-hash
+        // uniqueness constraint. The lock is transaction-scoped and each
+        // tenant uses a separate database.
+        await db.ExecuteAsync(new CommandDefinition("""
+            SELECT pg_advisory_xact_lock(hashtextextended(@Email, 705903));
+            """, new { challenge.Email }, tx, cancellationToken: ct)).ConfigureAwait(false);
+
+        // A retry of the same protected request reproduces the same challenge
+        // hash. Reuse the still-live issuance without incrementing rate-limit
+        // counters or appending another event.
+        var replay = await db.QuerySingleOrDefaultAsync<TesterQueue>(new CommandDefinition("""
+            SELECT c.expires_at AS ExpiresAt
+            FROM customer_identity.registration_challenges c
+            WHERE c.purpose='persona-activation' AND c.email=@Email
+              AND c.challenge_hash=@ChallengeHash
+              AND c.delivered AND NOT c.consumed
+              AND c.expires_at>clock_timestamp()
+              AND EXISTS(
+                SELECT 1 FROM customer_identity.persona_invitation_events issued
+                WHERE issued.invitation_hash=c.challenge_hash AND issued.action='ISSUED'
+              )
+              AND NOT EXISTS(
+                SELECT 1 FROM customer_identity.persona_invitation_events terminal
+                WHERE terminal.invitation_hash=c.challenge_hash
+                  AND terminal.action IN ('CONSUMED','CANCELLED','EXPIRED')
+              )
+            FOR UPDATE OF c;
+            """, challenge, tx, cancellationToken: ct)).ConfigureAwait(false);
+        if (replay is not null)
+        {
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return Utc(replay.ExpiresAt);
+        }
+
+        // A deterministic ticket may never be resurrected after reaching
+        // historical/terminal state. Intentional renewal requires a new
+        // client request ID and therefore a new secret-derived ticket.
+        var historical = await db.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            SELECT EXISTS(
+              SELECT 1 FROM customer_identity.persona_invitation_events
+              WHERE invitation_hash=@ChallengeHash
+            );
+            """, challenge, tx, cancellationToken: ct)).ConfigureAwait(false);
+        if (historical)
+        {
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return null;
+        }
+
         // Serialize renewals against the previous challenge, so successful
         // replacement cannot leave an earlier welcome ticket usable.
         var previous = await db.QuerySingleOrDefaultAsync<PreviousInvitation>(new CommandDefinition("""
@@ -58,7 +111,8 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
               )
             FOR UPDATE OF c;
             """, new { challenge.Email }, tx, cancellationToken: ct)).ConfigureAwait(false);
-        var written = await db.ExecuteAsync(new CommandDefinition("""
+
+        var written = await db.QuerySingleOrDefaultAsync<TesterQueue>(new CommandDefinition("""
             INSERT INTO customer_identity.registration_challenges AS c
             (purpose,email,challenge_hash,code_hash,protected_code,requested_at,expires_at,
              window_at,requests,delivered)
@@ -78,9 +132,37 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                 requests=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN 1 ELSE c.requests+1 END,
                 attempts=0,consumed=false,delivered=true,delivery_attempt=0,lease_until=NULL
             WHERE c.requested_at<=@RequestedAt-interval '1 minute'
-              AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5);
+              AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5)
+            RETURNING c.expires_at AS ExpiresAt;
             """, challenge, transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
-        if (written == 1 && previous is not null && previous.ChallengeHash != challenge.ChallengeHash)
+
+        if (written is null)
+        {
+            // Concurrent duplicate requests can both miss the first read. The
+            // conflict wait completes after the winner commits; re-read the
+            // exact active hash and treat it as the same accepted request.
+            replay = await db.QuerySingleOrDefaultAsync<TesterQueue>(new CommandDefinition("""
+                SELECT c.expires_at AS ExpiresAt
+                FROM customer_identity.registration_challenges c
+                WHERE c.purpose='persona-activation' AND c.email=@Email
+                  AND c.challenge_hash=@ChallengeHash
+                  AND c.delivered AND NOT c.consumed
+                  AND c.expires_at>clock_timestamp()
+                  AND EXISTS(
+                    SELECT 1 FROM customer_identity.persona_invitation_events issued
+                    WHERE issued.invitation_hash=c.challenge_hash AND issued.action='ISSUED'
+                  )
+                  AND NOT EXISTS(
+                    SELECT 1 FROM customer_identity.persona_invitation_events terminal
+                    WHERE terminal.invitation_hash=c.challenge_hash
+                      AND terminal.action IN ('CONSUMED','CANCELLED','EXPIRED')
+                  );
+                """, challenge, tx, cancellationToken: ct)).ConfigureAwait(false);
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return replay is null ? null : Utc(replay.ExpiresAt);
+        }
+
+        if (previous is not null && previous.ChallengeHash != challenge.ChallengeHash)
         {
             // A successful renewal supersedes the former ticket. If its
             // five-minute lifetime already elapsed, preserve EXPIRED rather
@@ -102,21 +184,20 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                 """, new { Event = Guid.NewGuid(), Previous = previous.ChallengeHash, Action = action },
                 tx, cancellationToken: ct)).ConfigureAwait(false);
         }
-        if (written == 1)
-        {
-            // Recorded only after the challenge was actually accepted. No OTP,
-            // bearer link, recipient email or unhashed secret is retained here.
-            await db.ExecuteAsync(new CommandDefinition("""
-                INSERT INTO customer_identity.persona_invitation_events
-                  (event_id,actor_id,invitation_hash,action)
-                SELECT @Event,p.actor_id,@Hash,'ISSUED'
-                  FROM customer_identity.tenant_principals p
-                 WHERE p.normalized_email=@Email;
-                """, new { Event = Guid.NewGuid(), Hash = challenge.ChallengeHash, challenge.Email },
-                transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
-        }
+
+        // Recorded only after the challenge was actually accepted. No OTP,
+        // bearer link, recipient email or unhashed secret is retained here.
+        await db.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO customer_identity.persona_invitation_events
+              (event_id,actor_id,invitation_hash,action)
+            SELECT @Event,p.actor_id,@Hash,'ISSUED'
+              FROM customer_identity.tenant_principals p
+             WHERE p.normalized_email=@Email;
+            """, new { Event = Guid.NewGuid(), Hash = challenge.ChallengeHash, challenge.Email },
+            transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
+
         await tx.CommitAsync(ct).ConfigureAwait(false);
-        return written == 1;
+        return Utc(written.ExpiresAt);
     }
 
     private static async Task<string?> ConsumeAsync(NpgsqlConnection db, NpgsqlTransaction tx,
@@ -245,6 +326,9 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
         await tx.CommitAsync(ct).ConfigureAwait(false);
         return actor is not null;
     }
+    private static DateTimeOffset Utc(DateTime value) =>
+        new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
+    private sealed record TesterQueue(DateTime ExpiresAt);
     private sealed record PreviousInvitation(string ChallengeHash, bool Expired);
     private sealed record Challenge(string Email, bool Valid);
 }

@@ -80,7 +80,7 @@ public sealed class PersonaCredentialTests
         var owner = new PersonaTesterActivation(fixture.Repository, fixture.Protector,
             fixture.Passwords, TimeProvider.System);
         var created = await owner.CreateWelcomeLinkAsync(
-            new("T001", "a300@example.test", "/advisor"), default);
+            new("T001", "a300@example.test", "/advisor", new string('a', 32)), default);
         var path = Assert.IsType<string>(created.GetType().GetProperty("welcomePath")!.GetValue(created));
         Assert.StartsWith("/welcome#tenant=T001&ticket=", path, StringComparison.Ordinal);
         Assert.DoesNotContain("a300@example.test", path, StringComparison.Ordinal);
@@ -91,6 +91,53 @@ public sealed class PersonaCredentialTests
         Assert.Equal(0, fixture.Sessions.Created);
         await Assert.ThrowsAsync<TenantAccessException>(() =>
             owner.ActivateAsync(new("T001", ticket, Fixture.Password), default));
+    }
+
+    [Fact]
+    public async Task TesterWelcomeRetryReusesSameSecretDerivedTicketAndExpiry()
+    {
+        var fixture = new Fixture();
+        var owner = new PersonaTesterActivation(fixture.Repository, fixture.Protector,
+            fixture.Passwords, TimeProvider.System);
+        var request = new PersonaTesterWelcomeRequest(
+            "T001", "a300@example.test", "/advisor", new string('b', 32));
+
+        var first = await owner.CreateWelcomeLinkAsync(request, default);
+        var second = await owner.CreateWelcomeLinkAsync(request, default);
+
+        var firstPath = Assert.IsType<string>(
+            first.GetType().GetProperty("welcomePath")!.GetValue(first));
+        var secondPath = Assert.IsType<string>(
+            second.GetType().GetProperty("welcomePath")!.GetValue(second));
+        var firstExpiry = Assert.IsType<DateTimeOffset>(
+            first.GetType().GetProperty("expiresAt")!.GetValue(first));
+        var secondExpiry = Assert.IsType<DateTimeOffset>(
+            second.GetType().GetProperty("expiresAt")!.GetValue(second));
+
+        Assert.Equal(firstPath, secondPath);
+        Assert.Equal(firstExpiry, secondExpiry);
+        Assert.Equal(1, fixture.Repository.TesterIssues);
+        Assert.DoesNotContain("a300@example.test", firstPath, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaag")]
+    public async Task TesterWelcomeRejectsMissingOrInvalidRequestIdentity(string? requestId)
+    {
+        var fixture = new Fixture();
+        var owner = new PersonaTesterActivation(fixture.Repository, fixture.Protector,
+            fixture.Passwords, TimeProvider.System);
+
+        var denied = await Assert.ThrowsAsync<TenantAccessException>(() =>
+            owner.CreateWelcomeLinkAsync(new(
+                "T001", "a300@example.test", "/advisor", requestId!), default));
+
+        Assert.Equal("WELCOME_REQUEST_ID_INVALID", denied.Code);
+        Assert.Equal(400, denied.StatusCode);
+        Assert.Equal(0, fixture.Repository.TesterIssues);
     }
 
     private sealed class Fixture
@@ -125,18 +172,33 @@ public sealed class PersonaCredentialTests
         public PersonaCredentialIdentity? Identity;
         public Repository(PersonaCredentialIdentity identity) { Identity = identity; }
         public RegistrationCode? Queued;
+        public int TesterIssues;
+        private string? testerHash;
+        private DateTimeOffset? testerExpiresAt;
         public bool Current = true;
         public bool LastValid;
         public Task QueueAsync(string tenant, RegistrationCode challenge, CancellationToken ct)
         { Queued = challenge; return Task.CompletedTask; }
-        public Task<bool> QueueTesterAsync(string tenant, RegistrationCode challenge, CancellationToken ct)
-        { Queued = challenge; return Task.FromResult(tenant == "T001"); }
+        public Task<DateTimeOffset?> QueueTesterAsync(
+            string tenant, RegistrationCode challenge, CancellationToken ct)
+        {
+            if (tenant != "T001") return Task.FromResult<DateTimeOffset?>(null);
+            if (testerHash == challenge.ChallengeHash && testerExpiresAt is not null)
+                return Task.FromResult(testerExpiresAt);
+            TesterIssues++;
+            testerHash = challenge.ChallengeHash;
+            testerExpiresAt = challenge.RequestedAt.AddMinutes(5);
+            Queued = challenge;
+            return Task.FromResult(testerExpiresAt);
+        }
         public Task<string?> ActivateAsync(string tenant, string hash, string verifier, string passwordHash, CancellationToken ct)
         {
             if (Queued is null || Queued.ChallengeHash != hash || Queued.CodeHash != verifier || tenant != "T001")
                 return Task.FromResult<string?>(null);
             Identity = Identity! with { PasswordHash = passwordHash };
             Queued = null;
+            testerHash = null;
+            testerExpiresAt = null;
             return Task.FromResult<string?>(Identity.ActorId);
         }
         public Task<PersonaCredentialIdentity?> ReadAsync(string tenant, string email, CancellationToken ct) =>

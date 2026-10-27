@@ -3,7 +3,7 @@ using Monergy.Contracts;
 
 namespace Monergy.Services.CustomerIdentity.Application;
 
-public sealed record PersonaTesterWelcomeRequest(string TenantId, string Email, string ReturnPath);
+public sealed record PersonaTesterWelcomeRequest(string TenantId, string Email, string ReturnPath, string RequestId);
 public sealed record PersonaTesterActivationConfirm(string TenantId, string Ticket, string Password);
 
 public sealed class PersonaTesterActivationOptions
@@ -52,17 +52,24 @@ public sealed class PersonaTesterActivation(
         var email = CustomerEmailAccess.NormalizeEmail(request.Email);
         if (!ReturnPaths.Contains(request.ReturnPath))
             throw new TenantAccessException("WELCOME_DESTINATION_INVALID", 400);
-        var ticket = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
+        if (request.RequestId is null || request.RequestId.Length != 32 ||
+            request.RequestId.Any(static value => !char.IsAsciiHexDigitLower(value)))
+            throw new TenantAccessException("WELCOME_REQUEST_ID_INVALID", 400);
+        // The request ID is not a bearer secret. It is combined with the
+        // owner-side key, tenant and recipient to derive a stable retry ticket
+        // without storing the raw ticket or reply in PostgreSQL.
+        var ticket = protector.DeriveTesterTicket(request.TenantId, email, request.RequestId);
         var hash = CustomerEmailCodeProtector.ChallengeHash(ticket);
         var now = clock.GetUtcNow();
-        var queued = await repository.QueueTesterAsync(request.TenantId, new(
+        var expiresAt = await repository.QueueTesterAsync(request.TenantId, new(
             "persona-activation", email, hash,
             protector.Verifier(request.TenantId + ":persona-activation", ticket, ticket),
             [], now), ct).ConfigureAwait(false);
-        if (!queued) throw new TenantAccessException("WELCOME_LINK_NOT_AVAILABLE", 409);
+        if (expiresAt is null)
+            throw new TenantAccessException("WELCOME_LINK_NOT_AVAILABLE", 409);
         var path = "/welcome#tenant=" + Uri.EscapeDataString(request.TenantId) +
             "&ticket=" + ticket + "&return=" + Uri.EscapeDataString(request.ReturnPath);
-        return new { welcomePath = path, expiresAt = now.AddMinutes(5) };
+        return new { welcomePath = path, expiresAt = expiresAt.Value };
     }
 
     public async Task<object> ActivateAsync(PersonaTesterActivationConfirm request, CancellationToken ct)

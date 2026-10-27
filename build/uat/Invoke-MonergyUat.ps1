@@ -644,7 +644,7 @@ if ($Action -eq 'Welcome') {
     }
     $email = $Actor.ToLowerInvariant() + '@example.test'
     $returnPath = switch ($Actor) { 'A900' { '/access' } 'A300' { '/advisor' } default { '/' } }
-    $request = @{ tenantId=$Tenant; email=$email; returnPath=$returnPath } | ConvertTo-Json -Compress
+    $request = @{ tenantId=$Tenant; email=$email; returnPath=$returnPath; requestId=[guid]::NewGuid().ToString('N') } | ConvertTo-Json -Compress
     $headers = @{ 'X-Monergy-Tester-Activation'=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess)) }
     $welcome = Invoke-RestMethod "$url/identity-api/local/v1/persona-credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
     if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/welcome#tenant=[A-Za-z0-9_.:-]+&ticket=[0-9a-f]{64}&return=%2F') {
