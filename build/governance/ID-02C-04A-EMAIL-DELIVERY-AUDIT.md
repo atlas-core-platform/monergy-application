@@ -60,6 +60,8 @@ A real PostgreSQL regression covers:
 
 The test uses only isolated LOCAL/CI database rows and a controlled sender; it does not send external email.
 
+The Development-only LOCAL/UAT host explicitly keeps minimal-API bad-request exceptions disabled so strict unknown-field validation returns HTTP 400 instead of terminating the response.
+
 ## Existing authority and grants
 
 No migration is required. The existing C&I runtime role already has:

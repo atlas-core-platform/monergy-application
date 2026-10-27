@@ -222,6 +222,8 @@ public sealed class CustomerEmailAccessTests
         var context = new Fixture();
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Development" });
         builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Services.Configure<Microsoft.AspNetCore.Routing.RouteHandlerOptions>(
+            options => options.ThrowOnBadRequest = false);
         builder.Services.ConfigureHttpJsonOptions(o => { o.SerializerOptions.UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow; o.SerializerOptions.RespectRequiredConstructorParameters = true; });
         builder.Services.AddSingleton(context.Owner);
         builder.Services.AddRateLimiter(o => { o.RejectionStatusCode = 429; o.AddFixedWindowLimiter("customer-email", x => { x.PermitLimit = 6; x.Window = TimeSpan.FromMinutes(1); x.QueueLimit = 0; }); });
