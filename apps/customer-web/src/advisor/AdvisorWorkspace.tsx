@@ -20,13 +20,10 @@ interface FinancialReview {
   facts: ReviewedFact[];
 }
 interface AdvisorAccessRequest {
-  tenantId: string;
-  actorId: string;
-  policyVersion: number;
-  subjectVersion: number;
   requestId: string | null;
   target: 'financial-advisor.assigned-customer-financial-review';
   targetLabel: string;
+  grantExplanation: string;
   state: 'NotRequested' | 'Submitted' | 'Rejected' | 'Fulfilled';
   hasAccess: boolean;
   canRequest: boolean;
@@ -94,21 +91,28 @@ function financialReview(value: unknown): FinancialReview {
 }
 const nullableDate = (value: unknown): value is string | null =>
   value === null || typeof value === 'string' && Number.isFinite(Date.parse(value));
-function accessRequest(value: unknown, tenantId: string, actorId: string): AdvisorAccessRequest {
+function accessRequest(value: unknown): AdvisorAccessRequest {
   const raw = record(value);
   const states = ['NotRequested', 'Submitted', 'Rejected', 'Fulfilled'];
-  if (raw.tenantId !== tenantId || raw.actorId !== actorId ||
-      typeof raw.policyVersion !== 'number' || !Number.isSafeInteger(raw.policyVersion) || raw.policyVersion < 1 ||
-      typeof raw.subjectVersion !== 'number' || !Number.isSafeInteger(raw.subjectVersion) || raw.subjectVersion < 1 ||
-      !(raw.requestId === null || typeof raw.requestId === 'string' && /^[0-9a-f]{32}$/.test(raw.requestId)) ||
+  if (!(raw.requestId === null || typeof raw.requestId === 'string' && /^[0-9a-f]{32}$/.test(raw.requestId)) ||
       raw.target !== 'financial-advisor.assigned-customer-financial-review' ||
       typeof raw.targetLabel !== 'string' || !raw.targetLabel.trim() || raw.targetLabel.length > 120 ||
+      typeof raw.grantExplanation !== 'string' || !raw.grantExplanation.trim() || raw.grantExplanation.length > 500 ||
       typeof raw.state !== 'string' || !states.includes(raw.state) ||
       typeof raw.hasAccess !== 'boolean' || typeof raw.canRequest !== 'boolean' ||
       !nullableDate(raw.createdAt) || !nullableDate(raw.decisionAt) || !nullableDate(raw.fulfilledAt) ||
       !(raw.decisionReason === null || typeof raw.decisionReason === 'string' && raw.decisionReason.length <= 160))
     throw new Error('ADVISOR_ACCESS_REQUEST_INVALID');
   return raw as unknown as AdvisorAccessRequest;
+}
+function advisorAccessRequest(value: unknown, tenantId: string, actorId: string): AdvisorAccessRequest {
+  const raw = record(value);
+  if (raw.tenantId !== tenantId || raw.actorId !== actorId ||
+      typeof raw.policyVersion !== 'number' || !Number.isSafeInteger(raw.policyVersion) || raw.policyVersion < 1 ||
+      typeof raw.subjectVersion !== 'number' || !Number.isSafeInteger(raw.subjectVersion) || raw.subjectVersion < 1 ||
+      !Array.isArray(raw.items) || raw.items.length !== 1)
+    throw new Error('ADVISOR_ACCESS_REQUEST_INVALID');
+  return accessRequest(raw.items[0]);
 }
 const newOperationId = () => crypto.randomUUID().replaceAll('-', '');
 
@@ -145,7 +149,7 @@ export default function AdvisorWorkspace() {
   const advisor = authorization?.area === 'advisor' ? authorization : null;
 
   useEffect(() => {
-    if (!advisor || !api || !session) return;
+    if (!advisor || !api || !session || !access?.hasAccess) return;
     const abort = new AbortController();
     // Defer the refresh transition until the request begins. Keep effects
     // limited to external synchronization rather than synchronous state updates.
@@ -168,7 +172,7 @@ export default function AdvisorWorkspace() {
       if (!abort.signal.aborted) setLoading(false);
     });
     return () => { abort.abort(); };
-  }, [advisor, api, session, refresh]);
+  }, [advisor, api, session, refresh, access?.hasAccess]);
 
   useEffect(() => {
     if (!advisor || !api || !session) return;
@@ -177,12 +181,12 @@ export default function AdvisorWorkspace() {
       if (abort.signal.aborted) return null;
       setAccessLoading(true);
       setAccessNotice('');
-      return api.request<unknown>('advisor/access-request', 'GET', undefined, abort.signal);
+      return api.request<unknown>('access-requests', 'GET', undefined, abort.signal);
     })
       .then(value => {
         if (value === null) return;
         abort.signal.throwIfAborted();
-        setAccess(accessRequest(value, session.tenantId, session.actorId));
+        setAccess(advisorAccessRequest(value, session.tenantId, session.actorId));
       })
       .catch(() => {
         if (!abort.signal.aborted)
@@ -220,10 +224,10 @@ export default function AdvisorWorkspace() {
     setAccessBusy(true);
     setAccessNotice('');
     try {
-      const value = await api.request<unknown>('advisor/access-request', 'POST', {
+      const value = await api.request<unknown>('access-requests/financial-advisor.assigned-customer-financial-review/submit', 'POST', {
         operationId: newOperationId(),
       });
-      setAccess(accessRequest(value, session.tenantId, session.actorId));
+      setAccess(accessRequest(value));
       setAccessNotice('Your request was submitted to an Organization Administrator.');
     } catch {
       setAccessNotice('The request was not confirmed. Refresh its status before trying again.');

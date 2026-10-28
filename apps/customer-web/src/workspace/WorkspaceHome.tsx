@@ -8,6 +8,7 @@ import { Alert, Skeleton, Tag } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import { getFinancialProfile, listEvidence, type ProductFinancialProfile } from '../product/productApi';
+import { RequestAccessOverview, type RequestTarget } from '../access/RequestAccess';
 
 const journeys: {
   title: string;
@@ -15,6 +16,7 @@ const journeys: {
   href: string;
   icon: WorkspaceIconName;
   capability: string;
+  target: RequestTarget;
   action: string;
 }[] = [
   {
@@ -23,6 +25,7 @@ const journeys: {
     href: '/evidence',
     icon: 'evidence',
     capability: 'evidence.document.upload',
+    target: 'customer.documents',
     action: 'Add document',
   },
   {
@@ -31,15 +34,17 @@ const journeys: {
     href: '/actions',
     icon: 'changes',
     capability: 'financial-profile.profile.read',
+    target: 'customer.financial-information',
     action: 'Open Action Centre',
   },
-  { title: 'Review monthly income and expenses', description: 'Review household totals, coverage and exact sources for a completed month.', href: '/monthly-cashflow', icon: 'reports', capability: 'financial-rules.calculation.execute', action: 'Review income and expenses' },
+  { title: 'Review monthly income and expenses', description: 'Review household totals, coverage and exact sources for a completed month.', href: '/monthly-cashflow', icon: 'reports', capability: 'financial-rules.calculation.execute', target: 'customer.calculations', action: 'Review income and expenses' },
   {
     title: 'Review net worth',
     description: 'Review a complete dated inventory, calculate assets minus liabilities and follow saved sources.',
     href: '/net-worth',
     icon: 'reports',
     capability: 'financial-rules.calculation.execute',
+    target: 'customer.calculations',
     action: 'Review net worth',
   },
   {
@@ -48,6 +53,7 @@ const journeys: {
     href: '/finances',
     icon: 'reports',
     capability: 'financial-profile.profile.read',
+    target: 'customer.financial-information',
     action: 'View financial information',
   },
   {
@@ -56,6 +62,7 @@ const journeys: {
     href: '/search',
     icon: 'search',
     capability: 'search.query.execute',
+    target: 'customer.search',
     action: 'Open search',
   },
   {
@@ -64,8 +71,15 @@ const journeys: {
     href: '/financial-qa?mode=summary',
     icon: 'reports',
     capability: 'ai-intelligence.analysis.execute',
+    target: 'customer.financial-qa',
     action: 'Create summary',
   },
+];
+
+const customerRequestTargets: RequestTarget[] = [
+  'customer.financial-information', 'customer.documents', 'customer.processing-status',
+  'customer.calculations', 'customer.search', 'customer.financial-qa',
+  'customer.reports', 'customer.data-connections',
 ];
 
 const formatPassportDate = (value: string | null) =>
@@ -408,6 +422,8 @@ export default function WorkspaceHome() {
           </div>
         )}
       </section>
+
+      {api && context && <RequestAccessOverview targets={customerRequestTargets} />}
 
       <section className="workspace-boundary" aria-labelledby="workspace-boundary-title">
         <span className="workspace-card-icon">

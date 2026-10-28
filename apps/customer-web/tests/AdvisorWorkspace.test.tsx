@@ -19,11 +19,16 @@ const advisor = () => ({
   policyVersion: 4, subjectVersion: 3, recordedRelationshipCount: 0,
 });
 const access = (overrides: Record<string, unknown> = {}) => ({
-  tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
   requestId: null, target: 'financial-advisor.assigned-customer-financial-review',
-  targetLabel: 'View assigned customer financial information', state: 'NotRequested',
+  targetLabel: 'Assigned customer financial review',
+  grantExplanation: 'Allows this Financial Advisor to read assigned customer financial information with current consent.',
+  state: 'NotRequested',
   hasAccess: false, canRequest: true, createdAt: null, decisionAt: null,
   fulfilledAt: null, decisionReason: null, ...overrides,
+});
+const accessPage = (overrides: Record<string, unknown> = {}) => ({
+  tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
+  items: [access(overrides)],
 });
 function mount() {
   return render(
@@ -42,7 +47,7 @@ function owner(contextStatus = 200, foreignActor = false) {
       tenantId: 'T001', actorId: 'A300', policyVersion: 4,
       subjectVersion: 3, customers: [],
     }));
-    if (url.endsWith('/advisor/access-request')) return Promise.resolve(json(access()));
+    if (url.endsWith('/access-requests')) return Promise.resolve(json(accessPage()));
     if (url.endsWith('/advisor/context')) return Promise.resolve(json(
       contextStatus === 200 ? { ...advisor(), ...(foreignActor ? { actorId: 'A100' } : {}) }
         : { error: 'ADVISOR_ROLE_REQUIRED' }, contextStatus));
@@ -77,7 +82,7 @@ it('submits only an idempotency operation and never browser-supplied authority f
   const fallback = requests.getMockImplementation();
   if (!fallback) throw Error('Missing owner mock');
   requests.mockImplementation((url: string, options?: RequestInit) => {
-    if (url.endsWith('/advisor/access-request') && options?.method === 'POST') {
+    if (url.endsWith('/access-requests/financial-advisor.assigned-customer-financial-review/submit') && options?.method === 'POST') {
       expect(typeof options.body).toBe('string');
       expect(JSON.parse(options.body as string)).toEqual({ operationId: 'd'.repeat(32) });
       return Promise.resolve(json(access({ requestId: 'a'.repeat(32), state: 'Submitted',
@@ -90,15 +95,16 @@ it('submits only an idempotency operation and never browser-supplied authority f
   expect(await screen.findByText(/request was submitted to an Organization Administrator/)).toBeVisible();
   expect(screen.getByText(/Submitted · Under review/)).toBeVisible();
   expect(requests.mock.calls.filter(([url, options]) =>
-    url.endsWith('/advisor/access-request') && options?.method === 'POST')).toHaveLength(1);
+    url.endsWith('/access-requests/financial-advisor.assigned-customer-financial-review/submit') &&
+    options?.method === 'POST')).toHaveLength(1);
 });
 it('shows a rejected lifecycle safely and allows a new bounded request', async () => {
   const requests = owner();
   const fallback = requests.getMockImplementation();
   if (!fallback) throw Error('Missing owner mock');
   requests.mockImplementation((url: string, options?: RequestInit) =>
-    url.endsWith('/advisor/access-request') && options?.method !== 'POST'
-      ? Promise.resolve(json(access({ requestId: 'b'.repeat(32), state: 'Rejected',
+    url.endsWith('/access-requests') && options?.method !== 'POST'
+      ? Promise.resolve(json(accessPage({ requestId: 'b'.repeat(32), state: 'Rejected',
           decisionAt: new Date().toISOString(), decisionReason: 'Not approved by your Organization Administrator' })))
       : fallback(url));
   mount(); await connect();
@@ -111,6 +117,10 @@ it('shows a read-only reviewed financial fact only after a consent-authorized cu
   const mock = requests.getMockImplementation();
   if (!mock) throw Error('Missing owner mock');
   requests.mockImplementation((url: string) => {
+    if (url.endsWith('/access-requests')) return Promise.resolve(json(accessPage({
+      requestId: 'c'.repeat(32), state: 'Fulfilled', hasAccess: true, canRequest: false,
+      decisionAt: new Date().toISOString(), fulfilledAt: new Date().toISOString(),
+    })));
     if (url.endsWith('/v1/advisor/customers')) return Promise.resolve(json({
       tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
       customers: [{ customerId: 'C001', displayName: 'Verified Customer' }],
@@ -136,6 +146,10 @@ it('fails closed when the owner revokes financial access after listing the assig
   const fallback = requests.getMockImplementation();
   if (!fallback) throw Error('Missing owner mock');
   requests.mockImplementation((url: string) => {
+    if (url.endsWith('/access-requests')) return Promise.resolve(json(accessPage({
+      requestId: 'c'.repeat(32), state: 'Fulfilled', hasAccess: true, canRequest: false,
+      decisionAt: new Date().toISOString(), fulfilledAt: new Date().toISOString(),
+    })));
     if (url.endsWith('/v1/advisor/customers')) return Promise.resolve(json({
       tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3, customers: [{ customerId: 'C001', displayName: 'Verified Customer' }],
     }));
@@ -153,10 +167,16 @@ it('never displays an invalid owner customer label', async () => {
   const requests = owner();
   const fallback = requests.getMockImplementation();
   if (!fallback) throw Error('Missing mock');
-  requests.mockImplementation((url: string) => url.endsWith('/v1/advisor/customers')
-    ? Promise.resolve(json({ tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
-      customers: [{ customerId: ' invalid', displayName: 'Should not be visible' }] }))
-    : fallback(url));
+  requests.mockImplementation((url: string) => {
+    if (url.endsWith('/access-requests')) return Promise.resolve(json(accessPage({
+      requestId: 'c'.repeat(32), state: 'Fulfilled', hasAccess: true, canRequest: false,
+      decisionAt: new Date().toISOString(), fulfilledAt: new Date().toISOString(),
+    })));
+    return url.endsWith('/v1/advisor/customers')
+      ? Promise.resolve(json({ tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
+        customers: [{ customerId: ' invalid', displayName: 'Should not be visible' }] }))
+      : fallback(url);
+  });
   mount(); await connect();
   expect(await screen.findByText(/Authorized customer names could not be verified/)).toBeVisible();
   expect(screen.queryByText('Should not be visible')).not.toBeInTheDocument();
