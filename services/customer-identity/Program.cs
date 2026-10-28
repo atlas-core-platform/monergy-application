@@ -26,7 +26,8 @@ if (tenantIntegration)
         options => options.ThrowOnBadRequest = false);
     builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.RespectRequiredConstructorParameters = true);
     builder.Services.AddTenantSessionAuthority(builder.Configuration);
-    builder.Services.AddSingleton<Monergy.Services.CustomerIdentity.Infrastructure.PostgresPersonaInvitationStatus>();
+    builder.Services.AddSingleton<Monergy.Services.CustomerIdentity.Infrastructure.IPersonaInvitationStatus,
+        Monergy.Services.CustomerIdentity.Infrastructure.PostgresPersonaInvitationStatus>();
     builder.Services.AddSelfSessions();
     // Tenant administrators need the customer directory independently of the
     // customer-facing onboarding composition. Keeping this registration behind
@@ -65,7 +66,7 @@ if (referenceAdapters)
 if (tenantIntegration)
 {
     app.MapTenantSessionAuthority();
-    app.MapPersonaInvitationStatus();
+    app.MapPersonaInvitationStatus(personaCredentials && customerEmailAccess);
     app.MapSelfSessions();
     app.MapCustomerEmailAccess(customerEmailAccess);
     app.MapCustomerRegistration(customerRegistration);
