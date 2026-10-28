@@ -41,6 +41,10 @@ public sealed class PostgresPersonaCredentialTests
                 VALUES(@Actor,@Email);
                 """, new { Actor = actor, Email = email });
 
+            Assert.Equal(email,
+                await repo.ReadActivationEmailAsync("T001", actor, default));
+            Assert.Null(await repo.ReadActivationEmailAsync("T002", actor, default));
+
             var activation = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
             var verifier = new string('a', 64);
             await repo.QueueAsync("T001", new("persona-activation", email, activation,
@@ -57,6 +61,7 @@ public sealed class PostgresPersonaCredentialTests
                 """, new { Hash = activation }));
 
             Assert.Equal(actor, await repo.ActivateAsync("T001", activation, verifier, new string('s', 72), default));
+            Assert.Null(await repo.ReadActivationEmailAsync("T001", actor, default));
             Assert.Null(await repo.ActivateAsync("T001", activation, verifier, "replay", default));
             var first = Assert.IsType<PersonaCredentialIdentity>(
                 await repo.ReadAsync("T001", email, default));
