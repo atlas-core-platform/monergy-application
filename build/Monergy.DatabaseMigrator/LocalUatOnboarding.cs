@@ -121,7 +121,7 @@ internal static partial class LocalUatBootstrap
                 var table = database.Service == "audit" ? "audit.access_tenant_identity" : schema + ".tenant_identity";
                 var sql = $"SELECT tenant_id=@tenant FROM {table} WHERE singleton;";
                 if (step == TenantProvisioningStep.ServiceMigrationsApplied)
-                    sql = $"SELECT tenant_id=@tenant AND schema_version={(database.Service == "am" ? 6 : 1)} FROM {table} WHERE singleton;";
+                    sql = $"SELECT tenant_id=@tenant AND schema_version={(database.Service == "am" ? 7 : 1)} FROM {table} WHERE singleton;";
                 if (step == TenantProvisioningStep.InitialAdministratorIdentityProvisioned && database.Service == "customer-identity")
                     sql = "SELECT EXISTS(SELECT 1 FROM customer_identity.tenant_principals WHERE actor_id='A900' AND normalized_email='a900@example.test');";
                 if (step == TenantProvisioningStep.AccessManagementBootstrapped && database.Service == "am")
