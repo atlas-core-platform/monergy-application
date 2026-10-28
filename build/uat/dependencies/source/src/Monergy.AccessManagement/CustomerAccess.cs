@@ -60,8 +60,12 @@ public sealed class CustomerAccessEvaluator(IAccessPolicyStore policies, ICustom
             if (string.IsNullOrWhiteSpace(roleId)) return Decision("NoBusinessRole");
             var role = await policies.GetRolePolicyAsync(actor.TenantId, roleId, state.PolicyVersion, ct).ConfigureAwait(false);
             if (role is null || role.RoleId != roleId || role.PolicyVersion != state.PolicyVersion) return Decision("PolicyUnavailable");
-            if (!role.Grants.Any(grant => grant.CapabilityId == request.CapabilityId && Enum.IsDefined(grant.Scope) &&
-                (request.CapabilityId != CustomerAccessPolicy.CustomerJobRead || grant.Scope == AuthorizationScope.Tenant)))
+            var subjectGrants = await policies.GetSubjectCapabilityGrantsAsync(actor.TenantId, actor.ActorId,
+                state.PolicyVersion, state.Subject.SubjectVersion, ct).ConfigureAwait(false);
+            var grants = role.Grants.Concat(subjectGrants).Where(grant =>
+                grant.CapabilityId == request.CapabilityId && Enum.IsDefined(grant.Scope) &&
+                (request.CapabilityId != CustomerAccessPolicy.CustomerJobRead || grant.Scope == AuthorizationScope.Tenant)).ToArray();
+            if (grants.Length == 0)
                 return Decision("CapabilityNotGranted");
             customer = await customers.ReadAsync(actor.TenantId, request.CustomerId, ct).ConfigureAwait(false);
             if (!Valid(customer)) return Decision("CustomerUnavailable");
@@ -72,6 +76,10 @@ public sealed class CustomerAccessEvaluator(IAccessPolicyStore policies, ICustom
                 return Decision("CustomerRelationshipRequired");
             if (!self)
             {
+                if (!grants.Any(grant => grant.Scope == AuthorizationScope.Tenant) &&
+                    !await policies.HasResourceGrantAsync(actor.TenantId, actor.ActorId, request.CapabilityId,
+                        capability.ResourceType!, request.CustomerId, ct).ConfigureAwait(false))
+                    return Decision("ResourceScopeNotGranted");
                 var consent = await consents.EvaluateAsync(new(actor.TenantId, actor.ActorId, request.CustomerId,
                     request.CapabilityId, request.Purpose), ct).ConfigureAwait(false);
                 if (consent.TenantId != actor.TenantId || consent.ActorId != actor.ActorId || consent.CustomerId != request.CustomerId ||

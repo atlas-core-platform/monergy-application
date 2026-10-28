@@ -4,8 +4,8 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "ff08172e54c85f1f7db3a90cc334d45e7f13e47d",
-  "sourceTree": "36b39f0c413fbc762462de40e1a656bf2a1b15eb",
+  "commit": "6f92e916914e7f89975b81adb8955e70bb094e2c",
+  "sourceTree": "2d394eaa75a4de97273758dbd5c10d9b1ffa5d21",
   "verificationStatus": "AM_IRA_01_CANDIDATE_PHYSICAL_AND_BROWSER_UAT_PENDING",
   "candidatePullRequest": 20,
   "files": [
@@ -63,7 +63,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerAccess.cs",
-      "gitBlobSha": "126e1a42cb63bc14581849c2a5020370f4f2800c"
+      "gitBlobSha": "8fc2c1aec4eb4a9e09d85a9c86ef2e30e7bbe9b2"
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerEnrollment.cs",
@@ -71,7 +71,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerRelationshipAdministration.cs",
-      "gitBlobSha": "f9133b0f7ed50908fe779de29f79493494dcb411"
+      "gitBlobSha": "aba50547e51fb038052b3a32d1417f371f909a76"
     },
     {
       "path": "src/Monergy.AccessManagement/DefaultAccessPack.cs",
@@ -103,7 +103,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessAdministration.cs",
-      "gitBlobSha": "cc49ac3bcc177ee2a3307268a7ba82a2651fb52e"
+      "gitBlobSha": "e22c38801cefea7d19d78124ceeac414a1f5fa36"
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessPolicyStore.cs",
