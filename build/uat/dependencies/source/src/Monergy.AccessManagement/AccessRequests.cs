@@ -241,7 +241,8 @@ public sealed partial class PostgresAccessAdministration
             }
             else
             {
-                var permissionIds = target!.Permissions.Select(value => value.PermissionId).ToArray();
+                var approvedTarget = target!;
+                var permissionIds = approvedTarget.Permissions.Select(value => value.PermissionId).ToArray();
                 var inserted = await connection.ExecuteScalarAsync<int>(Command("""
                     WITH inserted AS (
                         INSERT INTO am.subject_permissions (
@@ -263,16 +264,21 @@ public sealed partial class PostgresAccessAdministration
                     RoleId = request.RequesterRoleId
                 }, transaction, ct)).ConfigureAwait(false);
                 await connection.ExecuteAsync(Command("""
-                    INSERT INTO am.access_request_permission_grants (request_id,actor_id,permission_id)
-                    SELECT @RequestId,@ActorId,sp.permission_id
-                    FROM am.subject_permissions sp
-                    WHERE sp.actor_id=@ActorId AND sp.permission_id=ANY(@PermissionIds)
+                    INSERT INTO am.access_request_permission_grants (
+                        request_id,actor_id,permission_id,permission_code,capability_id,scope)
+                    SELECT @RequestId,@ActorId,snapshot.permission_id,snapshot.permission_code,
+                        snapshot.capability_id,snapshot.scope
+                    FROM unnest(@PermissionIds,@PermissionCodes,@CapabilityIds,@Scopes)
+                        AS snapshot(permission_id,permission_code,capability_id,scope)
                     ON CONFLICT DO NOTHING;
                     """, new
                 {
                     RequestId = request.RequestId,
                     ActorId = request.RequesterActorId,
-                    PermissionIds = permissionIds
+                    PermissionIds = permissionIds,
+                    PermissionCodes = approvedTarget.Permissions.Select(value => value.PermissionCode).ToArray(),
+                    CapabilityIds = approvedTarget.Permissions.Select(value => value.CapabilityId).ToArray(),
+                    Scopes = approvedTarget.Permissions.Select(value => value.Scope.ToString()).ToArray()
                 }, transaction, ct)).ConfigureAwait(false);
 
                 var nextPolicyVersion = policyVersion;
@@ -418,13 +424,17 @@ public sealed partial class PostgresAccessAdministration
             """, new { ActorId = actorId, Capabilities = capabilities }, transaction, ct)).ConfigureAwait(false))
             .ToHashSet(StringComparer.Ordinal);
         var rows = await connection.QueryAsync<SubjectGrantRow>(Command("""
-            SELECT pc.capability_id AS CapabilityId,pc.scope AS Scope,
+            SELECT sp.permission_id AS PermissionId,p.code AS PermissionCode,
+                pc.capability_id AS CapabilityId,pc.scope AS Scope,
+                apg.permission_code AS SnapshotPermissionCode,
+                apg.capability_id AS SnapshotCapabilityId,apg.scope AS SnapshotScope,
                 ar.target_code AS TargetCode,ar.target_definition_hash AS TargetDefinitionHash,
                 r.code AS RoleCode
             FROM am.subject_permissions sp
             JOIN am.access_request_permission_grants apg
                 ON apg.actor_id=sp.actor_id AND apg.permission_id=sp.permission_id
             JOIN am.access_requests ar ON ar.request_id=apg.request_id
+            JOIN am.permissions p ON p.permission_id=sp.permission_id
             JOIN am.permission_capabilities pc ON pc.permission_id=sp.permission_id
             JOIN am.access_subjects s ON s.actor_id=sp.actor_id
             JOIN am.roles r ON r.role_id=s.business_role_id
@@ -434,8 +444,13 @@ public sealed partial class PostgresAccessAdministration
             if (RequestTargets.TryGet(row.TargetCode, out var source) && source is not null &&
                 source.DefinitionHash == row.TargetDefinitionHash &&
                 source.EligibleRoleCodes.Contains(row.RoleCode, StringComparer.Ordinal) &&
-                source.Permissions.Any(permission => permission.CapabilityId == row.CapabilityId &&
-                    permission.Scope.ToString() == row.Scope))
+                source.Permissions.Any(permission => permission.PermissionId == row.PermissionId &&
+                    permission.PermissionCode == row.PermissionCode &&
+                    permission.PermissionCode == row.SnapshotPermissionCode &&
+                    permission.CapabilityId == row.CapabilityId &&
+                    permission.CapabilityId == row.SnapshotCapabilityId &&
+                    permission.Scope.ToString() == row.Scope &&
+                    permission.Scope.ToString() == row.SnapshotScope))
                 effective.Add(row.CapabilityId);
         return capabilities.All(effective.Contains);
     }
@@ -556,8 +571,9 @@ public sealed partial class PostgresAccessAdministration
     private sealed record BusinessSubjectRow(string? RoleId, long SubjectVersion, string Status, string? RoleCode);
     private sealed record PermissionDefinitionRow(string PermissionId, string PermissionCode, string CapabilityId, string Scope);
     private sealed record SubjectGrantRow(
-        string CapabilityId, string Scope, string TargetCode, string TargetDefinitionHash,
-        string RoleCode);
+        string PermissionId, string PermissionCode, string CapabilityId, string Scope,
+        string SnapshotPermissionCode, string SnapshotCapabilityId, string SnapshotScope,
+        string TargetCode, string TargetDefinitionHash, string RoleCode);
     private sealed record AccessRequestRow(
         string RequestId, string TargetCode, string TargetDefinitionHash, string State, DateTime CreatedAt,
         DateTime? DecisionAt, DateTime? FulfilledAt, string? DecisionReason);

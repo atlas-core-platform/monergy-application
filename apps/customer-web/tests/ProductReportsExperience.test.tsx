@@ -193,6 +193,32 @@ it('reopens a customer report only through the product report-read boundary', as
   );
 });
 
+it('keeps report read usable and requests the missing generate action', async () => {
+  window.history.replaceState(null, '', '/reports?report=report-customer-basic-001');
+  const api = new AccessApi(session);
+  const product = vi.spyOn(api, 'product').mockResolvedValue(report);
+  const item = { requestId: null, target: 'customer.reports', targetLabel: 'Reports',
+    grantExplanation: 'Allows governed report generation.', state: 'NotRequested',
+    hasAccess: false, canRequest: true, createdAt: null, decisionAt: null,
+    fulfilledAt: null, decisionReason: null };
+  const request = vi.spyOn(api, 'request').mockImplementation((path, method = 'GET', body) => {
+    if (method === 'GET') return Promise.resolve({ tenantId: 'T001', actorId: 'A100',
+      policyVersion: 8, subjectVersion: 2, items: [item] });
+    expect(path).toBe('access-requests/customer.reports/submit');
+    expect(body).toEqual({ operationId: expect.stringMatching(/^[0-9a-f]{32}$/) });
+    return Promise.resolve({ ...item, requestId: 'a'.repeat(32), state: 'Submitted',
+      canRequest: false, createdAt: '2026-10-28T00:00:00Z' });
+  });
+
+  mount(api, ['reporting.report.read']);
+  expect(await screen.findByText('Employment income')).toBeVisible();
+  expect(product).toHaveBeenCalledWith('v1/reports/report-customer-basic-001', 'GET', undefined,
+    expect.any(AbortSignal));
+  expect(screen.queryByRole('button', { name: 'Generate basic summary' })).not.toBeInTheDocument();
+  await userEvent.setup().click(await screen.findByRole('button', { name: 'Request access' }));
+  expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(1);
+});
+
 it('exports exactly the governed report payload returned by Reporting', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockResolvedValue(report);

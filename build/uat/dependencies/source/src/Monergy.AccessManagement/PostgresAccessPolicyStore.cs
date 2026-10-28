@@ -53,12 +53,16 @@ public sealed class PostgresAccessPolicyStore(
         QueryAsync<IReadOnlyList<CapabilityGrant>>(tenantId, async connection =>
         {
             var rows = (await connection.QueryAsync<SubjectGrantRow>(new CommandDefinition("""
-                SELECT DISTINCT sp.permission_id AS PermissionId,pc.capability_id AS CapabilityId,
-                    pc.scope AS Scope,r.code AS RoleCode,ar.target_code AS TargetCode,
+                SELECT DISTINCT sp.permission_id AS PermissionId,p.code AS PermissionCode,
+                    pc.capability_id AS CapabilityId,pc.scope AS Scope,
+                    apg.permission_code AS SnapshotPermissionCode,
+                    apg.capability_id AS SnapshotCapabilityId,apg.scope AS SnapshotScope,
+                    r.code AS RoleCode,ar.target_code AS TargetCode,
                     ar.target_definition_hash AS TargetDefinitionHash
                 FROM am.access_subjects s
                 JOIN am.policy_state ps ON ps.singleton
                 JOIN am.subject_permissions sp ON sp.actor_id=s.actor_id
+                JOIN am.permissions p ON p.permission_id=sp.permission_id
                 JOIN am.permission_capabilities pc ON pc.permission_id=sp.permission_id
                 JOIN am.access_request_permission_grants apg
                   ON apg.actor_id=sp.actor_id AND apg.permission_id=sp.permission_id
@@ -74,7 +78,12 @@ public sealed class PostgresAccessPolicyStore(
                     target.DefinitionHash == row.TargetDefinitionHash &&
                     target.EligibleRoleCodes.Contains(row.RoleCode, StringComparer.Ordinal) &&
                     target.Permissions.Any(permission => permission.PermissionId == row.PermissionId &&
-                        permission.CapabilityId == row.CapabilityId && permission.Scope.ToString() == row.Scope))
+                        permission.PermissionCode == row.PermissionCode &&
+                        permission.PermissionCode == row.SnapshotPermissionCode &&
+                        permission.CapabilityId == row.CapabilityId &&
+                        permission.CapabilityId == row.SnapshotCapabilityId &&
+                        permission.Scope.ToString() == row.Scope &&
+                        permission.Scope.ToString() == row.SnapshotScope))
                 .Select(row => new CapabilityGrant(row.CapabilityId, Enum.Parse<AuthorizationScope>(row.Scope)))
                 .Distinct().ToArray();
         }, ct);
@@ -111,6 +120,7 @@ public sealed class PostgresAccessPolicyStore(
         string? AdministrativeAuthority, long SubjectVersion, long PolicyVersion);
     private sealed record GrantRow(string RoleId, long PolicyVersion, string? CapabilityId, string? Scope);
     private sealed record SubjectGrantRow(
-        string PermissionId, string CapabilityId, string Scope, string RoleCode,
-        string TargetCode, string TargetDefinitionHash);
+        string PermissionId, string PermissionCode, string CapabilityId, string Scope,
+        string SnapshotPermissionCode, string SnapshotCapabilityId, string SnapshotScope,
+        string RoleCode, string TargetCode, string TargetDefinitionHash);
 }

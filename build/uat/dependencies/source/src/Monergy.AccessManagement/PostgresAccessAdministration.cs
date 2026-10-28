@@ -397,12 +397,16 @@ public sealed partial class PostgresAccessAdministration(
             if (!eligible)
             {
                 var subjectGrants = await connection.QueryAsync<ResourceSubjectGrantRow>(Command("""
-                    SELECT sp.permission_id AS PermissionId,pc.capability_id AS CapabilityId,
-                        pc.scope AS Scope,r.code AS RoleCode,ar.target_code AS TargetCode,
+                    SELECT sp.permission_id AS PermissionId,p.code AS PermissionCode,
+                        pc.capability_id AS CapabilityId,pc.scope AS Scope,
+                        apg.permission_code AS SnapshotPermissionCode,
+                        apg.capability_id AS SnapshotCapabilityId,apg.scope AS SnapshotScope,
+                        r.code AS RoleCode,ar.target_code AS TargetCode,
                         ar.target_definition_hash AS TargetDefinitionHash
                     FROM am.access_subjects s
                     JOIN am.roles r ON r.role_id=s.business_role_id
                     JOIN am.subject_permissions sp ON sp.actor_id=s.actor_id
+                    JOIN am.permissions p ON p.permission_id=sp.permission_id
                     JOIN am.permission_capabilities pc ON pc.permission_id=sp.permission_id
                     JOIN am.access_request_permission_grants apg
                         ON apg.actor_id=sp.actor_id AND apg.permission_id=sp.permission_id
@@ -416,7 +420,12 @@ public sealed partial class PostgresAccessAdministration(
                     target is not null && target.DefinitionHash == row.TargetDefinitionHash &&
                     target.EligibleRoleCodes.Contains(row.RoleCode, StringComparer.Ordinal) &&
                     target.Permissions.Any(permission => permission.PermissionId == row.PermissionId &&
-                        permission.CapabilityId == row.CapabilityId && permission.Scope.ToString() == row.Scope));
+                        permission.PermissionCode == row.PermissionCode &&
+                        permission.PermissionCode == row.SnapshotPermissionCode &&
+                        permission.CapabilityId == row.CapabilityId &&
+                        permission.CapabilityId == row.SnapshotCapabilityId &&
+                        permission.Scope.ToString() == row.Scope &&
+                        permission.Scope.ToString() == row.SnapshotScope));
             }
             AccessInput.Require(eligible, "RESOURCE_CAPABILITY_NOT_ASSIGNED", 409);
             await connection.ExecuteAsync(Command("""
@@ -841,7 +850,8 @@ public sealed partial class PostgresAccessAdministration(
     private sealed record MutationEffect(long? SubjectVersion = null, string? ActorId = null);
     private sealed record MemberRow(string Status, string? BusinessRoleId, string? Authority);
     private sealed record ResourceSubjectGrantRow(
-        string PermissionId, string CapabilityId, string Scope, string RoleCode,
-        string TargetCode, string TargetDefinitionHash);
+        string PermissionId, string PermissionCode, string CapabilityId, string Scope,
+        string SnapshotPermissionCode, string SnapshotCapabilityId, string SnapshotScope,
+        string RoleCode, string TargetCode, string TargetDefinitionHash);
     private sealed record DocumentRow(string Id, string Document);
 }

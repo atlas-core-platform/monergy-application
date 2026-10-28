@@ -13,6 +13,7 @@ import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Collapse, Drawer, Skeleton, Spin, Tag } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
+import { RequestAccessAction } from '../access/RequestAccess';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import {
   getFinancialFactDetail,
@@ -55,6 +56,7 @@ export default function FinancialProfileExperience() {
   const { api, authorization } = useWorkspaceSession();
   const product = authorization?.area === 'product' ? authorization.context : null;
   const canRead = product?.capabilities.includes('financial-profile.profile.read') ?? false;
+  const canUpdate = product?.capabilities.includes('financial-profile.profile.update') ?? false;
   const [profile, setProfile] = useState<ProductFinancialProfile | null>(null);
   const [assetRecordsVersion,setAssetRecordsVersion]=useState(0);
   const assetRecordsChanged=useCallback(()=>{setAssetRecordsVersion(value=>value+1);},[]);
@@ -205,10 +207,15 @@ export default function FinancialProfileExperience() {
         </div>
         <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
       </header>
+      {canRead && !canUpdate && <RequestAccessAction
+        target="customer.financial-information"
+        requiredCapabilities={['financial-profile.profile.update']}
+        title="Adding or changing financial information needs access"
+        description="Request the bounded Customer financial information capability from your Organization Administrator. You can continue reviewing information you already have." />}
       {canRead && <nav className="product-financial-category-filter" aria-label="Financial goals navigation"><Button href="/net-worth">Net Worth</Button><Button type={activeCategory === 'GOAL' ? 'primary' : 'default'} onClick={() => { selectCategory(activeCategory === 'GOAL' ? '' : 'GOAL'); }}>{activeCategory === 'GOAL' ? 'Back to financial information' : 'Financial goals'}</Button></nav>}
       {activeCategory === 'GOAL' && api && canRead && <FinancialGoalsExperience
         key={['goal',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api} canRead={canRead}
-        canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
+        canCreate={canUpdate} />}
       {activeCategory === 'LIABILITY' && api && canRead && <LiabilityRecordsExperience
         key={[product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
         facts={profile?.facts.filter(fact=>fact.factType==='LOAN') ?? []}

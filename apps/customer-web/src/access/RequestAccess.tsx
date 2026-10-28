@@ -176,6 +176,42 @@ export function RequestAccessGate({ target, requiredCapabilities, children }: {
   </main>;
 }
 
+export function RequestAccessAction({ target, requiredCapabilities, title, description }: {
+  target: RequestTarget;
+  requiredCapabilities: string[];
+  title: string;
+  description: string;
+}) {
+  const { authorization } = useWorkspaceSession();
+  const capabilities = new Set(authorization?.area === 'product' ? authorization.context.capabilities : []);
+  const granted = requiredCapabilities.every(capability => capabilities.has(capability));
+  const access = useRequestAccess(!granted);
+  const item = access.page?.items.find(value => value.target === target) ?? null;
+  if (granted) return null;
+  const underReview = item?.state === 'Submitted';
+  const rejected = item?.state === 'Rejected';
+  return <Alert className="request-access-action" showIcon
+    type={underReview ? 'info' : rejected ? 'warning' : 'warning'}
+    title={underReview ? 'Your request is under review' : rejected ? 'The request was not approved' : title}
+    description={<Space orientation="vertical" size="small">
+      <Text>{underReview
+        ? 'An Organization Administrator is reviewing this bounded request.'
+        : rejected
+          ? item.decisionReason ?? 'No access was granted. You may submit a new request if it is still available.'
+          : description}</Text>
+      {access.message && <Text>{access.message}</Text>}
+      <Space wrap>
+        {item?.canRequest && !item.hasAccess && <Button type="primary" size="small"
+          loading={access.busy === target} disabled={Boolean(access.busy)}
+          onClick={() => { void access.submit(target); }}>Request access</Button>}
+        <Button size="small" disabled={Boolean(access.busy)}
+          onClick={() => { void access.load().catch(() => undefined); }}>
+          {access.loading ? 'Checking status…' : 'Refresh status'}
+        </Button>
+      </Space>
+    </Space>} />;
+}
+
 export function RequestAccessOverview({ targets }: { targets: RequestTarget[] }) {
   const access = useRequestAccess();
   const items = useMemo(() => access.page?.items.filter(item => targets.includes(item.target) && !item.hasAccess) ?? [],

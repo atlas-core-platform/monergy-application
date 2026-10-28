@@ -65,6 +65,22 @@ afterEach(() => {
   vi.restoreAllMocks();
   window.history.replaceState(null, '', '/');
 });
+const documentRequestItem = {
+  requestId: null, target: 'customer.documents', targetLabel: 'Documents',
+  grantExplanation: 'Allows the bounded Customer document actions.', state: 'NotRequested',
+  hasAccess: false, canRequest: true, createdAt: null, decisionAt: null,
+  fulfilledAt: null, decisionReason: null,
+};
+function mockDocumentRequest(api: AccessApi) {
+  return vi.spyOn(api, 'request').mockImplementation((path, method = 'GET', body) => {
+    if (method === 'GET') return Promise.resolve({ tenantId: 'T001', actorId: 'A100',
+      policyVersion: 8, subjectVersion: 2, items: [documentRequestItem] });
+    expect(path).toBe('access-requests/customer.documents/submit');
+    expect(body).toEqual({ operationId: expect.stringMatching(/^[0-9a-f]{32}$/) });
+    return Promise.resolve({ ...documentRequestItem, requestId: 'a'.repeat(32),
+      state: 'Submitted', canRequest: false, createdAt: '2026-10-28T00:00:00Z' });
+  });
+}
 async function openCompletedProcessingResult(user: ReturnType<typeof userEvent.setup>) {
   // Wait for the owner-backed activity row, not an unrelated page control.
   // This gives a precise failing boundary if the durable processing list never loads.
@@ -147,12 +163,43 @@ it('reviews the exact file before submitting and shows the upload confirmation',
   expect(details).toHaveTextContent(`document-version-${'a'.repeat(32)}`);
 });
 
-it('does not expose upload when the current role lacks the capability', () => {
+it('keeps document read usable and requests the missing upload action', async () => {
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue({ items: [], dataDurability: 'Temporary data' });
+  const product = vi.spyOn(api, 'product').mockResolvedValue({ items: [{
+    documentId: 'document-read-only', documentVersionId: 'version-read-only',
+    evidenceId: 'evidence-read-only', version: 1, sourceName: 'Customer upload',
+    originalFileName: 'read-only.pdf', contentType: 'application/pdf', contentLength: 10,
+    contentSha256: 'a'.repeat(64), receivedAt: '2026-10-28T00:00:00Z',
+    createdAt: '2026-10-28T00:00:00Z',
+  }], dataDurability: 'Temporary data' });
+  const request = mockDocumentRequest(api);
   mount(api, ['evidence.document.read']);
-  expect(screen.getByText('Document upload is not included in your current access')).toBeVisible();
+  expect(await screen.findByText('read-only.pdf')).toBeVisible();
+  expect(product.mock.calls.some(([path, method]) => path === 'v1/evidence' && method === 'GET')).toBe(true);
   expect(document.querySelector('input[type="file"]')).toBeDisabled();
+  await userEvent.setup().click(await screen.findByRole('button', { name: 'Request access' }));
+  expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(1);
+});
+
+it('keeps document read and upload usable and requests the missing processing action', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({ items: [{
+    documentId: 'document-partial', documentVersionId: 'version-partial',
+    evidenceId: 'evidence-partial', version: 1, sourceName: 'Customer upload',
+    originalFileName: 'partial.csv', contentType: 'text/csv', contentLength: 10,
+    contentSha256: 'b'.repeat(64), receivedAt: '2026-10-28T00:00:00Z',
+    createdAt: '2026-10-28T00:00:00Z',
+  }], dataDurability: 'Temporary data' });
+  const request = mockDocumentRequest(api);
+  mount(api, ['evidence.document.read', 'evidence.document.upload']);
+  expect(await screen.findByText('partial.csv')).toBeVisible();
+  expect(document.querySelector('input[type="file"]')).toBeEnabled();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'View document details for partial.csv' }));
+  const details = screen.getByRole('dialog', { name: 'Document details' });
+  expect(within(details).getByRole('button', { name: 'Extract details' })).toBeDisabled();
+  await user.click(await within(details).findByRole('button', { name: 'Request access' }));
+  expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(1);
 });
 
 it('loads, filters and inspects the document library', async () => {
