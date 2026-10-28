@@ -24,6 +24,7 @@ public sealed record AccessRequestStatusPage(
 public sealed record AccessRequestReviewItem(
     string RequestId,
     string Requester,
+    string RequesterRole,
     string Target,
     string TargetLabel,
     string State,
@@ -180,10 +181,12 @@ public sealed partial class PostgresAccessAdministration
                     WHERE tenant_id=@TenantId AND request_id=@After
                 )
                 SELECT r.request_id AS RequestId,s.normalized_email AS Requester,r.target_code AS TargetCode,
+                    COALESCE(rr.label,'Former business role') AS RequesterRole,
                     r.target_definition_hash AS TargetDefinitionHash,r.state AS State,r.created_at AS CreatedAt,
                     r.expires_at AS ExpiresAt,r.decision_at AS DecisionAt,r.decision_reason AS DecisionReason
                 FROM am.access_requests r
                 JOIN am.access_subjects s ON s.actor_id=r.requester_actor_id
+                LEFT JOIN am.roles rr ON rr.role_id=r.requester_role_id
                 WHERE r.tenant_id=@TenantId AND (@After IS NULL OR
                     (r.created_at,r.request_id) < ((SELECT created_at FROM anchor),(SELECT request_id FROM anchor)))
                 ORDER BY r.created_at DESC,r.request_id DESC LIMIT @Take;
@@ -465,13 +468,15 @@ public sealed partial class PostgresAccessAdministration
         string requestId, bool forUpdate, CancellationToken ct) =>
         connection.QuerySingleOrDefaultAsync<DecisionRow>(Command($"""
             SELECT r.request_id AS RequestId,r.requester_actor_id AS RequesterActorId,
-                s.normalized_email AS Requester,r.target_code AS TargetCode,
+                s.normalized_email AS Requester,
+                COALESCE(rr.label,'Former business role') AS RequesterRole,r.target_code AS TargetCode,
                 r.target_definition_hash AS TargetDefinitionHash,r.requester_role_id AS RequesterRoleId,
                 r.requester_subject_version AS RequesterSubjectVersion,r.state AS State,
                 r.created_at AS CreatedAt,r.expires_at AS ExpiresAt,r.decision_at AS DecisionAt,
                 r.decision_action AS DecisionAction,r.decision_operation_id AS DecisionOperationId,
                 r.decision_reason AS DecisionReason
             FROM am.access_requests r JOIN am.access_subjects s ON s.actor_id=r.requester_actor_id
+            LEFT JOIN am.roles rr ON rr.role_id=r.requester_role_id
             WHERE r.tenant_id=@TenantId AND r.request_id=@RequestId {(forUpdate ? "FOR UPDATE OF r" : string.Empty)};
             """, new { TenantId = tenantId, RequestId = requestId }, transaction, ct));
 
@@ -508,7 +513,7 @@ public sealed partial class PostgresAccessAdministration
     private AccessRequestReviewItem Review(AccessRequestReviewRow row)
     {
         RequestTargets.TryGet(row.TargetCode, out var target);
-        return new(row.RequestId, row.Requester, row.TargetCode,
+        return new(row.RequestId, row.Requester, row.RequesterRole, row.TargetCode,
             target?.Label ?? "Retired access target", row.State == "Submitted" ? "UnderReview" : row.State,
             Utc(row.CreatedAt), Utc(row.ExpiresAt), NullableUtc(row.DecisionAt), SafeReason(row.DecisionReason),
             target?.GrantExplanation ?? "This target is no longer available and cannot be approved.");
@@ -517,7 +522,7 @@ public sealed partial class PostgresAccessAdministration
     private AccessRequestReviewItem Review(DecisionRow row)
     {
         RequestTargets.TryGet(row.TargetCode, out var target);
-        return new(row.RequestId, row.Requester, row.TargetCode,
+        return new(row.RequestId, row.Requester, row.RequesterRole, row.TargetCode,
             target?.Label ?? "Retired access target", row.State == "Submitted" ? "UnderReview" : row.State,
             Utc(row.CreatedAt), Utc(row.ExpiresAt), NullableUtc(row.DecisionAt), SafeReason(row.DecisionReason),
             target?.GrantExplanation ?? "This target is no longer available and cannot be approved.");
@@ -557,10 +562,11 @@ public sealed partial class PostgresAccessAdministration
         string RequestId, string TargetCode, string TargetDefinitionHash, string State, DateTime CreatedAt,
         DateTime? DecisionAt, DateTime? FulfilledAt, string? DecisionReason);
     private sealed record AccessRequestReviewRow(
-        string RequestId, string Requester, string TargetCode, string TargetDefinitionHash, string State,
+        string RequestId, string Requester, string RequesterRole, string TargetCode, string TargetDefinitionHash, string State,
         DateTime CreatedAt, DateTime ExpiresAt, DateTime? DecisionAt, string? DecisionReason);
     private sealed record DecisionRow(
-        string RequestId, string RequesterActorId, string Requester, string TargetCode, string TargetDefinitionHash,
+        string RequestId, string RequesterActorId, string Requester, string RequesterRole,
+        string TargetCode, string TargetDefinitionHash,
         string RequesterRoleId, long RequesterSubjectVersion, string State, DateTime CreatedAt, DateTime ExpiresAt,
         DateTime? DecisionAt, string? DecisionAction, string? DecisionOperationId, string? DecisionReason);
 }

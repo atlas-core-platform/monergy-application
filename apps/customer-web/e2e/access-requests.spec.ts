@@ -108,7 +108,7 @@ test('Organization Administrator reviews and approves only the bounded request',
       return route.fulfill({ json: {
         tenantId: 'T001', actorId: 'A900', policyVersion: 7, nextCursor: null,
         items: [{
-          requestId, requester: 'advisor@example.test',
+          requestId, requester: 'advisor@example.test', requesterRole: 'Financial Advisor',
           target: 'financial-advisor.assigned-customer-financial-review',
           targetLabel: 'View assigned customer financial information', state: 'UnderReview',
           createdAt: '2026-10-28T00:00:00Z', expiresAt: '2026-11-04T00:00:00Z',
@@ -119,7 +119,7 @@ test('Organization Administrator reviews and approves only the bounded request',
     if (path.endsWith(`/administration/access-requests/${requestId}/approve`)) {
       decisions.push({ path, body: route.request().postDataJSON() });
       return route.fulfill({ json: {
-        requestId, requester: 'advisor@example.test',
+        requestId, requester: 'advisor@example.test', requesterRole: 'Financial Advisor',
         target: 'financial-advisor.assigned-customer-financial-review',
         targetLabel: 'View assigned customer financial information', state: 'Fulfilled',
         createdAt: '2026-10-28T00:00:00Z', expiresAt: '2026-11-04T00:00:00Z',
@@ -163,7 +163,7 @@ test('Organization Administrator rejects and the Financial Advisor sees the safe
       return route.fulfill({ json: {
         tenantId: 'T001', actorId: 'A900', policyVersion: 7, nextCursor: null,
         items: [{
-          requestId, requester: 'advisor@example.test',
+          requestId, requester: 'advisor@example.test', requesterRole: 'Financial Advisor',
           target: 'financial-advisor.assigned-customer-financial-review',
           targetLabel: 'Assigned customer financial review', state,
           createdAt: '2026-10-28T00:00:00Z', expiresAt: '2026-11-04T00:00:00Z',
@@ -176,7 +176,7 @@ test('Organization Administrator rejects and the Financial Advisor sees the safe
       decisions.push(route.request().postDataJSON());
       state = 'Rejected';
       return route.fulfill({ json: {
-        requestId, requester: 'advisor@example.test',
+        requestId, requester: 'advisor@example.test', requesterRole: 'Financial Advisor',
         target: 'financial-advisor.assigned-customer-financial-review',
         targetLabel: 'Assigned customer financial review', state,
         createdAt: '2026-10-28T00:00:00Z', expiresAt: '2026-11-04T00:00:00Z',

@@ -27,6 +27,7 @@ const operationId = () => crypto.randomUUID().replaceAll('-', '');
 interface AccessRequestItem {
   requestId: string;
   requester: string;
+  requesterRole: string;
   target: string;
   targetLabel: string;
   state: 'UnderReview' | 'Rejected' | 'Fulfilled';
@@ -47,7 +48,7 @@ interface AccessRequestPage {
 function validItem(value: unknown): value is AccessRequestItem {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
-  return requestId(item.requestId) && safeText(item.requester, 320) &&
+  return requestId(item.requestId) && safeText(item.requester, 320) && safeText(item.requesterRole, 120) &&
     typeof item.target === 'string' && item.target.length <= 160 && target(item.target) &&
     safeText(item.targetLabel, 120) &&
     (item.state === 'UnderReview' || item.state === 'Rejected' || item.state === 'Fulfilled') &&
@@ -140,7 +141,10 @@ export function AccessRequests({
   const columns: TableColumnsType<AccessRequestItem> = [
     {
       title: 'Requester', dataIndex: 'requester', key: 'requester',
-      render: value => <Text strong>{value}</Text>,
+      render: (value, item) => <Space orientation="vertical" size={0}>
+        <Text strong>{value}</Text>
+        <Text type="secondary">{item.requesterRole}</Text>
+      </Space>,
     },
     {
       title: 'Requested access', key: 'target',
