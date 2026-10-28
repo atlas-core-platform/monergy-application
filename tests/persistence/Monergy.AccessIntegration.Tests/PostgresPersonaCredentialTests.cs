@@ -453,9 +453,9 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_credentials
                 WHERE actor_id=@Actor;
                 """, new { Actor = actor }));
-            Assert.DoesNotContain(
-                (await invitations.ListAsync("T001", null, default)).Items,
-                item => item.ActorId == actor);
+            Assert.Equal("Delivery pending",
+                Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
+                    item => item.ActorId == actor).State);
 
             sender.Fail = true;
             await delivery.DeliverAsync(default);
@@ -471,6 +471,9 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_credentials
                 WHERE actor_id=@Actor;
                 """, new { Actor = actor }));
+            Assert.Equal("Delivery pending",
+                Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
+                    item => item.ActorId == actor).State);
 
             await owner.ExecuteAsync("""
                 UPDATE customer_identity.registration_challenges
@@ -552,7 +555,7 @@ public sealed class PostgresPersonaCredentialTests
                 SELECT count(*) FROM customer_identity.persona_invitation_events
                 WHERE actor_id=@Actor AND invitation_hash=@Hash AND action='EXPIRED';
                 """, new { Actor = actor, Hash = firstHash }));
-            Assert.Equal("Cancelled",
+            Assert.Equal("Delivery pending",
                 Assert.Single((await invitations.ListAsync("T001", null, default)).Items,
                     item => item.ActorId == actor).State);
 

@@ -480,6 +480,96 @@ it('lets a tenant administrator request first delivery and resend without seeing
   expect(document.body.textContent).not.toMatch(/challenge|verification code:|password:/i);
 }, 30000);
 
+it('shows failed recipient delivery as attention without changing organization access', async () => {
+  const calls: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, options?: RequestInit) => {
+      if (url === '/access-api/v1/administration/imports/op-delivery-failed')
+        return Promise.resolve(
+          json({
+            id: 'op-delivery-failed',
+            status: 'Activated',
+            policyVersion: 35,
+            rowCount: 1,
+            identities: [
+              { rowNumber: 2, normalizedEmail: 'failed@example.test', actorId: 'A128' },
+            ],
+          }),
+        );
+      if (url === '/identity-api/local/v1/administration/persona-invitations')
+        return Promise.resolve(
+          json({
+            tenantId: 'T001',
+            deliveryEnabled: true,
+            items: [
+              {
+                actorId: 'A128',
+                email: 'failed@example.test',
+                state: 'Delivery failed',
+                issuedAt: null,
+                consumedAt: null,
+              },
+            ],
+          }),
+        );
+      if (
+        url === '/identity-api/local/v1/administration/persona-invitations/A128/send' &&
+        options?.method === 'POST'
+      ) {
+        calls.push(url);
+        return Promise.resolve(json({ actorId: 'A128', state: 'Accepted' }, 202));
+      }
+      return Promise.resolve(json({ error: 'NOT_FOUND' }, 404));
+    }),
+  );
+
+  render(
+    <FoundationProvider>
+      <ImportDrawer
+        api={new AccessApi(session)}
+        importId="op-delivery-failed"
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+        onExpired={vi.fn()}
+      />
+    </FoundationProvider>,
+  );
+
+  expect(await screen.findByText('Person access activated.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Check invitation status' }));
+  const invitationStatus = await screen.findByRole('region', {
+    name: 'Credential invitation status',
+  });
+  expect(within(invitationStatus).getByText('Delivery failed')).toBeVisible();
+  expect(
+    within(invitationStatus).getByText('1 credential invitation delivery needs attention.'),
+  ).toBeVisible();
+  expect(
+    within(invitationStatus).getByText(
+      'Monergy could not confirm recipient delivery before the bounded attempt or expiry limit. Review the address with the person, then use Resend invitation. Organization access is unchanged.',
+    ),
+  ).toBeVisible();
+  expect(within(invitationStatus).getByText('Not yet delivered')).toBeVisible();
+
+  fireEvent.click(
+    within(invitationStatus).getByRole('button', {
+      name: 'Resend invitation to failed@example.test',
+    }),
+  );
+  const confirmation = await screen.findByRole('tooltip');
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Resend invitation' }));
+  expect(
+    await screen.findByText(
+      'Invitation delivery was requested for failed@example.test. Refresh status after the recipient delivery completes.',
+    ),
+  ).toBeVisible();
+  expect(calls).toEqual([
+    '/identity-api/local/v1/administration/persona-invitations/A128/send',
+  ]);
+  expect(document.body.textContent).not.toMatch(/attempt count|smtp|challenge|password:/i);
+}, 30000);
+
 it('does not offer administrator send when authenticated email delivery is disabled', async () => {
   vi.stubGlobal(
     'fetch',
