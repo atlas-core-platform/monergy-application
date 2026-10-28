@@ -16,6 +16,10 @@ public static class AdministrationEndpoints
     {
         app.MapGet("/v1/advisor/context", (Func<HttpContext, Task<IResult>>)(http =>
             ExecuteAsync(http, (service, context, ct) => service.AdvisorContextAsync(context, ct))));
+        app.MapGet("/v1/advisor/access-request", (Func<HttpContext, Task<IResult>>)(http =>
+            ExecuteAsync(http, (service, context, ct) => service.ReadAdvisorAccessRequestAsync(context, ct))));
+        app.MapPost("/v1/advisor/access-request", (AccessRequestSubmission request, HttpContext http) =>
+            ExecuteAsync(http, (service, context, ct) => service.SubmitAdvisorAccessRequestAsync(context, request, ct)));
     }
 
     public static void MapCustomerRelationships(this WebApplication app)
@@ -34,6 +38,12 @@ public static class AdministrationEndpoints
         var routes = app.MapGroup("/v1/administration");
         routes.MapGet("/context", (Func<HttpContext, Task<IResult>>)(http =>
             ExecuteAsync(http, (service, context, ct) => service.ContextAsync(context, ct))));
+        routes.MapGet("/access-requests", (HttpContext http, string? after, int? limit) =>
+            ExecuteAsync(http, (service, context, ct) => service.ListAccessRequestsAsync(context, after, limit ?? 50, ct)));
+        routes.MapPost("/access-requests/{id}/approve", (string id, AccessRequestDecision request, HttpContext http) =>
+            ExecuteAsync(http, (service, context, ct) => service.ApproveAccessRequestAsync(context, id, request, ct)));
+        routes.MapPost("/access-requests/{id}/reject", (string id, AccessRequestDecision request, HttpContext http) =>
+            ExecuteAsync(http, (service, context, ct) => service.RejectAccessRequestAsync(context, id, request, ct)));
         routes.MapPost("/members/{actorId}/revoke-sessions", (string actorId, PolicyRevision request, HttpContext http) =>
             ExecuteAsync(http, (service, context, ct) => service.RevokeSessionsAsync(context, actorId, request, ct)));
         routes.MapGet("/groups", (HttpContext http, string? after, int? limit) =>
