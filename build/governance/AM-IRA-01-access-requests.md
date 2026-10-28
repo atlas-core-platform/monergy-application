@@ -1,6 +1,6 @@
 # AM-IRA-01 — Financial Advisor request access
 
-Access Management candidate source is pinned to PR #20 head `6f92e916914e7f89975b81adb8955e70bb094e2c` and exact tree `2d394eaa75a4de97273758dbd5c10d9b1ffa5d21`. This Application candidate does not advance the reconciled tracker or claim acceptance before exact-head review, physical PostgreSQL execution and isolated-profile LOCAL browser UAT.
+Access Management candidate source is pinned to PR #20 head `6f92e916914e7f89975b81adb8955e70bb094e2c` and exact tree `2d394eaa75a4de97273758dbd5c10d9b1ffa5d21`. This Application candidate does not advance the reconciled tracker or claim Production acceptance; the evidence below is bounded exact-head LOCAL merge-gate evidence.
 
 ## Delivered boundary
 
@@ -35,6 +35,6 @@ No generalized workflow engine, arbitrary target list, multi-request bundle, Pla
 
 ## Candidate verification
 
-Zero-warning Release builds passed for the owner service, official owner integration-test project, embedded owner source and UAT Gateway. Focused requester/administrator component tests, Gateway route checks, TypeScript, ESLint, production frontend build and manifest blob verification passed. The PostgreSQL integration source covers tenant isolation, authorization positives/negatives, submit and decision races, stale requester role/status, expiry, capability removal, administrator authority loss, grant cleanup and append-only audit evidence.
+Zero-warning Release builds passed for the owner service and migrations, official owner integration-test project, embedded owner source, Database Migrator and UAT Gateway. Focused Access Management tests passed 18/18 and the isolated PostgreSQL access-request suite passed 9/9, including tenant isolation, authorization positives/negatives, submission and decision races, stale requester role/status, expiry, capability removal, administrator authority loss, grant cleanup, least-privilege runtime grants and append-only event enforcement. All 46 embedded source files matched their pinned Git blobs.
 
-Physical PostgreSQL execution is pending because this execution host has no PostgreSQL or Docker runtime. The two browser specifications are source-complete, but execution is pending because this host has no installed Playwright browser. Complete retained-profile LOCAL UAT remains an operator gate. Development GitHub Actions are disabled for this candidate.
+Focused Customer Web React checks passed 28/28. Full Customer Web ESLint and the changed browser specification reported zero errors and zero warnings; TypeScript, the production frontend build and bundle/lazy-isolation gate passed. The changed mock browser journeys passed 3/3. On a disposable LOCAL profile, readiness and authenticated topology were 13/13, the real Advisor-to-Administrator approval/rejection and independent assignment/resource/Consent journeys passed 5/5, and the existing persona regression passed 8/8. The fulfilled request physically contained one Submitted, one Approved and one Fulfilled event, no Rejected event, and exactly the two bounded subject permissions; the rejected request contained one Submitted and one Rejected event and no subject permission. Development GitHub Actions remained disabled.
