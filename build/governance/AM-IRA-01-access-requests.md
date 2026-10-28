@@ -1,6 +1,6 @@
 # AM-IRA-01 — Financial Advisor request access
 
-Access Management candidate source is pinned to PR #20 head `e6080bad12a156f3ef797d6314d9f6a7c7d87483` and exact tree `b401a325b7cddb26494a364d7e8cca7fe60fd8a9`. This Application candidate does not advance the reconciled tracker or claim acceptance before exact-head review, physical PostgreSQL execution and retained-profile LOCAL browser UAT.
+Access Management candidate source is pinned to PR #20 head `a9157cfbd9de459bc7278b1909e15da5f0d050d6` and exact tree `a8c42abf8d4ff79e16f06e2997b7c4f0e18db22b`. This Application candidate does not advance the reconciled tracker or claim acceptance before exact-head review, physical PostgreSQL execution and retained-profile LOCAL browser UAT.
 
 ## Delivered boundary
 
