@@ -230,7 +230,9 @@ it('lets a tenant administrator cancel only a pending credential invitation and 
 
   expect(await screen.findByText('Person access activated.')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Check invitation status' }));
-  const invitationStatus = await screen.findByRole('region', { name: 'Credential invitation status' });
+  const invitationStatus = await screen.findByRole('region', {
+    name: 'Credential invitation status',
+  });
   expect(within(invitationStatus).getByText('Pending', { exact: true })).toBeVisible();
   expect(within(invitationStatus).queryByText('unrelated@example.test')).toBeNull();
 
@@ -268,9 +270,7 @@ it('lets a tenant administrator cancel only a pending credential invitation and 
     }),
   ).toBeNull();
 
-  const mutation = calls.find((call) =>
-    call.url.endsWith('/persona-invitations/A123/cancel'),
-  );
+  const mutation = calls.find((call) => call.url.endsWith('/persona-invitations/A123/cancel'));
   expect(mutation).toEqual({
     url: '/identity-api/local/v1/administration/persona-invitations/A123/cancel',
     method: 'POST',
@@ -298,9 +298,7 @@ it('refreshes the authoritative invitation state when cancellation loses a termi
             status: 'Activated',
             policyVersion: 32,
             rowCount: 1,
-            identities: [
-              { rowNumber: 2, normalizedEmail: 'race@example.test', actorId: 'A124' },
-            ],
+            identities: [{ rowNumber: 2, normalizedEmail: 'race@example.test', actorId: 'A124' }],
           }),
         );
       if (url === '/identity-api/local/v1/administration/persona-invitations')
@@ -343,16 +341,16 @@ it('refreshes the authoritative invitation state when cancellation loses a termi
 
   expect(await screen.findByText('Person access activated.')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Check invitation status' }));
-  const invitationStatus = await screen.findByRole('region', { name: 'Credential invitation status' });
+  const invitationStatus = await screen.findByRole('region', {
+    name: 'Credential invitation status',
+  });
   fireEvent.click(
     within(invitationStatus).getByRole('button', {
       name: 'Cancel invitation for race@example.test',
     }),
   );
   const confirmation = await screen.findByRole('tooltip');
-  fireEvent.click(
-    within(confirmation).getByRole('button', { name: 'Cancel invitation' }),
-  );
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Cancel invitation' }));
 
   expect(
     await screen.findByText(
@@ -370,3 +368,161 @@ it('refreshes the authoritative invitation state when cancellation loses a termi
   ).toBeNull();
 }, 30000);
 
+it('lets a tenant administrator request first delivery and resend without seeing activation secrets', async () => {
+  const calls: { url: string; method?: string; body?: string | null }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string, options?: RequestInit) => {
+      calls.push({
+        url,
+        method: options?.method,
+        body: typeof options?.body === 'string' ? options.body : null,
+      });
+      if (url === '/access-api/v1/administration/imports/op-send')
+        return Promise.resolve(
+          json({
+            id: 'op-send',
+            status: 'Activated',
+            policyVersion: 33,
+            rowCount: 2,
+            identities: [
+              { rowNumber: 2, normalizedEmail: 'expired@example.test', actorId: 'A125' },
+              { rowNumber: 3, normalizedEmail: 'new@example.test', actorId: 'A126' },
+            ],
+          }),
+        );
+      if (url === '/identity-api/local/v1/administration/persona-invitations')
+        return Promise.resolve(
+          json({
+            tenantId: 'T001',
+            deliveryEnabled: true,
+            items: [
+              {
+                actorId: 'A125',
+                email: 'expired@example.test',
+                state: 'Expired',
+                issuedAt: '2026-10-27T18:00:00Z',
+                consumedAt: null,
+              },
+            ],
+          }),
+        );
+      const delivery = /\/persona-invitations\/(A125|A126)\/send$/.exec(url);
+      if (delivery && options?.method === 'POST')
+        return Promise.resolve(json({ actorId: delivery[1], state: 'Accepted' }, 202));
+      return Promise.resolve(json({ error: 'NOT_FOUND' }, 404));
+    }),
+  );
+
+  render(
+    <FoundationProvider>
+      <ImportDrawer
+        api={new AccessApi(session)}
+        importId="op-send"
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+        onExpired={vi.fn()}
+      />
+    </FoundationProvider>,
+  );
+
+  expect(await screen.findByText('Person access activated.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Check invitation status' }));
+  const invitationStatus = await screen.findByRole('region', {
+    name: 'Credential invitation status',
+  });
+  expect(within(invitationStatus).getByText('Not sent')).toBeVisible();
+
+  fireEvent.click(
+    within(invitationStatus).getByRole('button', { name: 'Send invitation to new@example.test' }),
+  );
+  let confirmation = await screen.findByRole('tooltip');
+  expect(within(confirmation).getByText('Send credential invitation?')).toBeInTheDocument();
+  const confirmFirst = within(confirmation).getByRole('button', { name: 'Send invitation' });
+  act(() => {
+    confirmFirst.click();
+    confirmFirst.click();
+  });
+  expect(
+    await screen.findByText(
+      'Invitation delivery was requested for new@example.test. Refresh status after the recipient delivery completes.',
+    ),
+  ).toBeVisible();
+  await waitFor(() => {
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  fireEvent.click(
+    within(invitationStatus).getByRole('button', {
+      name: 'Resend invitation to expired@example.test',
+    }),
+  );
+  confirmation = await screen.findByRole('tooltip');
+  expect(within(confirmation).getByText('Resend credential invitation?')).toBeInTheDocument();
+  fireEvent.click(within(confirmation).getByRole('button', { name: 'Resend invitation' }));
+  expect(
+    await screen.findByText(
+      'Invitation delivery was requested for expired@example.test. Refresh status after the recipient delivery completes.',
+    ),
+  ).toBeVisible();
+
+  expect(calls.filter((call) => call.url.endsWith('/persona-invitations/A126/send'))).toEqual([
+    {
+      url: '/identity-api/local/v1/administration/persona-invitations/A126/send',
+      method: 'POST',
+      body: '{}',
+    },
+  ]);
+  expect(calls.filter((call) => call.url.endsWith('/persona-invitations/A125/send'))).toHaveLength(
+    1,
+  );
+  expect(within(invitationStatus).getAllByText('Delivery requested')).toHaveLength(2);
+  expect(document.body.textContent).not.toMatch(/challenge|verification code:|password:/i);
+}, 30000);
+
+it('does not offer administrator send when authenticated email delivery is disabled', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn((url: string) => {
+      if (url === '/access-api/v1/administration/imports/op-no-email')
+        return Promise.resolve(
+          json({
+            id: 'op-no-email',
+            status: 'Activated',
+            policyVersion: 34,
+            rowCount: 1,
+            identities: [{ rowNumber: 2, normalizedEmail: 'tester@example.test', actorId: 'A127' }],
+          }),
+        );
+      if (url === '/identity-api/local/v1/administration/persona-invitations')
+        return Promise.resolve(json({ tenantId: 'T001', deliveryEnabled: false, items: [] }));
+      return Promise.resolve(json({ error: 'NOT_FOUND' }, 404));
+    }),
+  );
+
+  render(
+    <FoundationProvider>
+      <ImportDrawer
+        api={new AccessApi(session)}
+        importId="op-no-email"
+        onClose={vi.fn()}
+        onChanged={vi.fn()}
+        onExpired={vi.fn()}
+      />
+    </FoundationProvider>,
+  );
+
+  expect(await screen.findByText('Person access activated.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Check invitation status' }));
+  const invitationStatus = await screen.findByRole('region', {
+    name: 'Credential invitation status',
+  });
+  expect(
+    within(invitationStatus).getByText(
+      'Administrator email delivery is not enabled for this profile.',
+    ),
+  ).toBeVisible();
+  expect(
+    within(invitationStatus).queryByRole('button', { name: /invitation to tester@example\.test/ }),
+  ).toBeNull();
+}, 30000);
