@@ -6,6 +6,7 @@ export const accessDestinations: WorkspaceDestination[] = [
   { id: 'documents', label: 'Document Monitoring', icon: 'changes', href: '/access/documents', group: 'Operations' },
   { id: 'processing', label: 'Processing Status', icon: 'changes', href: '/access/processing', group: 'Operations' },
   { id: 'customers', label: 'Customers', icon: 'users', href: '/access/customers' },
+  { id: 'requests', label: 'Access Requests', icon: 'check', href: '/access/requests' },
   { id: 'users', label: 'People', icon: 'users', href: '/access/users' },
   { id: 'roles', label: 'Roles', icon: 'shield', href: '/access/roles' },
   { id: 'permissions', label: 'Access Permissions', icon: 'check', href: '/access/permissions' },
