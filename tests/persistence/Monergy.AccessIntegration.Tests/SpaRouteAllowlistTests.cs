@@ -11,6 +11,7 @@ public sealed class SpaRouteAllowlistTests
     [InlineData("/")]
     [InlineData("/access")]
     [InlineData("/access/users")]
+    [InlineData("/access/requests")]
     [InlineData("/evidence")]
     [InlineData("/settings/sessions")]
     public void OnlyExplicitApplicationDocumentPathsReceiveSpaShell(string path)
