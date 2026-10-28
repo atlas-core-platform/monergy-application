@@ -43,8 +43,13 @@ public static class PersonaCredentialEndpoints
             }
         }
         services.TryAddSingleton<CustomerPasswordPolicy>();
-        services.AddSingleton<IPersonaCredentialRepository, PostgresPersonaCredentials>();
+        services.AddSingleton<PostgresPersonaCredentials>();
+        services.AddSingleton<IPersonaCredentialRepository>(services =>
+            services.GetRequiredService<PostgresPersonaCredentials>());
+        services.AddSingleton<IPersonaInvitationDeliveryRepository>(services =>
+            services.GetRequiredService<PostgresPersonaCredentials>());
         services.AddSingleton<PersonaCredentialAccess>();
+        services.AddSingleton<PersonaInvitationAdministration>();
         return true;
     }
 

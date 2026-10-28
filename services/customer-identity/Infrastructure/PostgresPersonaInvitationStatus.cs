@@ -13,7 +13,14 @@ public sealed record PersonaInvitationCancelResult(string ActorId, string State)
 public sealed record PersonaInvitationStatusPage(string TenantId,
     IReadOnlyList<PersonaInvitationStatus> Items, string? NextCursor);
 
-public sealed class PostgresPersonaInvitationStatus(PostgresTenantSessions connections)
+public interface IPersonaInvitationStatus
+{
+    Task<PersonaInvitationStatusPage> ListAsync(string tenant, string? after, CancellationToken ct);
+    Task<PersonaInvitationCancelResult> CancelAsync(string tenant, string actorId, CancellationToken ct);
+}
+
+public sealed class PostgresPersonaInvitationStatus(PostgresTenantSessions connections) :
+    IPersonaInvitationStatus
 {
     public async Task<PersonaInvitationStatusPage> ListAsync(string tenant, string? after, CancellationToken ct)
     {

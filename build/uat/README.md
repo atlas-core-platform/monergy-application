@@ -28,6 +28,8 @@ Use tenant **T001** and that key. T002 is an isolated second tenant with a diffe
 
 Each persona uses its own route and key. Open `/access` only as A900. Open `/` as A100 or A200 after Customer access is configured. A300 can establish a local session but can open only a feature for which the administrator has granted the Financial Advisor role/resource access or for which A300 is explicitly configured as the reviewer; A300 is never an Organization Administrator by implication. On a retained profile, `Start` additively repairs missing advertised reference memberships once without rotating keys or replacing later administrator changes.
 
+When a named onboarding profile enables authenticated email access and persona login, an Organization Administrator can open an activated People onboarding receipt, check credential-invitation status, and request first delivery or resend after cancellation/expiry. The request never returns the verification code, activation challenge or password; delivery-backed `Pending` appears only after the configured sender succeeds. Tester-only profiles remain explicit and do not offer administrator email send.
+
 Keys are generated once, stored in an access-restricted local profile, and excluded from Git and image build context. Do not share the `.artifacts/uat` profile directory. Do not delete its credentials while retaining the corresponding database volume. Refreshing the browser requires signing in again; browser storage and URLs never contain the bearer session.
 
 ## Administration UAT journey
