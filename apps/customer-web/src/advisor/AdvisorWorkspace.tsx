@@ -19,6 +19,22 @@ interface FinancialReview {
   revision: number;
   facts: ReviewedFact[];
 }
+interface AdvisorAccessRequest {
+  tenantId: string;
+  actorId: string;
+  policyVersion: number;
+  subjectVersion: number;
+  requestId: string | null;
+  target: 'financial-advisor.assigned-customer-financial-review';
+  targetLabel: string;
+  state: 'NotRequested' | 'Submitted' | 'Rejected' | 'Fulfilled';
+  hasAccess: boolean;
+  canRequest: boolean;
+  createdAt: string | null;
+  decisionAt: string | null;
+  fulfilledAt: string | null;
+  decisionReason: string | null;
+}
 
 const identifier = (value: string) => /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value);
 const containsControlCharacter = (value: string): boolean => {
@@ -76,6 +92,25 @@ function financialReview(value: unknown): FinancialReview {
   if (!facts.every(validFact)) throw new Error('ADVISOR_PROFILE_INVALID');
   return { revision: raw.revision, facts };
 }
+const nullableDate = (value: unknown): value is string | null =>
+  value === null || typeof value === 'string' && Number.isFinite(Date.parse(value));
+function accessRequest(value: unknown, tenantId: string, actorId: string): AdvisorAccessRequest {
+  const raw = record(value);
+  const states = ['NotRequested', 'Submitted', 'Rejected', 'Fulfilled'];
+  if (raw.tenantId !== tenantId || raw.actorId !== actorId ||
+      typeof raw.policyVersion !== 'number' || !Number.isSafeInteger(raw.policyVersion) || raw.policyVersion < 1 ||
+      typeof raw.subjectVersion !== 'number' || !Number.isSafeInteger(raw.subjectVersion) || raw.subjectVersion < 1 ||
+      !(raw.requestId === null || typeof raw.requestId === 'string' && /^[0-9a-f]{32}$/.test(raw.requestId)) ||
+      raw.target !== 'financial-advisor.assigned-customer-financial-review' ||
+      typeof raw.targetLabel !== 'string' || !raw.targetLabel.trim() || raw.targetLabel.length > 120 ||
+      typeof raw.state !== 'string' || !states.includes(raw.state) ||
+      typeof raw.hasAccess !== 'boolean' || typeof raw.canRequest !== 'boolean' ||
+      !nullableDate(raw.createdAt) || !nullableDate(raw.decisionAt) || !nullableDate(raw.fulfilledAt) ||
+      !(raw.decisionReason === null || typeof raw.decisionReason === 'string' && raw.decisionReason.length <= 160))
+    throw new Error('ADVISOR_ACCESS_REQUEST_INVALID');
+  return raw as unknown as AdvisorAccessRequest;
+}
+const newOperationId = () => crypto.randomUUID().replaceAll('-', '');
 
 const categories: Record<string, string> = {
   INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information',
@@ -103,6 +138,10 @@ export default function AdvisorWorkspace() {
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
+  const [access, setAccess] = useState<AdvisorAccessRequest | null>(null);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const [accessBusy, setAccessBusy] = useState(false);
+  const [accessNotice, setAccessNotice] = useState('');
   const advisor = authorization?.area === 'advisor' ? authorization : null;
 
   useEffect(() => {
@@ -131,6 +170,30 @@ export default function AdvisorWorkspace() {
     return () => { abort.abort(); };
   }, [advisor, api, session, refresh]);
 
+  useEffect(() => {
+    if (!advisor || !api || !session) return;
+    const abort = new AbortController();
+    void Promise.resolve().then(() => {
+      if (abort.signal.aborted) return null;
+      setAccessLoading(true);
+      setAccessNotice('');
+      return api.request<unknown>('advisor/access-request', 'GET', undefined, abort.signal);
+    })
+      .then(value => {
+        if (value === null) return;
+        abort.signal.throwIfAborted();
+        setAccess(accessRequest(value, session.tenantId, session.actorId));
+      })
+      .catch(() => {
+        if (!abort.signal.aborted)
+          setAccessNotice('Your current access request status could not be verified. Refresh before trying again.');
+      })
+      .finally(() => {
+        if (!abort.signal.aborted) setAccessLoading(false);
+      });
+    return () => { abort.abort(); };
+  }, [advisor, api, session, refresh]);
+
   if (!advisor) return null;
 
   async function openReview(customer: NamedCustomer) {
@@ -152,6 +215,23 @@ export default function AdvisorWorkspace() {
     }
   }
 
+  async function requestAccess() {
+    if (!api || !session || !access?.canRequest || accessBusy) return;
+    setAccessBusy(true);
+    setAccessNotice('');
+    try {
+      const value = await api.request<unknown>('advisor/access-request', 'POST', {
+        operationId: newOperationId(),
+      });
+      setAccess(accessRequest(value, session.tenantId, session.actorId));
+      setAccessNotice('Your request was submitted to an Organization Administrator.');
+    } catch {
+      setAccessNotice('The request was not confirmed. Refresh its status before trying again.');
+    } finally {
+      setAccessBusy(false);
+    }
+  }
+
   return (
     <main className="mx-auto w-full max-w-5xl p-6" aria-labelledby="advisor-title">
       <Title level={2} id="advisor-title">Financial Advisor workspace</Title>
@@ -164,6 +244,34 @@ export default function AdvisorWorkspace() {
         </Descriptions>
         <Alert type="info" showIcon title="Customer information is protected"
           description="A recorded relationship does not grant financial access. Both read permissions, a current assignment and customer consent are required for each review." />
+      </Card>
+
+      <Card title="Assigned customer financial review" className="mt-4"
+        extra={<Tag color={access?.hasAccess ? 'success' : access?.state === 'Submitted' ? 'processing' : 'warning'}>
+          {access?.hasAccess ? 'Available' : access?.state === 'Submitted' ? 'Submitted · Under review' :
+            access?.state === 'Rejected' ? 'Rejected' : 'Restricted'}
+        </Tag>}>
+        <Paragraph>
+          Review financial information and its supporting documents for customers who are separately assigned to you and have current consent.
+        </Paragraph>
+        {accessLoading && <Spin aria-label="Checking access request status" />}
+        {accessNotice && <Alert type={access?.state === 'Submitted' ? 'success' : 'warning'} showIcon title={accessNotice} />}
+        {!accessLoading && access?.hasAccess && <Alert type="success" showIcon
+          title="Financial review access is fulfilled"
+          description="Customer assignment, record access and current customer consent are still checked for every review." />}
+        {!accessLoading && access?.state === 'Submitted' && <Alert type="info" showIcon
+          title="Your request is under review"
+          description="An Organization Administrator can approve or reject this bounded request. Submitting again will not create a duplicate." />}
+        {!accessLoading && access?.state === 'Rejected' && <Alert type="warning" showIcon
+          title="The request was not approved"
+          description={access.decisionReason ?? 'No access was granted. You may submit a new request if the capability is still available.'} />}
+        {!accessLoading && access && !access.hasAccess && access.canRequest &&
+          <Button type="primary" onClick={() => { void requestAccess(); }} loading={accessBusy} disabled={accessBusy}>
+            Request access
+          </Button>}
+        {!accessLoading && access && !access.hasAccess && !access.canRequest && access.state === 'NotRequested' &&
+          <Alert type="info" showIcon title="This access cannot be requested right now"
+            description="The capability is visible, but an Organization Administrator cannot grant it in its current configuration." />}
       </Card>
 
       <Card title="Customers available for review" className="mt-4"
