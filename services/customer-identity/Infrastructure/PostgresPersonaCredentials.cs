@@ -7,8 +7,30 @@ namespace Monergy.Services.CustomerIdentity.Infrastructure;
 
 // All rows live inside the tenant's C&I owner database. A supplied email can
 // never pick an actor ID; only pre-existing canonical C&I principals qualify.
-public sealed class PostgresPersonaCredentials(PostgresTenantSessions connections) : IPersonaCredentialRepository
+public sealed class PostgresPersonaCredentials(PostgresTenantSessions connections) :
+    IPersonaCredentialRepository, IPersonaInvitationDeliveryRepository
 {
+    public async Task<string?> ReadActivationEmailAsync(
+        string tenant, string actorId, CancellationToken ct)
+    {
+        TenantAccessProtocol.Identifier(tenant, 64);
+        TenantAccessProtocol.Identifier(actorId, 128);
+        await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
+        return await db.QuerySingleOrDefaultAsync<string>(new CommandDefinition("""
+            SELECT p.normalized_email
+            FROM customer_identity.tenant_principals p
+            WHERE p.actor_id=@Actor
+              AND NOT EXISTS(
+                SELECT 1 FROM customer_identity.registered_credentials r
+                WHERE r.actor_id=p.actor_id
+              )
+              AND NOT EXISTS(
+                SELECT 1 FROM customer_identity.persona_credentials pc
+                WHERE pc.actor_id=p.actor_id
+              );
+            """, new { Actor = actorId }, cancellationToken: ct)).ConfigureAwait(false);
+    }
+
     public async Task QueueAsync(string tenant, RegistrationCode challenge, CancellationToken ct)
     {
         await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
