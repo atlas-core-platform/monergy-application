@@ -138,7 +138,7 @@ test('Organization Administrator reviews and approves only the bounded request',
   await expect(page.getByText('Under review')).toBeVisible();
   await page.getByRole('button', { name: 'Approve' }).click();
   await page.getByRole('button', { name: 'Approve access' }).click();
-  await expect(page.getByText('Fulfilled')).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Fulfilled' })).toBeVisible();
   expect(decisions).toHaveLength(1);
   expect(decisions[0]?.body).toEqual({ operationId: expect.stringMatching(/^[0-9a-f]{32}$/) });
   await page.screenshot({ path: '.artifacts/ui/am-ira-admin-fulfilled.png', fullPage: true });

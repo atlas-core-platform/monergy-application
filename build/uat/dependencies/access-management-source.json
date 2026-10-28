@@ -4,8 +4,8 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "e87ce1f8aa78219f5d5b6aa598fc42a28eca01f7",
-  "sourceTree": "e4a0cc743ed42ef9760755ab9391fce981d7a49a",
+  "commit": "599b9a86ac0d533767c9241e9c5696934ae140b2",
+  "sourceTree": "595aebdce286c529a20fd3805a1c8c8c9e21db2b",
   "verificationStatus": "AM_IRA_02_CANDIDATE_PHYSICAL_AND_BROWSER_UAT_PENDING",
   "candidatePullRequest": 21,
   "files": [
@@ -75,7 +75,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerRelationshipAdministration.cs",
-      "gitBlobSha": "f9133b0f7ed50908fe779de29f79493494dcb411"
+      "gitBlobSha": "aba50547e51fb038052b3a32d1417f371f909a76"
     },
     {
       "path": "src/Monergy.AccessManagement/DefaultAccessPack.cs",
@@ -135,7 +135,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/TenantConnections.cs",
-      "gitBlobSha": "3f2e26b8285544d4d6b589fc49d2540c2a29ea36"
+      "gitBlobSha": "e38e5a47a5acc064883771a24a3be2188e35a376"
     },
     {
       "path": "tools/Monergy.AccessManagement.DeliveryReference/fixture.sql",
