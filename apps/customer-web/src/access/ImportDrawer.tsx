@@ -400,6 +400,9 @@ export function ImportDrawer({
         },
       ];
     }) ?? [];
+  const failedInvitationDeliveries = invitationRows.filter(
+    (invitation) => invitation.state === 'Delivery failed',
+  ).length;
   const terminal = result?.status === 'Activated' || result?.status === 'Cancelled';
   const confirmationLabel =
     confirm === 'cancel'
@@ -858,6 +861,14 @@ export function ImportDrawer({
                           type="info"
                           showIcon
                           title="Administrator email delivery is not enabled for this profile."
+                        />
+                      )}
+                      {failedInvitationDeliveries > 0 && (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          title={`${String(failedInvitationDeliveries)} credential invitation ${failedInvitationDeliveries === 1 ? 'delivery needs' : 'deliveries need'} attention.`}
+                          description="Monergy could not confirm recipient delivery before the bounded attempt or expiry limit. Review the address with the person, then use Resend invitation. Organization access is unchanged."
                         />
                       )}
                       <Table<InvitationStatus>
