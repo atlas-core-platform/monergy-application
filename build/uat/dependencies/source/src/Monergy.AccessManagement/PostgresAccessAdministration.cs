@@ -363,8 +363,12 @@ public sealed partial class PostgresAccessAdministration(
                 Authority = request.TenantAdmin ? "TenantAdmin" : null
             },
                 transaction, ct)).ConfigureAwait(false);
-            if (current.BusinessRoleId != request.BusinessRoleId)
-                await connection.ExecuteAsync(Command("DELETE FROM am.resource_grants WHERE actor_id=@ActorId; DELETE FROM am.customer_relationships WHERE actor_id=@ActorId;",
+            if (current.BusinessRoleId != request.BusinessRoleId || !request.Active)
+                await connection.ExecuteAsync(Command("""
+                    DELETE FROM am.resource_grants WHERE actor_id=@ActorId;
+                    DELETE FROM am.customer_relationships WHERE actor_id=@ActorId;
+                    DELETE FROM am.subject_permissions WHERE actor_id=@ActorId;
+                    """,
                     new { ActorId = actorId }, transaction, ct)).ConfigureAwait(false);
             return new MutationEffect(version, actorId);
         }, ct);
@@ -387,7 +391,18 @@ public sealed partial class PostgresAccessAdministration(
                     SELECT 1 FROM am.access_subjects s
                     JOIN am.role_permissions rp ON rp.role_id=s.business_role_id
                     JOIN am.permission_capabilities pc ON pc.permission_id=rp.permission_id
-                    WHERE s.actor_id=@ActorId AND s.status='Active' AND pc.capability_id=@CapabilityId AND pc.scope='Resource');
+                    WHERE s.actor_id=@ActorId AND s.status='Active'
+                      AND pc.capability_id=@CapabilityId AND pc.scope='Resource'
+                    UNION ALL
+                    SELECT 1 FROM am.access_subjects s
+                    JOIN am.roles r ON r.role_id=s.business_role_id
+                    JOIN am.subject_permissions sp ON sp.actor_id=s.actor_id
+                    JOIN am.permission_capabilities pc ON pc.permission_id=sp.permission_id
+                    JOIN am.access_requests ar ON ar.request_id=sp.source_request_id
+                    WHERE s.actor_id=@ActorId AND s.status='Active' AND r.code='financial-advisor'
+                      AND pc.capability_id=@CapabilityId AND pc.scope='Resource'
+                      AND ar.state='Fulfilled' AND ar.requester_actor_id=s.actor_id
+                      AND ar.requester_role_id=s.business_role_id);
                 """, new { request.ActorId, request.CapabilityId }, transaction, ct)).ConfigureAwait(false);
             AccessInput.Require(eligible, "RESOURCE_CAPABILITY_NOT_ASSIGNED", 409);
             await connection.ExecuteAsync(Command("""

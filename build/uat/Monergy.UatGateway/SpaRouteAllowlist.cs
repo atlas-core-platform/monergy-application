@@ -9,7 +9,7 @@ public static class SpaRouteAllowlist
         "/", "/actions", "/evidence",
         "/access", "/access/users", "/access/users/history", "/access/roles",
         "/access/permissions", "/access/groups", "/access/resources", "/access/activity",
-        "/access/audit", "/access/sessions", "/access/customers", "/access/processing",
+        "/access/audit", "/access/sessions", "/access/customers", "/access/requests", "/access/processing",
         "/access/documents", "/operations",
         "/advisor", "/welcome",
         "/kyc", "/kyc/reviews", "/monthly-cashflow", "/net-worth",

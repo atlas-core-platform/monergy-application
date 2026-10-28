@@ -18,6 +18,13 @@ const advisor = () => ({
   tenantId: 'T001', actorId: 'A300', authority: 'FinancialAdvisor',
   policyVersion: 4, subjectVersion: 3, recordedRelationshipCount: 0,
 });
+const access = (overrides: Record<string, unknown> = {}) => ({
+  tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
+  requestId: null, target: 'financial-advisor.assigned-customer-financial-review',
+  targetLabel: 'View assigned customer financial information', state: 'NotRequested',
+  hasAccess: false, canRequest: true, createdAt: null, decisionAt: null,
+  fulfilledAt: null, decisionReason: null, ...overrides,
+});
 function mount() {
   return render(
     <FoundationProvider appearance="midnight">
@@ -28,12 +35,14 @@ function mount() {
   );
 }
 function owner(contextStatus = 200, foreignActor = false) {
-  const fetch = vi.fn((url: string) => {
+  const fetch = vi.fn((url: string, options?: RequestInit) => {
+    if (options?.signal?.aborted) return Promise.reject(new Error('aborted'));
     if (url.endsWith('/tenant-sessions')) return Promise.resolve(json(session()));
     if (url.endsWith('/v1/advisor/customers')) return Promise.resolve(json({
       tenantId: 'T001', actorId: 'A300', policyVersion: 4,
       subjectVersion: 3, customers: [],
     }));
+    if (url.endsWith('/advisor/access-request')) return Promise.resolve(json(access()));
     if (url.endsWith('/advisor/context')) return Promise.resolve(json(
       contextStatus === 200 ? { ...advisor(), ...(foreignActor ? { actorId: 'A100' } : {}) }
         : { error: 'ADVISOR_ROLE_REQUIRED' }, contextStatus));
@@ -61,6 +70,41 @@ it('does not expose an unconsented financial profile when no customers are autho
   expect(await screen.findByText(/No customer reviews are authorized yet/)).toBeVisible();
   expect(requests.mock.calls.some(([url]) => url.includes('/financial-profile'))).toBe(false);
   expect(screen.queryByText('Financial information (read only)')).not.toBeInTheDocument();
+});
+it('submits only an idempotency operation and never browser-supplied authority fields', async () => {
+  vi.stubGlobal('crypto', { randomUUID: () => 'dddddddd-dddd-dddd-dddd-dddddddddddd' });
+  const requests = owner();
+  const fallback = requests.getMockImplementation();
+  if (!fallback) throw Error('Missing owner mock');
+  requests.mockImplementation((url: string, options?: RequestInit) => {
+    if (url.endsWith('/advisor/access-request') && options?.method === 'POST') {
+      expect(typeof options.body).toBe('string');
+      expect(JSON.parse(options.body as string)).toEqual({ operationId: 'd'.repeat(32) });
+      return Promise.resolve(json(access({ requestId: 'a'.repeat(32), state: 'Submitted',
+        canRequest: false, createdAt: new Date().toISOString() })));
+    }
+    return fallback(url);
+  });
+  mount(); await connect();
+  await userEvent.click(await screen.findByRole('button', { name: 'Request access' }));
+  expect(await screen.findByText(/request was submitted to an Organization Administrator/)).toBeVisible();
+  expect(screen.getByText(/Submitted · Under review/)).toBeVisible();
+  expect(requests.mock.calls.filter(([url, options]) =>
+    url.endsWith('/advisor/access-request') && options?.method === 'POST')).toHaveLength(1);
+});
+it('shows a rejected lifecycle safely and allows a new bounded request', async () => {
+  const requests = owner();
+  const fallback = requests.getMockImplementation();
+  if (!fallback) throw Error('Missing owner mock');
+  requests.mockImplementation((url: string, options?: RequestInit) =>
+    url.endsWith('/advisor/access-request') && options?.method !== 'POST'
+      ? Promise.resolve(json(access({ requestId: 'b'.repeat(32), state: 'Rejected',
+          decisionAt: new Date().toISOString(), decisionReason: 'Not approved by your Organization Administrator' })))
+      : fallback(url));
+  mount(); await connect();
+  expect(await screen.findByText('The request was not approved')).toBeVisible();
+  expect(screen.getByText('Not approved by your Organization Administrator')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Request access' })).toBeEnabled();
 });
 it('shows a read-only reviewed financial fact only after a consent-authorized customer selection', async () => {
   const requests = owner();

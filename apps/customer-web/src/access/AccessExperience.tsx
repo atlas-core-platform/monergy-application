@@ -18,6 +18,7 @@ import { AuditLog } from './AuditLog';
 import { ProcessingStatus } from './ProcessingStatus';
 import { CustomerManagement } from './CustomerManagement';
 import { CustomerRelationships } from './CustomerRelationships';
+import { AccessRequests } from './AccessRequests';
 import './access.css';
 
 const areas: { value: AccessArea; label: string; description: string }[] = [
@@ -135,7 +136,7 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
           onExpired={fail}
         />
       )}
-      {path === '/access/classifications' ? (<ClassificationReview key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} />) : path === '/access/audit' ? (<AuditLog key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access/documents' ? (<DocumentMonitoring key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access/processing' ? (<ProcessingStatus key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access/customers' ? (<CustomerManagement key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access' ? (
+      {path === '/access/requests' ? (<AccessRequests key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access/classifications' ? (<ClassificationReview key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} />) : path === '/access/audit' ? (<AuditLog key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access/documents' ? (<DocumentMonitoring key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access/processing' ? (<ProcessingStatus key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access/customers' ? (<CustomerManagement key={session.tenantId + ':' + session.authenticationContextId} api={api} tenantId={session.tenantId} actorId={session.actorId} />) : path === '/access' ? (
         <AccessOverview api={api} onExpired={fail} />
       ) : area === 'resource-grants' ? (
         <CustomerRelationships
