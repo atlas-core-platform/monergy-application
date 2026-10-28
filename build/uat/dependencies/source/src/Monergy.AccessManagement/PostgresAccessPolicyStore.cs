@@ -45,6 +45,28 @@ public sealed class PostgresAccessPolicyStore(ITenantConnectionFactory connectio
                     .Select(row => new CapabilityGrant(row.CapabilityId!, Enum.Parse<AuthorizationScope>(row.Scope!))).ToArray());
         }, ct);
 
+    public ValueTask<IReadOnlyList<CapabilityGrant>> GetSubjectCapabilityGrantsAsync(
+        string tenantId, string actorId, long policyVersion, long subjectVersion, CancellationToken ct) =>
+        QueryAsync<IReadOnlyList<CapabilityGrant>>(tenantId, async connection =>
+        {
+            var rows = await connection.QueryAsync<SubjectGrantRow>(new CommandDefinition("""
+                SELECT pc.capability_id AS CapabilityId,pc.scope AS Scope
+                FROM am.access_subjects s
+                JOIN am.policy_state ps ON ps.singleton
+                JOIN am.subject_permissions sp ON sp.actor_id=s.actor_id
+                JOIN am.permission_capabilities pc ON pc.permission_id=sp.permission_id
+                JOIN am.access_requests ar ON ar.request_id=sp.source_request_id
+                JOIN am.roles r ON r.role_id=s.business_role_id
+                WHERE s.actor_id=@ActorId AND s.status='Active'
+                  AND s.subject_version=@SubjectVersion AND ps.policy_version=@PolicyVersion
+                  AND r.code='financial-advisor' AND ar.state='Fulfilled'
+                  AND ar.requester_actor_id=s.actor_id AND ar.requester_role_id=s.business_role_id;
+                """, new { ActorId = actorId, PolicyVersion = policyVersion, SubjectVersion = subjectVersion },
+                cancellationToken: ct)).ConfigureAwait(false);
+            return rows.Select(row => new CapabilityGrant(
+                row.CapabilityId, Enum.Parse<AuthorizationScope>(row.Scope))).ToArray();
+        }, ct);
+
     public ValueTask<bool> HasResourceGrantAsync(
         string tenantId, string actorId, string capabilityId, string resourceType, string resourceId, CancellationToken ct) =>
         QueryAsync(tenantId, connection => connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
@@ -76,4 +98,5 @@ public sealed class PostgresAccessPolicyStore(ITenantConnectionFactory connectio
         string ActorId, string NormalizedEmail, string Status, string? BusinessRoleId,
         string? AdministrativeAuthority, long SubjectVersion, long PolicyVersion);
     private sealed record GrantRow(string RoleId, long PolicyVersion, string? CapabilityId, string? Scope);
+    private sealed record SubjectGrantRow(string CapabilityId, string Scope);
 }
