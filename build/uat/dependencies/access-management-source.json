@@ -4,8 +4,8 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "a9157cfbd9de459bc7278b1909e15da5f0d050d6",
-  "sourceTree": "a8c42abf8d4ff79e16f06e2997b7c4f0e18db22b",
+  "commit": "ff08172e54c85f1f7db3a90cc334d45e7f13e47d",
+  "sourceTree": "36b39f0c413fbc762462de40e1a656bf2a1b15eb",
   "verificationStatus": "AM_IRA_01_CANDIDATE_PHYSICAL_AND_BROWSER_UAT_PENDING",
   "candidatePullRequest": 20,
   "files": [
@@ -23,7 +23,7 @@
     },
     {
       "path": "build/provision-ci-tenants.sh",
-      "gitBlobSha": "a8d37e80d5dec5584aa6274d857ec82e673e3802"
+      "gitBlobSha": "e27785b702d4b52c2d8527fd64d57a3af5693c47"
     },
     {
       "path": "global.json",
@@ -127,7 +127,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/TenantConnections.cs",
-      "gitBlobSha": "3f2e26b8285544d4d6b589fc49d2540c2a29ea36"
+      "gitBlobSha": "e38e5a47a5acc064883771a24a3be2188e35a376"
     },
     {
       "path": "src/Monergy.AccessManagement/packages.lock.json",

@@ -55,7 +55,7 @@ public sealed class ReferenceTenantConnectionFactory : ITenantConnectionFactory,
             var matches = await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
                 """
                 SELECT EXISTS (SELECT 1 FROM am.tenant_identity WHERE singleton AND tenant_id=@TenantId
-                    AND initial_admin_actor_id IS NOT NULL AND schema_version=6)
+                    AND initial_admin_actor_id IS NOT NULL AND schema_version=7)
                     AND NOT has_schema_privilege(current_user,'am','CREATE')
                     AND NOT has_schema_privilege(current_user,'public','CREATE')
                     AND NOT has_database_privilege(current_user,current_database(),'CREATE')
