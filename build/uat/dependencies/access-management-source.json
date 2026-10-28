@@ -4,8 +4,8 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "66a8cda2d49379f481e51affdbc4c5a2baf841d7",
-  "sourceTree": "55b0deb98a27b805f1f6438df647157b9a56b428",
+  "commit": "e87ce1f8aa78219f5d5b6aa598fc42a28eca01f7",
+  "sourceTree": "e4a0cc743ed42ef9760755ab9391fce981d7a49a",
   "verificationStatus": "AM_IRA_02_CANDIDATE_PHYSICAL_AND_BROWSER_UAT_PENDING",
   "candidatePullRequest": 21,
   "files": [
