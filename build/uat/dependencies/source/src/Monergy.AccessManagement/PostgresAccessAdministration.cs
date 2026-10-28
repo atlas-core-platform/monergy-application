@@ -363,8 +363,12 @@ public sealed partial class PostgresAccessAdministration(
                 Authority = request.TenantAdmin ? "TenantAdmin" : null
             },
                 transaction, ct)).ConfigureAwait(false);
-            if (current.BusinessRoleId != request.BusinessRoleId)
-                await connection.ExecuteAsync(Command("DELETE FROM am.resource_grants WHERE actor_id=@ActorId; DELETE FROM am.customer_relationships WHERE actor_id=@ActorId;",
+            if (current.BusinessRoleId != request.BusinessRoleId || !request.Active)
+                await connection.ExecuteAsync(Command("""
+                    DELETE FROM am.resource_grants WHERE actor_id=@ActorId;
+                    DELETE FROM am.customer_relationships WHERE actor_id=@ActorId;
+                    DELETE FROM am.subject_permissions WHERE actor_id=@ActorId;
+                    """,
                     new { ActorId = actorId }, transaction, ct)).ConfigureAwait(false);
             return new MutationEffect(version, actorId);
         }, ct);
