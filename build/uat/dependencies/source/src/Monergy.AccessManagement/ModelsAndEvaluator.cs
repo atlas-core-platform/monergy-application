@@ -85,6 +85,9 @@ public interface IAccessPolicyStore
     bool IsReady { get; }
     ValueTask<SubjectPolicyState?> GetSubjectPolicyStateAsync(string tenantId, string actorId, CancellationToken ct);
     ValueTask<RolePolicySnapshot?> GetRolePolicyAsync(string tenantId, string roleId, long policyVersion, CancellationToken ct);
+    ValueTask<IReadOnlyList<CapabilityGrant>> GetSubjectCapabilityGrantsAsync(
+        string tenantId, string actorId, long policyVersion, long subjectVersion, CancellationToken ct) =>
+        ValueTask.FromResult<IReadOnlyList<CapabilityGrant>>([]);
     ValueTask<bool> HasResourceGrantAsync(string tenantId, string actorId, string capabilityId, string resourceType, string resourceId, CancellationToken ct);
     ValueTask<bool> IsDecisionStateCurrentAsync(string tenantId, string actorId, string roleId, long policyVersion, long subjectVersion, CancellationToken ct);
 }
@@ -161,7 +164,9 @@ public sealed class AuthorizationEvaluator(
         if (policy.PolicyVersion != current.PolicyVersion || policy.RoleId != subject.BusinessRoleId)
             return Deny(AuthorizationReasonCode.PolicyVersionMismatch, current.PolicyVersion, subject.SubjectVersion);
 
-        var grants = policy.Grants.Where(grant =>
+        var subjectGrants = await store.GetSubjectCapabilityGrantsAsync(context.TenantId, context.ActorId,
+            current.PolicyVersion, subject.SubjectVersion, ct).ConfigureAwait(false);
+        var grants = policy.Grants.Concat(subjectGrants).Where(grant =>
             string.Equals(grant.CapabilityId, capability.CapabilityId, StringComparison.Ordinal)).ToArray();
         if (grants.Length == 0)
             return Deny(AuthorizationReasonCode.CapabilityNotGranted, current.PolicyVersion, subject.SubjectVersion);
