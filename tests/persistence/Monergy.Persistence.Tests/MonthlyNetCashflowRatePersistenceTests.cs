@@ -6,7 +6,7 @@ using Npgsql;
 using Xunit;
 namespace Monergy.Persistence.Tests;
 
-public sealed class MonthlyNetCashflowRatePersistenceTests:PhysicalPostgresFixture
+public sealed partial class PersistentFoundationTests
 {
     [Fact]
     public async Task RateReceiptSurvivesRestartIsTenantBoundIdempotentAndImmutable()

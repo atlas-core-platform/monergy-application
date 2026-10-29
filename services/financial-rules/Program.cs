@@ -25,7 +25,7 @@ if (referenceAdapters || physicalPersistence)
 {
     app.MapFinancialRulesContracts();
     if(TenantBoundaryOptions.Selected(builder.Configuration)&&builder.Configuration.GetValue<bool>("Monergy:NetWorth:Enabled")){app.MapNetWorthCalculations();app.MapAssetAllocationCalculations();}
-    if(TenantBoundaryOptions.Selected(builder.Configuration)&&builder.Configuration.GetValue<bool>("Monergy:MonthlyCashflow:Enabled")){app.MapMonthlyCashflowCalculations();app.MapDebtServiceRatioCalculations();app.MapDebtToIncomeCalculations();app.MapMonthlyNetCashflowRateCalculations();app.MapMonthlyEmiShareCalculations();}
+    if(TenantBoundaryOptions.Selected(builder.Configuration)&&builder.Configuration.GetValue<bool>("Monergy:MonthlyCashflow:Enabled")){app.MapMonthlyCashflowCalculations();app.MapDebtServiceRatioCalculations();app.MapDebtToIncomeCalculations();app.MapMonthlyNetCashflowRateCalculations();app.MapMonthlyEmiShareCalculations();app.MapMonthlyDebtServiceCoverageCalculations();}
     if(TenantBoundaryOptions.Selected(builder.Configuration)&&builder.Configuration.GetValue<bool>("Monergy:NetWorth:Enabled")&&builder.Configuration.GetValue<bool>("Monergy:MonthlyCashflow:Enabled"))app.MapLiquidityRatioCalculations();
 }
 if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Profile"], "persisted-reporting", StringComparison.Ordinal))

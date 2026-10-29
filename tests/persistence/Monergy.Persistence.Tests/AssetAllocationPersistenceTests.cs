@@ -5,7 +5,7 @@ using Monergy.Services.FinancialRules.Infrastructure;
 using Npgsql;
 using Xunit;
 namespace Monergy.Persistence.Tests;
-public sealed class AssetAllocationPersistenceTests:PhysicalPostgresFixture
+public sealed partial class PersistentFoundationTests
 {
     [Fact]
     public async Task AssetAllocationReceiptSurvivesRestartIsTenantBoundAndCannotBeRewritten()

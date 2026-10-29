@@ -6,6 +6,7 @@ namespace Monergy.Services.FinancialRules.Domain;
 public sealed record MonthlyEmiShareEvaluation(string State,string? MonthlyIncome,string? MonthlyEmi,string? RatePercent,IReadOnlyList<string> Issues);
 public sealed class MonthlyEmiShareRule
 {
+    private static readonly string[] MonthlyIncomeZero = ["MONTHLY_INCOME_ZERO"];
     public MonthlyEmiShareRule(IConfiguration config)
     {
         if((config["Monergy:MonthlyEmiShare:RuleVersion"]??MonthlyEmiShareDefinition.Version)!=MonthlyEmiShareDefinition.Version||
@@ -28,7 +29,7 @@ public sealed class MonthlyEmiShareRule
         }
         if(issues.Count>0)return new("INSUFFICIENT_DATA",null,null,null,issues.Distinct(StringComparer.Ordinal).ToArray());
         var income=decimal.Parse(source.TotalIncome!,NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture);
-        if(income==0)return new("INSUFFICIENT_DATA",null,null,null,new[]{"MONTHLY_INCOME_ZERO"});
+        if(income==0)return new("INSUFFICIENT_DATA",null,null,null,MonthlyIncomeZero);
         decimal emi=0;foreach(var loan in loans)emi=checked(emi+loan.Loan.Emi);
         var rate=decimal.Round(checked(emi/income*100m),2,MidpointRounding.AwayFromZero);
         return new("CALCULATED",Money(income),Money(emi),Money(rate),Array.Empty<string>());
