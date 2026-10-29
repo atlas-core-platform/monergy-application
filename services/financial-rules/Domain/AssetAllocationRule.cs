@@ -6,6 +6,8 @@ namespace Monergy.Services.FinancialRules.Domain;
 public sealed record AssetAllocationEvaluation(string State,string? TotalAssets,IReadOnlyList<AssetAllocationCategory> Categories,IReadOnlyList<string> Issues);
 public sealed class AssetAllocationRule
 {
+    private static readonly string[] NetWorthNotCalculated = ["NET_WORTH_NOT_CALCULATED"];
+    private static readonly string[] TotalAssetsZero = ["TOTAL_ASSETS_ZERO"];
     public AssetAllocationRule(IConfiguration config)
     {
         if((config["Monergy:AssetAllocation:RuleVersion"]??AssetAllocationDefinition.Version)!=AssetAllocationDefinition.Version||
@@ -15,9 +17,9 @@ public sealed class AssetAllocationRule
     public AssetAllocationEvaluation Evaluate(NetWorthCalculation source)
     {
         if(!NetWorthData.Calculation(source,source.CustomerId))throw new TenantBoundaryException("ASSET_ALLOCATION_SOURCE_INVALID",503);
-        if(source.State!="CALCULATED")return new("INSUFFICIENT_DATA",null,Array.Empty<AssetAllocationCategory>(),new[]{"NET_WORTH_NOT_CALCULATED"});
+        if(source.State!="CALCULATED")return new("INSUFFICIENT_DATA",null,Array.Empty<AssetAllocationCategory>(),NetWorthNotCalculated);
         var total=decimal.Parse(source.TotalAssets!,NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture);
-        if(total==0)return new("INSUFFICIENT_DATA",null,Array.Empty<AssetAllocationCategory>(),new[]{"TOTAL_ASSETS_ZERO"});
+        if(total==0)return new("INSUFFICIENT_DATA",null,Array.Empty<AssetAllocationCategory>(),TotalAssetsZero);
         var categories=source.Position.Position.Lines.Where(x=>x.Side=="ASSET"&&x.Amount is not null)
             .GroupBy(x=>x.Kind,StringComparer.Ordinal).Select(group=>new{Category=group.Key,Amount=group.Sum(x=>decimal.Parse(x.Amount!,NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture))})
             .Where(x=>x.Amount>0).OrderBy(x=>x.Category,StringComparer.Ordinal)

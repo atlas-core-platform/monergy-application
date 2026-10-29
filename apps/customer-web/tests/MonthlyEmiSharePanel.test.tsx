@@ -20,7 +20,7 @@ const select=async(user:ReturnType<typeof userEvent.setup>)=>{await screen.findB
 
 it('posts only exact source references and displays the server-calculated rate',async()=>{
   const api=new AccessApi(session);const request=vi.spyOn(api,'product').mockImplementation((path,method,body)=>method==='POST'?Promise.resolve(receipt((body as {operationId:string}).operationId)):path==='v1/loan-records'?Promise.resolve({items:[loan],hasMore:false,dataDurability:'Temporary data'}):Promise.resolve(page()));
-  render(view(api));const user=userEvent.setup();await select(user);await user.click(screen.getByRole('button',{name:'Calculate and save monthly EMI share'}));expect(await screen.findByText('25.00%')).toBeVisible();expect(screen.getByText(/not verified debt/)).toBeVisible();
+  render(view(api));const user=userEvent.setup();await select(user);await user.click(screen.getByRole('button',{name:'Calculate and save monthly EMI share'}));expect(await screen.findByText('25.00%')).toBeVisible();expect(screen.getByText(/This descriptive rate is not verified debt/)).toBeVisible();
   const write=request.mock.calls.find(([,method])=>method==='POST');expect(write?.[2]).toEqual(expect.objectContaining({monthlyCashflowCalculationId:'cashflow-1',loans:[{loanRecordId:'loan-1',revision:2}],activeLoansComplete:true}));expect(JSON.stringify(write?.[2])).not.toContain('2500');expect(Object.keys(write?.[2] as object).sort()).toEqual(['activeLoansComplete','loans','monthlyCashflowCalculationId','operationId']);
 });
 it('retries one identical frozen request after an uncertain response',async()=>{

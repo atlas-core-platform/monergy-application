@@ -83,6 +83,10 @@ public static class FinancialRulesRegistration
         if(physical)services.AddSingleton<IMonthlyEmiShareCalculationRepository,PostgresMonthlyEmiShareCalculations>();
         else services.AddSingleton<IMonthlyEmiShareCalculationRepository,InMemoryMonthlyEmiShareCalculations>();
         services.AddSingleton<MonthlyEmiShareCalculationsApplication>();
+        services.AddSingleton(new MonthlyDebtServiceCoverageRule(configuration));
+        if(physical)services.AddSingleton<IMonthlyDebtServiceCoverageCalculationRepository,PostgresMonthlyDebtServiceCoverageCalculations>();
+        else services.AddSingleton<IMonthlyDebtServiceCoverageCalculationRepository,InMemoryMonthlyDebtServiceCoverageCalculations>();
+        services.AddSingleton<MonthlyDebtServiceCoverageCalculationsApplication>();
     }
     private static void AddNetWorth(IServiceCollection services,IConfiguration configuration,bool physical)
     {

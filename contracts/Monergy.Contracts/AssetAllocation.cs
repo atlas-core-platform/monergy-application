@@ -30,7 +30,7 @@ public static class AssetAllocationData
         (value.State=="CALCULATED"&&value.SourceNetWorth.State=="CALCULATED"&&Money(value.TotalAssets)&&value.TotalAssets==value.SourceNetWorth.TotalAssets&&value.Issues.Count==0&&
          value.Categories.Count is >=1 and <=6&&value.Categories.Select(x=>x.Category).SequenceEqual(value.Categories.Select(x=>x.Category).Order(StringComparer.Ordinal))&&
          value.Categories.Select(x=>x.Category).Distinct(StringComparer.Ordinal).Count()==value.Categories.Count&&value.Categories.All(Category)&&
-         value.Categories.Sum(x=>decimal.Parse(x.Amount,CultureInfo.InvariantCulture))==decimal.Parse(value.TotalAssets,CultureInfo.InvariantCulture)||
+         value.Categories.Sum(x=>decimal.Parse(x.Amount,CultureInfo.InvariantCulture))==decimal.Parse(value.TotalAssets!,CultureInfo.InvariantCulture)||
          value.State=="INSUFFICIENT_DATA"&&value.TotalAssets is null&&value.Categories.Count==0&&value.Issues.Count>0&&value.Issues.Count<=2&&
          value.Issues.Distinct(StringComparer.Ordinal).Count()==value.Issues.Count&&value.Issues.All(x=>x is "NET_WORTH_NOT_CALCULATED" or "TOTAL_ASSETS_ZERO"));
     private static bool Category(AssetAllocationCategory value)=>Categories.Contains(value.Category,StringComparer.Ordinal)&&Money(value.Amount)&&decimal.Parse(value.Amount,CultureInfo.InvariantCulture)>0&&Percentage(value.Percentage);

@@ -182,6 +182,34 @@ public static class ProductMonthlyCashflowEndpoints
             foreach(var value in page.Items)foreach(var item in value.SourceLoans)if(!MonthlyCashflowData.Same(item,await loans.ReadAsync(session,customer.CustomerId,item.LoanRecordId,http.RequestAborted,item.Revision).ConfigureAwait(false)))throw Invalid();
             await Confirm(http,owners,access,session,customer,before,calculate:true,documents:true).ConfigureAwait(false);return page;
         });
+        group.MapPost("/debt-service-coverages",async(HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductMonthlyCashflowClient client)=>
+        {
+            CustomerReviewHttp.NoQuery(http.Request);var(session,customer,before)=await Resolve(http,owners,access,calculate:true,documents:true).ConfigureAwait(false);
+            var input=await CustomerReviewHttp.ReadAsync<CalculateMonthlyDebtServiceCoverage>(http).ConfigureAwait(false);if(!MonthlyDebtServiceCoverageData.Request(input))throw new TenantBoundaryException("MONTHLY_DEBT_SERVICE_COVERAGE_INVALID",400);
+            var cashflow=await client.Calculation(session,customer.CustomerId,input.MonthlyCashflowCalculationId,http.RequestAborted).ConfigureAwait(false);if(!Bound(cashflow,customer.CustomerId))throw Invalid();
+            var emi=await client.MonthlyEmiShare(session,customer.CustomerId,input.MonthlyEmiShareCalculationId,http.RequestAborted).ConfigureAwait(false);if(!MonthlyEmiShareData.Calculation(emi,customer.CustomerId))throw Invalid();
+            var receipt=await client.CalculateMonthlyDebtServiceCoverage(session,customer.CustomerId,input,http.RequestAborted).ConfigureAwait(false);
+            if(!MonthlyDebtServiceCoverageData.Calculation(receipt,customer.CustomerId)||receipt.OperationId!=input.OperationId||receipt.RecordedBy!=session.ActorId||receipt.DebtServiceIncludedInExpenses!=input.DebtServiceIncludedInExpenses||
+               receipt.SourceMonthlyCashflow.CalculationId!=input.MonthlyCashflowCalculationId||receipt.SourceMonthlyEmiShare.CalculationId!=input.MonthlyEmiShareCalculationId||!MonthlyCashflowData.Same(receipt.SourceMonthlyCashflow,cashflow)||!MonthlyCashflowData.Same(receipt.SourceMonthlyEmiShare,emi))throw Invalid();
+            var saved=await client.MonthlyDebtServiceCoverage(session,customer.CustomerId,receipt.CalculationId,http.RequestAborted).ConfigureAwait(false);if(!MonthlyCashflowData.Same(saved,receipt))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:true).ConfigureAwait(false);return saved;
+        });
+        group.MapGet("/debt-service-coverages/{calculationId}",async(string calculationId,HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductMonthlyCashflowClient client)=>
+        {
+            CustomerReviewHttp.NoQuery(http.Request);Identifier(calculationId);var(session,customer,before)=await Resolve(http,owners,access,calculate:true,documents:true).ConfigureAwait(false);
+            var value=await client.MonthlyDebtServiceCoverage(session,customer.CustomerId,calculationId,http.RequestAborted).ConfigureAwait(false);if(!MonthlyDebtServiceCoverageData.Calculation(value,customer.CustomerId)||value.CalculationId!=calculationId)throw Invalid();
+            var cashflow=await client.Calculation(session,customer.CustomerId,value.SourceMonthlyCashflow.CalculationId,http.RequestAborted).ConfigureAwait(false);var emi=await client.MonthlyEmiShare(session,customer.CustomerId,value.SourceMonthlyEmiShare.CalculationId,http.RequestAborted).ConfigureAwait(false);
+            if(!MonthlyCashflowData.Same(cashflow,value.SourceMonthlyCashflow)||!MonthlyCashflowData.Same(emi,value.SourceMonthlyEmiShare))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:true).ConfigureAwait(false);return value;
+        });
+        group.MapGet("/debt-service-coverages",async(HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductMonthlyCashflowClient client)=>
+        {
+            var(session,customer,before)=await Resolve(http,owners,access,calculate:true,documents:true).ConfigureAwait(false);var cursor=CustomerReviewHttp.Cursor(http.Request);
+            var page=await client.MonthlyDebtServiceCoverages(session,customer.CustomerId,cursor,http.RequestAborted).ConfigureAwait(false);
+            if(!Page(page.Items,page.HasMore,page.NextBeforeId,x=>MonthlyDebtServiceCoverageData.Calculation(x,customer.CustomerId),x=>x.CalculationId)||page.Items.Any(x=>x.CalculationId==cursor))throw Invalid();
+            foreach(var value in page.Items){var cashflow=await client.Calculation(session,customer.CustomerId,value.SourceMonthlyCashflow.CalculationId,http.RequestAborted).ConfigureAwait(false);var emi=await client.MonthlyEmiShare(session,customer.CustomerId,value.SourceMonthlyEmiShare.CalculationId,http.RequestAborted).ConfigureAwait(false);if(!MonthlyCashflowData.Same(cashflow,value.SourceMonthlyCashflow)||!MonthlyCashflowData.Same(emi,value.SourceMonthlyEmiShare))throw Invalid();}
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:true).ConfigureAwait(false);return page;
+        });
     }
     public static bool Bound(MonthlyCashflowCalculation? value,string customer)=>MonthlyCashflowData.Calculation(value,customer);
     private static bool Page<T>(IReadOnlyList<T>? items,bool more,string? next,Func<T,bool> bound,Func<T,string> id)=>items is not null&&items.Count<=50&&items.All(x=>x is not null&&bound(x))&&items.Select(id).Distinct(StringComparer.Ordinal).Count()==items.Count&&(more?items.Count==50&&next==id(items[^1]):next is null);
@@ -225,6 +253,9 @@ public sealed class ProductMonthlyCashflowClient:IDisposable
     public Task<MonthlyEmiShareCalculation> CalculateMonthlyEmiShare(CustomerOwnerSession s,string c,CalculateMonthlyEmiShare input,CancellationToken ct)=>Send<MonthlyEmiShareCalculation>(rules,s,c,"emi-shares",input,ct);
     public Task<MonthlyEmiShareCalculation> MonthlyEmiShare(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>Send<MonthlyEmiShareCalculation>(rules,s,c,"emi-shares/"+Uri.EscapeDataString(id),null,ct);
     public Task<MonthlyEmiShareCalculationPage> MonthlyEmiShares(CustomerOwnerSession s,string c,string? cursor,CancellationToken ct)=>Send<MonthlyEmiShareCalculationPage>(rules,s,c,"emi-shares"+Cursor(cursor),null,ct);
+    public Task<MonthlyDebtServiceCoverageCalculation> CalculateMonthlyDebtServiceCoverage(CustomerOwnerSession s,string c,CalculateMonthlyDebtServiceCoverage input,CancellationToken ct)=>Send<MonthlyDebtServiceCoverageCalculation>(rules,s,c,"debt-service-coverages",input,ct);
+    public Task<MonthlyDebtServiceCoverageCalculation> MonthlyDebtServiceCoverage(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>Send<MonthlyDebtServiceCoverageCalculation>(rules,s,c,"debt-service-coverages/"+Uri.EscapeDataString(id),null,ct);
+    public Task<MonthlyDebtServiceCoverageCalculationPage> MonthlyDebtServiceCoverages(CustomerOwnerSession s,string c,string? cursor,CancellationToken ct)=>Send<MonthlyDebtServiceCoverageCalculationPage>(rules,s,c,"debt-service-coverages"+Cursor(cursor),null,ct);
     private static string Cursor(string? value)=>value is null?"":"?beforeId="+Uri.EscapeDataString(value);
     private async Task<T> Send<T>(Uri root,CustomerOwnerSession session,string customer,string suffix,object? input,CancellationToken ct)
     {
