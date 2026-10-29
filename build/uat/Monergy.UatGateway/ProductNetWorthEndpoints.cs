@@ -71,6 +71,36 @@ public static class ProductNetWorthEndpoints
             if(!Page(page.Items,page.HasMore,page.NextBeforeId,x=>Bound(x,customer.CustomerId),x=>x.CalculationId)||page.Items.Any(x=>x.CalculationId==cursor))throw Invalid();
             await Confirm(http,owners,access,session,customer,before,calculate:true,documents:page.Items.Any(x=>x.Position.Lines.Any(y=>y.Source is not null))).ConfigureAwait(false);return page;
         });
+        group.MapPost("/liquidity-ratios",async(HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductNetWorthClient client)=>
+        {
+            CustomerReviewHttp.NoQuery(http.Request);var (session,customer,before)=await Resolve(http,owners,access,calculate:true).ConfigureAwait(false);
+            var input=await CustomerReviewHttp.ReadAsync<CalculateLiquidityRatio>(http).ConfigureAwait(false);if(!LiquidityRatioData.Request(input))throw new TenantBoundaryException("LIQUIDITY_RATIO_INVALID",400);
+            var net=await client.Calculation(session,customer.CustomerId,input.NetWorthCalculationId,http.RequestAborted).ConfigureAwait(false);
+            var monthly=await client.MonthlyCashflowCalculation(session,customer.CustomerId,input.MonthlyCashflowCalculationId,http.RequestAborted).ConfigureAwait(false);
+            if(!NetWorthData.Calculation(net,customer.CustomerId)||net.CalculationId!=input.NetWorthCalculationId||!MonthlyCashflowData.Calculation(monthly,customer.CustomerId)||monthly.CalculationId!=input.MonthlyCashflowCalculationId)throw Invalid();
+            var receipt=await client.CalculateLiquidityRatio(session,customer.CustomerId,input,http.RequestAborted).ConfigureAwait(false);
+            if(!LiquidityRatioData.Calculation(receipt,customer.CustomerId)||receipt.OperationId!=input.OperationId||receipt.RecordedBy!=session.ActorId||
+               !NetWorthData.Same(receipt.SourceNetWorth,net)||!MonthlyCashflowData.Same(receipt.SourceMonthlyCashflow,monthly)||
+               !receipt.LiquidAssetLineIds.SequenceEqual(input.LiquidAssetLineIds)||receipt.LiquidAssetsComplete!=input.LiquidAssetsComplete)throw Invalid();
+            var saved=await client.LiquidityRatio(session,customer.CustomerId,receipt.CalculationId,http.RequestAborted).ConfigureAwait(false);if(!NetWorthData.Same(saved,receipt))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:net.Position.Lines.Any(x=>x.Source is not null)||monthly.Position.Lines.Any(x=>x.Source is not null)).ConfigureAwait(false);return saved;
+        });
+        group.MapGet("/liquidity-ratios/{calculationId}",async(string calculationId,HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductNetWorthClient client)=>
+        {
+            CustomerReviewHttp.NoQuery(http.Request);Identifier(calculationId);var (session,customer,before)=await Resolve(http,owners,access,calculate:true).ConfigureAwait(false);
+            var value=await client.LiquidityRatio(session,customer.CustomerId,calculationId,http.RequestAborted).ConfigureAwait(false);if(!LiquidityRatioData.Calculation(value,customer.CustomerId)||value.CalculationId!=calculationId)throw Invalid();
+            var net=await client.Calculation(session,customer.CustomerId,value.SourceNetWorth.CalculationId,http.RequestAborted).ConfigureAwait(false);
+            var monthly=await client.MonthlyCashflowCalculation(session,customer.CustomerId,value.SourceMonthlyCashflow.CalculationId,http.RequestAborted).ConfigureAwait(false);
+            if(!NetWorthData.Same(net,value.SourceNetWorth)||!MonthlyCashflowData.Same(monthly,value.SourceMonthlyCashflow))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:net.Position.Lines.Any(x=>x.Source is not null)||monthly.Position.Lines.Any(x=>x.Source is not null)).ConfigureAwait(false);return value;
+        });
+        group.MapGet("/liquidity-ratios",async(HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductNetWorthClient client)=>
+        {
+            var (session,customer,before)=await Resolve(http,owners,access,calculate:true).ConfigureAwait(false);var cursor=CustomerReviewHttp.Cursor(http.Request);
+            var page=await client.LiquidityRatios(session,customer.CustomerId,cursor,http.RequestAborted).ConfigureAwait(false);
+            if(!Page(page.Items,page.HasMore,page.NextBeforeId,x=>LiquidityRatioData.Calculation(x,customer.CustomerId),x=>x.CalculationId)||page.Items.Any(x=>x.CalculationId==cursor))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:page.Items.Any(x=>x.SourceNetWorth.Position.Lines.Any(y=>y.Source is not null)||x.SourceMonthlyCashflow.Position.Lines.Any(y=>y.Source is not null))).ConfigureAwait(false);return page;
+        });
     }
     public static bool Bound(NetWorthCalculation? value,string customer)=>NetWorthData.Calculation(value,customer);
     private static bool Page<T>(IReadOnlyList<T>? items,bool more,string? next,Func<T,bool> bound,Func<T,string> id)=>items is not null&&items.Count<=50&&items.All(x=>x is not null&&bound(x))&&items.Select(id).Distinct(StringComparer.Ordinal).Count()==items.Count&&(more?items.Count==50&&next==id(items[^1]):next is null);
@@ -102,10 +132,15 @@ public sealed class ProductNetWorthClient:IDisposable
     public Task<NetWorthCalculation> Calculate(CustomerOwnerSession s,string c,CalculateNetWorth input,CancellationToken ct)=>Send<NetWorthCalculation>(rules,s,c,"calculations",input,ct);
     public Task<NetWorthCalculation> Calculation(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>Send<NetWorthCalculation>(rules,s,c,"calculations/"+Uri.EscapeDataString(id),null,ct);
     public Task<NetWorthCalculationPage> Calculations(CustomerOwnerSession s,string c,string? cursor,CancellationToken ct)=>Send<NetWorthCalculationPage>(rules,s,c,"calculations"+Cursor(cursor),null,ct);
+    public Task<MonthlyCashflowCalculation> MonthlyCashflowCalculation(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>SendAt<MonthlyCashflowCalculation>(rules,s,c,"monthly-cashflow","calculations/"+Uri.EscapeDataString(id),null,ct);
+    public Task<LiquidityRatioCalculation> CalculateLiquidityRatio(CustomerOwnerSession s,string c,CalculateLiquidityRatio input,CancellationToken ct)=>Send<LiquidityRatioCalculation>(rules,s,c,"liquidity-ratios",input,ct);
+    public Task<LiquidityRatioCalculation> LiquidityRatio(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>Send<LiquidityRatioCalculation>(rules,s,c,"liquidity-ratios/"+Uri.EscapeDataString(id),null,ct);
+    public Task<LiquidityRatioCalculationPage> LiquidityRatios(CustomerOwnerSession s,string c,string? cursor,CancellationToken ct)=>Send<LiquidityRatioCalculationPage>(rules,s,c,"liquidity-ratios"+Cursor(cursor),null,ct);
     private static string Cursor(string? value)=>value is null?"":"?beforeId="+Uri.EscapeDataString(value);
-    private async Task<T> Send<T>(Uri root,CustomerOwnerSession session,string customer,string suffix,object? input,CancellationToken ct)
+    private Task<T> Send<T>(Uri root,CustomerOwnerSession session,string customer,string suffix,object? input,CancellationToken ct)=>SendAt<T>(root,session,customer,"net-worth",suffix,input,ct);
+    private async Task<T> SendAt<T>(Uri root,CustomerOwnerSession session,string customer,string area,string suffix,object? input,CancellationToken ct)
     {
-        using var request=new HttpRequestMessage(input is null?HttpMethod.Get:HttpMethod.Post,new Uri(root,"local/v1/customers/"+Uri.EscapeDataString(customer)+"/net-worth/"+suffix));
+        using var request=new HttpRequestMessage(input is null?HttpMethod.Get:HttpMethod.Post,new Uri(root,"local/v1/customers/"+Uri.EscapeDataString(customer)+"/"+area+"/"+suffix));
         request.Headers.Add("X-Monergy-Tenant",session.TenantId);request.Headers.Add("X-Monergy-Session",session.AuthenticationContextId);if(input is not null)request.Content=JsonContent.Create(input,options:ContractJson.Options);
         using var response=await client.SendAsync(request,ct).ConfigureAwait(false);
         if(!response.IsSuccessStatusCode)throw new TenantBoundaryException("NET_WORTH_UNAVAILABLE",(int)response.StatusCode is 400 or 401 or 403 or 404 or 409 or 413?(int)response.StatusCode:503);

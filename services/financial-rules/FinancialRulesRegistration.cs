@@ -45,7 +45,7 @@ public static class FinancialRulesRegistration
             client.Timeout = TimeSpan.FromSeconds(10); // LOCAL/CI engineering timeout; not a client target.
         });
         services.AddTransient<FinancialRulesApplication>();
-        AddNetWorth(services,configuration,false); AddMonthlyCashflow(services,configuration,false);
+        AddNetWorth(services,configuration,false); AddMonthlyCashflow(services,configuration,false); AddLiquidityRatio(services,configuration,false);
         return services;
     }
 
@@ -54,7 +54,7 @@ public static class FinancialRulesRegistration
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
         AddCommon(services, configuration);
         services.AddSingleton<ICalculationRepository, PostgresCalculationRepository>();
-        AddNetWorth(services,configuration,true); AddMonthlyCashflow(services,configuration,true);
+        AddNetWorth(services,configuration,true); AddMonthlyCashflow(services,configuration,true); AddLiquidityRatio(services,configuration,true);
         return services;
     }
 
@@ -79,6 +79,14 @@ public static class FinancialRulesRegistration
         if(physical)services.AddSingleton<INetWorthCalculationRepository,PostgresNetWorthCalculations>();
         else services.AddSingleton<INetWorthCalculationRepository,InMemoryNetWorthCalculations>();
         services.AddSingleton<NetWorthCalculationsApplication>();
+    }
+    private static void AddLiquidityRatio(IServiceCollection services,IConfiguration configuration,bool physical)
+    {
+        if(!configuration.GetValue<bool>("Monergy:NetWorth:Enabled")||!configuration.GetValue<bool>("Monergy:MonthlyCashflow:Enabled"))return;
+        services.AddSingleton(new LiquidityRatioRule(configuration));
+        if(physical)services.AddSingleton<ILiquidityRatioCalculationRepository,PostgresLiquidityRatioCalculations>();
+        else services.AddSingleton<ILiquidityRatioCalculationRepository,InMemoryLiquidityRatioCalculations>();
+        services.AddSingleton<LiquidityRatioCalculationsApplication>();
     }
     private static void AddCommon(IServiceCollection services, IConfiguration configuration)
     {
