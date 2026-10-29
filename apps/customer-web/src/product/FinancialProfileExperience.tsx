@@ -7,6 +7,7 @@ import ExpenseRecordsExperience from './ExpenseRecordsExperience';
 import IncomeRecordsExperience from './IncomeRecordsExperience';
 import InvestmentRecordsExperience from './InvestmentRecordsExperience';
 import BankAccountRecordsExperience from './BankAccountRecordsExperience';
+import CreditCardRecordsExperience from './CreditCardRecordsExperience';
 import PropertyRecordsExperience from './PropertyRecordsExperience';
 import VehicleRecordsExperience from './VehicleRecordsExperience';
 import LoanRecordsExperience from './LoanRecordsExperience';
@@ -44,11 +45,11 @@ const assetTypeName = (value?: string) => value === 'PROPERTY' ? 'Property' : va
 const factTypeName = (value: string) =>
   ({ INCOME: 'Income', EXPENSE: 'Expense', LOAN: 'Loan information', ASSET: 'Asset source figure', INVESTMENT: 'Investment source figure', INSURANCE: 'Insurance source figure', TAX: 'Tax source figure' })[value] ?? value;
 
-type FinancialCategory = 'GOAL' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'LOAN' | 'ASSET' | 'BANK_ACCOUNT' | 'INVESTMENT' | 'INSURANCE' | 'TAX';
+type FinancialCategory = 'GOAL' | 'LIABILITY' | 'INCOME' | 'EXPENSE' | 'LOAN' | 'CREDIT_CARD' | 'ASSET' | 'BANK_ACCOUNT' | 'INVESTMENT' | 'INSURANCE' | 'TAX';
 
 const categoryFromLocation = (): FinancialCategory | '' => {
   const value = new URLSearchParams(window.location.search).get('type')?.toUpperCase();
-  return value === 'GOAL' || value === 'LIABILITY' || value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' || value === 'ASSET' || value === 'BANK_ACCOUNT' || value === 'INVESTMENT' || value === 'INSURANCE' || value === 'TAX' ? value : '';
+  return value === 'GOAL' || value === 'LIABILITY' || value === 'INCOME' || value === 'EXPENSE' || value === 'LOAN' || value === 'CREDIT_CARD' || value === 'ASSET' || value === 'BANK_ACCOUNT' || value === 'INVESTMENT' || value === 'INSURANCE' || value === 'TAX' ? value : '';
 };
 
 const initialFactId = () => categoryFromLocation() === 'GOAL' ? '' : new URLSearchParams(window.location.search).get('fact') ?? '';
@@ -153,6 +154,7 @@ export default function FinancialProfileExperience() {
       { key: 'INCOME' as const, title: 'Income', facts: facts.filter((fact) => fact.factType === 'INCOME') },
       { key: 'EXPENSE' as const, title: 'Expenses', facts: facts.filter((fact) => fact.factType === 'EXPENSE') },
       { key: 'LOAN' as const, title: 'Loan information', facts: facts.filter((fact) => fact.factType === 'LOAN') },
+      { key: 'CREDIT_CARD' as const, title: 'Credit card source figures', facts: facts.filter((fact) => fact.factType === 'LOAN') },
       { key: 'ASSET' as const, title: 'Asset source figures', facts: facts.filter((fact) => fact.factType === 'ASSET') },
       { key: 'INVESTMENT' as const, title: 'Investment source figures', facts: facts.filter((fact) => fact.factType === 'INVESTMENT') },
       { key: 'INSURANCE' as const, title: 'Insurance source figures', facts: facts.filter((fact) => fact.factType === 'INSURANCE') },
@@ -248,6 +250,11 @@ export default function FinancialProfileExperience() {
         facts={profile?.facts.filter(fact=>fact.factType==='ASSET'&&fact.assetType==='BANK_ACCOUNT') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
+      {activeCategory === 'CREDIT_CARD' && api && canRead && <CreditCardRecordsExperience
+        key={['credit-card',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
+        facts={profile?.facts.filter(fact=>fact.factType==='LOAN') ?? []}
+        canRead={product?.capabilities.includes('evidence.document.read') ?? false}
+        canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
       {activeCategory === 'INVESTMENT' && api && canRead && <InvestmentRecordsExperience onRecordsChanged={assetRecordsChanged}
         key={[product?.tenantId, product?.actorId, product?.customerId].join(':')}
         api={api} facts={profile?.facts.filter((fact) => fact.factType === 'INVESTMENT') ?? []}
@@ -341,6 +348,9 @@ export default function FinancialProfileExperience() {
               onClick={() => { selectCategory('LOAN'); }}
             >
               Loan information
+            </Button>
+            <Button type={activeCategory === 'CREDIT_CARD' ? 'primary' : 'default'} onClick={() => { selectCategory('CREDIT_CARD'); }}>
+              Credit cards
             </Button>
             <Button
               type={activeCategory === 'ASSET' ? 'primary' : 'default'}
@@ -440,10 +450,10 @@ export default function FinancialProfileExperience() {
                 <WorkspaceIcon name="reports" size={28} />
               </span>
               <p className="workspace-eyebrow">{activeCategory}</p>
-              <h2>No trusted {activeCategory === 'INCOME' ? 'income' : activeCategory === 'LOAN' ? 'loan' : activeCategory === 'ASSET' ? 'asset' : activeCategory === 'INVESTMENT' ? 'investment' : activeCategory === 'INSURANCE' ? 'insurance' : activeCategory === 'TAX' ? 'tax' : 'expense'} information yet.</h2>
+              <h2>No trusted {activeCategory === 'INCOME' ? 'income' : activeCategory === 'LOAN' ? 'loan' : activeCategory === 'CREDIT_CARD' ? 'credit card' : activeCategory === 'ASSET' ? 'asset' : activeCategory === 'INVESTMENT' ? 'investment' : activeCategory === 'INSURANCE' ? 'insurance' : activeCategory === 'TAX' ? 'tax' : 'expense'} information yet.</h2>
               <p>
                 This category has no reviewed financial information yet. Review supported documents
-                and add only the Income, Expense, Loan, Asset, Investment, Insurance or Tax source details you have checked.
+                and add only the Income, Expense, Loan, Credit Card, Asset, Investment, Insurance or Tax source details you have checked.
               </p>
               <div className="product-category-empty-actions">
                 <Button type="primary" href="/evidence">

@@ -701,6 +701,22 @@ it('opens reviewed bank accounts with only explicitly classified bank-account so
   expect(request.mock.calls.some(([path])=>path==='v1/bank-account-records')).toBe(true);
 });
 
+it('opens reviewed credit cards from customer-selected loan and debt source figures',async()=>{
+  window.history.replaceState(null,'','/finances?type=CREDIT_CARD');const api=new AccessApi(session);
+  const card={financialFactId:'ff-card',factType:'LOAN',label:'Reviewed card balance',value:910.25,currency:'INR',effectiveDate:'2026-10-01',revision:1,
+    source:{sourceName:'card-statement.txt',documentVersion:'document-card',recordedAt:'2026-10-19T00:00:00Z',technicalSourceFactId:'source-card',technicalProvenanceId:'provenance-card'}};
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/credit-card-records'
+    ?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({financialProfileId:'profile',revision:1,updatedAt:'2026-10-19T00:00:00Z',dataDurability:'Temporary data',facts:[card]}));
+  mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
+  expect(await screen.findByRole('heading',{name:'Credit cards'})).toBeVisible();
+  expect(screen.getByRole('button',{name:'Add credit card'})).toBeEnabled();
+  await userEvent.setup().click(screen.getByRole('button',{name:'Add credit card'}));const drawer=screen.getByRole('dialog',{name:'Add credit card'});
+  await userEvent.setup().click(within(drawer).getByRole('combobox',{name:'Reviewed credit card source'}));
+  expect((await screen.findAllByText(/Reviewed card balance ·/,{selector:'.ant-select-item-option-content'})).length).toBeGreaterThan(0);
+  expect(request.mock.calls.some(([path])=>path==='v1/credit-card-records')).toBe(true);
+});
+
 
 it('opens customer-defined goals without documents or source-profile access',async()=>{
   window.history.replaceState(null,'','/finances?type=GOAL');const api=new AccessApi(session);

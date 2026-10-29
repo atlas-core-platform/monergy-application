@@ -11,6 +11,7 @@
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductLoanRecordEndpoints.cs" Link="ProductLoanRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductInvestmentRecordEndpoints.cs" Link="ProductInvestmentRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductBankAccountRecordEndpoints.cs" Link="ProductBankAccountRecordEndpoints.cs" />
+    <Compile Include="../../../build/uat/Monergy.UatGateway/ProductCreditCardRecordEndpoints.cs" Link="ProductCreditCardRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductPropertyRecordEndpoints.cs" Link="ProductPropertyRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductInsuranceRecordEndpoints.cs" Link="ProductInsuranceRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductVehicleRecordEndpoints.cs" Link="ProductVehicleRecordEndpoints.cs" />
