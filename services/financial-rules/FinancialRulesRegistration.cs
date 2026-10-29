@@ -66,6 +66,10 @@ public static class FinancialRulesRegistration
         if(physical)services.AddSingleton<IMonthlyCashflowCalculationRepository,PostgresMonthlyCashflowCalculations>();
         else services.AddSingleton<IMonthlyCashflowCalculationRepository,InMemoryMonthlyCashflowCalculations>();
         services.AddSingleton<MonthlyCashflowCalculationsApplication>();
+        services.AddSingleton(new DebtServiceRatioRule(configuration));
+        if(physical)services.AddSingleton<IDebtServiceRatioCalculationRepository,PostgresDebtServiceRatioCalculations>();
+        else services.AddSingleton<IDebtServiceRatioCalculationRepository,InMemoryDebtServiceRatioCalculations>();
+        services.AddSingleton<DebtServiceRatioCalculationsApplication>();
     }
     private static void AddNetWorth(IServiceCollection services,IConfiguration configuration,bool physical)
     {

@@ -1,4 +1,5 @@
 import MonthlyCashflowComparison from './MonthlyCashflowComparison';
+import DebtServiceRatioPanel from './DebtServiceRatioPanel';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Checkbox, Drawer, Input, Space, Tag } from 'antd';
 import type { AccessApi } from '../access/accessApi';
@@ -142,15 +143,16 @@ export function MonthlyCashflowExperience({ api, customerId, canRead, canWrite, 
         <Checkbox checked={current.value.expensesComplete} onChange={e => { change({ ...current.value, expensesComplete: e.target.checked }); }}>I have reviewed and included all my expenses, or confirm I have none.</Checkbox>
       </fieldset><Button type="primary" style={{ marginBlock: 16 }} loading={busy} disabled={conflict === context || !frozen && !validMonthlyCashflowDraft(current.value)} onClick={() => { void save(); }}>{frozen ? 'Retry monthly cash flow confirmation' : 'Save review and calculate monthly cash flow'}</Button></>}
     </Drawer>
-    <Drawer title="Saved monthly cash flow result" open={selected?.context === context && canCalculate} onClose={() => { setSelected(null); }} size={760} destroyOnHidden>{selected?.context === context && <MonthlyCashflowDetails result={selected.result} />}</Drawer>
+    <Drawer title="Saved monthly cash flow result" open={selected?.context === context && canCalculate} onClose={() => { setSelected(null); }} size={760} destroyOnHidden>{selected?.context === context && <MonthlyCashflowDetails api={api} customerId={customerId} result={selected.result} />}</Drawer>
     <Drawer title="Saved reviewed inventory" open={review?.context === context} onClose={() => { setReview(null); }} size={760} destroyOnHidden>{review?.context === context && <PositionDetails position={review.position} />}</Drawer>
   </main>;
 }
-function MonthlyCashflowDetails({ result }: { result: MonthlyCashflowResult }) {
+function MonthlyCashflowDetails({ api,customerId,result }: { api:AccessApi;customerId:string;result:MonthlyCashflowResult }) {
   return <section aria-label="Saved monthly cash flow calculation"><h2>{result.position.position.asOfDate} · {result.position.position.currency}</h2><Tag>Customer-reviewed inputs</Tag>
     {result.state === 'CALCULATED' && result.totalIncome !== null && result.totalExpenses !== null && result.balance !== null ? <dl><dt>Total income</dt><dd>{exactMoney(result.totalIncome, result.position.position.currency)}</dd><dt>Total expenses</dt><dd>{exactMoney(result.totalExpenses, result.position.position.currency)}</dd><dt>Monthly balance</dt><dd>{exactMoney(result.balance, result.position.position.currency)}</dd></dl> : <Alert type="info" title="More information needed before monthly cash flow can be calculated" description={<ul>{result.issues.map(issue => <li key={issue}>{monthlyCashflowIssues[issue]}</li>)}</ul>} />}
     <p>Monthly balance = total income − total expenses. This saved result uses the exact reviewed inventory below. Later changes require a new review and calculation.</p><p>Rule version {result.ruleVersion} · Calculated {result.recordedAt}</p><PositionDetails position={result.position} />
     <details><summary>Calculation details</summary><p>{result.numericSemantics}</p><p>Rule: {result.ruleId} · Definition: {result.definitionHash}</p><p>Calculation: {result.calculationId} · Recorded by: {result.recordedBy}</p></details>
+    <DebtServiceRatioPanel api={api} customerId={customerId} source={result} />
   </section>;
 }
 function PositionDetails({ position }: { position: MonthlyCashflowPosition }) {
