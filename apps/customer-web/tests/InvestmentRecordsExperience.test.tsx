@@ -12,7 +12,8 @@ const source: ProductFinancialFact = { financialFactId: 'ff-investment', factTyp
 const investment: ProductInvestmentDraft = { name:'Retirement holding', institution:'Example institution', investmentType:'Mutual fund',
   purchaseValue:500000, currentValue:400000, valueAsOfDate:'2026-10-01', sourceFinancialFactId:'ff-investment', sourceRevision:2 };
 const record: ProductInvestmentRecord = { investmentRecordId:'investment-saved',operationId:'a'.repeat(32),customerId:'reference-customer',investment,
-  currency:'USD',sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-investment',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',revision:1 };
+  currency:'USD',sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-investment',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',revision:1,
+  lifecycleStatus:'UNREVIEWED',lifecycleAsOfDate:null };
 function mount(api: AccessApi, canCreate = true, canRead = true, facts: ProductFinancialFact[] = [source]) {
   return render(<FoundationProvider appearance="midnight"><InvestmentRecordsExperience api={api} canCreate={canCreate} canRead={canRead} facts={facts} /></FoundationProvider>);
 }

@@ -137,6 +137,8 @@ public sealed class PostgresInvestmentRecords : IInvestmentRecordRepository, IAs
             )
             SELECT payload FROM latest WHERE (CAST(payload AS jsonb)->>'currency')=@Currency
               AND (CAST(payload AS jsonb)#>>'{investment,valueAsOfDate}')=@AsOfDate
+              AND (COALESCE(CAST(payload AS jsonb)->>'lifecycleStatus','UNREVIEWED')<>'CLOSED'
+                OR (CAST(payload AS jsonb)->>'lifecycleAsOfDate')>@AsOfDate)
             ORDER BY recorded_at DESC,investment_record_id LIMIT 201;
             """,new {Tenant=tenant,Customer=customer,Currency=currency,AsOfDate=asOfDate.ToString("yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture)},cancellationToken:ct)).ConfigureAwait(false)).ToArray();
         return new(rows.Take(200).Select(Decode).ToArray(),rows.Length>200);

@@ -2,16 +2,18 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Alert, Button, Card, Drawer, Input, Select, Space, Tag } from 'antd';
 import type { AccessApi} from '../access/accessApi';
 import { AccessApiError } from '../access/accessApi';
-import { createInvestmentRecord, getInvestmentRecords, reviseInvestmentRecord, getInvestmentRecordHistory } from './productApi';
-import type { ProductFinancialFact, ProductInvestmentDraft, ProductInvestmentRecord, ProductInvestmentRecordList, ProductInvestmentRecordHistory } from './productApi';
+import { createInvestmentRecord, getInvestmentRecords, reviseInvestmentRecord, getInvestmentRecordHistory, reviewInvestmentRecordStatus } from './productApi';
+import type { ProductFinancialFact, ProductInvestmentDraft, ProductInvestmentRecord, ProductInvestmentRecordList, ProductInvestmentRecordHistory, ProductInvestmentStatusReview } from './productApi';
 
 const numberFields = [ ['purchaseValue', 'Purchase value'], ['currentValue', 'Current value'] ] as const;
 const dateFields = [ ['valueAsOfDate', 'Value as of'] ] as const;
 type FormValues = Record<string, string>;
 interface Submission { operationId: string; investment: ProductInvestmentDraft; expectedRevision?: number }
 interface Editor { api: AccessApi; open: boolean; values: FormValues; operationId: string; submission: Submission | null; original: ProductInvestmentRecord | null; conflict?: boolean }
+interface StatusEditor { api: AccessApi; open: boolean; record: ProductInvestmentRecord; status?: 'ACTIVE' | 'CLOSED'; asOfDate: string; operationId: string; submission: ProductInvestmentStatusReview | null; conflict?: boolean }
 const money = (value: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency }).format(value);
 const terms = (record: ProductInvestmentRecord) => record.investment.investmentType;
+const statusLabel = (record: ProductInvestmentRecord) => record.lifecycleStatus === 'ACTIVE' ? 'Active — customer reported' : record.lifecycleStatus === 'CLOSED' ? 'Closed — customer reported' : 'Status not reviewed';
 
 export default function InvestmentRecordsExperience({ api, facts, canRead, canCreate, onRecordsChanged }: {
   api: AccessApi; facts: ProductFinancialFact[]; canRead: boolean; canCreate: boolean; onRecordsChanged?: () => void;
@@ -26,7 +28,9 @@ export default function InvestmentRecordsExperience({ api, facts, canRead, canCr
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [saved, setSaved] = useState<ProductInvestmentRecord | null>(null);
+  const [saved, setSaved] = useState<{ api: AccessApi; record: ProductInvestmentRecord; statusReview: boolean } | null>(null);
+  const [statusEditor, setStatusEditor] = useState<StatusEditor | null>(null);
+  const [statusError, setStatusError] = useState('');
   const [history, setHistory] = useState<{ api: AccessApi; record: ProductInvestmentRecord } | null>(null);
   const [selected, setSelected] = useState<{ api: AccessApi; record: ProductInvestmentRecord } | null>(null);
   const load = useCallback(async (signal?: AbortSignal, afterId?: string) => {
@@ -53,6 +57,7 @@ export default function InvestmentRecordsExperience({ api, facts, canRead, canCr
     return () => { window.clearTimeout(start); controller.abort(); activeLoad.current?.abort(); };
   }, [load]);
   const current = editor?.api === api ? editor : null;
+  const currentStatus = statusEditor?.api === api ? statusEditor : null;
   const list = loaded?.api === api && canRead ? loaded.list : null;
   const source = facts.find((fact) => fact.financialFactId === current?.values.sourceFinancialFactId && fact.revision === Number(current.values.sourceRevision) && fact.factType === 'INVESTMENT');
   const valid = current && (current.original ?? source) && !current.conflict && current.values.name?.trim() && current.values.institution?.trim() && current.values.investmentType?.trim() &&
@@ -73,7 +78,7 @@ export default function InvestmentRecordsExperience({ api, facts, canRead, canCr
     if (current && !current.submission && !current.conflict && !saving) setEditor({ ...current, values: { ...current.values, [key]: value } });
   };
   const save = async () => {
-    if (!current || !canRead || !canCreate || saving || (!current.submission && !valid)) return;
+    if (!current || !canRead || !canCreate || saving || currentStatus?.submission || (!current.submission && !valid)) return;
     const submission = current.submission ?? { operationId: current.operationId, ...(current.original ? {expectedRevision:current.original.revision}:{}), investment: {
       name: current.values.name ?? '', institution: current.values.institution ?? '', investmentType: current.values.investmentType ?? '',
       purchaseValue: Number(current.values.purchaseValue), currentValue: Number(current.values.currentValue),
@@ -88,7 +93,7 @@ export default function InvestmentRecordsExperience({ api, facts, canRead, canCr
       if (record.operationId !== submission.operationId || record.investment.sourceFinancialFactId !== submission.investment.sourceFinancialFactId ||
           record.investment.sourceRevision !== submission.investment.sourceRevision || !record.investmentRecordId || current.original && (record.investmentRecordId !== current.original.investmentRecordId || record.revision !== (submission.expectedRevision ?? 0)+1)) throw new Error('Invalid confirmation');
       if (scope.current.api !== api || !scope.current.canRead || !scope.current.canCreate) return;
-      setSaved(record); setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, open: false, submission: null } : active); await load();
+      setSaved({ api, record, statusReview: false }); setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, open: false, submission: null } : active); await load();
     } catch (error) {
       if (scope.current.api !== api || !scope.current.canRead || !scope.current.canCreate) return;
       const conflict = error instanceof AccessApiError && error.code === 'INVESTMENT_REVISION_CONFLICT';
@@ -98,26 +103,61 @@ export default function InvestmentRecordsExperience({ api, facts, canRead, canCr
       if (conflict || error instanceof AccessApiError && error.status === 400) setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, submission: null, conflict } : active);
     } finally { setSaving(false); }
   };
+  const openStatus = (record: ProductInvestmentRecord) => {
+    if (saving || current?.submission) return;
+    setSaved(null); setStatusError('');
+    if (current) setEditor({ ...current, open: false });
+    if (currentStatus?.submission) setStatusEditor({ ...currentStatus, open: true });
+    else setStatusEditor({ api, record, open: true, asOfDate: '', operationId: crypto.randomUUID().replaceAll('-', ''), submission: null });
+  };
+  const saveStatus = async () => {
+    if (!currentStatus || !canCreate || saving || current?.submission || currentStatus.conflict || (!currentStatus.submission && (!currentStatus.status || !currentStatus.asOfDate))) return;
+    let submission = currentStatus.submission;
+    if (!submission) {
+      if (!currentStatus.status) return;
+      submission = { operationId: currentStatus.operationId, expectedRevision: currentStatus.record.revision, status: currentStatus.status, asOfDate: currentStatus.asOfDate };
+    }
+    setStatusEditor({ ...currentStatus, submission }); setSaving(true); setStatusError('');
+    try {
+      const record = await reviewInvestmentRecordStatus(api, currentStatus.record.investmentRecordId, submission);
+      if (record.investmentRecordId !== currentStatus.record.investmentRecordId || record.operationId !== submission.operationId ||
+          record.revision !== submission.expectedRevision + 1 || record.lifecycleStatus !== submission.status || record.lifecycleAsOfDate !== submission.asOfDate)
+        throw new Error('Invalid confirmation');
+      setSaved({ api, record, statusReview: true });
+      setStatusEditor((active) => active?.api === api && active.operationId === currentStatus.operationId ? { ...currentStatus, open: false, submission: null } : active);
+      await load();
+    } catch (error) {
+      const conflict = error instanceof AccessApiError && error.code === 'INVESTMENT_REVISION_CONFLICT';
+      setStatusError(conflict ? 'A newer version has been saved. Close this form, refresh investment records and review that version before changing status.' :
+        error instanceof AccessApiError && error.status === 400 ? 'Check the status and date. The date must follow the recorded value and latest reviewed status, and cannot be in the future.' :
+        'The status save has not been confirmed. Retry confirmation using the same request.');
+      if (conflict || error instanceof AccessApiError && error.status === 400)
+        setStatusEditor((active) => active?.api === api && active.operationId === currentStatus.operationId ? { ...currentStatus, submission: null, conflict } : active);
+    } finally { setSaving(false); }
+  };
   const visible = selected?.api === api && canRead ? selected.record : null;
   if (!canRead) return <Alert type="info" title="Document access is required to view investment records and their sources." />;
   return <section aria-label="Investment records" style={{ marginBlock: 24 }}>
     <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}><h2>Investment records</h2>
       <Button disabled={loading || saving} onClick={() => { void load(); }}>Refresh investment records</Button>
-      {canCreate && <Button onClick={open} disabled={saving || (!current?.submission && facts.every((fact) => fact.factType !== 'INVESTMENT'))}>
+      {canCreate && <Button onClick={open} disabled={Boolean(currentStatus?.submission) || saving || (!current?.submission && facts.every((fact) => fact.factType !== 'INVESTMENT'))}>
         {current?.submission ? 'Continue save confirmation' : 'Add investment record'}</Button>}
     </Space>
-    <p>Record the holding and values you have reviewed. Source figures stay separate. Ownership and valuations are customer reported; these records do not calculate a portfolio total or net worth.</p>
-    {saved && editor?.api === api && <Alert type="success" title={'Investment record saved: ' + saved.investment.name} />}
+    {canCreate && currentStatus?.submission && <Button onClick={() => { setStatusEditor({ ...currentStatus, open: true }); }}>Continue investment status confirmation</Button>}
+    <p>Record the holding, values and lifecycle status you have reviewed. Source figures stay separate. Ownership and valuations are customer reported; these records do not calculate a portfolio total or net worth.</p>
+    {saved?.api === api && <Alert type="success" title={(saved.statusReview ? 'Investment status saved: ' : 'Investment record saved: ') + saved.record.investment.name} />}
     {failure?.api === api && <Alert type="error" title={failure.text} action={<Button onClick={() => { void load(); }}>Retry investment records</Button>} />}
     {loading && <p role="status">Loading investment records…</p>}
     {list?.items.length === 0 && <p>No investment records added yet. Review an investment source figure in Documents, then add the holding and values here.</p>}
     {list?.hasMore && <Button disabled={loading || saving} onClick={() => { void load(undefined, list.items.at(-1)?.investmentRecordId); }}>Earlier investment records</Button>}
     {list && <p>Showing {list.items.length} investment records on this page. Refresh returns to the newest records.</p>}
     {list?.items.map((record) => <Card key={record.investmentRecordId} size="small" style={{ marginBlock: 12 }}>
-      <Space wrap><strong>{record.investment.name}</strong><Tag>Customer reviewed</Tag><span>{record.investment.institution} · {terms(record)}</span></Space>
+      <Space wrap><strong>{record.investment.name}</strong><Tag>Customer reviewed</Tag><Tag>{statusLabel(record)}</Tag><span>{record.investment.institution} · {terms(record)}</span></Space>
+      {record.lifecycleAsOfDate && <p>Investment status as of {record.lifecycleAsOfDate}</p>}
       <p>Current value: {money(record.investment.currentValue, record.currency)} · as of {record.investment.valueAsOfDate}</p>
       <Button onClick={() => { setSelected({ api, record }); }}>View investment record: {record.investment.name}</Button>
-      {canCreate && <Button disabled={saving || Boolean(current?.submission)} onClick={() => {edit(record);}}>Edit investment record: {record.investment.name}</Button>}
+      {canCreate && <Button disabled={saving || Boolean(current?.submission) || Boolean(currentStatus?.submission)} onClick={() => {edit(record);}}>Edit investment record: {record.investment.name}</Button>}
+      {canCreate && <Button disabled={saving || Boolean(current?.submission) || Boolean(currentStatus?.submission)} onClick={() => { openStatus(record); }}>Review investment status: {record.investment.name}</Button>}
       <Button onClick={() => {setHistory({api,record});}}>View investment history: {record.investment.name}</Button>
     </Card>)}
     <Drawer title={current?.original ? "Edit investment record" : "Add investment record"} open={Boolean(current?.open && canCreate)} onClose={() => { if (current) setEditor({ ...current, open: false }); }}
@@ -146,11 +186,28 @@ export default function InvestmentRecordsExperience({ api, facts, canRead, canCr
           <Input id={'investment-' + key} type="date" value={current?.values[key] ?? ''} onChange={(event) => { change(key, event.target.value); }} /></div>)}
       </fieldset>
       <p>Saving records your review and the exact source revision. It does not verify ownership or current market value with the institution.</p>
-      <Button type="primary" loading={saving} disabled={!canCreate || (!current?.submission && !valid)} onClick={() => { void save(); }}>
+      <Button type="primary" loading={saving} disabled={!canCreate || Boolean(currentStatus?.submission) || (!current?.submission && !valid)} onClick={() => { void save(); }}>
         {current?.submission ? 'Retry save confirmation' : current?.original ? 'Save reviewed corrections' : 'Save reviewed investment record'}</Button>
+    </Drawer>
+    <Drawer title="Review investment status" open={Boolean(currentStatus?.open && canCreate)} onClose={() => { if (currentStatus) setStatusEditor({ ...currentStatus, open: false }); }}
+      size={480} closable={!saving} mask={{ closable: !saving }} destroyOnHidden>
+      {currentStatus && <><h2>{currentStatus.record.investment.name}</h2><p>{statusLabel(currentStatus.record)} · Record version {currentStatus.record.revision}</p>
+        <p>Report the lifecycle status you reviewed and its effective date. This records your review; it does not confirm the holding or value with the institution.</p>
+        <p>Recorded value: {money(currentStatus.record.investment.currentValue, currentStatus.record.currency)} as of {currentStatus.record.investment.valueAsOfDate}</p>
+        {statusError && <Alert type="error" title={statusError} />}
+        <label htmlFor="investment-lifecycle-status">Investment status</label><Select id="investment-lifecycle-status" aria-label="Investment status" style={{ width: '100%', marginBlock: 12 }}
+          disabled={saving || Boolean(currentStatus.submission) || Boolean(currentStatus.conflict)} value={currentStatus.status}
+          options={[{ value: 'ACTIVE', label: currentStatus.record.lifecycleStatus === 'CLOSED' ? 'Active — reopen record' : 'Active' }, { value: 'CLOSED', label: 'Closed' }]}
+          onChange={(status: 'ACTIVE' | 'CLOSED') => { setStatusEditor({ ...currentStatus, status }); }} />
+        <label htmlFor="investment-lifecycle-date">Status as of</label><Input id="investment-lifecycle-date" type="date" style={{ marginBlock: 12 }} value={currentStatus.asOfDate}
+          disabled={saving || Boolean(currentStatus.submission) || Boolean(currentStatus.conflict)} onChange={(event) => { setStatusEditor({ ...currentStatus, asOfDate: event.target.value }); }} />
+        {currentStatus.status === 'ACTIVE' && currentStatus.record.lifecycleStatus === 'CLOSED' && <Alert type="info" title="This will reopen the record as customer reported. The earlier closed version stays in history." />}
+        <Button type="primary" loading={saving} disabled={!canCreate || Boolean(currentStatus.conflict) || !currentStatus.submission && (!currentStatus.status || !currentStatus.asOfDate)} onClick={() => { void saveStatus(); }}>
+          {currentStatus.submission ? 'Retry status confirmation' : 'Save reviewed investment status'}</Button></>}
     </Drawer>
     <Drawer title="Investment record details" open={Boolean(visible)} onClose={() => { setSelected(null); }} size={560} destroyOnHidden>
       {visible && <><h2>{visible.investment.name}</h2><Tag>Customer reviewed</Tag><dl>
+        <dt>Customer-reported investment status</dt><dd>{statusLabel(visible)}{visible.lifecycleAsOfDate ? ' as of ' + visible.lifecycleAsOfDate : ''}</dd>
         <dt>Institution</dt><dd>{visible.investment.institution}</dd><dt>Investment type</dt><dd>{terms(visible)}</dd>
         <dt>Currency</dt><dd>{visible.currency}</dd><dt>Purchase value</dt><dd>{money(visible.investment.purchaseValue, visible.currency)}</dd>
         <dt>Current value</dt><dd>{money(visible.investment.currentValue, visible.currency)} as of {visible.investment.valueAsOfDate}</dd>
@@ -192,11 +249,13 @@ function InvestmentHistory({ api, record }: { api: AccessApi; record: ProductInv
     {failure && <Alert type="error" title="Investment history is unavailable." action={<Button onClick={() => { void load(); }}>Retry investment history</Button>} />}
     {page?.items.map((item) => <Card key={item.revision} size="small" style={{ marginBlock: 12 }}>
       <strong>Version {item.revision}</strong><p>{item.investment.name} · {item.investment.institution} · {money(item.investment.currentValue,item.currency)} as of {item.investment.valueAsOfDate}</p>
+      <p>{statusLabel(item)}{item.lifecycleAsOfDate ? ' as of ' + item.lifecycleAsOfDate : ''}</p>
       <p>Reviewed {item.recordedAt}</p><Button onClick={() => { setVersion(item); }}>View version {item.revision}</Button>
     </Card>)}
     {page?.hasMore && page.nextBeforeRevision !== null && <Button disabled={loading} onClick={() => { void load(page.nextBeforeRevision ?? undefined); }}>Earlier versions</Button>}
     {page && <Button disabled={loading} onClick={() => { void load(); }}>Latest versions</Button>}
     {version && <section aria-label={'Saved investment version ' + String(version.revision)}><h3>Saved version {version.revision}</h3><dl>
+      <dt>Customer-reported investment status</dt><dd>{statusLabel(version)}{version.lifecycleAsOfDate ? ' as of ' + version.lifecycleAsOfDate : ''}</dd>
       <dt>Investment name</dt><dd>{version.investment.name}</dd><dt>Institution</dt><dd>{version.investment.institution}</dd><dt>Investment type</dt><dd>{terms(version)}</dd>
       <dt>Currency</dt><dd>{version.currency}</dd><dt>Purchase value</dt><dd>{money(version.investment.purchaseValue,version.currency)}</dd>
       <dt>Current value</dt><dd>{money(version.investment.currentValue,version.currency)} as of {version.investment.valueAsOfDate}</dd>
