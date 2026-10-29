@@ -9,7 +9,7 @@ namespace Monergy.FinancialProfile.Tests;
 
 public sealed class FinancialProfileAuthorityTests
 {
-    private static readonly string[] CompetingAssetTypes = ["PROPERTY", "VEHICLE"];
+    private static readonly string[] CompetingAssetTypes = ["PROPERTY", "VEHICLE", "BANK_ACCOUNT"];
     [Fact]
     public async Task AllGovernedObjectTypesBecomeOneAuthorizedProviderNeutralProfile()
     {

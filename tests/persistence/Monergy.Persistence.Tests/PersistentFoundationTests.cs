@@ -553,6 +553,51 @@ public sealed partial class PersistentFoundationTests
     }
 
     [Fact]
+    public async Task ReviewedBankAccountRecordPersistsExactSourceAndRuntimeHistoryIsAppendOnly()
+    {
+        var configuration=Configuration("FinancialProfile");var suffix=Guid.NewGuid().ToString("N");var customer="customer-bank-"+suffix;
+        var now=DateTimeOffset.UtcNow;
+        var security=new TrustedSecurityContext(new("actor-bank","CUSTOMER",now,"authn-bank"),new("financial-profile","workload-bank"),new("P2_01_TEST",null,"authorization-bank",customer));
+        var request=new ContractRequest<NormalizeSourceFacts>(Vs02ContractNames.NormalizeSourceFacts,ContractGuard.CurrentVersion,
+            "request-"+suffix,"correlation-"+suffix,null,security,"source-"+suffix,
+            new("profile-"+suffix,customer,"processing-"+suffix,[new("source-"+suffix,customer,FinancialObjectTypes.BankAccount,
+                "Reviewed balance",2510.25m,"INR",new(2026,10,1),"line 1",1m,"evidence-"+suffix,"document-"+suffix,
+                "extract/1","validate/1")],"normalize/1",now));
+        await using var financial=new PostgresFinancialProfileRepository(configuration);
+        var normalized=await financial.NormalizeAsync(FinancialNormalizationIdentity.From(request),request,new(now,request.CorrelationId,request.RequestId),default);
+        var source=Assert.Single(normalized.Facts);
+        var input=new CreateBankAccountRecord(suffix,new("Example Bank","Savings","4821",source.FinancialFactId,1));
+        ReviewedBankAccountRecord saved;ReviewedBankAccountRecord corrected;
+        await using(var records=new PostgresBankAccountRecords(configuration))
+        {
+            var owner=new BankAccountRecordsApplication(financial,records,TimeProvider.System);
+            saved=await owner.CreateAsync("T001",customer,"actor-bank",input,default);
+            Assert.Equal(2510.25m,saved.Balance);Assert.Equal("INR",saved.Currency);Assert.Equal(new DateOnly(2026,10,1),saved.BalanceAsOfDate);
+            Assert.Equal(saved,await owner.CreateAsync("T001",customer,"actor-bank",input,default));
+            corrected=await owner.ReviseAsync("T001",customer,"actor-bank",saved.BankAccountRecordId,
+                new(Guid.NewGuid().ToString("N"),1,saved.Account with{BankName="Updated Bank",AccountNumberLast4="7314"}),default);
+        }
+        await using(var records=new PostgresBankAccountRecords(configuration))
+        {
+            Assert.Equal(corrected,await records.ReadAsync("T001",customer,saved.BankAccountRecordId,default));
+            Assert.Equal(saved,await records.ReadAsync("T001",customer,saved.BankAccountRecordId,default,1));
+            Assert.Null(await records.ReadAsync("T002",customer,saved.BankAccountRecordId,default));
+            Assert.Equal([corrected,saved],(await records.HistoryAsync("T001",customer,saved.BankAccountRecordId,null,default)).Items);
+        }
+        await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
+        foreach(var statement in new[]{
+            "UPDATE financial_profile.bank_account_records SET payload=payload WHERE bank_account_record_id=@Id;",
+            "DELETE FROM financial_profile.bank_account_record_revisions WHERE bank_account_record_id=@Id;",
+            "TRUNCATE financial_profile.bank_account_record_revisions;"})
+        {
+            var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync(statement,new{Id=saved.BankAccountRecordId}));
+            Assert.Equal("42501",denied.SqlState);
+        }
+        Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.bank_account_records WHERE tenant_id='T001' AND customer_id=@Customer;",new{Customer=customer}));
+        Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.bank_account_record_revisions WHERE tenant_id='T001' AND customer_id=@Customer;",new{Customer=customer}));
+    }
+
+    [Fact]
     public async Task ReviewedPropertyRecordRetainsExactSourceAcrossRestartAndRuntimeCannotRewriteIt()
     {
         var configuration=Configuration("FinancialProfile"); var suffix=Guid.NewGuid().ToString("N"); var customer="customer-property-"+suffix;

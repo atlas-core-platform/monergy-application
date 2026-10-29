@@ -2587,7 +2587,7 @@ it.each(['png', 'jpeg', 'pdf'])('reviews the stated vehicle purchase figure from
     { operationId: 'd'.repeat(32), sourceFactIds: ['vehicle-purchase'] }, undefined);
 });
 
-it.each(['text', 'csv', 'xlsx'].flatMap((format) => ['PROPERTY', 'VEHICLE'].map((assetType) => ({ format, assetType }))))('requires explicit $assetType classification for a generic $format asset', async ({ format, assetType }) => {
+it.each(['text', 'csv', 'xlsx'].flatMap((format) => ['PROPERTY', 'VEHICLE', 'BANK_ACCOUNT'].map((assetType) => ({ format, assetType }))))('requires explicit $assetType classification for a generic $format asset', async ({ format, assetType }) => {
   const api = new AccessApi(session);
   const item = { documentId: 'vehicle-document', documentVersionId: 'vehicle-version', evidenceId: 'vehicle-evidence', version: 1,
     sourceName: 'Customer upload', originalFileName: 'asset-source.' + (format === 'text' ? 'txt' : format),
@@ -2628,7 +2628,7 @@ it.each(['text', 'csv', 'xlsx'].flatMap((format) => ['PROPERTY', 'VEHICLE'].map(
   await user.click(within(review).getByRole('checkbox', { name: `Add ${label} to financial information` }));
   expect(add).toBeDisabled();
   await user.click(within(review).getByRole('combobox', { name: `Asset type for ${label}` }));
-  await user.click(screen.getByText(assetType === 'PROPERTY' ? 'Property' : 'Vehicle', { selector: '.ant-select-item-option-content' }));
+  await user.click(screen.getByText(assetType === 'PROPERTY' ? 'Property' : assetType === 'VEHICLE' ? 'Vehicle' : 'Bank account', { selector: '.ant-select-item-option-content' }));
   expect(add).toBeEnabled();
   expect(request.mock.calls.filter(([path]) => path.includes('/from-processing/'))).toHaveLength(0);
   await user.click(add);
@@ -2638,7 +2638,7 @@ it.each(['text', 'csv', 'xlsx'].flatMap((format) => ['PROPERTY', 'VEHICLE'].map(
     { operationId: 'd'.repeat(32), sourceFactIds: ['vehicle-purchase'], assetTypes: [{ sourceFactId: 'vehicle-purchase', assetType }] }, undefined);
 });
 
-it.each(['PROPERTY', 'VEHICLE'])('requires %s classification when resuming a generic asset review', async (assetType) => {
+it.each(['PROPERTY', 'VEHICLE', 'BANK_ACCOUNT'])('requires %s classification when resuming a generic asset review', async (assetType) => {
   const api = new AccessApi(session);
   const document = {
     documentId: 'document-resume',
@@ -2761,7 +2761,7 @@ it.each(['PROPERTY', 'VEHICLE'])('requires %s classification when resuming a gen
   const add = within(drawer).getByRole('button', { name: 'Add selected information' });
   expect(add).toBeDisabled();
   await user.click(within(drawer).getByRole('combobox', { name: 'Asset type for Stated asset figure' }));
-  await user.click(screen.getByText(assetType === 'PROPERTY' ? 'Property' : 'Vehicle', { selector: '.ant-select-item-option-content' }));
+  await user.click(screen.getByText(assetType === 'PROPERTY' ? 'Property' : assetType === 'VEHICLE' ? 'Vehicle' : 'Bank account', { selector: '.ant-select-item-option-content' }));
   expect(request.mock.calls.filter(([path]) => path.includes('/from-processing/'))).toHaveLength(0);
   await user.click(add);
 

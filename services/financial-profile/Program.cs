@@ -30,7 +30,7 @@ app.MapHealthChecks("/health/ready");
 if (referenceAdapters || physicalPersistence)
 {
     app.MapFinancialProfileContracts();
-    if (TenantBoundaryOptions.Selected(builder.Configuration)) { app.MapLoanRecords(); app.MapInvestmentRecords(); app.MapPropertyRecords(); app.MapVehicleRecords(); app.MapInsuranceRecords();
+    if (TenantBoundaryOptions.Selected(builder.Configuration)) { app.MapLoanRecords(); app.MapInvestmentRecords(); app.MapBankAccountRecords(); app.MapPropertyRecords(); app.MapVehicleRecords(); app.MapInsuranceRecords();
 app.MapTaxRecords();
 app.MapFinancialGoals();
 app.MapNetWorthPositions(); app.MapMonthlyCashflowPositions(); app.MapGoalContributions(); app.MapAssetSnapshot(); app.MapIncomeRecords(); app.MapExpenseRecords(); app.MapLiabilityRecords(); }

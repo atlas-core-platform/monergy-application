@@ -22,10 +22,13 @@ public sealed class ReviewedAssetSourceTests
     [Theory]
     [InlineData("text", "PROPERTY")]
     [InlineData("text", "VEHICLE")]
+    [InlineData("text", "BANK_ACCOUNT")]
     [InlineData("csv", "PROPERTY")]
     [InlineData("csv", "VEHICLE")]
+    [InlineData("csv", "BANK_ACCOUNT")]
     [InlineData("xlsx", "PROPERTY")]
     [InlineData("xlsx", "VEHICLE")]
+    [InlineData("xlsx", "BANK_ACCOUNT")]
     public async Task ExplicitAssetTypeSurvivesOwnerHttpAdoptionReplayConflictAndReadback(string format, string ownerType)
     {
         var original = Assert.Single(await new StructuredDocumentExtractor().ExtractAsync(FinancialSourceCategoryTests.Source(format,"ASSET"),"source-run",default));
@@ -108,6 +111,14 @@ public sealed class ReviewedAssetSourceTests
         Assert.Equal("FINANCIAL_REVIEW_ASSET_SOURCE_UNSUPPORTED",error.Code);
         var mapped=FinancialSourceFactBoundary.ReviewedTypes([("income","INCOME",null),("insurance","INSURANCE",null),("tax","TAX",null),("property","ASSET","property-sale-deed-png-ocr/1.0.0"),("vehicle","ASSET","vehicle-purchase-invoice-png-ocr/1.0.0")],null);
         Assert.Equal("INCOME",mapped["income"]); Assert.Equal("INSURANCE_POLICY",mapped["insurance"]); Assert.Equal("TAX_RECORD",mapped["tax"]); Assert.Equal("PROPERTY",mapped["property"]);Assert.Equal("VEHICLE",mapped["vehicle"]);
+    }
+    [Fact]
+    public void DirectCanonicalBankAccountRemainsCanonicalWithoutAReviewChoice()
+    {
+        var mapped=FinancialSourceFactBoundary.ReviewedTypes([("account","BANK_ACCOUNT","bank-statement/1.0.0")],null);
+        Assert.Equal("BANK_ACCOUNT",mapped["account"]);
+        Assert.Equal("ASSET",FinancialSourceFactBoundary.ForCustomer(mapped["account"]));
+        Assert.Equal("BANK_ACCOUNT",FinancialSourceFactBoundary.CustomerAssetType(mapped["account"]));
     }
     private static async Task<ContractResult<TData>> Send<TPayload,TData>(HttpClient client,string cid,ContractRequest<TPayload> request)
     {

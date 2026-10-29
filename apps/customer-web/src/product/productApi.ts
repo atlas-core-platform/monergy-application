@@ -153,13 +153,13 @@ export interface ProductFinancialSource {
 
 export interface ProductAssetTypeSelection {
   sourceFactId: string;
-  assetType: 'PROPERTY' | 'VEHICLE';
+  assetType: 'PROPERTY' | 'VEHICLE' | 'BANK_ACCOUNT';
 }
 
 export interface ProductFinancialFact {
   financialFactId: string;
   factType: string;
-  assetType?: 'PROPERTY' | 'VEHICLE';
+  assetType?: 'PROPERTY' | 'VEHICLE' | 'BANK_ACCOUNT';
   label: string;
   value: number;
   currency: string;
@@ -477,6 +477,26 @@ export const reviseInvestmentRecord = (api: AccessApi, id: string, input: { oper
   api.product<ProductInvestmentRecord>('v1/investment-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
 export const getInvestmentRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductInvestmentRecordHistory>('v1/investment-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
+export interface ProductBankAccountDraft {
+  bankName: string; accountType: string; accountNumberLast4: string;
+  sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductBankAccountRecord {
+  bankAccountRecordId: string; operationId: string; customerId: string; account: ProductBankAccountDraft;
+  balance: number; currency: string; balanceAsOfDate: string; sourceProvenanceId: string;
+  documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
+}
+export interface ProductBankAccountRecordList { items: ProductBankAccountRecord[]; hasMore: boolean; dataDurability: string }
+export interface ProductBankAccountRecordHistory { items: ProductBankAccountRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const getBankAccountRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) =>
+  api.product<ProductBankAccountRecordList>('v1/bank-account-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
+export const createBankAccountRecord = (api: AccessApi, input: { operationId: string; account: ProductBankAccountDraft }) =>
+  api.product<ProductBankAccountRecord>('v1/bank-account-records', 'POST', input);
+export const reviseBankAccountRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; account: ProductBankAccountDraft }) =>
+  api.product<ProductBankAccountRecord>('v1/bank-account-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getBankAccountRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductBankAccountRecordHistory>('v1/bank-account-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
 
 
 export interface ProductIncomeDraft {

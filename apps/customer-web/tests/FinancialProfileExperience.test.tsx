@@ -684,6 +684,23 @@ it('opens vehicle records under Assets with only explicitly classified vehicle s
   expect(screen.queryByText(/Property source amount ·/,{selector:'.ant-select-item-option-content'})).not.toBeInTheDocument();
 });
 
+it('opens reviewed bank accounts with only explicitly classified bank-account sources',async()=>{
+  window.history.replaceState(null,'','/finances?type=BANK_ACCOUNT');const api=new AccessApi(session);
+  const bank={financialFactId:'ff-bank',factType:'ASSET',assetType:'BANK_ACCOUNT',label:'Reviewed bank balance',value:2510.25,currency:'INR',effectiveDate:'2026-10-01',revision:1,
+    source:{sourceName:'statement.txt',documentVersion:'document-bank',recordedAt:'2026-10-19T00:00:00Z',technicalSourceFactId:'source-bank',technicalProvenanceId:'provenance-bank'}};
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/bank-account-records'
+    ?Promise.resolve({items:[],hasMore:false,dataDurability:'Temporary data'})
+    :Promise.resolve({financialProfileId:'profile',revision:1,updatedAt:'2026-10-19T00:00:00Z',dataDurability:'Temporary data',facts:[bank,{...bank,financialFactId:'ff-property',assetType:'PROPERTY',label:'Property amount'}]}));
+  mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
+  expect(await screen.findByRole('heading',{name:'Bank accounts'})).toBeVisible();
+  expect(screen.getByRole('button',{name:'Add bank account'})).toBeEnabled();
+  await userEvent.setup().click(screen.getByRole('button',{name:'Add bank account'}));const drawer=screen.getByRole('dialog',{name:'Add bank account'});
+  await userEvent.setup().click(within(drawer).getByRole('combobox',{name:'Reviewed bank account source'}));
+  expect((await screen.findAllByText(/Reviewed bank balance ·/,{selector:'.ant-select-item-option-content'})).length).toBeGreaterThan(0);
+  expect(screen.queryByText(/Property amount ·/,{selector:'.ant-select-item-option-content'})).not.toBeInTheDocument();
+  expect(request.mock.calls.some(([path])=>path==='v1/bank-account-records')).toBe(true);
+});
+
 
 it('opens customer-defined goals without documents or source-profile access',async()=>{
   window.history.replaceState(null,'','/finances?type=GOAL');const api=new AccessApi(session);
