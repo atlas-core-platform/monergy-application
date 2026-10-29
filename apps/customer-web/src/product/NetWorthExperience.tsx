@@ -5,6 +5,7 @@ import { AccessApiError } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import { getAssetSnapshot, getLiabilitySnapshot } from './productApi';
 import LiquidityRatioPanel from './LiquidityRatioPanel';
+import AssetAllocationPanel from './AssetAllocationPanel';
 import { calculateNetWorth, exactMoney, getNetWorthPositions, getNetWorthResult, getNetWorthResults, netWorthIssues, saveNetWorthPosition, validNetWorthDraft, validNetWorthPage, validNetWorthPosition, validNetWorthResult } from './netWorthApi';
 import type { NetWorthDraft, NetWorthLine, NetWorthPage, NetWorthPosition, NetWorthResult } from './netWorthApi';
 const uuid = () => crypto.randomUUID().replaceAll('-', '');
@@ -148,7 +149,7 @@ function NetWorthDetails({ api, customerId, result }: { api: AccessApi; customer
   return <section aria-label="Saved net worth calculation"><h2>{result.position.position.asOfDate} · {result.position.position.currency}</h2><Tag>Customer-reviewed inputs</Tag>
     {result.state === 'CALCULATED' && result.totalAssets !== null && result.totalLiabilities !== null && result.netWorth !== null ? <dl><dt>Total assets</dt><dd>{exactMoney(result.totalAssets, result.position.position.currency)}</dd><dt>Total liabilities</dt><dd>{exactMoney(result.totalLiabilities, result.position.position.currency)}</dd><dt>Net worth</dt><dd>{exactMoney(result.netWorth, result.position.position.currency)}</dd></dl> : <Alert type="info" title="More information needed before net worth can be calculated" description={<ul>{result.issues.map(issue => <li key={issue}>{netWorthIssues[issue]}</li>)}</ul>} />}
     <p>Net worth = total assets − total liabilities. This saved result uses the exact reviewed inventory below. Later changes require a new review and calculation.</p><p>Rule version {result.ruleVersion} · Calculated {result.recordedAt}</p><PositionDetails position={result.position} />
-    <details><summary>Calculation details</summary><p>{result.numericSemantics}</p><p>Rule: {result.ruleId} · Definition: {result.definitionHash}</p><p>Calculation: {result.calculationId} · Recorded by: {result.recordedBy}</p></details><LiquidityRatioPanel api={api} customerId={customerId} source={result} />
+    <details><summary>Calculation details</summary><p>{result.numericSemantics}</p><p>Rule: {result.ruleId} · Definition: {result.definitionHash}</p><p>Calculation: {result.calculationId} · Recorded by: {result.recordedBy}</p></details><AssetAllocationPanel api={api} customerId={customerId} source={result} /><LiquidityRatioPanel api={api} customerId={customerId} source={result} />
   </section>;
 }
 function PositionDetails({ position }: { position: NetWorthPosition }) {
