@@ -83,6 +83,10 @@ public static class FinancialRulesRegistration
         if(physical)services.AddSingleton<INetWorthCalculationRepository,PostgresNetWorthCalculations>();
         else services.AddSingleton<INetWorthCalculationRepository,InMemoryNetWorthCalculations>();
         services.AddSingleton<NetWorthCalculationsApplication>();
+        services.AddSingleton(new AssetAllocationRule(configuration));
+        if(physical)services.AddSingleton<IAssetAllocationCalculationRepository,PostgresAssetAllocationCalculations>();
+        else services.AddSingleton<IAssetAllocationCalculationRepository,InMemoryAssetAllocationCalculations>();
+        services.AddSingleton<AssetAllocationCalculationsApplication>();
     }
     private static void AddLiquidityRatio(IServiceCollection services,IConfiguration configuration,bool physical)
     {

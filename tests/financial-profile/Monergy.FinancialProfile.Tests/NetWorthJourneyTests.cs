@@ -91,6 +91,21 @@ public sealed class NetWorthJourneyTests
         Assert.Throws<InvalidOperationException>(()=>new NetWorthRule(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Monergy:NetWorth:Formula","arbitrary"}}).Build()));Assert.Equal(64,NetWorthRule.DefinitionHash.Length);
     }
     [Fact]
+    public async Task AssetAllocationUsesOnlyExactCalculatedSourceAndCanonicalAssetKinds()
+    {
+        var input=Input();input=input with {Position=input.Position with {Lines=new[]{Line(value:"1000.00") with {Kind="CASH"},Line(value:"3000.00") with {Kind="PROPERTY"},Line("LIABILITY","500.00")}}};
+        var position=await Positions().CreateAsync("T001",Customer,"actor-001",input,default);var net=Rule().Evaluate(position);var source=new NetWorthCalculation("networth-source",Guid.NewGuid().ToString("N"),Customer,position,NetWorthDefinition.Id,NetWorthDefinition.Version,NetWorthDefinition.DefinitionHash,NetWorthDefinition.Semantics,net.State,net.TotalAssets,net.TotalLiabilities,net.NetWorth,net.Issues,"actor-001",DateTimeOffset.UtcNow);
+        var result=new AssetAllocationRule(new ConfigurationBuilder().Build()).Evaluate(source);Assert.Equal("CALCULATED",result.State);Assert.Equal("4000.00",result.TotalAssets);
+        Assert.Collection(result.Categories,x=>{Assert.Equal("CASH",x.Category);Assert.Equal("1000.00",x.Amount);Assert.Equal("25.00",x.Percentage);},x=>{Assert.Equal("PROPERTY",x.Category);Assert.Equal("3000.00",x.Amount);Assert.Equal("75.00",x.Percentage);});
+    }
+    [Fact]
+    public async Task AssetAllocationFailsClosedForIncompleteOrZeroAssetSourceAndRejectsFormulaDrift()
+    {
+        var input=Input();input=input with {Position=input.Position with {Lines=new[]{Line(value:"0.00")}}};var position=await Positions().CreateAsync("T001",Customer,"actor-001",input,default);var net=Rule().Evaluate(position);var source=new NetWorthCalculation("networth-zero",Guid.NewGuid().ToString("N"),Customer,position,NetWorthDefinition.Id,NetWorthDefinition.Version,NetWorthDefinition.DefinitionHash,NetWorthDefinition.Semantics,net.State,net.TotalAssets,net.TotalLiabilities,net.NetWorth,net.Issues,"actor-001",DateTimeOffset.UtcNow);
+        var result=new AssetAllocationRule(new ConfigurationBuilder().Build()).Evaluate(source);Assert.Equal("INSUFFICIENT_DATA",result.State);Assert.Contains("TOTAL_ASSETS_ZERO",result.Issues);Assert.Empty(result.Categories);
+        Assert.Throws<InvalidOperationException>(()=>new AssetAllocationRule(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string,string?>{{"Monergy:AssetAllocation:Formula","arbitrary"}}).Build()));
+    }
+    [Fact]
     public async Task ActualThreeOwnerHttpJourneySavesCalculatesReopensExplainsAndUpdatesWithoutRewritingHistory()
     {
         await using var h=await Harness.Create();using var client=h.Client();var input=Input();var position=await Save(client,input);var request=new CalculateNetWorth(Guid.NewGuid().ToString("N"),position.PositionId);

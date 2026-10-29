@@ -101,6 +101,31 @@ public static class ProductNetWorthEndpoints
             if(!Page(page.Items,page.HasMore,page.NextBeforeId,x=>LiquidityRatioData.Calculation(x,customer.CustomerId),x=>x.CalculationId)||page.Items.Any(x=>x.CalculationId==cursor))throw Invalid();
             await Confirm(http,owners,access,session,customer,before,calculate:true,documents:page.Items.Any(x=>x.SourceNetWorth.Position.Lines.Any(y=>y.Source is not null)||x.SourceMonthlyCashflow.Position.Lines.Any(y=>y.Source is not null))).ConfigureAwait(false);return page;
         });
+        group.MapPost("/asset-allocations",async(HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductNetWorthClient client)=>
+        {
+            CustomerReviewHttp.NoQuery(http.Request);var (session,customer,before)=await Resolve(http,owners,access,calculate:true).ConfigureAwait(false);
+            var input=await CustomerReviewHttp.ReadAsync<CalculateAssetAllocation>(http).ConfigureAwait(false);if(!AssetAllocationData.Request(input))throw new TenantBoundaryException("ASSET_ALLOCATION_INVALID",400);
+            var source=await client.Calculation(session,customer.CustomerId,input.NetWorthCalculationId,http.RequestAborted).ConfigureAwait(false);
+            if(!NetWorthData.Calculation(source,customer.CustomerId)||source.CalculationId!=input.NetWorthCalculationId)throw Invalid();
+            var receipt=await client.CalculateAssetAllocation(session,customer.CustomerId,input,http.RequestAborted).ConfigureAwait(false);
+            if(!AssetAllocationData.Calculation(receipt,customer.CustomerId)||receipt.OperationId!=input.OperationId||receipt.RecordedBy!=session.ActorId||!NetWorthData.Same(receipt.SourceNetWorth,source))throw Invalid();
+            var saved=await client.AssetAllocation(session,customer.CustomerId,receipt.CalculationId,http.RequestAborted).ConfigureAwait(false);if(!NetWorthData.Same(saved,receipt))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:source.Position.Lines.Any(x=>x.Source is not null)).ConfigureAwait(false);return saved;
+        });
+        group.MapGet("/asset-allocations/{calculationId}",async(string calculationId,HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductNetWorthClient client)=>
+        {
+            CustomerReviewHttp.NoQuery(http.Request);Identifier(calculationId);var (session,customer,before)=await Resolve(http,owners,access,calculate:true).ConfigureAwait(false);
+            var value=await client.AssetAllocation(session,customer.CustomerId,calculationId,http.RequestAborted).ConfigureAwait(false);if(!AssetAllocationData.Calculation(value,customer.CustomerId)||value.CalculationId!=calculationId)throw Invalid();
+            var source=await client.Calculation(session,customer.CustomerId,value.SourceNetWorth.CalculationId,http.RequestAborted).ConfigureAwait(false);if(!NetWorthData.Same(source,value.SourceNetWorth))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:source.Position.Lines.Any(x=>x.Source is not null)).ConfigureAwait(false);return value;
+        });
+        group.MapGet("/asset-allocations",async(HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductNetWorthClient client)=>
+        {
+            var (session,customer,before)=await Resolve(http,owners,access,calculate:true).ConfigureAwait(false);var cursor=CustomerReviewHttp.Cursor(http.Request);
+            var page=await client.AssetAllocations(session,customer.CustomerId,cursor,http.RequestAborted).ConfigureAwait(false);
+            if(!Page(page.Items,page.HasMore,page.NextBeforeId,x=>AssetAllocationData.Calculation(x,customer.CustomerId),x=>x.CalculationId)||page.Items.Any(x=>x.CalculationId==cursor))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:page.Items.Any(x=>x.SourceNetWorth.Position.Lines.Any(y=>y.Source is not null))).ConfigureAwait(false);return page;
+        });
     }
     public static bool Bound(NetWorthCalculation? value,string customer)=>NetWorthData.Calculation(value,customer);
     private static bool Page<T>(IReadOnlyList<T>? items,bool more,string? next,Func<T,bool> bound,Func<T,string> id)=>items is not null&&items.Count<=50&&items.All(x=>x is not null&&bound(x))&&items.Select(id).Distinct(StringComparer.Ordinal).Count()==items.Count&&(more?items.Count==50&&next==id(items[^1]):next is null);
@@ -136,6 +161,9 @@ public sealed class ProductNetWorthClient:IDisposable
     public Task<LiquidityRatioCalculation> CalculateLiquidityRatio(CustomerOwnerSession s,string c,CalculateLiquidityRatio input,CancellationToken ct)=>Send<LiquidityRatioCalculation>(rules,s,c,"liquidity-ratios",input,ct);
     public Task<LiquidityRatioCalculation> LiquidityRatio(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>Send<LiquidityRatioCalculation>(rules,s,c,"liquidity-ratios/"+Uri.EscapeDataString(id),null,ct);
     public Task<LiquidityRatioCalculationPage> LiquidityRatios(CustomerOwnerSession s,string c,string? cursor,CancellationToken ct)=>Send<LiquidityRatioCalculationPage>(rules,s,c,"liquidity-ratios"+Cursor(cursor),null,ct);
+    public Task<AssetAllocationCalculation> CalculateAssetAllocation(CustomerOwnerSession s,string c,CalculateAssetAllocation input,CancellationToken ct)=>Send<AssetAllocationCalculation>(rules,s,c,"asset-allocations",input,ct);
+    public Task<AssetAllocationCalculation> AssetAllocation(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>Send<AssetAllocationCalculation>(rules,s,c,"asset-allocations/"+Uri.EscapeDataString(id),null,ct);
+    public Task<AssetAllocationCalculationPage> AssetAllocations(CustomerOwnerSession s,string c,string? cursor,CancellationToken ct)=>Send<AssetAllocationCalculationPage>(rules,s,c,"asset-allocations"+Cursor(cursor),null,ct);
     private static string Cursor(string? value)=>value is null?"":"?beforeId="+Uri.EscapeDataString(value);
     private Task<T> Send<T>(Uri root,CustomerOwnerSession session,string customer,string suffix,object? input,CancellationToken ct)=>SendAt<T>(root,session,customer,"net-worth",suffix,input,ct);
     private async Task<T> SendAt<T>(Uri root,CustomerOwnerSession session,string customer,string area,string suffix,object? input,CancellationToken ct)
