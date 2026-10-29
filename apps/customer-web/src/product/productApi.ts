@@ -420,6 +420,20 @@ export function getBasicFinancialReportJob(
   );
 }
 
+export function cancelBasicFinancialReportJob(
+  api: AccessApi,
+  jobId: string,
+  operationId: string,
+  signal?: AbortSignal,
+): Promise<ReportGenerationJob> {
+  return api.product<ReportGenerationJob>(
+    `v1/reports/jobs/${encodeURIComponent(jobId)}/cancellations`,
+    'POST',
+    { operationId },
+    signal,
+  );
+}
+
 const wait = (milliseconds: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     if (signal?.aborted) {

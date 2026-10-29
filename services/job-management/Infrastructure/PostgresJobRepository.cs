@@ -215,15 +215,36 @@ public sealed partial class PostgresJobRepository : IJobRepository, IAsyncDispos
             JobState.Failed, failureCode, retryable, nextAttemptAt, null, now, JobEvent.Failed,
             cancellationToken);
 
-    public async Task<DurableJobRecord> CancelAsync(string jobId, string customerId, string reason,
-        DateTimeOffset now, CancellationToken cancellationToken)
+    public async Task<DurableJobRecord> CancelAsync(JobCancellation cancellation,
+        CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
-        var current = await LockedAsync(connection, transaction, jobId, cancellationToken);
+        var key = string.Join('|', cancellation.ContractName, cancellation.ContractVersion,
+            cancellation.CustomerId, cancellation.IdempotencyKey);
+        await connection.ExecuteAsync(new CommandDefinition(
+            "SELECT pg_advisory_xact_lock(hashtextextended(@key, 0));", new { key }, transaction,
+            cancellationToken: cancellationToken));
+        var prior = await connection.QuerySingleOrDefaultAsync<IdempotencyRow>(new CommandDefinition("""
+            SELECT job_id AS JobId, payload_fingerprint AS PayloadFingerprint
+            FROM job_management.idempotency_operations
+            WHERE contract_name=@ContractName AND contract_version=@ContractVersion
+              AND customer_id=@CustomerId AND idempotency_key=@IdempotencyKey;
+            """, cancellation, transaction, cancellationToken: cancellationToken));
+        if (prior is not null)
+        {
+            if (!string.Equals(prior.PayloadFingerprint, cancellation.PayloadFingerprint, StringComparison.Ordinal) ||
+                !string.Equals(prior.JobId, cancellation.JobId, StringComparison.Ordinal))
+                throw new InvalidOperationException("Idempotency key conflict.");
+            var replay = await FindAsync(connection, transaction, prior.JobId, cancellationToken)
+                ?? throw new InvalidOperationException("Committed cancellation operation is incomplete.");
+            await transaction.CommitAsync(cancellationToken);
+            return replay;
+        }
+        var current = await LockedAsync(connection, transaction, cancellation.JobId, cancellationToken);
         var pendingRetry = current.State == JobState.Failed && current.Retryable &&
             !current.ReconciliationRequired && current.LeaseToken is null;
-        if (current.CustomerId != customerId || current.State is JobState.Completed or JobState.Cancelled ||
+        if (current.CustomerId != cancellation.CustomerId || current.State is JobState.Completed or JobState.Cancelled ||
             (current.State == JobState.Failed && !pendingRetry))
             throw new InvalidOperationException("Invalid cancellation state.");
         var state = current.State == JobState.Scheduled || pendingRetry
@@ -234,10 +255,25 @@ public sealed partial class PostgresJobRepository : IJobRepository, IAsyncDispos
                 retryable=false, next_attempt_at=NULL,
                 cancellation_requested_at=@now, terminal_at=CASE WHEN @State='Cancelled' THEN @now ELSE NULL END,
                 updated_at=@now WHERE job_id=@jobId;
-            """, new { State = state.ToString(), reason, now, jobId }, transaction,
+            """, new
+            {
+                State = state.ToString(),
+                reason = cancellation.Reason,
+                now = cancellation.RequestedAt,
+                jobId = cancellation.JobId,
+            }, transaction,
             cancellationToken: cancellationToken));
+        await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO job_management.idempotency_operations
+                (contract_name, contract_version, customer_id, idempotency_key,
+                 payload_fingerprint, job_id, created_at)
+            VALUES (@ContractName, @ContractVersion, @CustomerId, @IdempotencyKey,
+                    @PayloadFingerprint, @JobId, @RequestedAt);
+            """, cancellation, transaction, cancellationToken: cancellationToken));
+        var updated = await FindAsync(connection, transaction, cancellation.JobId, cancellationToken)
+            ?? throw new InvalidOperationException("Cancelled job is unavailable.");
         await transaction.CommitAsync(cancellationToken);
-        return (await GetAsync(jobId, cancellationToken))!;
+        return updated;
     }
 
     public async Task<DurableJobRecord> ReplayAsync(string jobId, string customerId, DateTimeOffset now,

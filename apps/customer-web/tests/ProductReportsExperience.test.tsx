@@ -239,6 +239,42 @@ it('shows the governed background lifecycle and prevents duplicate generation wh
   expect(await screen.findByText('Employment income')).toBeVisible();
 });
 
+it('cancels a scheduled report idempotently and prevents duplicate cancellation clicks', async () => {
+  const api = new AccessApi(session);
+  let scheduled: Record<string, unknown> = {};
+  let finishCancellation: (value: Record<string, unknown>) => void = () => {
+    throw new Error('Cancellation request was not started');
+  };
+  const product = vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
+    if (path === 'v1/reports' && method === 'POST') {
+      const operationId = (body as { operationId: string }).operationId;
+      scheduled = { jobId: `job-report-${operationId}`, reportId: report.reportId,
+        state: 'Scheduled', attempt: 0, failureCode: null, retryable: false,
+        updatedAt: '2026-10-29T09:00:00Z' };
+      return Promise.resolve(scheduled);
+    }
+    if (path.endsWith('/cancellations') && method === 'POST')
+      return new Promise<Record<string, unknown>>((resolve) => { finishCancellation = resolve; });
+    if (path.startsWith('v1/reports/jobs/') && method === 'GET')
+      return new Promise(() => undefined);
+    return Promise.reject(new Error(`Unexpected product path ${method ?? 'GET'} ${path}`));
+  });
+  mount(api);
+  const user = userEvent.setup();
+
+  await user.click(screen.getByRole('button', { name: 'Generate basic summary' }));
+  const cancel = await screen.findByRole('button', { name: 'Cancel report request' });
+  await user.click(cancel);
+  await user.click(cancel);
+  const calls = product.mock.calls.filter(([path, method]) =>
+    path.endsWith('/cancellations') && method === 'POST');
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.[2]).toEqual({ operationId: expect.stringMatching(/^[0-9a-f]{32}$/) });
+  act(() => { finishCancellation({ ...scheduled, state: 'Cancelled' }); });
+  expect(await screen.findByText('Your financial summary request was cancelled.')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Cancel report request' })).not.toBeInTheDocument();
+});
+
 it('generates a Phase 2 review from exact matching receipt identifiers without posting figures', async () => {
   const phase2Report = {
     ...report,
