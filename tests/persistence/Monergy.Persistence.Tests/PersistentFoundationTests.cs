@@ -598,6 +598,51 @@ public sealed partial class PersistentFoundationTests
     }
 
     [Fact]
+    public async Task ReviewedCreditCardRecordPersistsExactSourceAndRuntimeHistoryIsAppendOnly()
+    {
+        var configuration=Configuration("FinancialProfile");var suffix=Guid.NewGuid().ToString("N");var customer="customer-card-"+suffix;
+        var now=DateTimeOffset.UtcNow;
+        var security=new TrustedSecurityContext(new("actor-card","CUSTOMER",now,"authn-card"),new("financial-profile","workload-card"),new("P2_02_TEST",null,"authorization-card",customer));
+        var request=new ContractRequest<NormalizeSourceFacts>(Vs02ContractNames.NormalizeSourceFacts,ContractGuard.CurrentVersion,
+            "request-"+suffix,"correlation-"+suffix,null,security,"source-"+suffix,
+            new("profile-"+suffix,customer,"processing-"+suffix,[new("source-"+suffix,customer,FinancialObjectTypes.Loan,
+                "Reviewed card balance",910.25m,"INR",new(2026,10,1),"line 1",1m,"evidence-"+suffix,"document-"+suffix,
+                "extract/1","validate/1")],"normalize/1",now));
+        await using var financial=new PostgresFinancialProfileRepository(configuration);
+        var normalized=await financial.NormalizeAsync(FinancialNormalizationIdentity.From(request),request,new(now,request.CorrelationId,request.RequestId),default);
+        var source=Assert.Single(normalized.Facts);
+        var input=new CreateCreditCardRecord(suffix,new("Example Issuer","Rewards","4821",source.FinancialFactId,1));
+        ReviewedCreditCardRecord saved;ReviewedCreditCardRecord corrected;
+        await using(var records=new PostgresCreditCardRecords(configuration))
+        {
+            var owner=new CreditCardRecordsApplication(financial,records,TimeProvider.System);
+            saved=await owner.CreateAsync("T001",customer,"actor-card",input,default);
+            Assert.Equal(910.25m,saved.Balance);Assert.Equal("INR",saved.Currency);Assert.Equal(new DateOnly(2026,10,1),saved.BalanceAsOfDate);
+            Assert.Equal(saved,await owner.CreateAsync("T001",customer,"actor-card",input,default));
+            corrected=await owner.ReviseAsync("T001",customer,"actor-card",saved.CreditCardRecordId,
+                new(Guid.NewGuid().ToString("N"),1,saved.Card with{IssuerName="Updated Issuer",CardNumberLast4="7314"}),default);
+        }
+        await using(var records=new PostgresCreditCardRecords(configuration))
+        {
+            Assert.Equal(corrected,await records.ReadAsync("T001",customer,saved.CreditCardRecordId,default));
+            Assert.Equal(saved,await records.ReadAsync("T001",customer,saved.CreditCardRecordId,default,1));
+            Assert.Null(await records.ReadAsync("T002",customer,saved.CreditCardRecordId,default));
+            Assert.Equal([corrected,saved],(await records.HistoryAsync("T001",customer,saved.CreditCardRecordId,null,default)).Items);
+        }
+        await using var sql=new NpgsqlConnection(Runtime("financial-profile"));
+        foreach(var statement in new[]{
+            "UPDATE financial_profile.credit_card_records SET payload=payload WHERE credit_card_record_id=@Id;",
+            "DELETE FROM financial_profile.credit_card_record_revisions WHERE credit_card_record_id=@Id;",
+            "TRUNCATE financial_profile.credit_card_record_revisions;"})
+        {
+            var denied=await Assert.ThrowsAsync<PostgresException>(()=>sql.ExecuteAsync(statement,new{Id=saved.CreditCardRecordId}));
+            Assert.Equal("42501",denied.SqlState);
+        }
+        Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.credit_card_records WHERE tenant_id='T001' AND customer_id=@Customer;",new{Customer=customer}));
+        Assert.Equal(1,await sql.ExecuteScalarAsync<int>("SELECT count(*) FROM financial_profile.credit_card_record_revisions WHERE tenant_id='T001' AND customer_id=@Customer;",new{Customer=customer}));
+    }
+
+    [Fact]
     public async Task ReviewedPropertyRecordRetainsExactSourceAcrossRestartAndRuntimeCannotRewriteIt()
     {
         var configuration=Configuration("FinancialProfile"); var suffix=Guid.NewGuid().ToString("N"); var customer="customer-property-"+suffix;

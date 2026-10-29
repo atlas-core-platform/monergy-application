@@ -498,6 +498,26 @@ export const reviseBankAccountRecord = (api: AccessApi, id: string, input: { ope
 export const getBankAccountRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductBankAccountRecordHistory>('v1/bank-account-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
 
+export interface ProductCreditCardDraft {
+  issuerName: string; cardType: string; cardNumberLast4: string;
+  sourceFinancialFactId: string; sourceRevision: number;
+}
+export interface ProductCreditCardRecord {
+  creditCardRecordId: string; operationId: string; customerId: string; card: ProductCreditCardDraft;
+  balance: number; currency: string; balanceAsOfDate: string; sourceProvenanceId: string;
+  documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
+}
+export interface ProductCreditCardRecordList { items: ProductCreditCardRecord[]; hasMore: boolean; dataDurability: string }
+export interface ProductCreditCardRecordHistory { items: ProductCreditCardRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
+export const getCreditCardRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) =>
+  api.product<ProductCreditCardRecordList>('v1/credit-card-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
+export const createCreditCardRecord = (api: AccessApi, input: { operationId: string; card: ProductCreditCardDraft }) =>
+  api.product<ProductCreditCardRecord>('v1/credit-card-records', 'POST', input);
+export const reviseCreditCardRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; card: ProductCreditCardDraft }) =>
+  api.product<ProductCreditCardRecord>('v1/credit-card-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export const getCreditCardRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
+  api.product<ProductCreditCardRecordHistory>('v1/credit-card-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
+
 
 export interface ProductIncomeDraft {
   name: string; incomeSource: string; incomeType: string; amount: number; frequency: string; financialYear: string;
