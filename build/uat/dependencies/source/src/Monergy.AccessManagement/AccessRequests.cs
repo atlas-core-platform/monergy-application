@@ -180,8 +180,8 @@ public sealed partial class PostgresAccessAdministration
                     SELECT created_at,request_id FROM am.access_requests
                     WHERE tenant_id=@TenantId AND request_id=@After
                 )
-                SELECT r.request_id AS RequestId,s.normalized_email AS Requester,r.target_code AS TargetCode,
-                    COALESCE(rr.label,'Former business role') AS RequesterRole,
+                SELECT r.request_id AS RequestId,s.normalized_email AS Requester,
+                    COALESCE(rr.label,'Former business role') AS RequesterRole,r.target_code AS TargetCode,
                     r.target_definition_hash AS TargetDefinitionHash,r.state AS State,r.created_at AS CreatedAt,
                     r.expires_at AS ExpiresAt,r.decision_at AS DecisionAt,r.decision_reason AS DecisionReason
                 FROM am.access_requests r
