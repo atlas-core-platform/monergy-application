@@ -1,5 +1,6 @@
 import MonthlyCashflowComparison from './MonthlyCashflowComparison';
 import DebtServiceRatioPanel from './DebtServiceRatioPanel';
+import MonthlyNetCashflowRatePanel from './MonthlyNetCashflowRatePanel';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Checkbox, Drawer, Input, Space, Tag } from 'antd';
 import type { AccessApi } from '../access/accessApi';
@@ -153,6 +154,7 @@ function MonthlyCashflowDetails({ api,customerId,result }: { api:AccessApi;custo
     <p>Monthly balance = total income − total expenses. This saved result uses the exact reviewed inventory below. Later changes require a new review and calculation.</p><p>Rule version {result.ruleVersion} · Calculated {result.recordedAt}</p><PositionDetails position={result.position} />
     <details><summary>Calculation details</summary><p>{result.numericSemantics}</p><p>Rule: {result.ruleId} · Definition: {result.definitionHash}</p><p>Calculation: {result.calculationId} · Recorded by: {result.recordedBy}</p></details>
     <DebtServiceRatioPanel api={api} customerId={customerId} source={result} />
+    <MonthlyNetCashflowRatePanel api={api} customerId={customerId} source={result} />
   </section>;
 }
 function PositionDetails({ position }: { position: MonthlyCashflowPosition }) {
