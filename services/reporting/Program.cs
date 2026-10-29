@@ -16,6 +16,9 @@ var app = builder.Build();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
 app.MapHealthChecks("/health/ready");
 if (referenceAdapters || physicalPersistence) app.MapReportingContracts();
+if ((referenceAdapters || physicalPersistence) &&
+    builder.Configuration.GetValue<bool>("Monergy:ReportGeneration:Enabled"))
+    app.MapReportGenerationJobs(builder.Configuration);
 if (physicalPersistence && string.Equals(builder.Configuration["Monergy:D11:Profile"], "persisted-reporting",
     StringComparison.Ordinal))
 {

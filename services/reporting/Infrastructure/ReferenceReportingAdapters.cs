@@ -136,6 +136,62 @@ public sealed class InMemoryReportRepository(IConfiguration configuration) : IRe
     }
 }
 
+public sealed class InMemoryReportGenerationIntentRepository : IReportGenerationIntentRepository
+{
+    private readonly Dictionary<string, ReportGenerationIntent> values = new(StringComparer.Ordinal);
+    private readonly object sync = new();
+
+    public Task<(ReportGenerationIntent Intent, bool Created)> GetOrCreateAsync(
+        ReportGenerationIntent intent,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            if (values.TryGetValue(intent.OperationId, out var current))
+            {
+                if (current.CustomerId != intent.CustomerId || current.ActorId != intent.ActorId ||
+                    current.Fingerprint != intent.Fingerprint || current.JobId != intent.JobId ||
+                    current.ReportId != intent.ReportId)
+                    throw new InvalidOperationException("Report generation operation conflict.");
+                return Task.FromResult((current, false));
+            }
+            values.Add(intent.OperationId, intent);
+            return Task.FromResult((intent, true));
+        }
+    }
+
+    public Task<ReportGenerationIntent?> GetAsync(string operationId, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync) return Task.FromResult(values.GetValueOrDefault(operationId));
+    }
+}
+
+public sealed class ReferenceReportJobScheduler(TimeProvider timeProvider) : IReportJobScheduler
+{
+    private readonly Dictionary<string, ScheduledJob> jobs = new(StringComparer.Ordinal);
+    private readonly object sync = new();
+
+    public Task<ScheduledJob> ScheduleAsync(ReportGenerationIntent intent, TrustedSecurityContext security,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        lock (sync)
+        {
+            var current = jobs.GetValueOrDefault(intent.JobId);
+            if (current is not null && (current.CustomerId != intent.CustomerId ||
+                current.PayloadReference != intent.OperationId))
+                throw new InvalidOperationException("Report job conflict.");
+            current ??= new(intent.JobId, "report-generation", ReportingIdentity.OwnerService,
+                intent.OperationId, intent.CustomerId, JobState.Scheduled, 0, null, false,
+                timeProvider.GetUtcNow());
+            jobs[intent.JobId] = current;
+            return Task.FromResult(current);
+        }
+    }
+}
+
 public sealed class ReferenceReportingAuthorizationPolicy(IConfiguration configuration) : IReportingAuthorizationPolicy
 {
     private readonly Dictionary<string, TrustedSecurityContext> grants = new(StringComparer.Ordinal);

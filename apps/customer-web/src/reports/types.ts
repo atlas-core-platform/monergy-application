@@ -48,6 +48,16 @@ export interface TrustedFinancialReport {
   export: ReportExport;
 }
 
+export interface ReportGenerationJob {
+  jobId: string;
+  reportId: string;
+  state: 'Scheduled' | 'Running' | 'CancellationRequested' | 'Completed' | 'Failed' | 'Cancelled';
+  attempt: number;
+  failureCode: string | null;
+  retryable: boolean;
+  updatedAt: string;
+}
+
 export interface ReportingFailure {
   code: string;
   message: string;

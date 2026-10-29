@@ -157,9 +157,8 @@ public sealed class ReportingApplication(
         ReportOperationIdentity identity, DateTimeOffset generatedAt)
     {
         var items = snapshot.Items.OrderBy(item => item.Label, StringComparer.Ordinal).ToImmutableArray();
-        var identityMaterial = string.Join("|", identity.ContractName, identity.ContractVersion,
-            identity.CustomerId, identity.IdempotencyKey);
-        var reportId = $"report-{Hash(identityMaterial)[..20].ToLowerInvariant()}";
+        var reportId = ReportingIdentity.ReportId(identity.ContractVersion, identity.CustomerId,
+            identity.IdempotencyKey);
         var exportModel = new
         {
             reportId,

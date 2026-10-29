@@ -40,6 +40,37 @@ public interface IReportRepository
     void AcknowledgeEvent(string eventId);
 }
 
+public sealed record ReportGenerationIntent(
+    string OperationId,
+    string JobId,
+    string ReportId,
+    string CustomerId,
+    string ActorId,
+    string ContractVersion,
+    string RequestId,
+    string CorrelationId,
+    string? CausationId,
+    FinancialReviewReceiptSelection? FinancialReview,
+    string Fingerprint,
+    DateTimeOffset SubmittedAt);
+
+public interface IReportGenerationIntentRepository
+{
+    Task<(ReportGenerationIntent Intent, bool Created)> GetOrCreateAsync(
+        ReportGenerationIntent intent,
+        CancellationToken cancellationToken);
+
+    Task<ReportGenerationIntent?> GetAsync(string operationId, CancellationToken cancellationToken);
+}
+
+public interface IReportJobScheduler
+{
+    Task<ScheduledJob> ScheduleAsync(
+        ReportGenerationIntent intent,
+        TrustedSecurityContext security,
+        CancellationToken cancellationToken);
+}
+
 public sealed record ReportOperationIdentity(
     string ContractName,
     string ContractVersion,

@@ -1,10 +1,10 @@
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Collapse, Descriptions, Skeleton, Tag } from 'antd';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
 import { RequestAccessAction } from '../access/RequestAccess';
 import { useWorkspaceSession } from '../access/workspaceSession';
-import type { TrustedFinancialReport } from '../reports/types';
+import type { ReportGenerationJob, TrustedFinancialReport } from '../reports/types';
 import type { FinancialReviewReceiptSelection } from '../reports/types';
 import { getAssetAllocations, validAssetAllocation, validNetWorthPage } from './netWorthApi';
 import {
@@ -16,7 +16,7 @@ import {
   validMonthlyEmiShare,
   validMonthlyNetCashflowRate,
 } from './monthlyCashflowApi';
-import { generateBasicFinancialReport, getBasicFinancialReport } from './productApi';
+import { getBasicFinancialReport, scheduleBasicFinancialReport, waitForBasicFinancialReport } from './productApi';
 import './product.css';
 
 const reportFromLocation = () => new URLSearchParams(window.location.search).get('report') ?? '';
@@ -51,10 +51,14 @@ export default function ProductReportsExperience() {
   const canCalculate = capabilities.has('financial-rules.calculation.execute');
   const [report, setReport] = useState<TrustedFinancialReport | null>(null);
   const [busy, setBusy] = useState(false);
+  const [job, setJob] = useState<ReportGenerationJob | null>(null);
   const [error, setError] = useState('');
   const [requestedReportId] = useState(reportFromLocation);
   const [reviewSelection, setReviewSelection] = useState<FinancialReviewReceiptSelection | null>(null);
   const [reviewChecked, setReviewChecked] = useState(false);
+  const generation = useRef<AbortController | null>(null);
+
+  useEffect(() => () => { generation.current?.abort(); }, []);
 
   const message = useCallback((failure: unknown) => {
     if (failure instanceof AccessApiError) {
@@ -135,14 +139,22 @@ export default function ProductReportsExperience() {
 
   const generate = async (includeFinancialReview = false) => {
     if (!api || !canGenerate || busy) return;
+    generation.current?.abort();
+    const controller = new AbortController();
+    generation.current = controller;
     setBusy(true);
     setError('');
+    setJob(null);
     try {
-      const generated = await generateBasicFinancialReport(
+      const scheduled = await scheduleBasicFinancialReport(
         api,
         globalThis.crypto.randomUUID().replaceAll('-', ''),
         includeFinancialReview ? reviewSelection ?? undefined : undefined,
+        controller.signal,
       );
+      setJob(scheduled);
+      const generated = await waitForBasicFinancialReport(
+        api, scheduled, setJob, controller.signal);
       setReport(generated);
       window.history.replaceState(
         null,
@@ -150,10 +162,11 @@ export default function ProductReportsExperience() {
         '/reports?report=' + encodeURIComponent(generated.reportId),
       );
     } catch (failure) {
+      if (controller.signal.aborted) return;
       setReport(null);
       setError(message(failure));
     } finally {
-      setBusy(false);
+      if (!controller.signal.aborted) setBusy(false);
     }
   };
 
@@ -185,6 +198,10 @@ export default function ProductReportsExperience() {
         />
       )}
       {error && <Alert showIcon type="error" title={error} />}
+      {job && !report && !error && <Alert showIcon type="info"
+        title={job.state === 'Running' ? 'Your financial summary is being prepared.' :
+          'Your financial summary is scheduled.'}
+        description={`Background status: ${job.state}. You can keep this page open while Reporting completes the governed request.`} />}
 
       {busy && !report ? (
         <section className="product-panel">

@@ -43,21 +43,31 @@ public static class JobManagementRegistration
         services.AddSingleton<InMemoryJobRepository>();
         services.AddSingleton<IJobRepository>(provider=>provider.GetRequiredService<InMemoryJobRepository>());
         services.AddSingleton<IJobAdministrationRepository>(provider=>provider.GetRequiredService<InMemoryJobRepository>());
-        if (configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled"))
+        var documentProcessing = configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled");
+        var reportGeneration = configuration.GetValue<bool>("Monergy:ReportGeneration:Enabled");
+        if (documentProcessing || reportGeneration)
         {
             services.AddSingleton<TenantAccessClient>();
             services.AddSingleton<OwnerBackedJobExecutionPolicy>();
             services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<OwnerBackedJobExecutionPolicy>());
             services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<OwnerBackedJobExecutionPolicy>());
-            services.AddSingleton<DocumentProcessingJobRegistry>();
-            services.AddSingleton<HttpDocumentProcessingTarget>();
-            services.AddSingleton<IJobExecutionTarget>(provider => provider.GetRequiredService<HttpDocumentProcessingTarget>());
         }
         else
         {
             services.AddSingleton<ReferenceJobExecutionPolicy>();
             services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
             services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
+        }
+        if (documentProcessing)
+        {
+            services.AddSingleton<DocumentProcessingJobRegistry>();
+            services.AddSingleton<HttpDocumentProcessingTarget>();
+            services.AddSingleton<IJobExecutionTarget>(provider => provider.GetRequiredService<HttpDocumentProcessingTarget>());
+        }
+        if (reportGeneration)
+        {
+            services.AddSingleton<HttpReportGenerationTarget>();
+            services.AddSingleton<IJobExecutionTarget>(provider => provider.GetRequiredService<HttpReportGenerationTarget>());
         }
         services.AddSingleton<JobManagementApplication>();
         return services.AddWorkerInfrastructure(configuration);
@@ -68,13 +78,26 @@ public static class JobManagementRegistration
         IConfiguration configuration)
     {
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
+        var reportGeneration = configuration.GetValue<bool>("Monergy:ReportGeneration:Enabled");
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<PostgresJobRepository>();
         services.AddSingleton<IJobRepository>(provider=>provider.GetRequiredService<PostgresJobRepository>());
         services.AddSingleton<IJobAdministrationRepository>(provider=>provider.GetRequiredService<PostgresJobRepository>());
-        services.AddSingleton<ReferenceJobExecutionPolicy>();
-        services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
-        services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
+        if (reportGeneration)
+        {
+            services.AddSingleton<TenantAccessClient>();
+            services.AddSingleton<OwnerBackedJobExecutionPolicy>();
+            services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<OwnerBackedJobExecutionPolicy>());
+            services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<OwnerBackedJobExecutionPolicy>());
+            services.AddSingleton<HttpReportGenerationTarget>();
+            services.AddSingleton<IJobExecutionTarget>(provider => provider.GetRequiredService<HttpReportGenerationTarget>());
+        }
+        else
+        {
+            services.AddSingleton<ReferenceJobExecutionPolicy>();
+            services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
+            services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<ReferenceJobExecutionPolicy>());
+        }
         services.AddSingleton<JobManagementApplication>();
         return services.AddWorkerInfrastructure(configuration);
     }

@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { AccessApi } from '../src/access/accessApi';
@@ -76,6 +76,25 @@ const emiShare = { calculationId: 'emi-share-1', operationId: '9'.repeat(32), cu
 const coverage = { calculationId: 'coverage-1', operationId: 'b'.repeat(32), customerId: 'reference-customer', sourceMonthlyCashflow: cashflow, sourceMonthlyEmiShare: emiShare, debtServiceIncludedInExpenses: true, ruleId: 'monergy.customer-reviewed-monthly-debt-service-coverage', ruleVersion: '1.0.0', definitionHash: 'c'.repeat(64), numericSemantics: 'Exact descriptive customer-reviewed coverage.', state: 'CALCULATED', monthlyIncome: '10000.00', monthlyExpenses: '5000.00', monthlyEmi: '2500.00', monthlyCashflowBalance: '5000.00', cashAvailableForDebtService: '7500.00', coverageMultiple: '3.00', issues: [], recordedBy: 'A100', recordedAt: '2026-10-02T00:00:00Z' };
 const page = (items: unknown[]) => ({ items, hasMore: false, nextBeforeId: null });
 
+function mockReportLifecycle(api: AccessApi, generated = report) {
+  let job: { jobId: string; reportId: string; state: string; attempt: number;
+    failureCode: null; retryable: boolean; updatedAt: string } | null = null;
+  return vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
+    if (path === 'v1/reports' && method === 'POST') {
+      const operationId = (body as { operationId: string }).operationId;
+      job = { jobId: `job-report-${operationId}`, reportId: generated.reportId,
+        state: 'Scheduled', attempt: 0, failureCode: null, retryable: false,
+        updatedAt: '2026-10-29T09:00:00Z' };
+      return Promise.resolve(job);
+    }
+    if (path.startsWith('v1/reports/jobs/') && method === 'GET' && job)
+      return Promise.resolve({ ...job, state: 'Completed', attempt: 1,
+        updatedAt: '2026-10-29T09:00:01Z' });
+    if (path.startsWith('v1/reports/') && method === 'GET') return Promise.resolve(generated);
+    return Promise.reject(new Error(`Unexpected product path ${method ?? 'GET'} ${path}`));
+  });
+}
+
 function mount(api: AccessApi, capabilities = ['reporting.report.generate', 'reporting.report.read']) {
   render(
     <FoundationProvider appearance="midnight">
@@ -129,7 +148,7 @@ it('includes a reviewed Tax source figure and exports exact Reporting content wi
   };
   const content = JSON.stringify({ reportId: 'report-tax', items: [taxItem] });
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue({
+  mockReportLifecycle(api, {
     ...report, reportId: 'report-tax', items: [taxItem],
     sourceFinancialReferences: ['ff-tax'], evidenceReferences: ['evidence-tax'],
     financialProvenanceReferences: ['provenance-tax'],
@@ -165,7 +184,7 @@ it('includes a reviewed Tax source figure and exports exact Reporting content wi
 
 it('generates an authorized source-connected basic summary without scores or advice', async () => {
   const api = new AccessApi(session);
-  const product = vi.spyOn(api, 'product').mockResolvedValue(report);
+  const product = mockReportLifecycle(api);
   mount(api);
 
   await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
@@ -179,7 +198,7 @@ it('generates an authorized source-connected basic summary without scores or adv
     'v1/reports',
     'POST',
     expect.objectContaining({ operationId: expect.stringMatching(/^[0-9a-f]{32}$/) }),
-    undefined,
+    expect.any(AbortSignal),
   );
   expect(screen.getAllByRole('link', { name: 'View source & history' })[0]).toHaveAttribute(
     'href',
@@ -190,6 +209,34 @@ it('generates an authorized source-connected basic summary without scores or adv
     expect(within(item).queryByText(/recommendation/i)).not.toBeInTheDocument();
   }
   expect(screen.queryByText(/savings ratio/i)).not.toBeInTheDocument();
+});
+
+it('shows the governed background lifecycle and prevents duplicate generation while scheduled', async () => {
+  const api = new AccessApi(session);
+  let scheduled: Record<string, unknown> = {};
+  let complete: (value: Record<string, unknown>) => void = (value) => {
+    throw new Error(`Report status request was not started: ${JSON.stringify(value)}`);
+  };
+  vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
+    if (path === 'v1/reports' && method === 'POST') {
+      const operationId = (body as { operationId: string }).operationId;
+      scheduled = { jobId: `job-report-${operationId}`, reportId: report.reportId,
+        state: 'Scheduled', attempt: 0, failureCode: null, retryable: false,
+        updatedAt: '2026-10-29T09:00:00Z' };
+      return Promise.resolve(scheduled);
+    }
+    if (path.startsWith('v1/reports/jobs/') && scheduled.jobId)
+      return new Promise<Record<string, unknown>>((resolve) => { complete = resolve; });
+    if (path === `v1/reports/${report.reportId}`) return Promise.resolve(report);
+    return Promise.reject(new Error(`Unexpected product path ${method ?? 'GET'} ${path}`));
+  });
+  mount(api);
+
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
+  expect(await screen.findByText(/Background status: Scheduled/i)).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Generate basic summary' })).not.toBeInTheDocument();
+  act(() => { complete({ ...scheduled, state: 'Completed', attempt: 1 }); });
+  expect(await screen.findByText('Employment income')).toBeVisible();
 });
 
 it('generates a Phase 2 review from exact matching receipt identifiers without posting figures', async () => {
@@ -209,7 +256,17 @@ it('generates a Phase 2 review from exact matching receipt identifiers without p
   };
   const api = new AccessApi(session);
   const product = vi.spyOn(api, 'product').mockImplementation((path, method) => {
-    if (method === 'POST' && path === 'v1/reports') return Promise.resolve(phase2Report);
+    if (method === 'POST' && path === 'v1/reports') return Promise.resolve({
+      jobId: `job-report-${'1'.repeat(32)}`, reportId: phase2Report.reportId,
+      state: 'Scheduled', attempt: 0, failureCode: null, retryable: false,
+      updatedAt: '2026-10-29T09:00:00Z',
+    });
+    if (path.startsWith('v1/reports/jobs/')) return Promise.resolve({
+      jobId: `job-report-${'1'.repeat(32)}`, reportId: phase2Report.reportId,
+      state: 'Completed', attempt: 1, failureCode: null, retryable: false,
+      updatedAt: '2026-10-29T09:00:01Z',
+    });
+    if (path === 'v1/reports/report-phase2') return Promise.resolve(phase2Report);
     if (path.endsWith('asset-allocations')) return Promise.resolve(page([allocation]));
     if (path.endsWith('net-cashflow-rates')) return Promise.resolve(page([cashflowRate]));
     if (path.endsWith('emi-shares')) return Promise.resolve(page([emiShare]));
@@ -240,7 +297,7 @@ it('generates a Phase 2 review from exact matching receipt identifiers without p
 it('reopens a customer report only through the product report-read boundary', async () => {
   window.history.replaceState(null, '', '/reports?report=report-customer-basic-001');
   const api = new AccessApi(session);
-  const product = vi.spyOn(api, 'product').mockResolvedValue(report);
+  const product = mockReportLifecycle(api);
 
   mount(api);
 
@@ -256,7 +313,7 @@ it('reopens a customer report only through the product report-read boundary', as
 it('keeps report read usable and requests the missing generate action', async () => {
   window.history.replaceState(null, '', '/reports?report=report-customer-basic-001');
   const api = new AccessApi(session);
-  const product = vi.spyOn(api, 'product').mockResolvedValue(report);
+  const product = mockReportLifecycle(api);
   const item = { requestId: null, target: 'customer.reports', targetLabel: 'Reports',
     grantExplanation: 'Allows governed report generation.', state: 'NotRequested',
     hasAccess: false, canRequest: true, createdAt: null, decisionAt: null,
@@ -281,7 +338,7 @@ it('keeps report read usable and requests the missing generate action', async ()
 
 it('exports exactly the governed report payload returned by Reporting', async () => {
   const api = new AccessApi(session);
-  vi.spyOn(api, 'product').mockResolvedValue(report);
+  mockReportLifecycle(api);
   const createObjectURL = vi.fn().mockReturnValue('blob:customer-report');
   const revokeObjectURL = vi.fn();
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
@@ -324,7 +381,7 @@ it('includes a trusted Asset source figure as a report item without a valuation 
       calculationLineageReferenceId: null,
     },
   };
-  vi.spyOn(api, 'product').mockResolvedValue({
+  mockReportLifecycle(api, {
     ...report,
     items: [...report.items, assetItem],
     sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-asset'],
@@ -359,7 +416,7 @@ it('includes a trusted Investment source item without implying live holdings or 
       calculationLineageReferenceId: null,
     },
   };
-  vi.spyOn(api, 'product').mockResolvedValue({
+  mockReportLifecycle(api, {
     ...report,
     items: [...report.items, sourceItem],
     sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-investment'],
@@ -392,7 +449,7 @@ it('includes a trusted Insurance source figure without claiming verified coverag
       calculationLineageReferenceId: null,
     },
   };
-  vi.spyOn(api, 'product').mockResolvedValue({
+  mockReportLifecycle(api, {
     ...report,
     items: [...report.items, sourceItem],
     sourceFinancialReferences: [...report.sourceFinancialReferences, 'ff-insurance'],

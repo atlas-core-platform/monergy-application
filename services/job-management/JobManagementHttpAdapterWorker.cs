@@ -40,14 +40,19 @@ public sealed class JobManagementHttpAdapterWorker(
         var documentProcessing =
             ReferenceAdapterGuard.IsSelected(configuration) &&
             configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled");
+        var reportGeneration =
+            ReferenceAdapterGuard.IsSelected(configuration) &&
+            configuration.GetValue<bool>("Monergy:ReportGeneration:Enabled");
 
-        if (documentProcessing)
+        if (documentProcessing || reportGeneration)
         {
             builder.Services.AddSingleton(ownerServices.GetRequiredService<JobManagementApplication>());
-            builder.Services.AddSingleton(ownerServices.GetRequiredService<DocumentProcessingJobRegistry>());
             builder.Services.AddSingleton(ownerServices.GetRequiredService<IJobRepository>());
-
             builder.Services.AddSingleton(ownerServices.GetRequiredService<IJobAuthorizationPolicy>());
+        }
+        if (documentProcessing)
+        {
+            builder.Services.AddSingleton(ownerServices.GetRequiredService<DocumentProcessingJobRegistry>());
             builder.Services.AddSingleton(ownerServices.GetRequiredService<HttpDocumentProcessingTarget>());
         }
 
@@ -70,8 +75,8 @@ public sealed class JobManagementHttpAdapterWorker(
         if (documentProcessing)
         {
             app.MapDocumentProcessingJobs(configuration);
-
         }
+        if (reportGeneration) app.MapReportGenerationJobs(configuration, includeStatusEndpoint: !documentProcessing);
 
         if(administration)app.MapJobAdministration(documentProcessing);
         await app.StartAsync(stoppingToken).ConfigureAwait(false);

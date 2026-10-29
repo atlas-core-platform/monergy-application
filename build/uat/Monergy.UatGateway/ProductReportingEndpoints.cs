@@ -24,6 +24,7 @@ public static class ProductReportingEndpoints
     {
         if (!builder.Configuration.GetValue<bool>("Monergy:Product:Enabled")) return;
         builder.Services.AddSingleton<ProductReportingClient>();
+        builder.Services.AddSingleton<ProductReportJobClient>();
     }
 
     public static void MapProductReporting(this WebApplication app)
@@ -56,12 +57,46 @@ public static class ProductReportingEndpoints
                 submission.OperationId,
                 new GenerateReport(customer.CustomerId, submission.FinancialReview));
 
-            var result = await reporting.GenerateAsync(
+            var result = await reporting.ScheduleAsync(
                 session.TenantId,
                 session.AuthenticationContextId,
                 request,
                 http.RequestAborted).ConfigureAwait(false);
-            return Results.Ok(ReadResult(result, customer.CustomerId));
+            var job = ReadJobResult(result, customer.CustomerId, submission.OperationId);
+            return Results.Accepted($"/product-api/v1/reports/jobs/{job.JobId}", job);
+        });
+
+        app.MapGet("/product-api/v1/reports/jobs/{jobId}", async (
+            string jobId,
+            HttpContext http,
+            CustomerOwnerClient owners,
+            TenantAccessClient access,
+            ProductReportJobClient jobs) =>
+        {
+            if (!TenantAccessClient.Identifier(jobId, 160) ||
+                !jobId.StartsWith("job-report-", StringComparison.Ordinal))
+                throw new TenantBoundaryException("REPORT_JOB_ID_INVALID", 400);
+            var operationId = jobId["job-report-".Length..];
+            ValidateOperation(operationId);
+            var session = await owners.SessionAsync(http).ConfigureAwait(false);
+            var customer = await owners.OwnedCustomerAsync(
+                session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
+            var decision = await access.EvaluateCustomerAsync(
+                http, "reporting.report.read", customer.CustomerId).ConfigureAwait(false);
+            if (decision.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+            var request = new ContractRequest<GetJobStatus>(
+                Vs02ContractNames.GetJobStatus,
+                ContractGuard.CurrentVersion,
+                "request-product-report-job-" + operationId,
+                "correlation-product-report-job-" + operationId,
+                null,
+                Security(session, customer.CustomerId, decision),
+                null,
+                new GetJobStatus(jobId, customer.CustomerId));
+            var scheduled = await jobs.StatusAsync(
+                session.TenantId, request, http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(ReadJob(scheduled, customer.CustomerId, operationId));
         });
 
         app.MapGet("/product-api/v1/reports/{reportId}", async (
@@ -160,6 +195,48 @@ public static class ProductReportingEndpoints
         return report;
     }
 
+    private static ReportGenerationJob ReadJobResult(
+        ContractResult<ReportGenerationJob> result,
+        string customerId,
+        string operationId)
+    {
+        if (result.Outcome != ContractOutcome.Success || result.Data is null)
+            throw new TenantBoundaryException(result.Error?.Category switch
+            {
+                ContractErrorCategory.AccessDenied or ContractErrorCategory.AuthenticationRequired => "ACCESS_DENIED",
+                ContractErrorCategory.Conflict => "REPORT_OPERATION_CONFLICT",
+                ContractErrorCategory.DependencyFailure or ContractErrorCategory.TemporarilyUnavailable =>
+                    "REPORT_JOB_OWNER_UNAVAILABLE",
+                _ => "REPORT_GENERATION_REJECTED",
+            }, result.Error?.Category switch
+            {
+                ContractErrorCategory.AccessDenied or ContractErrorCategory.AuthenticationRequired => 403,
+                ContractErrorCategory.Conflict => 409,
+                ContractErrorCategory.DependencyFailure or ContractErrorCategory.TemporarilyUnavailable => 503,
+                _ => 400,
+            });
+        return ValidateJob(result.Data, customerId, operationId);
+    }
+
+    private static ReportGenerationJob ReadJob(ScheduledJob job, string customerId, string operationId) =>
+        ValidateJob(new(job.JobId,
+            ReportingIdentity.ReportId(ContractGuard.CurrentVersion, customerId, operationId),
+            job.State, job.Attempt, job.FailureCode, job.Retryable, job.UpdatedAt),
+            customerId, operationId);
+
+    private static ReportGenerationJob ValidateJob(
+        ReportGenerationJob job,
+        string customerId,
+        string operationId)
+    {
+        if (job.JobId != ReportingIdentity.JobId(operationId) ||
+            job.ReportId != ReportingIdentity.ReportId(ContractGuard.CurrentVersion, customerId, operationId) ||
+            job.Attempt < 0 ||
+            job.FailureCode?.Length > 160)
+            throw new TenantBoundaryException("REPORT_JOB_OWNER_RESPONSE_INVALID", 503);
+        return job;
+    }
+
     private static bool ValidCalculation(ReportLineItem item)
     {
         var source = item.Source;
@@ -221,13 +298,13 @@ public sealed class ProductReportingClient : IDisposable
             TenantAccessIntegration.Required(configuration, "Monergy:Product:ReportingUrl"));
     }
 
-    public Task<ContractResult<TrustedFinancialReport>> GenerateAsync(
+    public Task<ContractResult<ReportGenerationJob>> ScheduleAsync(
         string tenantId,
         string sessionId,
         ContractRequest<GenerateReport> request,
         CancellationToken cancellationToken) =>
-        SendAsync<GenerateReport, TrustedFinancialReport>(
-            tenantId, sessionId, "contracts/cid-051/v1", request, cancellationToken);
+        SendAsync<GenerateReport, ReportGenerationJob>(
+            tenantId, sessionId, "contracts/cid-051/v2", request, cancellationToken);
 
     public Task<ContractResult<TrustedFinancialReport>> GetAsync(
         string tenantId,
@@ -278,6 +355,69 @@ public sealed class ProductReportingClient : IDisposable
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             throw new TenantBoundaryException("REPORTING_OWNER_UNAVAILABLE", 503);
+        }
+    }
+
+    public void Dispose() => client.Dispose();
+}
+
+public sealed class ProductReportJobClient : IDisposable
+{
+    private readonly HttpClient client = new(new SocketsHttpHandler
+    { AllowAutoRedirect = false, UseProxy = false })
+    { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1_048_576 };
+    private readonly Uri endpoint;
+    private readonly string token;
+
+    public ProductReportJobClient(IConfiguration configuration)
+    {
+        endpoint = TenantAccessIntegration.LoopbackRoot(
+            TenantAccessIntegration.Required(configuration, "Monergy:Product:JobManagementUrl"));
+        token = TenantAccessIntegration.Required(configuration, "Monergy:Product:JobManagementToken");
+        TenantAccessIntegration.ValidateToken(token);
+    }
+
+    public async Task<ScheduledJob> StatusAsync(
+        string tenantId,
+        ContractRequest<GetJobStatus> request,
+        CancellationToken cancellationToken)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Post,
+            new Uri(endpoint, "internal/local/v1/jobs/status"));
+        message.Headers.Add("X-Monergy-Tenant", tenantId);
+        message.Headers.Add("X-Monergy-Job-Token", token);
+        message.Content = JsonContent.Create(request, options: ContractJson.Options);
+        try
+        {
+            using var response = await client.SendAsync(message, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+                throw new TenantBoundaryException("ACCESS_DENIED", 403);
+            if (response.StatusCode == HttpStatusCode.NotFound)
+                throw new TenantBoundaryException("REPORT_JOB_NOT_FOUND", 404);
+            if (!response.IsSuccessStatusCode)
+                throw new TenantBoundaryException("REPORT_JOB_OWNER_UNAVAILABLE", 503);
+            var result = await response.Content.ReadFromJsonAsync<ContractResult<ScheduledJob>>(
+                ContractJson.Options, cancellationToken).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("REPORT_JOB_OWNER_RESPONSE_INVALID", 503);
+            if (result.ContractName != request.ContractName ||
+                result.ContractVersion != request.ContractVersion ||
+                result.RequestId != request.RequestId ||
+                result.CorrelationId != request.CorrelationId ||
+                result.Outcome != ContractOutcome.Success || result.Data is null ||
+                result.Data.JobId != request.Payload.JobId ||
+                result.Data.CustomerId != request.Payload.CustomerId ||
+                result.Data.JobName != "report-generation" ||
+                result.Data.OwnerService != ReportingIdentity.OwnerService)
+                throw new TenantBoundaryException("REPORT_JOB_OWNER_RESPONSE_INVALID", 503);
+            return result.Data;
+        }
+        catch (Exception error) when (error is HttpRequestException or JsonException or NotSupportedException)
+        {
+            throw new TenantBoundaryException("REPORT_JOB_OWNER_UNAVAILABLE", 503);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new TenantBoundaryException("REPORT_JOB_OWNER_UNAVAILABLE", 503);
         }
     }
 
