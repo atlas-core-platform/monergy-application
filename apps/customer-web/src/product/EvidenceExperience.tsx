@@ -5,6 +5,7 @@ import { Alert, Button, Checkbox, Drawer, Input, Select, Skeleton, Spin, Tag, Up
 import type { UploadProps } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
+import { RequestAccessAction } from '../access/RequestAccess';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import {
   addProcessingFactsToFinancialProfile,
@@ -703,9 +704,9 @@ export default function EvidenceExperience() {
             </div>
           </div>
           {!canUpload && (
-            <Alert
-              showIcon
-              type="warning"
+            <RequestAccessAction
+              target="customer.documents"
+              requiredCapabilities={['evidence.document.upload']}
               title="Document upload is not included in your current access"
               description="Contact your organization administrator if you need access to upload documents."
             />
@@ -1592,9 +1593,9 @@ export default function EvidenceExperience() {
               </Button>
             </div>
             {!canProcess && (
-              <Alert
-                showIcon
-                type="warning"
+              <RequestAccessAction
+                target="customer.documents"
+                requiredCapabilities={['document-intelligence.document.process']}
                 title="Extracting details is not included in your current access"
                 description="Contact your organization administrator if you need access to extract document details."
               />

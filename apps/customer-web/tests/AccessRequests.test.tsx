@@ -10,6 +10,7 @@ const id = 'a'.repeat(32);
 const item = {
   requestId: id,
   requester: 'advisor@example.test',
+  requesterRole: 'Financial Advisor',
   target: 'financial-advisor.assigned-customer-financial-review',
   targetLabel: 'View assigned customer financial information',
   state: 'UnderReview',
@@ -38,6 +39,7 @@ it('shows the bounded request in safe business language and approves it exactly 
   mount(request);
   const user = userEvent.setup();
   expect(await screen.findByText('advisor@example.test')).toBeVisible();
+  expect(screen.getByText('Financial Advisor')).toBeVisible();
   expect(screen.getByText(/separately assigned/)).toBeVisible();
   expect(screen.queryByText(/permission ID|actor ID|credential/i)).not.toBeInTheDocument();
   await user.click(screen.getByRole('button', { name: 'Approve' }));

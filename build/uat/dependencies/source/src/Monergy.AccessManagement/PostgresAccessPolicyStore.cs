@@ -3,8 +3,11 @@ using Npgsql;
 
 namespace Monergy.AccessManagement;
 
-public sealed class PostgresAccessPolicyStore(ITenantConnectionFactory connections) : IAccessPolicyStore, ICustomerRelationshipStore
+public sealed class PostgresAccessPolicyStore(
+    ITenantConnectionFactory connections, AccessRequestTargetCatalog? targetCatalog = null)
+    : IAccessPolicyStore, ICustomerRelationshipStore
 {
+    private AccessRequestTargetCatalog RequestTargets => targetCatalog ?? new(new CapabilityCatalog());
     public ValueTask<bool> IsAssignedAsync(string tenantId, string actorId, string customerId, CancellationToken cancellationToken) =>
         QueryAsync(tenantId, connection => connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
             SELECT EXISTS (SELECT 1 FROM am.customer_relationships WHERE actor_id=@ActorId AND customer_id=@CustomerId);
@@ -49,22 +52,40 @@ public sealed class PostgresAccessPolicyStore(ITenantConnectionFactory connectio
         string tenantId, string actorId, long policyVersion, long subjectVersion, CancellationToken ct) =>
         QueryAsync<IReadOnlyList<CapabilityGrant>>(tenantId, async connection =>
         {
-            var rows = await connection.QueryAsync<SubjectGrantRow>(new CommandDefinition("""
-                SELECT pc.capability_id AS CapabilityId,pc.scope AS Scope
+            var rows = (await connection.QueryAsync<SubjectGrantRow>(new CommandDefinition("""
+                SELECT DISTINCT sp.permission_id AS PermissionId,p.code AS PermissionCode,
+                    pc.capability_id AS CapabilityId,pc.scope AS Scope,
+                    apg.permission_code AS SnapshotPermissionCode,
+                    apg.capability_id AS SnapshotCapabilityId,apg.scope AS SnapshotScope,
+                    r.code AS RoleCode,ar.target_code AS TargetCode,
+                    ar.target_definition_hash AS TargetDefinitionHash
                 FROM am.access_subjects s
                 JOIN am.policy_state ps ON ps.singleton
                 JOIN am.subject_permissions sp ON sp.actor_id=s.actor_id
+                JOIN am.permissions p ON p.permission_id=sp.permission_id
                 JOIN am.permission_capabilities pc ON pc.permission_id=sp.permission_id
-                JOIN am.access_requests ar ON ar.request_id=sp.source_request_id
+                JOIN am.access_request_permission_grants apg
+                  ON apg.actor_id=sp.actor_id AND apg.permission_id=sp.permission_id
+                JOIN am.access_requests ar ON ar.request_id=apg.request_id
                 JOIN am.roles r ON r.role_id=s.business_role_id
                 WHERE s.actor_id=@ActorId AND s.status='Active'
                   AND s.subject_version=@SubjectVersion AND ps.policy_version=@PolicyVersion
-                  AND r.code='financial-advisor' AND ar.state='Fulfilled'
+                  AND ar.state='Fulfilled'
                   AND ar.requester_actor_id=s.actor_id AND ar.requester_role_id=s.business_role_id;
                 """, new { ActorId = actorId, PolicyVersion = policyVersion, SubjectVersion = subjectVersion },
-                cancellationToken: ct)).ConfigureAwait(false);
-            return rows.Select(row => new CapabilityGrant(
-                row.CapabilityId, Enum.Parse<AuthorizationScope>(row.Scope))).ToArray();
+                cancellationToken: ct)).ConfigureAwait(false)).ToArray();
+            return rows.Where(row => RequestTargets.TryGet(row.TargetCode, out var target) && target is not null &&
+                    target.DefinitionHash == row.TargetDefinitionHash &&
+                    target.EligibleRoleCodes.Contains(row.RoleCode, StringComparer.Ordinal) &&
+                    target.Permissions.Any(permission => permission.PermissionId == row.PermissionId &&
+                        permission.PermissionCode == row.PermissionCode &&
+                        permission.PermissionCode == row.SnapshotPermissionCode &&
+                        permission.CapabilityId == row.CapabilityId &&
+                        permission.CapabilityId == row.SnapshotCapabilityId &&
+                        permission.Scope.ToString() == row.Scope &&
+                        permission.Scope.ToString() == row.SnapshotScope))
+                .Select(row => new CapabilityGrant(row.CapabilityId, Enum.Parse<AuthorizationScope>(row.Scope)))
+                .Distinct().ToArray();
         }, ct);
 
     public ValueTask<bool> HasResourceGrantAsync(
@@ -98,5 +119,8 @@ public sealed class PostgresAccessPolicyStore(ITenantConnectionFactory connectio
         string ActorId, string NormalizedEmail, string Status, string? BusinessRoleId,
         string? AdministrativeAuthority, long SubjectVersion, long PolicyVersion);
     private sealed record GrantRow(string RoleId, long PolicyVersion, string? CapabilityId, string? Scope);
-    private sealed record SubjectGrantRow(string CapabilityId, string Scope);
+    private sealed record SubjectGrantRow(
+        string PermissionId, string PermissionCode, string CapabilityId, string Scope,
+        string SnapshotPermissionCode, string SnapshotCapabilityId, string SnapshotScope,
+        string RoleCode, string TargetCode, string TargetDefinitionHash);
 }

@@ -6,14 +6,11 @@ namespace Monergy.AccessManagement;
 
 public sealed record AccessRequestSubmission(string OperationId);
 public sealed record AccessRequestDecision(string OperationId);
-public sealed record AdvisorAccessRequestStatus(
-    string TenantId,
-    string ActorId,
-    long PolicyVersion,
-    long SubjectVersion,
+public sealed record AccessRequestTargetStatus(
     string? RequestId,
     string Target,
     string TargetLabel,
+    string GrantExplanation,
     string State,
     bool HasAccess,
     bool CanRequest,
@@ -21,9 +18,13 @@ public sealed record AdvisorAccessRequestStatus(
     DateTimeOffset? DecisionAt,
     DateTimeOffset? FulfilledAt,
     string? DecisionReason);
+public sealed record AccessRequestStatusPage(
+    string TenantId, string ActorId, long PolicyVersion, long SubjectVersion,
+    IReadOnlyList<AccessRequestTargetStatus> Items);
 public sealed record AccessRequestReviewItem(
     string RequestId,
     string Requester,
+    string RequesterRole,
     string Target,
     string TargetLabel,
     string State,
@@ -38,19 +39,9 @@ public sealed record AccessRequestReviewPage(
 
 public sealed partial class PostgresAccessAdministration
 {
-    private const string AdvisorTarget = "financial-advisor.assigned-customer-financial-review";
-    private const string AdvisorTargetLabel = "View assigned customer financial information";
-    private const string AdvisorPermissionId = "default-permission-profile-read";
-    private const string AdvisorPermissionCode = "financial-profile-read";
-    private const string AdvisorCapability = "financial-profile.profile.read";
-    private const string AdvisorEvidencePermissionId = "default-permission-evidence-read";
-    private const string AdvisorEvidencePermissionCode = "evidence-read";
-    private const string AdvisorEvidenceCapability = "evidence.document.read";
-    private const string AdvisorRoleCode = "financial-advisor";
-    private const string GrantExplanation =
-        "Allows this Financial Advisor to read financial information only for customers separately assigned to them, with the required record access and current customer consent.";
+    private AccessRequestTargetCatalog RequestTargets => requestTargetCatalog ?? new(catalog);
 
-    public async Task<AdvisorAccessRequestStatus> ReadAdvisorAccessRequestAsync(
+    public async Task<AccessRequestStatusPage> ReadAccessRequestsAsync(
         TrustedActorContext context, CancellationToken ct)
     {
         try
@@ -59,71 +50,88 @@ public sealed partial class PostgresAccessAdministration
             await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
             var policyVersion = await connection.ExecuteScalarAsync<long>(Command(
                 "SELECT policy_version FROM am.policy_state WHERE singleton FOR SHARE;", null, transaction, ct)).ConfigureAwait(false);
-            var subject = await RequireAdvisorAsync(connection, transaction, context.ActorId, false, ct).ConfigureAwait(false);
-            var available = await TargetAvailableAsync(connection, transaction, ct).ConfigureAwait(false);
-            var hasAccess = available && await HasTargetAsync(connection, transaction, context.ActorId, ct).ConfigureAwait(false);
-            var row = await connection.QuerySingleOrDefaultAsync<AccessRequestRow>(Command("""
-                SELECT request_id AS RequestId,state AS State,created_at AS CreatedAt,
-                    decision_at AS DecisionAt,fulfilled_at AS FulfilledAt,decision_reason AS DecisionReason
-                FROM am.access_requests
-                WHERE tenant_id=@TenantId AND requester_actor_id=@ActorId AND target_code=@Target
-                ORDER BY created_at DESC,request_id DESC LIMIT 1;
-                """, new { context.TenantId, context.ActorId, Target = AdvisorTarget }, transaction, ct)).ConfigureAwait(false);
+            var subject = await RequireBusinessSubjectAsync(connection, transaction, context.ActorId, false, ct).ConfigureAwait(false);
+            var items = new List<AccessRequestTargetStatus>();
+            foreach (var target in RequestTargets.All.Where(value =>
+                         value.EligibleRoleCodes.Contains(subject.RoleCode, StringComparer.Ordinal)).OrderBy(value => value.Code))
+            {
+                var available = await TargetAvailableAsync(connection, transaction, target, ct).ConfigureAwait(false);
+                var hasAccess = available && await HasTargetAsync(connection, transaction, context.ActorId, target, ct).ConfigureAwait(false);
+                var row = await LatestAsync(connection, transaction, context.TenantId, context.ActorId, target.Code, ct)
+                    .ConfigureAwait(false);
+                items.Add(Status(target, row, hasAccess, available && !hasAccess && row?.State != "Submitted"));
+            }
             await transaction.CommitAsync(ct).ConfigureAwait(false);
-            return Status(context, policyVersion, subject.SubjectVersion, row, hasAccess, available && !hasAccess &&
-                (row is null || !string.Equals(row.State, "Submitted", StringComparison.Ordinal)));
+            return new(context.TenantId, context.ActorId, policyVersion, subject.SubjectVersion, items);
         }
         catch (NpgsqlException exception) { throw new AccessStoreUnavailableException(exception); }
     }
 
-    public async Task<AdvisorAccessRequestStatus> SubmitAdvisorAccessRequestAsync(
-        TrustedActorContext context, AccessRequestSubmission request, CancellationToken ct)
+    // Compatibility wrapper only. The definition and grant path are the generic catalog path.
+    public async Task<AccessRequestTargetStatus> ReadAdvisorAccessRequestAsync(
+        TrustedActorContext context, CancellationToken ct)
+    {
+        var page = await ReadAccessRequestsAsync(context, ct).ConfigureAwait(false);
+        return page.Items.Single(value => value.Target == AccessRequestTargetCatalog.AdvisorTarget);
+    }
+
+    public Task<AccessRequestTargetStatus> SubmitAdvisorAccessRequestAsync(
+        TrustedActorContext context, AccessRequestSubmission request, CancellationToken ct) =>
+        SubmitAccessRequestAsync(context, AccessRequestTargetCatalog.AdvisorTarget, request, ct);
+
+    public async Task<AccessRequestTargetStatus> SubmitAccessRequestAsync(
+        TrustedActorContext context, string targetCode, AccessRequestSubmission request, CancellationToken ct)
     {
         OperationId(request.OperationId);
+        AccessInput.Require(RequestTargets.TryGet(targetCode, out var target) && target is not null && target.TenantGrantable,
+            "ACCESS_REQUEST_TARGET_NOT_FOUND", 404);
         try
         {
             await using var connection = await connections.OpenAsync(context.TenantId, ct).ConfigureAwait(false);
             await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
-            await connection.ExecuteAsync(Command("SELECT pg_advisory_xact_lock(hashtext(@ActorId));",
-                new { context.ActorId }, transaction, ct)).ConfigureAwait(false);
+            await connection.ExecuteAsync(Command("SELECT pg_advisory_xact_lock(hashtext(@LockKey));",
+                new { LockKey = context.ActorId + ":" + targetCode }, transaction, ct)).ConfigureAwait(false);
             var policyVersion = await connection.ExecuteScalarAsync<long>(Command(
                 "SELECT policy_version FROM am.policy_state WHERE singleton FOR SHARE;", null, transaction, ct)).ConfigureAwait(false);
-            var subject = await RequireAdvisorAsync(connection, transaction, context.ActorId, true, ct).ConfigureAwait(false);
-            AccessInput.Require(await TargetAvailableAsync(connection, transaction, ct).ConfigureAwait(false),
-                "ACCESS_REQUEST_TARGET_UNAVAILABLE", 409);
-            AccessInput.Require(!await HasTargetAsync(connection, transaction, context.ActorId, ct).ConfigureAwait(false),
-                "ACCESS_ALREADY_AVAILABLE", 409);
+            var subject = await RequireBusinessSubjectAsync(connection, transaction, context.ActorId, true, ct).ConfigureAwait(false);
+            AccessInput.Require(target!.EligibleRoleCodes.Contains(subject.RoleCode, StringComparer.Ordinal),
+                "ACCESS_REQUEST_TARGET_NOT_ELIGIBLE", 403);
 
+            // Network retry replay is evaluated before current-access checks, including after fulfillment.
             var replay = await connection.QuerySingleOrDefaultAsync<AccessRequestRow>(Command("""
-                SELECT request_id AS RequestId,state AS State,created_at AS CreatedAt,
-                    decision_at AS DecisionAt,fulfilled_at AS FulfilledAt,decision_reason AS DecisionReason
+                SELECT request_id AS RequestId,target_code AS TargetCode,target_definition_hash AS TargetDefinitionHash,
+                    state AS State,created_at AS CreatedAt,decision_at AS DecisionAt,
+                    fulfilled_at AS FulfilledAt,decision_reason AS DecisionReason
                 FROM am.access_requests
                 WHERE tenant_id=@TenantId AND requester_actor_id=@ActorId AND submit_operation_id=@OperationId;
                 """, new { context.TenantId, context.ActorId, request.OperationId }, transaction, ct)).ConfigureAwait(false);
             if (replay is not null)
             {
+                AccessInput.Require(replay.TargetCode == target.Code, "ACCESS_REQUEST_OPERATION_CONFLICT", 409);
+                var replayHasAccess = await HasTargetAsync(connection, transaction, context.ActorId, target, ct).ConfigureAwait(false);
                 await transaction.CommitAsync(ct).ConfigureAwait(false);
-                return Status(context, policyVersion, subject.SubjectVersion, replay, false, false);
+                return Status(target, replay, replayHasAccess, false);
             }
 
-            var existing = await connection.QuerySingleOrDefaultAsync<AccessRequestRow>(Command("""
-                SELECT request_id AS RequestId,state AS State,created_at AS CreatedAt,
-                    decision_at AS DecisionAt,fulfilled_at AS FulfilledAt,decision_reason AS DecisionReason
-                FROM am.access_requests
-                WHERE tenant_id=@TenantId AND requester_actor_id=@ActorId AND target_code=@Target AND state='Submitted';
-                """, new { context.TenantId, context.ActorId, Target = AdvisorTarget }, transaction, ct)).ConfigureAwait(false);
+            AccessInput.Require(await TargetAvailableAsync(connection, transaction, target, ct).ConfigureAwait(false),
+                "ACCESS_REQUEST_TARGET_UNAVAILABLE", 409);
+            AccessInput.Require(!await HasTargetAsync(connection, transaction, context.ActorId, target, ct).ConfigureAwait(false),
+                "ACCESS_ALREADY_AVAILABLE", 409);
+
+            var existing = await LatestSubmittedAsync(connection, transaction, context.TenantId, context.ActorId, target.Code, ct)
+                .ConfigureAwait(false);
             if (existing is not null)
             {
                 await transaction.CommitAsync(ct).ConfigureAwait(false);
-                return Status(context, policyVersion, subject.SubjectVersion, existing, false, false);
+                return Status(target, existing, false, false);
             }
 
             var id = Guid.NewGuid().ToString("N");
             await connection.ExecuteAsync(Command("""
                 INSERT INTO am.access_requests (
-                    request_id,tenant_id,requester_actor_id,target_code,
+                    request_id,tenant_id,requester_actor_id,target_code,target_definition_hash,
                     requester_role_id,requester_subject_version,submit_operation_id,state,expires_at)
-                VALUES (@RequestId,@TenantId,@ActorId,@Target,@RoleId,@SubjectVersion,
+                VALUES (@RequestId,@TenantId,@ActorId,@Target,@DefinitionHash,@RoleId,@SubjectVersion,
                     @OperationId,'Submitted',clock_timestamp()+interval '7 days');
                 INSERT INTO am.access_request_events (
                     event_id,request_id,event_type,actor_id,policy_version)
@@ -133,22 +141,20 @@ public sealed partial class PostgresAccessAdministration
                 RequestId = id,
                 context.TenantId,
                 ActorId = context.ActorId,
-                Target = AdvisorTarget,
+                Target = target.Code,
+                DefinitionHash = target.DefinitionHash,
                 subject.RoleId,
                 subject.SubjectVersion,
                 request.OperationId,
                 EventId = Guid.NewGuid(),
                 PolicyVersion = policyVersion
             }, transaction, ct)).ConfigureAwait(false);
-            await WriteAccessRequestAuditAsync(connection, transaction, context, id, policyVersion, subject.SubjectVersion,
-                "access-request.submitted", context.ActorId, ct).ConfigureAwait(false);
-            var created = await connection.QuerySingleAsync<AccessRequestRow>(Command("""
-                SELECT request_id AS RequestId,state AS State,created_at AS CreatedAt,
-                    decision_at AS DecisionAt,fulfilled_at AS FulfilledAt,decision_reason AS DecisionReason
-                FROM am.access_requests WHERE request_id=@RequestId;
-                """, new { RequestId = id }, transaction, ct)).ConfigureAwait(false);
+            await WriteAccessRequestAuditAsync(connection, transaction, context, id, target.Code, policyVersion,
+                subject.SubjectVersion, "access-request.submitted", context.ActorId, ct).ConfigureAwait(false);
+            var created = await LatestAsync(connection, transaction, context.TenantId, context.ActorId, target.Code, ct)
+                .ConfigureAwait(false);
             await transaction.CommitAsync(ct).ConfigureAwait(false);
-            return Status(context, policyVersion, subject.SubjectVersion, created, false, false);
+            return Status(target, created!, false, false);
         }
         catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
         {
@@ -174,21 +180,19 @@ public sealed partial class PostgresAccessAdministration
                     SELECT created_at,request_id FROM am.access_requests
                     WHERE tenant_id=@TenantId AND request_id=@After
                 )
-                SELECT r.request_id AS RequestId,s.normalized_email AS Requester,r.state AS State,
-                    r.created_at AS CreatedAt,r.expires_at AS ExpiresAt,r.decision_at AS DecisionAt,
-                    r.decision_reason AS DecisionReason
+                SELECT r.request_id AS RequestId,s.normalized_email AS Requester,
+                    COALESCE(rr.label,'Former business role') AS RequesterRole,r.target_code AS TargetCode,
+                    r.target_definition_hash AS TargetDefinitionHash,r.state AS State,r.created_at AS CreatedAt,
+                    r.expires_at AS ExpiresAt,r.decision_at AS DecisionAt,r.decision_reason AS DecisionReason
                 FROM am.access_requests r
                 JOIN am.access_subjects s ON s.actor_id=r.requester_actor_id
+                LEFT JOIN am.roles rr ON rr.role_id=r.requester_role_id
                 WHERE r.tenant_id=@TenantId AND (@After IS NULL OR
                     (r.created_at,r.request_id) < ((SELECT created_at FROM anchor),(SELECT request_id FROM anchor)))
                 ORDER BY r.created_at DESC,r.request_id DESC LIMIT @Take;
                 """, new { context.TenantId, After = after, Take = limit + 1 }, transaction, ct)).ConfigureAwait(false)).ToArray();
             await transaction.CommitAsync(ct).ConfigureAwait(false);
-            var items = rows.Take(limit).Select(row => new AccessRequestReviewItem(
-                row.RequestId, row.Requester, AdvisorTarget, AdvisorTargetLabel,
-                row.State == "Submitted" ? "UnderReview" : row.State,
-                Utc(row.CreatedAt), Utc(row.ExpiresAt), NullableUtc(row.DecisionAt),
-                SafeReason(row.DecisionReason), GrantExplanation)).ToArray();
+            var items = rows.Take(limit).Select(Review).ToArray();
             return new(context.TenantId, context.ActorId, policyVersion, items,
                 rows.Length > limit ? items[^1].RequestId : null);
         }
@@ -215,18 +219,7 @@ public sealed partial class PostgresAccessAdministration
             var policyVersion = await connection.ExecuteScalarAsync<long>(Command(
                 "SELECT policy_version FROM am.policy_state WHERE singleton FOR UPDATE;", null, transaction, ct)).ConfigureAwait(false);
             await RequireAdministratorAsync(connection, transaction, context.ActorId, ct).ConfigureAwait(false);
-            var request = await connection.QuerySingleOrDefaultAsync<DecisionRow>(Command("""
-                SELECT r.request_id AS RequestId,r.requester_actor_id AS RequesterActorId,
-                    s.normalized_email AS Requester,r.requester_role_id AS RequesterRoleId,
-                    r.requester_subject_version AS RequesterSubjectVersion,r.state AS State,
-                    r.created_at AS CreatedAt,r.expires_at AS ExpiresAt,r.decision_at AS DecisionAt,
-                    r.decision_action AS DecisionAction,r.decision_operation_id AS DecisionOperationId,
-                    r.decision_reason AS DecisionReason
-                FROM am.access_requests r
-                JOIN am.access_subjects s ON s.actor_id=r.requester_actor_id
-                WHERE r.tenant_id=@TenantId AND r.request_id=@RequestId AND r.target_code=@Target
-                FOR UPDATE OF r;
-                """, new { context.TenantId, RequestId = requestId, Target = AdvisorTarget }, transaction, ct)).ConfigureAwait(false);
+            var request = await DecisionAsync(connection, transaction, context.TenantId, requestId, true, ct).ConfigureAwait(false);
             AccessInput.Require(request is not null, "ACCESS_REQUEST_NOT_FOUND", 404);
             AccessInput.Require(request!.RequesterActorId != context.ActorId, "ACCESS_REQUEST_SELF_REVIEW_DENIED", 403);
             if (request.State != "Submitted")
@@ -237,8 +230,9 @@ public sealed partial class PostgresAccessAdministration
                 return Review(request);
             }
 
+            RequestTargets.TryGet(request.TargetCode, out var target);
             var reason = approve
-                ? await ApprovalFailureAsync(connection, transaction, request, ct).ConfigureAwait(false)
+                ? await ApprovalFailureAsync(connection, transaction, request, target, ct).ConfigureAwait(false)
                 : "AdministratorRejected";
             if (reason is not null)
             {
@@ -247,24 +241,50 @@ public sealed partial class PostgresAccessAdministration
             }
             else
             {
-                var alreadyGranted = await HasTargetAsync(connection, transaction, request.RequesterActorId, ct).ConfigureAwait(false);
-                var nextPolicyVersion = policyVersion;
-                long? subjectVersion = null;
-                if (!alreadyGranted)
-                {
-                    await connection.ExecuteAsync(Command("""
+                var approvedTarget = target!;
+                var permissionIds = approvedTarget.Permissions.Select(value => value.PermissionId).ToArray();
+                var inserted = await connection.ExecuteScalarAsync<int>(Command("""
+                    WITH inserted AS (
                         INSERT INTO am.subject_permissions (
                             actor_id,permission_id,granted_at,granted_by,source_request_id)
-                        VALUES (@ActorId,@ProfilePermissionId,clock_timestamp(),@GrantedBy,@RequestId),
-                               (@ActorId,@EvidencePermissionId,clock_timestamp(),@GrantedBy,@RequestId);
-                        """, new
-                    {
-                        ActorId = request.RequesterActorId,
-                        ProfilePermissionId = AdvisorPermissionId,
-                        EvidencePermissionId = AdvisorEvidencePermissionId,
-                        GrantedBy = context.ActorId,
-                        RequestId = request.RequestId
-                    }, transaction, ct)).ConfigureAwait(false);
+                        SELECT @ActorId,required.permission_id,clock_timestamp(),@GrantedBy,@RequestId
+                        FROM unnest(@PermissionIds) AS required(permission_id)
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM am.role_permissions rp
+                            WHERE rp.role_id=@RoleId AND rp.permission_id=required.permission_id)
+                        ON CONFLICT (actor_id,permission_id) DO NOTHING
+                        RETURNING permission_id
+                    ) SELECT count(*)::integer FROM inserted;
+                    """, new
+                {
+                    ActorId = request.RequesterActorId,
+                    PermissionIds = permissionIds,
+                    GrantedBy = context.ActorId,
+                    RequestId = request.RequestId,
+                    RoleId = request.RequesterRoleId
+                }, transaction, ct)).ConfigureAwait(false);
+                await connection.ExecuteAsync(Command("""
+                    INSERT INTO am.access_request_permission_grants (
+                        request_id,actor_id,permission_id,permission_code,capability_id,scope)
+                    SELECT @RequestId,@ActorId,snapshot.permission_id,snapshot.permission_code,
+                        snapshot.capability_id,snapshot.scope
+                    FROM unnest(@PermissionIds,@PermissionCodes,@CapabilityIds,@Scopes)
+                        AS snapshot(permission_id,permission_code,capability_id,scope)
+                    ON CONFLICT DO NOTHING;
+                    """, new
+                {
+                    RequestId = request.RequestId,
+                    ActorId = request.RequesterActorId,
+                    PermissionIds = permissionIds,
+                    PermissionCodes = approvedTarget.Permissions.Select(value => value.PermissionCode).ToArray(),
+                    CapabilityIds = approvedTarget.Permissions.Select(value => value.CapabilityId).ToArray(),
+                    Scopes = approvedTarget.Permissions.Select(value => value.Scope.ToString()).ToArray()
+                }, transaction, ct)).ConfigureAwait(false);
+
+                var nextPolicyVersion = policyVersion;
+                long? subjectVersion = null;
+                if (inserted > 0)
+                {
                     subjectVersion = await IncrementSubjectAsync(connection, transaction,
                         request.RequesterActorId, ct).ConfigureAwait(false);
                     nextPolicyVersion = await connection.ExecuteScalarAsync<long>(Command("""
@@ -291,22 +311,14 @@ public sealed partial class PostgresAccessAdministration
                     PolicyVersion = nextPolicyVersion
                 }, transaction, ct)).ConfigureAwait(false);
                 await WriteAccessRequestAuditAsync(connection, transaction, context, request.RequestId,
-                    nextPolicyVersion, subjectVersion, "access-request.fulfilled", request.RequesterActorId, ct,
-                    !alreadyGranted).ConfigureAwait(false);
+                    request.TargetCode, nextPolicyVersion, subjectVersion, "access-request.fulfilled",
+                    request.RequesterActorId, ct, inserted > 0).ConfigureAwait(false);
             }
 
-            var decided = await connection.QuerySingleAsync<DecisionRow>(Command("""
-                SELECT r.request_id AS RequestId,r.requester_actor_id AS RequesterActorId,
-                    s.normalized_email AS Requester,r.requester_role_id AS RequesterRoleId,
-                    r.requester_subject_version AS RequesterSubjectVersion,r.state AS State,
-                    r.created_at AS CreatedAt,r.expires_at AS ExpiresAt,r.decision_at AS DecisionAt,
-                    r.decision_action AS DecisionAction,r.decision_operation_id AS DecisionOperationId,
-                    r.decision_reason AS DecisionReason
-                FROM am.access_requests r JOIN am.access_subjects s ON s.actor_id=r.requester_actor_id
-                WHERE r.request_id=@RequestId;
-                """, new { RequestId = request.RequestId }, transaction, ct)).ConfigureAwait(false);
+            var decided = await DecisionAsync(connection, transaction, context.TenantId, request.RequestId, false, ct)
+                .ConfigureAwait(false);
             await transaction.CommitAsync(ct).ConfigureAwait(false);
-            return Review(decided);
+            return Review(decided!);
         }
         catch (PostgresException exception) when (exception.SqlState == PostgresErrorCodes.UniqueViolation)
         {
@@ -316,20 +328,23 @@ public sealed partial class PostgresAccessAdministration
     }
 
     private async Task<string?> ApprovalFailureAsync(
-        NpgsqlConnection connection, NpgsqlTransaction transaction, DecisionRow request, CancellationToken ct)
+        NpgsqlConnection connection, NpgsqlTransaction transaction, DecisionRow request,
+        AccessRequestTargetDefinition? target, CancellationToken ct)
     {
-        if (!await TargetAvailableAsync(connection, transaction, ct).ConfigureAwait(false))
+        if (target is null || target.DefinitionHash != request.TargetDefinitionHash || !target.TenantGrantable ||
+            !await TargetAvailableAsync(connection, transaction, target, ct).ConfigureAwait(false))
             return "CapabilityUnavailable";
         var expired = await connection.ExecuteScalarAsync<bool>(Command(
             "SELECT clock_timestamp()>=@ExpiresAt;", new { request.ExpiresAt }, transaction, ct)).ConfigureAwait(false);
         if (expired) return "RequestExpired";
-        var current = await connection.QuerySingleOrDefaultAsync<AdvisorSubjectRow>(Command("""
+        var current = await connection.QuerySingleOrDefaultAsync<BusinessSubjectRow>(Command("""
             SELECT s.business_role_id AS RoleId,s.subject_version AS SubjectVersion,
                 s.status AS Status,r.code AS RoleCode
             FROM am.access_subjects s LEFT JOIN am.roles r ON r.role_id=s.business_role_id
             WHERE s.actor_id=@ActorId FOR SHARE OF s;
             """, new { ActorId = request.RequesterActorId }, transaction, ct)).ConfigureAwait(false);
-        return current is { Status: "Active", RoleCode: AdvisorRoleCode } &&
+        return current is { Status: "Active", RoleCode: not null } &&
+            target.EligibleRoleCodes.Contains(current.RoleCode, StringComparer.Ordinal) &&
             current.RoleId == request.RequesterRoleId && current.SubjectVersion == request.RequesterSubjectVersion
                 ? null
                 : "RequesterNoLongerEligible";
@@ -357,83 +372,135 @@ public sealed partial class PostgresAccessAdministration
             EventId = Guid.NewGuid(),
             PolicyVersion = policyVersion
         }, transaction, ct)).ConfigureAwait(false);
-        await WriteAccessRequestAuditAsync(connection, transaction, context, request.RequestId, policyVersion,
-            null, "access-request.rejected", request.RequesterActorId, ct).ConfigureAwait(false);
+        await WriteAccessRequestAuditAsync(connection, transaction, context, request.RequestId,
+            request.TargetCode, policyVersion, null, "access-request.rejected", request.RequesterActorId, ct)
+            .ConfigureAwait(false);
     }
 
-    private static async Task<AdvisorSubjectRow> RequireAdvisorAsync(
+    private static async Task<BusinessSubjectRow> RequireBusinessSubjectAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction, string actorId, bool forShare, CancellationToken ct)
     {
-        var subject = await connection.QuerySingleOrDefaultAsync<AdvisorSubjectRow>(Command($"""
+        var subject = await connection.QuerySingleOrDefaultAsync<BusinessSubjectRow>(Command($"""
             SELECT s.business_role_id AS RoleId,s.subject_version AS SubjectVersion,
                 s.status AS Status,r.code AS RoleCode
             FROM am.access_subjects s JOIN am.roles r ON r.role_id=s.business_role_id
             WHERE s.actor_id=@ActorId {(forShare ? "FOR SHARE OF s,r" : string.Empty)};
             """, new { ActorId = actorId }, transaction, ct)).ConfigureAwait(false);
-        AccessInput.Require(subject is { Status: "Active", RoleCode: AdvisorRoleCode }, "ADVISOR_ROLE_REQUIRED", 403);
+        AccessInput.Require(subject is { Status: "Active", RoleId: not null, RoleCode: not null },
+            "BUSINESS_ROLE_REQUIRED", 403);
         return subject!;
     }
 
     private async Task<bool> TargetAvailableAsync(
-        NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct)
+        NpgsqlConnection connection, NpgsqlTransaction transaction,
+        AccessRequestTargetDefinition target, CancellationToken ct)
     {
-        if (!catalog.TryGet(AdvisorCapability, out var capability) ||
-            capability is not { Lifecycle: CapabilityLifecycle.Active, ResourceType: "customer" } ||
-            !catalog.TryGet(AdvisorEvidenceCapability, out var evidence) ||
-            evidence is not { Lifecycle: CapabilityLifecycle.Active, ResourceType: "document" }) return false;
-        return await connection.ExecuteScalarAsync<bool>(Command("""
-            SELECT (SELECT count(*) FROM am.permissions p
-                JOIN am.permission_capabilities pc ON pc.permission_id=p.permission_id
-                WHERE p.permission_id=@PermissionId AND p.code=@PermissionCode
-                  AND pc.capability_id=@Capability AND pc.scope='Resource')=1
-              AND (SELECT count(*) FROM am.permission_capabilities WHERE permission_id=@PermissionId)=1
-              AND (SELECT count(*) FROM am.permissions p
-                JOIN am.permission_capabilities pc ON pc.permission_id=p.permission_id
-                WHERE p.permission_id=@EvidencePermissionId AND p.code=@EvidencePermissionCode
-                  AND pc.capability_id=@EvidenceCapability AND pc.scope='Resource')=1
-              AND (SELECT count(*) FROM am.permission_capabilities WHERE permission_id=@EvidencePermissionId)=1;
-            """, new
-        {
-            PermissionId = AdvisorPermissionId,
-            PermissionCode = AdvisorPermissionCode,
-            Capability = AdvisorCapability,
-            EvidencePermissionId = AdvisorEvidencePermissionId,
-            EvidencePermissionCode = AdvisorEvidencePermissionCode,
-            EvidenceCapability = AdvisorEvidenceCapability
-        }, transaction, ct)).ConfigureAwait(false);
+        foreach (var permission in target.Permissions)
+            if (!catalog.TryGet(permission.CapabilityId, out var capability) ||
+                capability is not { Lifecycle: CapabilityLifecycle.Active }) return false;
+        var rows = (await connection.QueryAsync<PermissionDefinitionRow>(Command("""
+            SELECT p.permission_id AS PermissionId,p.code AS PermissionCode,
+                pc.capability_id AS CapabilityId,pc.scope AS Scope
+            FROM am.permissions p JOIN am.permission_capabilities pc ON pc.permission_id=p.permission_id
+            WHERE p.permission_id=ANY(@PermissionIds);
+            """, new { PermissionIds = target.Permissions.Select(value => value.PermissionId).ToArray() }, transaction, ct))
+            .ConfigureAwait(false)).ToArray();
+        return rows.Length == target.Permissions.Count && target.Permissions.All(expected => rows.Count(row =>
+            row.PermissionId == expected.PermissionId && row.PermissionCode == expected.PermissionCode &&
+            row.CapabilityId == expected.CapabilityId && row.Scope == expected.Scope.ToString()) == 1);
     }
 
-    private static Task<bool> HasTargetAsync(
-        NpgsqlConnection connection, NpgsqlTransaction transaction, string actorId, CancellationToken ct) =>
-        connection.ExecuteScalarAsync<bool>(Command("""
-            SELECT count(DISTINCT capability_id)=2 FROM (
-                SELECT pc.capability_id FROM am.access_subjects s
-                JOIN am.role_permissions rp ON rp.role_id=s.business_role_id
-                JOIN am.permission_capabilities pc ON pc.permission_id=rp.permission_id
-                WHERE s.actor_id=@ActorId AND pc.capability_id=ANY(@Capabilities) AND pc.scope='Resource'
-                UNION ALL
-                SELECT pc.capability_id FROM am.subject_permissions sp
-                JOIN am.permission_capabilities pc ON pc.permission_id=sp.permission_id
-                WHERE sp.actor_id=@ActorId AND pc.capability_id=ANY(@Capabilities) AND pc.scope='Resource'
-            ) grants;
-            """, new
-        {
-            ActorId = actorId,
-            Capabilities = new[] { AdvisorCapability, AdvisorEvidenceCapability }
-        }, transaction, ct));
+    private async Task<bool> HasTargetAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction, string actorId,
+        AccessRequestTargetDefinition target, CancellationToken ct)
+    {
+        var capabilities = target.Permissions.Select(value => value.CapabilityId).Distinct().ToArray();
+        var effective = (await connection.QueryAsync<string>(Command("""
+            SELECT DISTINCT pc.capability_id
+            FROM am.access_subjects s
+            JOIN am.role_permissions rp ON rp.role_id=s.business_role_id
+            JOIN am.permission_capabilities pc ON pc.permission_id=rp.permission_id
+            WHERE s.actor_id=@ActorId AND pc.capability_id=ANY(@Capabilities);
+            """, new { ActorId = actorId, Capabilities = capabilities }, transaction, ct)).ConfigureAwait(false))
+            .ToHashSet(StringComparer.Ordinal);
+        var rows = await connection.QueryAsync<SubjectGrantRow>(Command("""
+            SELECT sp.permission_id AS PermissionId,p.code AS PermissionCode,
+                pc.capability_id AS CapabilityId,pc.scope AS Scope,
+                apg.permission_code AS SnapshotPermissionCode,
+                apg.capability_id AS SnapshotCapabilityId,apg.scope AS SnapshotScope,
+                ar.target_code AS TargetCode,ar.target_definition_hash AS TargetDefinitionHash,
+                r.code AS RoleCode
+            FROM am.subject_permissions sp
+            JOIN am.access_request_permission_grants apg
+                ON apg.actor_id=sp.actor_id AND apg.permission_id=sp.permission_id
+            JOIN am.access_requests ar ON ar.request_id=apg.request_id
+            JOIN am.permissions p ON p.permission_id=sp.permission_id
+            JOIN am.permission_capabilities pc ON pc.permission_id=sp.permission_id
+            JOIN am.access_subjects s ON s.actor_id=sp.actor_id
+            JOIN am.roles r ON r.role_id=s.business_role_id
+            WHERE sp.actor_id=@ActorId AND ar.state='Fulfilled' AND pc.capability_id=ANY(@Capabilities);
+            """, new { ActorId = actorId, Capabilities = capabilities }, transaction, ct)).ConfigureAwait(false);
+        foreach (var row in rows)
+            if (RequestTargets.TryGet(row.TargetCode, out var source) && source is not null &&
+                source.DefinitionHash == row.TargetDefinitionHash &&
+                source.EligibleRoleCodes.Contains(row.RoleCode, StringComparer.Ordinal) &&
+                source.Permissions.Any(permission => permission.PermissionId == row.PermissionId &&
+                    permission.PermissionCode == row.PermissionCode &&
+                    permission.PermissionCode == row.SnapshotPermissionCode &&
+                    permission.CapabilityId == row.CapabilityId &&
+                    permission.CapabilityId == row.SnapshotCapabilityId &&
+                    permission.Scope.ToString() == row.Scope &&
+                    permission.Scope.ToString() == row.SnapshotScope))
+                effective.Add(row.CapabilityId);
+        return capabilities.All(effective.Contains);
+    }
+
+    private static Task<AccessRequestRow?> LatestAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction, string tenantId,
+        string actorId, string target, CancellationToken ct) =>
+        connection.QuerySingleOrDefaultAsync<AccessRequestRow>(Command("""
+            SELECT request_id AS RequestId,target_code AS TargetCode,target_definition_hash AS TargetDefinitionHash,
+                state AS State,created_at AS CreatedAt,decision_at AS DecisionAt,
+                fulfilled_at AS FulfilledAt,decision_reason AS DecisionReason
+            FROM am.access_requests
+            WHERE tenant_id=@TenantId AND requester_actor_id=@ActorId AND target_code=@Target
+            ORDER BY created_at DESC,request_id DESC LIMIT 1;
+            """, new { TenantId = tenantId, ActorId = actorId, Target = target }, transaction, ct));
+
+    private static Task<AccessRequestRow?> LatestSubmittedAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction, string tenantId,
+        string actorId, string target, CancellationToken ct) =>
+        connection.QuerySingleOrDefaultAsync<AccessRequestRow>(Command("""
+            SELECT request_id AS RequestId,target_code AS TargetCode,target_definition_hash AS TargetDefinitionHash,
+                state AS State,created_at AS CreatedAt,decision_at AS DecisionAt,
+                fulfilled_at AS FulfilledAt,decision_reason AS DecisionReason
+            FROM am.access_requests
+            WHERE tenant_id=@TenantId AND requester_actor_id=@ActorId AND target_code=@Target AND state='Submitted';
+            """, new { TenantId = tenantId, ActorId = actorId, Target = target }, transaction, ct));
+
+    private static Task<DecisionRow?> DecisionAsync(
+        NpgsqlConnection connection, NpgsqlTransaction transaction, string tenantId,
+        string requestId, bool forUpdate, CancellationToken ct) =>
+        connection.QuerySingleOrDefaultAsync<DecisionRow>(Command($"""
+            SELECT r.request_id AS RequestId,r.requester_actor_id AS RequesterActorId,
+                s.normalized_email AS Requester,
+                COALESCE(rr.label,'Former business role') AS RequesterRole,r.target_code AS TargetCode,
+                r.target_definition_hash AS TargetDefinitionHash,r.requester_role_id AS RequesterRoleId,
+                r.requester_subject_version AS RequesterSubjectVersion,r.state AS State,
+                r.created_at AS CreatedAt,r.expires_at AS ExpiresAt,r.decision_at AS DecisionAt,
+                r.decision_action AS DecisionAction,r.decision_operation_id AS DecisionOperationId,
+                r.decision_reason AS DecisionReason
+            FROM am.access_requests r JOIN am.access_subjects s ON s.actor_id=r.requester_actor_id
+            LEFT JOIN am.roles rr ON rr.role_id=r.requester_role_id
+            WHERE r.tenant_id=@TenantId AND r.request_id=@RequestId {(forUpdate ? "FOR UPDATE OF r" : string.Empty)};
+            """, new { TenantId = tenantId, RequestId = requestId }, transaction, ct));
 
     private static async Task WriteAccessRequestAuditAsync(
         NpgsqlConnection connection, NpgsqlTransaction transaction, TrustedActorContext context,
-        string requestId, long policyVersion, long? subjectVersion, string operation,
+        string requestId, string target, long policyVersion, long? subjectVersion, string operation,
         string subjectActorId, CancellationToken ct, bool authorizationChanged = false)
     {
-        var payload = JsonSerializer.Serialize(new
-        {
-            operation,
-            requestId,
-            target = AdvisorTarget,
-            subjectActorId
-        });
+        var payload = JsonSerializer.Serialize(new { operation, requestId, target, subjectActorId });
         var eventTypes = authorizationChanged
             ? new[] { "AuthorizationPolicyChanged", "TenantUserAccessChanged", "AccessManagementAuditEvidence" }
             : new[] { "AccessManagementAuditEvidence" };
@@ -458,19 +525,30 @@ public sealed partial class PostgresAccessAdministration
             }, transaction, ct)).ConfigureAwait(false);
     }
 
-    private static AdvisorAccessRequestStatus Status(
-        TrustedActorContext context, long policyVersion, long subjectVersion,
-        AccessRequestRow? row, bool hasAccess, bool canRequest) =>
-        new(context.TenantId, context.ActorId, policyVersion, subjectVersion,
-            row?.RequestId, AdvisorTarget, AdvisorTargetLabel, row?.State ?? "NotRequested", hasAccess, canRequest,
+    private AccessRequestReviewItem Review(AccessRequestReviewRow row)
+    {
+        RequestTargets.TryGet(row.TargetCode, out var target);
+        return new(row.RequestId, row.Requester, row.RequesterRole, row.TargetCode,
+            target?.Label ?? "Retired access target", row.State == "Submitted" ? "UnderReview" : row.State,
+            Utc(row.CreatedAt), Utc(row.ExpiresAt), NullableUtc(row.DecisionAt), SafeReason(row.DecisionReason),
+            target?.GrantExplanation ?? "This target is no longer available and cannot be approved.");
+    }
+
+    private AccessRequestReviewItem Review(DecisionRow row)
+    {
+        RequestTargets.TryGet(row.TargetCode, out var target);
+        return new(row.RequestId, row.Requester, row.RequesterRole, row.TargetCode,
+            target?.Label ?? "Retired access target", row.State == "Submitted" ? "UnderReview" : row.State,
+            Utc(row.CreatedAt), Utc(row.ExpiresAt), NullableUtc(row.DecisionAt), SafeReason(row.DecisionReason),
+            target?.GrantExplanation ?? "This target is no longer available and cannot be approved.");
+    }
+
+    private static AccessRequestTargetStatus Status(
+        AccessRequestTargetDefinition target, AccessRequestRow? row, bool hasAccess, bool canRequest) =>
+        new(row?.RequestId, target.Code, target.Label, target.GrantExplanation,
+            row?.State ?? "NotRequested", hasAccess, canRequest,
             row is null ? null : Utc(row.CreatedAt), NullableUtc(row?.DecisionAt), NullableUtc(row?.FulfilledAt),
             SafeReason(row?.DecisionReason));
-
-    private static AccessRequestReviewItem Review(DecisionRow row) => new(
-        row.RequestId, row.Requester, AdvisorTarget, AdvisorTargetLabel,
-        row.State == "Submitted" ? "UnderReview" : row.State,
-        Utc(row.CreatedAt), Utc(row.ExpiresAt), NullableUtc(row.DecisionAt),
-        SafeReason(row.DecisionReason), GrantExplanation);
 
     private static string? SafeReason(string? value) => value switch
     {
@@ -481,8 +559,7 @@ public sealed partial class PostgresAccessAdministration
         _ => null
     };
 
-    private static DateTimeOffset Utc(DateTime value) =>
-        new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
+    private static DateTimeOffset Utc(DateTime value) => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
     private static DateTimeOffset? NullableUtc(DateTime? value) => value is null ? null : Utc(value.Value);
     private static void OperationId(string value) =>
         AccessInput.Require(value is { Length: 32 } && value.All(character =>
@@ -491,15 +568,21 @@ public sealed partial class PostgresAccessAdministration
         AccessInput.Require(value is { Length: 32 } && value.All(character =>
             character is >= '0' and <= '9' or >= 'a' and <= 'f'), "INVALID_ACCESS_REQUEST_ID");
 
-    private sealed record AdvisorSubjectRow(string? RoleId, long SubjectVersion, string Status, string? RoleCode);
+    private sealed record BusinessSubjectRow(string? RoleId, long SubjectVersion, string Status, string? RoleCode);
+    private sealed record PermissionDefinitionRow(string PermissionId, string PermissionCode, string CapabilityId, string Scope);
+    private sealed record SubjectGrantRow(
+        string PermissionId, string PermissionCode, string CapabilityId, string Scope,
+        string SnapshotPermissionCode, string SnapshotCapabilityId, string SnapshotScope,
+        string TargetCode, string TargetDefinitionHash, string RoleCode);
     private sealed record AccessRequestRow(
-        string RequestId, string State, DateTime CreatedAt, DateTime? DecisionAt, DateTime? FulfilledAt,
-        string? DecisionReason);
+        string RequestId, string TargetCode, string TargetDefinitionHash, string State, DateTime CreatedAt,
+        DateTime? DecisionAt, DateTime? FulfilledAt, string? DecisionReason);
     private sealed record AccessRequestReviewRow(
-        string RequestId, string Requester, string State, DateTime CreatedAt, DateTime ExpiresAt,
-        DateTime? DecisionAt, string? DecisionReason);
+        string RequestId, string Requester, string RequesterRole, string TargetCode, string TargetDefinitionHash, string State,
+        DateTime CreatedAt, DateTime ExpiresAt, DateTime? DecisionAt, string? DecisionReason);
     private sealed record DecisionRow(
-        string RequestId, string RequesterActorId, string Requester, string RequesterRoleId,
-        long RequesterSubjectVersion, string State, DateTime CreatedAt, DateTime ExpiresAt,
+        string RequestId, string RequesterActorId, string Requester, string RequesterRole,
+        string TargetCode, string TargetDefinitionHash,
+        string RequesterRoleId, long RequesterSubjectVersion, string State, DateTime CreatedAt, DateTime ExpiresAt,
         DateTime? DecisionAt, string? DecisionAction, string? DecisionOperationId, string? DecisionReason);
 }

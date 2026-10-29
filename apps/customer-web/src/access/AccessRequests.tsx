@@ -6,7 +6,12 @@ import type { AccessApi } from './accessApi';
 import { displayError } from './accessApi';
 
 const { Paragraph, Text, Title } = Typography;
-const target = 'financial-advisor.assigned-customer-financial-review';
+const target = (value: string): boolean => {
+  const parts = value.split('.');
+  return parts.length >= 2 && parts.every(part => part.length > 0 && part.length <= 80 &&
+    part.charAt(0) >= 'a' && part.charAt(0) <= 'z' && Array.from(part).every(character =>
+      character >= 'a' && character <= 'z' || character >= '0' && character <= '9' || character === '-'));
+};
 const requestId = (value: unknown): value is string =>
   typeof value === 'string' && /^[0-9a-f]{32}$/.test(value);
 const safeText = (value: unknown, maximum: number): value is string =>
@@ -22,7 +27,8 @@ const operationId = () => crypto.randomUUID().replaceAll('-', '');
 interface AccessRequestItem {
   requestId: string;
   requester: string;
-  target: typeof target;
+  requesterRole: string;
+  target: string;
   targetLabel: string;
   state: 'UnderReview' | 'Rejected' | 'Fulfilled';
   createdAt: string;
@@ -42,7 +48,8 @@ interface AccessRequestPage {
 function validItem(value: unknown): value is AccessRequestItem {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
-  return requestId(item.requestId) && safeText(item.requester, 320) && item.target === target &&
+  return requestId(item.requestId) && safeText(item.requester, 320) && safeText(item.requesterRole, 120) &&
+    typeof item.target === 'string' && item.target.length <= 160 && target(item.target) &&
     safeText(item.targetLabel, 120) &&
     (item.state === 'UnderReview' || item.state === 'Rejected' || item.state === 'Fulfilled') &&
     date(item.createdAt) && date(item.expiresAt) &&
@@ -134,7 +141,10 @@ export function AccessRequests({
   const columns: TableColumnsType<AccessRequestItem> = [
     {
       title: 'Requester', dataIndex: 'requester', key: 'requester',
-      render: value => <Text strong>{value}</Text>,
+      render: (value, item) => <Space orientation="vertical" size={0}>
+        <Text strong>{value}</Text>
+        <Text type="secondary">{item.requesterRole}</Text>
+      </Space>,
     },
     {
       title: 'Requested access', key: 'target',
@@ -187,7 +197,7 @@ export function AccessRequests({
       <div>
         <p className="workspace-eyebrow">ORGANIZATION · ACCESS</p>
         <Title level={1} id="access-requests-title">Access requests</Title>
-        <Paragraph>Review Financial Advisor requests for assigned customer financial information.</Paragraph>
+        <Paragraph>Review bounded, tenant-grantable access requests from your organization.</Paragraph>
       </div>
       <Button onClick={() => { setCurrent(null); setRevision(value => value + 1); }} disabled={Boolean(busy)}>
         Refresh
@@ -195,7 +205,7 @@ export function AccessRequests({
     </header>
     <Alert type="info" showIcon className="access-notice"
       title="Approval is deliberately bounded"
-      description="Approval gives this requester financial-profile and supporting-document read eligibility. It does not assign a customer, grant record access, replace customer consent, or provide administrator authority." />
+      description="Approval grants only the capability described on the request. It cannot assign a customer, replace customer consent, grant Platform Administrator access or provide administrator authority." />
     {error && <Alert type="error" showIcon className="access-notice" title={error} />}
     {notice && <Alert type="success" showIcon className="access-notice" title={notice} />}
     <Card>

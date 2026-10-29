@@ -7,7 +7,8 @@ using Npgsql;
 namespace Monergy.AccessManagement;
 
 public sealed partial class PostgresAccessAdministration(
-    ITenantConnectionFactory connections, CapabilityCatalog catalog, IVerifiedTenantIdentityDirectory identities, ITenantIdentityProvisioner? provisioner = null)
+    ITenantConnectionFactory connections, CapabilityCatalog catalog, IVerifiedTenantIdentityDirectory identities,
+    ITenantIdentityProvisioner? provisioner = null, AccessRequestTargetCatalog? requestTargetCatalog = null)
 {
     public Task<AdministrationResult> SavePermissionAsync(
         TrustedActorContext context, string? permissionId, PermissionWrite request, CancellationToken ct)
@@ -391,19 +392,41 @@ public sealed partial class PostgresAccessAdministration(
                     SELECT 1 FROM am.access_subjects s
                     JOIN am.role_permissions rp ON rp.role_id=s.business_role_id
                     JOIN am.permission_capabilities pc ON pc.permission_id=rp.permission_id
-                    WHERE s.actor_id=@ActorId AND s.status='Active'
-                      AND pc.capability_id=@CapabilityId AND pc.scope='Resource'
-                    UNION ALL
-                    SELECT 1 FROM am.access_subjects s
+                    WHERE s.actor_id=@ActorId AND s.status='Active' AND pc.capability_id=@CapabilityId AND pc.scope='Resource');
+                """, new { request.ActorId, request.CapabilityId }, transaction, ct)).ConfigureAwait(false);
+            if (!eligible)
+            {
+                var subjectGrants = await connection.QueryAsync<ResourceSubjectGrantRow>(Command("""
+                    SELECT sp.permission_id AS PermissionId,p.code AS PermissionCode,
+                        pc.capability_id AS CapabilityId,pc.scope AS Scope,
+                        apg.permission_code AS SnapshotPermissionCode,
+                        apg.capability_id AS SnapshotCapabilityId,apg.scope AS SnapshotScope,
+                        r.code AS RoleCode,ar.target_code AS TargetCode,
+                        ar.target_definition_hash AS TargetDefinitionHash
+                    FROM am.access_subjects s
                     JOIN am.roles r ON r.role_id=s.business_role_id
                     JOIN am.subject_permissions sp ON sp.actor_id=s.actor_id
+                    JOIN am.permissions p ON p.permission_id=sp.permission_id
                     JOIN am.permission_capabilities pc ON pc.permission_id=sp.permission_id
-                    JOIN am.access_requests ar ON ar.request_id=sp.source_request_id
-                    WHERE s.actor_id=@ActorId AND s.status='Active' AND r.code='financial-advisor'
+                    JOIN am.access_request_permission_grants apg
+                        ON apg.actor_id=sp.actor_id AND apg.permission_id=sp.permission_id
+                    JOIN am.access_requests ar ON ar.request_id=apg.request_id
+                    WHERE s.actor_id=@ActorId AND s.status='Active'
                       AND pc.capability_id=@CapabilityId AND pc.scope='Resource'
                       AND ar.state='Fulfilled' AND ar.requester_actor_id=s.actor_id
-                      AND ar.requester_role_id=s.business_role_id);
-                """, new { request.ActorId, request.CapabilityId }, transaction, ct)).ConfigureAwait(false);
+                      AND ar.requester_role_id=s.business_role_id;
+                    """, new { request.ActorId, request.CapabilityId }, transaction, ct)).ConfigureAwait(false);
+                eligible = subjectGrants.Any(row => RequestTargets.TryGet(row.TargetCode, out var target) &&
+                    target is not null && target.DefinitionHash == row.TargetDefinitionHash &&
+                    target.EligibleRoleCodes.Contains(row.RoleCode, StringComparer.Ordinal) &&
+                    target.Permissions.Any(permission => permission.PermissionId == row.PermissionId &&
+                        permission.PermissionCode == row.PermissionCode &&
+                        permission.PermissionCode == row.SnapshotPermissionCode &&
+                        permission.CapabilityId == row.CapabilityId &&
+                        permission.CapabilityId == row.SnapshotCapabilityId &&
+                        permission.Scope.ToString() == row.Scope &&
+                        permission.Scope.ToString() == row.SnapshotScope));
+            }
             AccessInput.Require(eligible, "RESOURCE_CAPABILITY_NOT_ASSIGNED", 409);
             await connection.ExecuteAsync(Command("""
                 INSERT INTO am.resource_grants (grant_id,actor_id,capability_id,resource_type,resource_id)
@@ -826,5 +849,9 @@ public sealed partial class PostgresAccessAdministration(
     private sealed record RoleState(string RoleId, string Code, string Label, IReadOnlyList<string> PermissionIds);
     private sealed record MutationEffect(long? SubjectVersion = null, string? ActorId = null);
     private sealed record MemberRow(string Status, string? BusinessRoleId, string? Authority);
+    private sealed record ResourceSubjectGrantRow(
+        string PermissionId, string PermissionCode, string CapabilityId, string Scope,
+        string SnapshotPermissionCode, string SnapshotCapabilityId, string SnapshotScope,
+        string RoleCode, string TargetCode, string TargetDefinitionHash);
     private sealed record DocumentRow(string Id, string Document);
 }

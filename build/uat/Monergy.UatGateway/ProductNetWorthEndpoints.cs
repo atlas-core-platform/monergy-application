@@ -12,7 +12,7 @@ namespace Monergy.UatGateway;
 public static class ProductNetWorthEndpoints
 {
     public static void AddProductNetWorth(this WebApplicationBuilder builder)
-    {if(builder.Configuration.GetValue<bool>("Monergy:Product:Enabled"))builder.Services.AddSingleton<ProductNetWorthClient>();}
+    {if(builder.Configuration.GetValue<bool>("Monergy:Product:Enabled"))builder.Services.AddSingleton(provider=>new ProductNetWorthClient(provider.GetRequiredService<IConfiguration>()));}
     public static void MapProductNetWorth(this WebApplication app)
     {
         if(!app.Configuration.GetValue<bool>("Monergy:Product:Enabled"))return;
@@ -92,9 +92,10 @@ public sealed class ProductNetWorthClient:IDisposable
 {
     private readonly HttpClient client;private readonly Uri profile,rules;
     private static readonly JsonSerializerOptions Json=new(ContractJson.Options){RespectRequiredConstructorParameters=true,RespectNullableAnnotations=true,UnmappedMemberHandling=System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow};
-    public ProductNetWorthClient(IConfiguration config):this(config,new HttpClient(new SocketsHttpHandler{AllowAutoRedirect=false,UseProxy=false})){}
+    public ProductNetWorthClient(IConfiguration config):this(config,CreateClient()){}
     public ProductNetWorthClient(IConfiguration config,HttpClient client)
-    {this.client=client;client.Timeout=TimeSpan.FromSeconds(30);client.MaxResponseContentBufferSize=33554432;profile=TenantAccessIntegration.LoopbackRoot(config["Monergy:Product:FinancialProfileUrl"]??throw new InvalidOperationException("Financial Profile endpoint required."));rules=TenantAccessIntegration.LoopbackRoot(config["Monergy:Product:FinancialRulesUrl"]??throw new InvalidOperationException("Financial Rules endpoint required."));}
+    {this.client=client;profile=TenantAccessIntegration.LoopbackRoot(config["Monergy:Product:FinancialProfileUrl"]??throw new InvalidOperationException("Financial Profile endpoint required."));rules=TenantAccessIntegration.LoopbackRoot(config["Monergy:Product:FinancialRulesUrl"]??throw new InvalidOperationException("Financial Rules endpoint required."));}
+    private static HttpClient CreateClient()=>new(new SocketsHttpHandler{AllowAutoRedirect=false,UseProxy=false}){Timeout=TimeSpan.FromSeconds(30),MaxResponseContentBufferSize=33554432};
     public Task<ReviewedNetWorthPosition> SavePosition(CustomerOwnerSession s,string c,CreateNetWorthPosition input,CancellationToken ct)=>Send<ReviewedNetWorthPosition>(profile,s,c,"positions",input,ct);
     public Task<ReviewedNetWorthPosition> Position(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>Send<ReviewedNetWorthPosition>(profile,s,c,"positions/"+Uri.EscapeDataString(id),null,ct);
     public Task<NetWorthPositionPage> Positions(CustomerOwnerSession s,string c,string? cursor,CancellationToken ct)=>Send<NetWorthPositionPage>(profile,s,c,"positions"+Cursor(cursor),null,ct);

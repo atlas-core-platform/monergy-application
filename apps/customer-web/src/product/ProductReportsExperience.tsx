@@ -2,6 +2,7 @@ import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Collapse, Descriptions, Skeleton, Tag } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
+import { RequestAccessAction } from '../access/RequestAccess';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import type { TrustedFinancialReport } from '../reports/types';
 import { generateBasicFinancialReport, getBasicFinancialReport } from './productApi';
@@ -113,9 +114,9 @@ export default function ProductReportsExperience() {
       </header>
 
       {!canGenerate && (
-        <Alert
-          showIcon
-          type="warning"
+        <RequestAccessAction
+          target="customer.reports"
+          requiredCapabilities={['reporting.report.generate']}
           title="Basic reports aren't included in your current access"
           description="Your organization can review the recommended Customer access update before enabling this journey."
         />

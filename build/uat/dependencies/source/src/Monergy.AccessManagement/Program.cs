@@ -10,6 +10,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.RespectRequiredConstructorParameters = true;
 });
 builder.Services.AddSingleton(new CapabilityCatalog());
+builder.Services.AddSingleton<AccessRequestTargetCatalog>();
 builder.Services.AddSingleton<TimeProvider>(TimeProvider.System);
 builder.Services.AddMemoryCache(options => options.SizeLimit = 1_000);
 builder.Services.AddSingleton<AuthorizationEvaluator>();

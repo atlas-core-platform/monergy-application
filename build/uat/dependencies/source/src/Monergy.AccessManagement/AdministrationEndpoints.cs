@@ -14,6 +14,10 @@ public static class AdministrationEndpoints
 
     public static void MapAdvisorWorkspace(this WebApplication app)
     {
+        app.MapGet("/v1/access-requests", (Func<HttpContext, Task<IResult>>)(http =>
+            ExecuteAsync(http, (service, context, ct) => service.ReadAccessRequestsAsync(context, ct))));
+        app.MapPost("/v1/access-requests/{target}/submit", (string target, AccessRequestSubmission request, HttpContext http) =>
+            ExecuteAsync(http, (service, context, ct) => service.SubmitAccessRequestAsync(context, target, request, ct)));
         app.MapGet("/v1/advisor/context", (Func<HttpContext, Task<IResult>>)(http =>
             ExecuteAsync(http, (service, context, ct) => service.AdvisorContextAsync(context, ct))));
         app.MapGet("/v1/advisor/access-request", (Func<HttpContext, Task<IResult>>)(http =>

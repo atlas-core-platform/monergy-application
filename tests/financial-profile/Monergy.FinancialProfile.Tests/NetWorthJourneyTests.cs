@@ -102,6 +102,14 @@ public sealed class NetWorthJourneyTests
         var page=(await client.GetFromJsonAsync<NetWorthCalculationPage>("/product-api/v1/net-worth/calculations",ContractJson.Options))!;Assert.Equal(2,page.Items.Count);Assert.Equal(updated.CalculationId,page.Items[0].CalculationId);
         h.Authority.Denied="financial-profile.profile.update";Assert.Equal(HttpStatusCode.OK,(await client.GetAsync("/product-api/v1/net-worth/calculations/"+result.CalculationId)).StatusCode);Assert.Equal(HttpStatusCode.Forbidden,(await client.PostAsJsonAsync("/product-api/v1/net-worth/positions",Input(),ContractJson.Options)).StatusCode);
     }
+    [Fact]
+    public async Task GatewayNetWorthUsesDedicatedClientAfterSharedClientHasSentAndPreservesGovernedFlow()
+    {
+        await using var h=await Harness.Create(useRegisteredClient:true);var shared=Assert.IsType<HttpClient>(h.SharedClient);Assert.Equal(1,h.SharedCalls);Assert.Equal(TimeSpan.FromSeconds(7),shared.Timeout);Assert.Equal(123456,shared.MaxResponseContentBufferSize);
+        using var client=h.Client();h.Authority.Denied="financial-profile.profile.update";Assert.Equal(HttpStatusCode.Forbidden,(await client.PostAsJsonAsync("/product-api/v1/net-worth/positions",Input(),ContractJson.Options)).StatusCode);Assert.Empty((await h.Positions.ListAsync("T001",Customer,null,default)).Items);
+        h.Authority.Denied="";var first=await Save(client,Input());_ = await Save(client,Input());var response=await client.PostAsJsonAsync("/product-api/v1/net-worth/calculations",new CalculateNetWorth(Guid.NewGuid().ToString("N"),first.PositionId),ContractJson.Options);Assert.Equal(HttpStatusCode.OK,response.StatusCode);Assert.Equal(2,(await h.Positions.ListAsync("T001",Customer,null,default)).Items.Count);Assert.Single((await h.Calculations.ListAsync("T001",Customer,null,default)).Items);
+        Assert.Equal(1,h.SharedCalls);Assert.Equal(TimeSpan.FromSeconds(7),shared.Timeout);Assert.Equal(123456,shared.MaxResponseContentBufferSize);
+    }
     [Theory,InlineData("financial-profile.profile.read"),InlineData("financial-profile.profile.update"),InlineData("advisor")]
     public async Task CurrentAuthorityRejectsInventoryWritesBeforeMutation(string denied)
     {
@@ -203,15 +211,24 @@ public sealed class NetWorthJourneyTests
             response.Content.Dispose();response.Content=new StringContent(json.ToJsonString(),Encoding.UTF8,"application/json");return response;
         }
     }
-    private sealed class Harness(WebApplication profile,WebApplication rules,WebApplication gateway,Authority authority,InMemoryNetWorthPositions positions,InMemoryNetWorthCalculations calculations,InMemoryInvestmentRecords investments,Tamper tamper):IAsyncDisposable
+    private sealed class SharedProbeHandler:HttpMessageHandler
+    {
+        public int Calls{get;private set;}
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)
+        {Calls++;return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));}
+    }
+    private sealed class Harness(WebApplication profile,WebApplication rules,WebApplication gateway,Authority authority,InMemoryNetWorthPositions positions,InMemoryNetWorthCalculations calculations,InMemoryInvestmentRecords investments,Tamper tamper,HttpClient? sharedClient,SharedProbeHandler? sharedProbe):IAsyncDisposable
     {
         public Authority Authority=>authority;public InMemoryNetWorthPositions Positions=>positions;public InMemoryNetWorthCalculations Calculations=>calculations;public InMemoryInvestmentRecords Investments=>investments;public Tamper Tamper=>tamper;
-        public static async Task<Harness> Create(string? scenario=null)
+        public HttpClient? SharedClient=>sharedClient;public int SharedCalls=>sharedProbe?.Calls??0;
+        public static async Task<Harness> Create(string? scenario=null,bool useRegisteredClient=false)
         {
             var authority=new Authority();var positions=new InMemoryNetWorthPositions();var calculations=new InMemoryNetWorthCalculations();var investments=new InMemoryInvestmentRecords();var values=new Dictionary<string,string?>{["Monergy:ExecutionZone"]="CI_EPHEMERAL",["Monergy:AccessIntegration:Enabled"]="true",["Monergy:AccessIntegration:CustomerIdentityUrl"]="http://127.0.0.1:5001/",["Monergy:AccessIntegration:AccessManagementUrl"]="http://127.0.0.1:5002/",["Monergy:AccessIntegration:CustomerContextToken"]=new('a',32),["Monergy:AccessIntegration:CustomerIdentityToken"]=new('b',32),["Monergy:AccessIntegration:MembershipToken"]=new('c',32),["Monergy:Product:Enabled"]="true"};
             var pb=Builder(values,authority,"financial-profile");pb.Services.AddSingleton(PositionsOwner(positions,investments));var profile=pb.Build();profile.MapNetWorthPositions();await profile.StartAsync();values["Monergy:NetWorth:FinancialProfileUrl"]=profile.Urls.Single()+"/";values["Monergy:Product:FinancialProfileUrl"]=profile.Urls.Single()+"/";
             var rb=Builder(values,authority,"financial-rules");rb.Services.AddSingleton(new NetWorthCalculationsApplication(new NetWorthPositionClient(rb.Configuration),calculations,new NetWorthRule(rb.Configuration),TimeProvider.System));var rules=rb.Build();rules.MapNetWorthCalculations();await rules.StartAsync();values["Monergy:Product:FinancialRulesUrl"]=rules.Urls.Single()+"/";
-            var gb=Builder(values,authority,"gateway");gb.Services.AddSingleton(new CustomerOwnerClient(gb.Configuration,new HttpClient(authority,false)));var tamper=new Tamper(scenario,authority);gb.Services.AddSingleton(new ProductNetWorthClient(gb.Configuration,new HttpClient(tamper)));var gateway=gb.Build();gateway.MapProductNetWorth();await gateway.StartAsync();return new(profile,rules,gateway,authority,positions,calculations,investments,tamper);
+            var gb=Builder(values,authority,"gateway");gb.Services.AddSingleton(new CustomerOwnerClient(gb.Configuration,new HttpClient(authority,false)));var tamper=new Tamper(scenario,authority);HttpClient? shared=null;SharedProbeHandler? probe=null;
+            if(useRegisteredClient){probe=new();shared=new(probe){Timeout=TimeSpan.FromSeconds(7),MaxResponseContentBufferSize=123456};using var used=await shared.GetAsync("http://shared-gateway.invalid/already-used");gb.Services.AddSingleton(shared);gb.AddProductNetWorth();}else gb.Services.AddSingleton(new ProductNetWorthClient(gb.Configuration,new HttpClient(tamper)));
+            var gateway=gb.Build();gateway.MapProductNetWorth();await gateway.StartAsync();if(useRegisteredClient)_=gateway.Services.GetRequiredService<ProductNetWorthClient>();return new(profile,rules,gateway,authority,positions,calculations,investments,tamper,shared,probe);
         }
         private static NetWorthPositionsApplication PositionsOwner(InMemoryNetWorthPositions positions,InMemoryInvestmentRecords investments)=>new(positions,investments,new InMemoryPropertyRecords(),new InMemoryVehicleRecords(),new InMemoryLiabilityRecords(),TimeProvider.System);
         private static WebApplicationBuilder Builder(Dictionary<string,string?> values,Authority authority,string service)

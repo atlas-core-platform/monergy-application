@@ -16,7 +16,7 @@ SELECT format('GRANT SELECT ON ALL TABLES IN SCHEMA am TO %I', :'runtime') \gexe
 SELECT format('GRANT INSERT,UPDATE,DELETE ON am.permissions,am.roles,am.permission_capabilities,am.role_permissions,am.access_subjects,am.resource_grants,am.customer_relationships,am.groups,am.group_members,am.import_batches,am.import_rows,am.import_email_reservations TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT,UPDATE ON am.access_requests TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT,DELETE ON am.subject_permissions TO %I', :'runtime') \gexec
-SELECT format('GRANT INSERT ON am.access_request_events TO %I', :'runtime') \gexec
+SELECT format('GRANT INSERT ON am.access_request_events,am.access_request_permission_grants TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT ON am.default_access_pack_history TO %I', :'runtime') \gexec
 SELECT format('GRANT UPDATE (default_access_pack_version,default_access_pack_installed_at) ON am.tenant_identity TO %I', :'runtime') \gexec
 SELECT format('GRANT UPDATE (policy_version) ON am.policy_state TO %I', :'runtime') \gexec
@@ -31,7 +31,7 @@ for tenant in T001 T002; do
   lower="${tenant,,}"
   docker exec -i "$container_id" psql -U postgres -d "am_${lower}" -v ON_ERROR_STOP=1 -At <<'SQL' | grep -qx '1|8|13|7'
 SELECT
-  CASE WHEN (SELECT default_access_pack_version FROM am.tenant_identity WHERE singleton)='2.0' THEN 1 ELSE 0 END,
+  CASE WHEN (SELECT default_access_pack_version FROM am.tenant_identity WHERE singleton)='2.5' THEN 1 ELSE 0 END,
   (SELECT count(*) FROM am.roles),
   (SELECT count(*) FROM am.permissions),
   (SELECT count(*) FROM am.roles r WHERE NOT EXISTS (

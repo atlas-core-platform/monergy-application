@@ -11,6 +11,7 @@ import { localUat, useWorkspaceSession } from './access/workspaceSession';
 import { WorkspaceSessionProvider } from './access/WorkspaceSessionProvider';
 import { WorkspaceEntry } from './access/WorkspaceEntry';
 import { PersonaWelcomeEntry } from './access/PersonaWelcomeEntry';
+import { RequestAccessGate } from './access/RequestAccess';
 const TenantSetupGate = lazy(() =>
   import('./access/TenantSetup').then((module) => ({ default: module.TenantSetupGate })),
 );
@@ -124,7 +125,7 @@ function ToolchainFoundation() {
 
 function RouteContent() {
   if (window.location.pathname === '/advisor') return <Suspense fallback={<main aria-busy="true">Loading Advisor workspace…</main>}><AdvisorWorkspace /></Suspense>;
-  if (window.location.pathname === '/financial-qa') return <Suspense fallback={<main aria-busy="true">Loading Q&A…</main>}><FinancialQaExperience /></Suspense>;
+  if (window.location.pathname === '/financial-qa') return <RequestAccessGate target="customer.financial-qa" requiredCapabilities={['ai-intelligence.analysis.execute', 'search.query.execute', 'financial-profile.profile.read', 'evidence.document.read']}><Suspense fallback={<main aria-busy="true">Loading Q&A…</main>}><FinancialQaExperience /></Suspense></RequestAccessGate>;
   if (window.location.pathname === '/settings/sessions')
     return <Suspense fallback={<main aria-busy="true">Loading sessions…</main>}><SelfSessionsExperience /></Suspense>;
   if (window.location.pathname === '/') return <WorkspaceHome />;
@@ -137,11 +138,13 @@ function RouteContent() {
           </main>
         }
       >
-        <EvidenceExperience />
+        <RequestAccessGate target="customer.documents" requiredCapabilities={['evidence.document.read']}>
+          <EvidenceExperience />
+        </RequestAccessGate>
       </Suspense>
     );
-  if (window.location.pathname === '/monthly-cashflow') return <Suspense fallback={<main className="access-loading" aria-busy="true">Loading income and expenses…</main>}><MonthlyCashflowExperience /></Suspense>;
-  if (window.location.pathname === '/net-worth') return <Suspense fallback={<main className="access-loading" aria-busy="true">Loading net worth…</main>}><NetWorthExperience /></Suspense>;
+  if (window.location.pathname === '/monthly-cashflow') return <RequestAccessGate target="customer.calculations" requiredCapabilities={['financial-rules.calculation.execute', 'financial-profile.profile.read']}><Suspense fallback={<main className="access-loading" aria-busy="true">Loading income and expenses…</main>}><MonthlyCashflowExperience /></Suspense></RequestAccessGate>;
+  if (window.location.pathname === '/net-worth') return <RequestAccessGate target="customer.calculations" requiredCapabilities={['financial-rules.calculation.execute', 'financial-profile.profile.read']}><Suspense fallback={<main className="access-loading" aria-busy="true">Loading net worth…</main>}><NetWorthExperience /></Suspense></RequestAccessGate>;
   if (window.location.pathname === '/finances')
     return (
       <Suspense
@@ -151,20 +154,24 @@ function RouteContent() {
           </main>
         }
       >
-        <FinancialProfileExperience />
+        <RequestAccessGate target="customer.financial-information" requiredCapabilities={['financial-profile.profile.read']}>
+          <FinancialProfileExperience />
+        </RequestAccessGate>
       </Suspense>
     );
   if (window.location.pathname === '/actions')
     return (
-      <Suspense
-        fallback={
-          <main className="access-loading" aria-busy="true">
-            Loading Action Centre…
-          </main>
-        }
-      >
-        <ProductActionCentreExperience />
-      </Suspense>
+      <RequestAccessGate target="customer.processing-status" requiredCapabilities={['job-management.job.read']}>
+        <Suspense
+          fallback={
+            <main className="access-loading" aria-busy="true">
+              Loading Action Centre…
+            </main>
+          }
+        >
+          <ProductActionCentreExperience />
+        </Suspense>
+      </RequestAccessGate>
     );
   if (
     window.location.pathname === '/access' ||
@@ -185,13 +192,15 @@ function RouteContent() {
           </main>
         }
       >
-        <ProductReportsExperience />
+        <RequestAccessGate target="customer.reports" requiredCapabilities={['reporting.report.read']}>
+          <ProductReportsExperience />
+        </RequestAccessGate>
       </Suspense>
     );
   }
 
-  if (window.location.pathname === '/connections/onedrive') return <Suspense fallback={<main aria-busy="true">Loading connections…</main>}><OneDriveExperience /></Suspense>;
-  if (window.location.pathname === '/connections') return <Suspense fallback={<main aria-busy="true">Loading connections…</main>}><GoogleDriveExperience /></Suspense>;
+  if (window.location.pathname === '/connections/onedrive') return <RequestAccessGate target="customer.data-connections" requiredCapabilities={['integration-gateway.connection.manage']}><Suspense fallback={<main aria-busy="true">Loading connections…</main>}><OneDriveExperience /></Suspense></RequestAccessGate>;
+  if (window.location.pathname === '/connections') return <RequestAccessGate target="customer.data-connections" requiredCapabilities={['integration-gateway.connection.manage']}><Suspense fallback={<main aria-busy="true">Loading connections…</main>}><GoogleDriveExperience /></Suspense></RequestAccessGate>;
 
   if (window.location.pathname === '/consent') {
     return (
@@ -218,7 +227,9 @@ function RouteContent() {
           </main>
         }
       >
-        <ProductSearchExperience />
+        <RequestAccessGate target="customer.search" requiredCapabilities={['search.query.execute']}>
+          <ProductSearchExperience />
+        </RequestAccessGate>
       </Suspense>
     );
   }

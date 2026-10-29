@@ -56,6 +56,32 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
 });
 
+it('keeps read-only financial information usable and requests the missing update action', async () => {
+  const api = new AccessApi(session);
+  const product = vi.spyOn(api, 'product').mockResolvedValue({
+    financialProfileId: 'profile', revision: 1, updatedAt: '2026-10-28T00:00:00Z',
+    dataDurability: 'Temporary data', facts: [],
+  });
+  const item = { requestId: null, target: 'customer.financial-information',
+    targetLabel: 'Financial information', grantExplanation: 'Allows financial information updates.',
+    state: 'NotRequested', hasAccess: false, canRequest: true, createdAt: null,
+    decisionAt: null, fulfilledAt: null, decisionReason: null };
+  const request = vi.spyOn(api, 'request').mockImplementation((path, method = 'GET', body) => {
+    if (method === 'GET') return Promise.resolve({ tenantId: 'T001', actorId: 'A100',
+      policyVersion: 8, subjectVersion: 2, items: [item] });
+    expect(path).toBe('access-requests/customer.financial-information/submit');
+    expect(body).toEqual({ operationId: expect.stringMatching(/^[0-9a-f]{32}$/) });
+    return Promise.resolve({ ...item, requestId: 'a'.repeat(32), state: 'Submitted',
+      canRequest: false, createdAt: '2026-10-28T00:00:00Z' });
+  });
+
+  mount(api, ['financial-profile.profile.read']);
+  expect(await screen.findByText('Your financial information will appear here after you review it.')).toBeVisible();
+  expect(product).toHaveBeenCalledWith('v1/financial-profile', 'GET', undefined, expect.any(AbortSignal));
+  await userEvent.setup().click(await screen.findByRole('button', { name: 'Request access' }));
+  expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(1);
+});
+
 it('shows trusted financial information with source history and hides raw ids by default', async () => {
   const api = new AccessApi(session);
   vi.spyOn(api, 'product').mockResolvedValue({
