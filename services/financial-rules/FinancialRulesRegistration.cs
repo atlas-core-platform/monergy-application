@@ -70,6 +70,10 @@ public static class FinancialRulesRegistration
         if(physical)services.AddSingleton<IDebtServiceRatioCalculationRepository,PostgresDebtServiceRatioCalculations>();
         else services.AddSingleton<IDebtServiceRatioCalculationRepository,InMemoryDebtServiceRatioCalculations>();
         services.AddSingleton<DebtServiceRatioCalculationsApplication>();
+        services.AddSingleton(new DebtToIncomeRule(configuration));
+        if(physical)services.AddSingleton<IDebtToIncomeCalculationRepository,PostgresDebtToIncomeCalculations>();
+        else services.AddSingleton<IDebtToIncomeCalculationRepository,InMemoryDebtToIncomeCalculations>();
+        services.AddSingleton<DebtToIncomeCalculationsApplication>();
     }
     private static void AddNetWorth(IServiceCollection services,IConfiguration configuration,bool physical)
     {
