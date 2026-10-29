@@ -4,6 +4,7 @@ import type { AccessApi } from '../access/accessApi';
 import { AccessApiError } from '../access/accessApi';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import { getAssetSnapshot, getLiabilitySnapshot } from './productApi';
+import LiquidityRatioPanel from './LiquidityRatioPanel';
 import { calculateNetWorth, exactMoney, getNetWorthPositions, getNetWorthResult, getNetWorthResults, netWorthIssues, saveNetWorthPosition, validNetWorthDraft, validNetWorthPage, validNetWorthPosition, validNetWorthResult } from './netWorthApi';
 import type { NetWorthDraft, NetWorthLine, NetWorthPage, NetWorthPosition, NetWorthResult } from './netWorthApi';
 const uuid = () => crypto.randomUUID().replaceAll('-', '');
@@ -139,15 +140,15 @@ export function NetWorthExperience({ api, customerId, canRead, canWrite, canCalc
         <Checkbox checked={current.value.liabilitiesComplete} onChange={e => { change({ ...current.value, liabilitiesComplete: e.target.checked }); }}>I have reviewed and included all my liabilities, or confirm I have none.</Checkbox>
       </fieldset><Button type="primary" style={{ marginBlock: 16 }} loading={busy} disabled={conflict === context || !frozen && !validNetWorthDraft(current.value)} onClick={() => { void save(); }}>{frozen ? 'Retry net worth confirmation' : 'Save review and calculate net worth'}</Button></>}
     </Drawer>
-    <Drawer title="Saved net worth result" open={selected?.context === context && canCalculate} onClose={() => { setSelected(null); }} size={760} destroyOnHidden>{selected?.context === context && <NetWorthDetails result={selected.result} />}</Drawer>
+    <Drawer title="Saved net worth result" open={selected?.context === context && canCalculate} onClose={() => { setSelected(null); }} size={760} destroyOnHidden>{selected?.context === context && <NetWorthDetails api={api} customerId={customerId} result={selected.result} />}</Drawer>
     <Drawer title="Saved reviewed inventory" open={review?.context === context} onClose={() => { setReview(null); }} size={760} destroyOnHidden>{review?.context === context && <PositionDetails position={review.position} />}</Drawer>
   </main>;
 }
-function NetWorthDetails({ result }: { result: NetWorthResult }) {
+function NetWorthDetails({ api, customerId, result }: { api: AccessApi; customerId: string; result: NetWorthResult }) {
   return <section aria-label="Saved net worth calculation"><h2>{result.position.position.asOfDate} · {result.position.position.currency}</h2><Tag>Customer-reviewed inputs</Tag>
     {result.state === 'CALCULATED' && result.totalAssets !== null && result.totalLiabilities !== null && result.netWorth !== null ? <dl><dt>Total assets</dt><dd>{exactMoney(result.totalAssets, result.position.position.currency)}</dd><dt>Total liabilities</dt><dd>{exactMoney(result.totalLiabilities, result.position.position.currency)}</dd><dt>Net worth</dt><dd>{exactMoney(result.netWorth, result.position.position.currency)}</dd></dl> : <Alert type="info" title="More information needed before net worth can be calculated" description={<ul>{result.issues.map(issue => <li key={issue}>{netWorthIssues[issue]}</li>)}</ul>} />}
     <p>Net worth = total assets − total liabilities. This saved result uses the exact reviewed inventory below. Later changes require a new review and calculation.</p><p>Rule version {result.ruleVersion} · Calculated {result.recordedAt}</p><PositionDetails position={result.position} />
-    <details><summary>Calculation details</summary><p>{result.numericSemantics}</p><p>Rule: {result.ruleId} · Definition: {result.definitionHash}</p><p>Calculation: {result.calculationId} · Recorded by: {result.recordedBy}</p></details>
+    <details><summary>Calculation details</summary><p>{result.numericSemantics}</p><p>Rule: {result.ruleId} · Definition: {result.definitionHash}</p><p>Calculation: {result.calculationId} · Recorded by: {result.recordedBy}</p></details><LiquidityRatioPanel api={api} customerId={customerId} source={result} />
   </section>;
 }
 function PositionDetails({ position }: { position: NetWorthPosition }) {
