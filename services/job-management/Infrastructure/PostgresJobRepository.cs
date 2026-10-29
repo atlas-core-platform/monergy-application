@@ -276,17 +276,51 @@ public sealed partial class PostgresJobRepository : IJobRepository, IAsyncDispos
         return updated;
     }
 
-    public async Task<DurableJobRecord> ReplayAsync(string jobId, string customerId, DateTimeOffset now,
-        CancellationToken cancellationToken)
+    public async Task<DurableJobRecord> ReplayAsync(JobReplay replay, CancellationToken cancellationToken)
     {
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
-        var changed = await connection.ExecuteAsync(new CommandDefinition("""
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var key = string.Join('|', replay.ContractName, replay.ContractVersion,
+            replay.CustomerId, replay.IdempotencyKey);
+        await connection.ExecuteAsync(new CommandDefinition(
+            "SELECT pg_advisory_xact_lock(hashtextextended(@key, 0));", new { key }, transaction,
+            cancellationToken: cancellationToken));
+        var prior = await connection.QuerySingleOrDefaultAsync<IdempotencyRow>(new CommandDefinition("""
+            SELECT job_id AS JobId, payload_fingerprint AS PayloadFingerprint
+            FROM job_management.idempotency_operations
+            WHERE contract_name=@ContractName AND contract_version=@ContractVersion
+              AND customer_id=@CustomerId AND idempotency_key=@IdempotencyKey;
+            """, replay, transaction, cancellationToken: cancellationToken));
+        if (prior is not null)
+        {
+            if (!string.Equals(prior.PayloadFingerprint, replay.PayloadFingerprint, StringComparison.Ordinal) ||
+                !string.Equals(prior.JobId, replay.JobId, StringComparison.Ordinal))
+                throw new InvalidOperationException("Idempotency key conflict.");
+            var committed = await FindAsync(connection, transaction, prior.JobId, cancellationToken)
+                ?? throw new InvalidOperationException("Committed replay operation is incomplete.");
+            await transaction.CommitAsync(cancellationToken);
+            return committed;
+        }
+        var current = await LockedAsync(connection, transaction, replay.JobId, cancellationToken);
+        if (current.CustomerId != replay.CustomerId || current.State != JobState.Failed ||
+            !current.Retryable || current.ReconciliationRequired || current.LeaseToken is not null)
+            throw new InvalidOperationException("Job is not replayable.");
+        await connection.ExecuteAsync(new CommandDefinition("""
             UPDATE job_management.jobs SET state='Scheduled', replay_count=replay_count+1,
-                next_attempt_at=@now, terminal_at=NULL, reconciliation_required=false, updated_at=@now
-            WHERE job_id=@jobId AND customer_id=@customerId AND state='Failed' AND retryable=true;
-            """, new { jobId, customerId, now }, cancellationToken: cancellationToken));
-        if (changed != 1) throw new InvalidOperationException("Job is not replayable.");
-        return (await GetAsync(jobId, cancellationToken))!;
+                failure_code=NULL, retryable=false, next_attempt_at=@RequestedAt, terminal_at=NULL,
+                reconciliation_required=false, updated_at=@RequestedAt WHERE job_id=@JobId;
+            """, replay, transaction, cancellationToken: cancellationToken));
+        await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO job_management.idempotency_operations
+                (contract_name, contract_version, customer_id, idempotency_key,
+                 payload_fingerprint, job_id, created_at)
+            VALUES (@ContractName, @ContractVersion, @CustomerId, @IdempotencyKey,
+                    @PayloadFingerprint, @JobId, @RequestedAt);
+            """, replay, transaction, cancellationToken: cancellationToken));
+        var updated = await FindAsync(connection, transaction, replay.JobId, cancellationToken)
+            ?? throw new InvalidOperationException("Replayed job is unavailable.");
+        await transaction.CommitAsync(cancellationToken);
+        return updated;
     }
 
     public async Task<int> RecoverInterruptedAsync(DateTimeOffset now, CancellationToken cancellationToken)

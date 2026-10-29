@@ -243,26 +243,37 @@ public sealed partial class InMemoryJobRepository : IJobRepository
         }
     }
 
-    public Task<DurableJobRecord> ReplayAsync(string jobId, string customerId, DateTimeOffset now,
-        CancellationToken cancellationToken)
+    public Task<DurableJobRecord> ReplayAsync(JobReplay replay, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         lock (sync)
         {
-            var current = Required(jobId);
-            if (!string.Equals(current.CustomerId, customerId, StringComparison.Ordinal) ||
-                current.State != JobState.Failed || !current.Retryable)
+            var identity = Identity(replay);
+            if (idempotency.TryGetValue(identity, out var prior))
+            {
+                if (!string.Equals(prior.Fingerprint, replay.PayloadFingerprint, StringComparison.Ordinal) ||
+                    !string.Equals(prior.JobId, replay.JobId, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Idempotency key conflict.");
+                return Task.FromResult(Required(prior.JobId));
+            }
+            var current = Required(replay.JobId);
+            if (!string.Equals(current.CustomerId, replay.CustomerId, StringComparison.Ordinal) ||
+                current.State != JobState.Failed || !current.Retryable ||
+                current.ReconciliationRequired || current.LeaseToken is not null)
                 throw new InvalidOperationException("Job is not replayable.");
             var next = current with
             {
                 State = JobState.Scheduled,
                 ReplayCount = current.ReplayCount + 1,
-                NextAttemptAt = now,
+                FailureCode = null,
+                Retryable = false,
+                NextAttemptAt = replay.RequestedAt,
                 TerminalAt = null,
                 ReconciliationRequired = false,
-                UpdatedAt = now
+                UpdatedAt = replay.RequestedAt
             };
-            jobs[jobId] = next;
+            jobs[replay.JobId] = next;
+            idempotency.Add(identity, (replay.JobId, replay.PayloadFingerprint));
             return Task.FromResult(next);
         }
     }
@@ -509,6 +520,9 @@ public sealed partial class InMemoryJobRepository : IJobRepository
         value.ContractVersion, value.CustomerId, value.IdempotencyKey);
 
     private static string Identity(JobCancellation value) => string.Join('|', value.ContractName,
+        value.ContractVersion, value.CustomerId, value.IdempotencyKey);
+
+    private static string Identity(JobReplay value) => string.Join('|', value.ContractName,
         value.ContractVersion, value.CustomerId, value.IdempotencyKey);
 }
 

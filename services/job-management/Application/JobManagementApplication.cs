@@ -33,6 +33,15 @@ public sealed record JobCancellation(
     string Reason,
     DateTimeOffset RequestedAt);
 
+public sealed record JobReplay(
+    string ContractName,
+    string ContractVersion,
+    string IdempotencyKey,
+    string PayloadFingerprint,
+    string JobId,
+    string CustomerId,
+    DateTimeOffset RequestedAt);
+
 public sealed record DurableJobRecord(
     string JobId,
     string JobName,
@@ -127,7 +136,7 @@ public interface IJobRepository
         DateTimeOffset? nextAttemptAt, DateTimeOffset now, CancellationToken cancellationToken);
     Task<DurableJobRecord> CancelAsync(JobCancellation cancellation,
         CancellationToken cancellationToken);
-    Task<DurableJobRecord> ReplayAsync(string jobId, string customerId, DateTimeOffset now, CancellationToken cancellationToken);
+    Task<DurableJobRecord> ReplayAsync(JobReplay replay, CancellationToken cancellationToken);
     Task<int> RecoverInterruptedAsync(DateTimeOffset now, CancellationToken cancellationToken);
     Task<DurableJobRecord> ReconcileAsync(string jobId, string customerId, JobReconciliationOutcome outcome,
         DateTimeOffset now, CancellationToken cancellationToken);
@@ -274,6 +283,13 @@ public sealed class JobManagementApplication(
     {
         var contextError = ContractGuard.Validate(request, Vs02ContractNames.GetJobStatus);
         if (contextError is not null) return Reject<ScheduledJob, GetJobStatus>(request, contextError);
+        if (string.IsNullOrWhiteSpace(request.IdempotencyKey) ||
+            string.IsNullOrWhiteSpace(request.Payload.JobId) ||
+            string.IsNullOrWhiteSpace(request.Payload.CustomerId))
+        {
+            return ContractResult<ScheduledJob>.Rejected(request, "job.replay.invalid",
+                ContractErrorCategory.ValidationError, "The replay request is invalid.");
+        }
         var persisted = await repository.GetAsync(request.Payload.JobId, cancellationToken);
         if (persisted is null ||
             !string.Equals(persisted.CustomerId, request.Payload.CustomerId, StringComparison.Ordinal) ||
@@ -284,8 +300,13 @@ public sealed class JobManagementApplication(
         }
         try
         {
-            var job = await repository.ReplayAsync(request.Payload.JobId, request.Payload.CustomerId,
-                timeProvider.GetUtcNow(), cancellationToken);
+            var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(request.Payload, ContractJson.Options)))).ToLowerInvariant();
+            var job = await repository.ReplayAsync(new(
+                request.ContractName, request.ContractVersion, request.IdempotencyKey, fingerprint,
+                request.Payload.JobId, request.Payload.CustomerId, timeProvider.GetUtcNow()), cancellationToken);
+            Record("ReplayJob", "REPLAYED", request.RequestId, request.CorrelationId,
+                request.CausationId, job.JobId);
             return ContractResult<ScheduledJob>.Succeeded(request, job.ToStatus());
         }
         catch (InvalidOperationException)

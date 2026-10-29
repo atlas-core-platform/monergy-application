@@ -111,7 +111,7 @@ public sealed class DurableJobBehaviorTests
         var otherSecurity = JobTestContext.Security("customer-other");
         var request = new ContractRequest<GetJobStatus>(Vs02ContractNames.GetJobStatus,
             ContractGuard.CurrentVersion, "replay-boundary-request", "replay-boundary-correlation", null,
-            otherSecurity, null, new("job-replay-boundary", JobTestContext.CustomerId));
+            otherSecurity, "replay-boundary-key", new("job-replay-boundary", JobTestContext.CustomerId));
 
         var denied = await app.ReplayAsync(request);
 
@@ -119,10 +119,33 @@ public sealed class DurableJobBehaviorTests
         var unchanged = await repository.GetAsync("job-replay-boundary", default);
         Assert.Equal(JobState.Failed, unchanged?.State);
         Assert.Equal(0, unchanged?.ReplayCount);
-        var replayed = await app.ReplayAsync(JobTestContext.Status("job-replay-boundary"));
+        var replayed = await app.ReplayAsync(JobTestContext.Replay("job-replay-boundary"));
         Assert.Equal(JobState.Scheduled, replayed.Data?.State);
         Assert.Equal(1, (await repository.GetAsync("job-replay-boundary", default))?.ReplayCount);
         Assert.Equal(0, (await repository.GetAsync("job-replay-boundary", default))?.RetryCount);
+    }
+
+    [Fact]
+    public async Task ReplayIsIdempotentAndChangedJobReuseConflicts()
+    {
+        var repository = new InMemoryJobRepository();
+        var app = App(repository);
+        await app.ScheduleJobAsync(JobTestContext.Schedule("job-replay-one", "key-replay-one"));
+        await app.ScheduleJobAsync(JobTestContext.Schedule("job-replay-two", "key-replay-two"));
+        await app.FailAsync("job-replay-one", "dependency.timeout", true);
+        await app.FailAsync("job-replay-two", "dependency.timeout", true);
+        var request = JobTestContext.Replay("job-replay-one", idempotencyKey: "shared-replay-key");
+
+        var first = await app.ReplayAsync(request);
+        var replay = await app.ReplayAsync(request);
+        var changed = await app.ReplayAsync(JobTestContext.Replay(
+            "job-replay-two", idempotencyKey: "shared-replay-key"));
+
+        Assert.Equal(JobState.Scheduled, first.Data?.State);
+        Assert.Equal(first.Data, replay.Data);
+        Assert.Equal(1, (await repository.GetAsync("job-replay-one", default))?.ReplayCount);
+        Assert.Equal(ContractErrorCategory.Conflict, changed.Error?.Category);
+        Assert.Equal(JobState.Failed, (await repository.GetAsync("job-replay-two", default))?.State);
     }
 
     [Fact]
@@ -182,7 +205,7 @@ public sealed class DurableJobBehaviorTests
         Assert.Null(await repository.ClaimAsync("job-pending-retry", "worker", JobTestContext.Now.AddHours(1),
             TimeSpan.FromMinutes(1), default));
         Assert.Equal(ContractErrorCategory.Conflict,
-            (await app.ReplayAsync(JobTestContext.Status("job-pending-retry"))).Error?.Category);
+            (await app.ReplayAsync(JobTestContext.Replay("job-pending-retry"))).Error?.Category);
     }
 
     [Fact]
