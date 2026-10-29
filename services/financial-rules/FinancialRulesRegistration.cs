@@ -78,6 +78,11 @@ public static class FinancialRulesRegistration
         if(physical)services.AddSingleton<IMonthlyNetCashflowRateCalculationRepository,PostgresMonthlyNetCashflowRateCalculations>();
         else services.AddSingleton<IMonthlyNetCashflowRateCalculationRepository,InMemoryMonthlyNetCashflowRateCalculations>();
         services.AddSingleton<MonthlyNetCashflowRateCalculationsApplication>();
+        services.AddSingleton(new MonthlyEmiShareRule(configuration));
+        services.AddSingleton<IMonthlyEmiLoanReader,MonthlyEmiLoanClient>();
+        if(physical)services.AddSingleton<IMonthlyEmiShareCalculationRepository,PostgresMonthlyEmiShareCalculations>();
+        else services.AddSingleton<IMonthlyEmiShareCalculationRepository,InMemoryMonthlyEmiShareCalculations>();
+        services.AddSingleton<MonthlyEmiShareCalculationsApplication>();
     }
     private static void AddNetWorth(IServiceCollection services,IConfiguration configuration,bool physical)
     {
