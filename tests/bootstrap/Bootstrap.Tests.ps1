@@ -1,11 +1,35 @@
 [CmdletBinding()]
 param(
     [string]$RepositoryRoot = (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)),
-    [switch]$SchemaCompatibilityOnly
+    [switch]$SchemaCompatibilityOnly,
+    [switch]$RuntimePrivilegeOnly
 )
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
+
+$bootstrapSource = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/Monergy.DatabaseMigrator/LocalUatBootstrap.cs') -Raw
+$expectedProvenanceGrant = 'GRANT INSERT ON am.access_request_events,am.access_request_permission_grants TO {runtime};'
+if (-not $bootstrapSource.Contains($expectedProvenanceGrant)) {
+    throw 'LOCAL-UAT does not grant the AM runtime INSERT on immutable access-request provenance.'
+}
+if ($bootstrapSource -match 'GRANT\s+(?:[^;]*(?:UPDATE|DELETE|TRUNCATE)[^;]*)\s+ON\s+[^;]*access_request_permission_grants') {
+    throw 'LOCAL-UAT grants a prohibited mutation privilege on immutable access-request provenance.'
+}
+foreach ($privilege in @('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')) {
+    if (-not $bootstrapSource.Contains("has_table_privilege(current_user,'am.access_request_permission_grants','$privilege')")) {
+        throw "LOCAL-UAT does not verify the AM runtime $privilege privilege on access-request provenance."
+    }
+}
+$embeddedAccessRequestSource = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/uat/dependencies/source/src/Monergy.AccessManagement/AccessRequests.cs') -Raw
+if (-not $embeddedAccessRequestSource.Contains('INSERT INTO am.access_request_permission_grants (') -or
+    -not $bootstrapSource.Contains('LOCAL_AM_RUNTIME_PROVENANCE_INSERT_FAILED') -or
+    -not $bootstrapSource.Contains('await transaction.RollbackAsync()')) {
+    throw 'LOCAL-UAT does not exercise the embedded AM fulfillment provenance write through its deployed runtime role.'
+}
+Write-Output 'LOCAL-UAT AM runtime provenance privilege contract passed: SELECT/INSERT allowed; UPDATE/DELETE/TRUNCATE denied; transactional fulfillment probe present.'
+
+if ($RuntimePrivilegeOnly) { exit 0 }
 
 $migrationRoot = Join-Path $RepositoryRoot 'build/uat/dependencies/source/tools/Monergy.AccessManagement.Migrations/migrations'
 $migrationVersions = @(Get-ChildItem -LiteralPath $migrationRoot -File -Filter '*.sql' |

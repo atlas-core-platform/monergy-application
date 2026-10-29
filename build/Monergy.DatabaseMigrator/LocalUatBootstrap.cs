@@ -98,6 +98,8 @@ internal static partial class LocalUatBootstrap
                 await using var scoped = new NpgsqlConnection(connection);
                 await scoped.OpenAsync().ConfigureAwait(false);
                 await ExecuteAsync(scoped, Grants(database)).ConfigureAwait(false);
+                if (database.Service == "am")
+                    await VerifyAccessManagementRuntimePrivilegesAsync(database).ConfigureAwait(false);
                 if (database.Service != "am")
                 {
                     var table = database.Service switch { "audit" => "audit.access_tenant_identity", "consent" => "consent.tenant_identity", _ => "customer_identity.tenant_identity" };
@@ -136,12 +138,81 @@ internal static partial class LocalUatBootstrap
             ? $"GRANT INSERT ON customer_identity.kyc_events TO {runtime}; GRANT INSERT ON customer_identity.customers TO {runtime}; GRANT INSERT,UPDATE ON customer_identity.registration_challenges,customer_identity.registered_credentials,customer_identity.persona_credentials TO {runtime}; GRANT INSERT ON customer_identity.registration_events TO {runtime}; GRANT INSERT ON customer_identity.persona_invitation_events TO {runtime}; GRANT INSERT,UPDATE ON customer_identity.customer_availability TO {runtime}; GRANT INSERT ON customer_identity.customer_status_changes TO {runtime}; GRANT INSERT,UPDATE ON customer_identity.customer_pan TO {runtime}; GRANT INSERT ON customer_identity.customer_pan_receipts,customer_identity.customer_pan_audit TO {runtime}; GRANT INSERT,UPDATE ON customer_identity.customer_profiles TO {runtime}; GRANT INSERT ON customer_identity.customer_profile_receipts TO {runtime}; GRANT INSERT ON customer_identity.self_session_receipts TO {runtime}; GRANT INSERT ON customer_identity.account_agreement_publications,customer_identity.account_agreement_acceptances TO {runtime};" : "";
         return common + profile + (database.Service switch
         {
-            "am" => $"GRANT INSERT,UPDATE,DELETE ON am.permissions,am.roles,am.permission_capabilities,am.role_permissions,am.access_subjects,am.resource_grants,am.customer_relationships,am.groups,am.group_members,am.import_batches,am.import_rows,am.import_email_reservations TO {runtime}; GRANT INSERT,UPDATE ON am.access_requests TO {runtime}; GRANT INSERT,DELETE ON am.subject_permissions TO {runtime}; GRANT INSERT ON am.access_request_events TO {runtime}; GRANT UPDATE(policy_version) ON am.policy_state TO {runtime}; GRANT INSERT ON am.outbox TO {runtime}; GRANT USAGE ON SCHEMA am TO {delivery}; GRANT SELECT ON am.tenant_identity,am.policy_state,am.outbox,am.outbox_delivery,am.outbox_redrives TO {delivery}; GRANT INSERT,UPDATE ON am.outbox_delivery TO {delivery}; GRANT INSERT ON am.outbox_redrives TO {delivery};",
+            "am" => $"GRANT INSERT,UPDATE,DELETE ON am.permissions,am.roles,am.permission_capabilities,am.role_permissions,am.access_subjects,am.resource_grants,am.customer_relationships,am.groups,am.group_members,am.import_batches,am.import_rows,am.import_email_reservations TO {runtime}; GRANT INSERT,UPDATE ON am.access_requests TO {runtime}; GRANT INSERT,DELETE ON am.subject_permissions TO {runtime}; GRANT INSERT ON am.access_request_events,am.access_request_permission_grants TO {runtime}; GRANT UPDATE(policy_version) ON am.policy_state TO {runtime}; GRANT INSERT ON am.outbox TO {runtime}; GRANT USAGE ON SCHEMA am TO {delivery}; GRANT SELECT ON am.tenant_identity,am.policy_state,am.outbox,am.outbox_delivery,am.outbox_redrives TO {delivery}; GRANT INSERT,UPDATE ON am.outbox_delivery TO {delivery}; GRANT INSERT ON am.outbox_redrives TO {delivery};",
             "customer-identity" => $"GRANT INSERT(session_hash,actor_id,subject_version),UPDATE(revoked) ON customer_identity.trusted_sessions TO {runtime}; GRANT INSERT,UPDATE(version) ON customer_identity.access_subject_versions TO {runtime}; GRANT UPDATE(version) ON customer_identity.access_policy_version TO {runtime}; GRANT INSERT ON customer_identity.access_event_inbox TO {runtime}; GRANT INSERT(actor_id,normalized_email) ON customer_identity.tenant_principals TO {runtime}; GRANT INSERT ON customer_identity.provisioning_receipts TO {runtime}; GRANT INSERT,UPDATE ON customer_identity.email_access_challenges TO {runtime}; GRANT INSERT ON customer_identity.email_access_events TO {runtime};",
             "audit" => $"GRANT INSERT ON audit.evidence,audit.inbox,audit.access_event_inbox,audit.product_activity TO {runtime};",
             "consent" => $"GRANT INSERT ON consent.grants,consent.receipts,consent.audit,consent.outbox,consent.provider_grants,consent.provider_evidence TO {runtime}; GRANT UPDATE(version,folder_id,revoked_at) ON consent.provider_grants TO {runtime}; GRANT UPDATE(revoked_at) ON consent.grants TO {runtime}; GRANT UPDATE(version) ON consent.state TO {runtime};",
             _ => throw new InvalidOperationException("Unknown service."),
         });
+    }
+    private static async Task VerifyAccessManagementRuntimePrivilegesAsync(UatDatabase database)
+    {
+        await using var runtime = new NpgsqlConnection(Connection(
+            database.Name, database.Name + "_runtime", database.RuntimePassword));
+        await runtime.OpenAsync().ConfigureAwait(false);
+        var privileges = await ScalarAsync(runtime, """
+            SELECT has_table_privilege(current_user,'am.access_request_permission_grants','SELECT')
+               AND has_table_privilege(current_user,'am.access_request_permission_grants','INSERT')
+               AND NOT has_table_privilege(current_user,'am.access_request_permission_grants','UPDATE')
+               AND NOT has_table_privilege(current_user,'am.access_request_permission_grants','DELETE')
+               AND NOT has_table_privilege(current_user,'am.access_request_permission_grants','TRUNCATE');
+            """).ConfigureAwait(false);
+        if (privileges is not true)
+            throw new InvalidOperationException("LOCAL_AM_RUNTIME_PROVENANCE_PRIVILEGE_MISMATCH");
+
+        // Exercise the deployed runtime fulfillment write set without retaining probe history.
+        await using var transaction = await runtime.BeginTransactionAsync().ConfigureAwait(false);
+        var requestId = Guid.NewGuid().ToString("N");
+        var actorId = "local-runtime-probe-" + requestId;
+        await using var command = new NpgsqlCommand("""
+            INSERT INTO am.access_subjects (actor_id,normalized_email,status,business_role_id)
+            VALUES (@actor,@email,'Active','default-role-financial-advisor');
+            INSERT INTO am.access_requests (
+                request_id,tenant_id,requester_actor_id,target_code,target_definition_hash,
+                requester_role_id,requester_subject_version,submit_operation_id,state,expires_at)
+            VALUES (@request,@tenant,@actor,'financial-advisor.assigned-customer-financial-review',
+                @definition,'default-role-financial-advisor',1,@submit,'Submitted',clock_timestamp()+interval '1 hour');
+            INSERT INTO am.subject_permissions (
+                actor_id,permission_id,granted_at,granted_by,source_request_id)
+            VALUES (@actor,'default-permission-profile-read',clock_timestamp(),'A900',@request);
+            INSERT INTO am.access_request_permission_grants (
+                request_id,actor_id,permission_id,permission_code,capability_id,scope)
+            VALUES (@request,@actor,'default-permission-profile-read','financial-profile-read',
+                'financial-profile.profile.read','Resource');
+            UPDATE am.policy_state SET policy_version=policy_version+1 WHERE singleton;
+            UPDATE am.access_requests SET state='Fulfilled',decision_at=clock_timestamp(),
+                deciding_actor_id='A900',decision_action='Approve',decision_operation_id=@decision,
+                decision_reason=NULL,fulfilled_at=clock_timestamp()
+            WHERE request_id=@request;
+            INSERT INTO am.access_request_events (
+                event_id,request_id,event_type,actor_id,policy_version)
+            VALUES (@approved,@request,'Approved','A900',(SELECT policy_version FROM am.policy_state WHERE singleton)),
+                   (@fulfilled,@request,'Fulfilled','A900',(SELECT policy_version FROM am.policy_state WHERE singleton));
+            INSERT INTO am.outbox (
+                event_id,event_type,tenant_id,aggregate_id,initiator_actor_id,
+                correlation_id,policy_version,subject_version,payload)
+            VALUES (@outbox,'AccessManagementAuditEvidence',@tenant,@request,'A900',@correlation,
+                (SELECT policy_version FROM am.policy_state WHERE singleton),1,'{"probe":true}'::jsonb);
+            SELECT EXISTS(
+                SELECT 1 FROM am.access_request_permission_grants
+                WHERE request_id=@request AND actor_id=@actor
+                  AND permission_id='default-permission-profile-read'
+                  AND capability_id='financial-profile.profile.read' AND scope='Resource');
+            """, runtime, transaction);
+        command.Parameters.AddWithValue("actor", actorId);
+        command.Parameters.AddWithValue("email", requestId + "@runtime-probe.example.test");
+        command.Parameters.AddWithValue("request", requestId);
+        command.Parameters.AddWithValue("tenant", database.Tenant);
+        command.Parameters.AddWithValue("definition", new string('0', 64));
+        command.Parameters.AddWithValue("submit", Guid.NewGuid().ToString("N"));
+        command.Parameters.AddWithValue("decision", Guid.NewGuid().ToString("N"));
+        command.Parameters.AddWithValue("approved", Guid.NewGuid());
+        command.Parameters.AddWithValue("fulfilled", Guid.NewGuid());
+        command.Parameters.AddWithValue("outbox", Guid.NewGuid());
+        command.Parameters.AddWithValue("correlation", Guid.NewGuid().ToString("N"));
+        if (await command.ExecuteScalarAsync().ConfigureAwait(false) is not true)
+            throw new InvalidOperationException("LOCAL_AM_RUNTIME_PROVENANCE_INSERT_FAILED");
+        await transaction.RollbackAsync().ConfigureAwait(false);
     }
     private static void ValidateSecret(string value)
     { if (value.Length != 64 || value.Any(c => !char.IsAsciiHexDigit(c))) throw new InvalidOperationException("Invalid profile secret."); }
