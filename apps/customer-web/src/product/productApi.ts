@@ -466,6 +466,7 @@ export interface ProductInvestmentDraft {
 export interface ProductInvestmentRecord {
   investmentRecordId: string; operationId: string; customerId: string; investment: ProductInvestmentDraft; currency: string;
   sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
+  lifecycleStatus: 'UNREVIEWED' | 'ACTIVE' | 'CLOSED'; lifecycleAsOfDate: string | null;
 }
 export interface ProductInvestmentRecordList { items: ProductInvestmentRecord[]; hasMore: boolean; dataDurability: string }
 export const getInvestmentRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) => api.product<ProductInvestmentRecordList>('v1/investment-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
@@ -475,6 +476,9 @@ export const createInvestmentRecord = (api: AccessApi, input: { operationId: str
 export interface ProductInvestmentRecordHistory { items: ProductInvestmentRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
 export const reviseInvestmentRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; investment: ProductInvestmentDraft }) =>
   api.product<ProductInvestmentRecord>('v1/investment-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export interface ProductInvestmentStatusReview { operationId: string; expectedRevision: number; status: 'ACTIVE' | 'CLOSED'; asOfDate: string }
+export const reviewInvestmentRecordStatus = (api: AccessApi, id: string, input: ProductInvestmentStatusReview) =>
+  api.product<ProductInvestmentRecord>('v1/investment-records/' + encodeURIComponent(id) + '/lifecycle', 'POST', input);
 export const getInvestmentRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductInvestmentRecordHistory>('v1/investment-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
 

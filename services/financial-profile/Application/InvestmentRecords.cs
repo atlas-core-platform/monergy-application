@@ -61,6 +61,38 @@ public sealed class InvestmentRecordsApplication(IFinancialProfileRepository fin
         var original = await ReadAsync(tenant, customer, id, ct, 1).ConfigureAwait(false);
         if (original.Investment.SourceFinancialFactId != input.Investment.SourceFinancialFactId || original.Investment.SourceRevision != input.Investment.SourceRevision)
             throw new TenantBoundaryException("INVESTMENT_SOURCE_IMMUTABLE", 400);
+        var previous = await repository.ReadAsync(tenant, customer, id, ct, input.ExpectedRevision).ConfigureAwait(false)
+            ?? throw new TenantBoundaryException("INVESTMENT_REVISION_CONFLICT", 409);
+        if (previous.LifecycleStatus == "CLOSED" && input.Investment.ValueAsOfDate > previous.LifecycleAsOfDate)
+            throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID", 400);
+        await EnsureOriginalSourceAsync(original, customer, ct).ConfigureAwait(false);
+        var normalized = input with { Investment = input.Investment with { Name = input.Investment.Name.Trim(), Institution = input.Investment.Institution.Trim(), InvestmentType = input.Investment.InvestmentType.Trim() } };
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(normalized, ContractJson.Options)));
+        var record = original with { OperationId = input.OperationId, Investment = normalized.Investment, RecordedBy = actor,
+            RecordedAt = clock.GetUtcNow(), Revision = input.ExpectedRevision + 1,
+            LifecycleStatus = previous.LifecycleStatus, LifecycleAsOfDate = previous.LifecycleAsOfDate };
+        return await repository.ReviseAsync(tenant, customer, actor, fingerprint, input.ExpectedRevision, record, ct).ConfigureAwait(false);
+    }
+    public async Task<ReviewedInvestmentRecord> ReviewStatusAsync(string tenant, string customer, string actor, string id,
+        ReviewInvestmentRecordStatus input, CancellationToken ct)
+    {
+        if (input is null || input.ExpectedRevision is < 1 or int.MaxValue || !Guid.TryParseExact(input.OperationId, "N", out _) ||
+            input.OperationId.Any(char.IsAsciiLetterUpper) || input.Status is not ("ACTIVE" or "CLOSED") || input.AsOfDate.Year < 1900 ||
+            input.AsOfDate > DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime.AddHours(14)))
+            throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID", 400);
+        var original = await ReadAsync(tenant, customer, id, ct, 1).ConfigureAwait(false);
+        var previous = await repository.ReadAsync(tenant, customer, id, ct, input.ExpectedRevision).ConfigureAwait(false)
+            ?? throw new TenantBoundaryException("INVESTMENT_REVISION_CONFLICT", 409);
+        if (input.AsOfDate < previous.Investment.ValueAsOfDate || input.AsOfDate < previous.LifecycleAsOfDate)
+            throw new TenantBoundaryException("INVESTMENT_RECORD_INVALID", 400);
+        await EnsureOriginalSourceAsync(original, customer, ct).ConfigureAwait(false);
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(input, ContractJson.Options)));
+        var record = previous with { OperationId = input.OperationId, RecordedBy = actor, RecordedAt = clock.GetUtcNow(),
+            Revision = input.ExpectedRevision + 1, LifecycleStatus = input.Status, LifecycleAsOfDate = input.AsOfDate };
+        return await repository.ReviseAsync(tenant, customer, actor, fingerprint, input.ExpectedRevision, record, ct).ConfigureAwait(false);
+    }
+    private async Task EnsureOriginalSourceAsync(ReviewedInvestmentRecord original, string customer, CancellationToken ct)
+    {
         var source = await financial.GetFactAsync(original.Investment.SourceFinancialFactId, original.Investment.SourceRevision, ct).ConfigureAwait(false);
         var provenance = await financial.GetProvenanceAsync(original.SourceProvenanceId, ct).ConfigureAwait(false);
         if (source is null || source.CustomerId != customer || source.FactType != FinancialObjectTypes.Investment ||
@@ -68,11 +100,6 @@ public sealed class InvestmentRecordsApplication(IFinancialProfileRepository fin
             provenance is null || provenance.CustomerId != customer || provenance.FinancialFactId != source.FinancialFactId ||
             provenance.SourceFactId != source.SourceFactId || provenance.EvidenceId != original.EvidenceId || provenance.DocumentVersionId != original.DocumentVersionId)
             throw new TenantBoundaryException("INVESTMENT_SOURCE_UNAVAILABLE", 503);
-        var normalized = input with { Investment = input.Investment with { Name = input.Investment.Name.Trim(), Institution = input.Investment.Institution.Trim(), InvestmentType = input.Investment.InvestmentType.Trim() } };
-        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(normalized, ContractJson.Options)));
-        var record = original with { OperationId = input.OperationId, Investment = normalized.Investment, RecordedBy = actor,
-            RecordedAt = clock.GetUtcNow(), Revision = input.ExpectedRevision + 1 };
-        return await repository.ReviseAsync(tenant, customer, actor, fingerprint, input.ExpectedRevision, record, ct).ConfigureAwait(false);
     }
     public async Task<InvestmentRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct)
     {
