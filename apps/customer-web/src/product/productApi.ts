@@ -1,5 +1,5 @@
 import type { AccessApi } from '../access/accessApi';
-import type { TrustedFinancialReport } from '../reports/types';
+import type { FinancialReviewReceiptSelection, TrustedFinancialReport } from '../reports/types';
 import type { SearchResults } from '../search/types';
 
 export interface ProductEvidenceReceipt {
@@ -396,12 +396,13 @@ export function getFinancialFactDetail(
 export function generateBasicFinancialReport(
   api: AccessApi,
   operationId: string,
+  financialReview?: FinancialReviewReceiptSelection,
   signal?: AbortSignal,
 ): Promise<TrustedFinancialReport> {
   return api.product<TrustedFinancialReport>(
     'v1/reports',
     'POST',
-    { operationId },
+    { operationId, ...(financialReview ? { financialReview } : {}) },
     signal,
   );
 }

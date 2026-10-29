@@ -18,6 +18,12 @@ public sealed class ReportingApplication(
     {
         var error = Validate(request, ReportingContractNames.GenerateReport, request.Payload.CustomerId);
         if (error is not null) return Rejected<GenerateReport>(request, error);
+        if (request.Payload.FinancialReview is { } review && !ValidReview(review))
+        {
+            return ContractResult<TrustedFinancialReport>.Rejected(request,
+                "report.financial-review.invalid", ContractErrorCategory.ValidationError,
+                "Four canonical Financial Rules receipt identifiers are required.");
+        }
         if (string.IsNullOrWhiteSpace(request.IdempotencyKey))
         {
             return ContractResult<TrustedFinancialReport>.Rejected(request, "report.idempotency.required",
@@ -36,7 +42,8 @@ public sealed class ReportingApplication(
             operation = await repository.GetOrCreateAsync(identity, async operationCancellationToken =>
             {
                 var sourceContext = new ReportSourceReadContext(request.Payload.CustomerId, request.Security,
-                    request.RequestId, request.CorrelationId, request.CausationId);
+                    request.RequestId, request.CorrelationId, request.CausationId,
+                    request.Payload.FinancialReview);
                 var snapshot = await sourceReader.ReadAsync(sourceContext, operationCancellationToken)
                     .ConfigureAwait(false);
                 if (snapshot is null)
@@ -75,6 +82,12 @@ public sealed class ReportingApplication(
         if (operation.Error is not null) return Rejected<GenerateReport>(request, operation.Error);
 
         var report = operation.Report!;
+        if (!MatchesReview(report, request.Payload.FinancialReview))
+        {
+            return ContractResult<TrustedFinancialReport>.Rejected(request,
+                "report.idempotency.conflict", ContractErrorCategory.Conflict,
+                "The idempotency key is already bound to a different report source selection.");
+        }
         return ContractResult<TrustedFinancialReport>.Succeeded(request, report);
     }
 
@@ -105,6 +118,39 @@ public sealed class ReportingApplication(
             ? new("report.customer.invalid", ContractErrorCategory.AccessDenied,
                 "The report request must match the current customer boundary.", false, request.CorrelationId)
             : null;
+    }
+
+    private static bool ValidReview(FinancialReviewReceiptSelection value)
+    {
+        var identifiers = new[]
+        {
+            value.AssetAllocationCalculationId,
+            value.MonthlyNetCashflowRateCalculationId,
+            value.MonthlyEmiShareCalculationId,
+            value.MonthlyDebtServiceCoverageCalculationId,
+        };
+        return identifiers.All(identifier => !string.IsNullOrWhiteSpace(identifier) &&
+            identifier.Length <= 80 && identifier.All(character =>
+                char.IsAsciiLetterOrDigit(character) || character is '-' or '_')) &&
+            identifiers.Distinct(StringComparer.Ordinal).Count() == identifiers.Length;
+    }
+
+    private static bool MatchesReview(TrustedFinancialReport report, FinancialReviewReceiptSelection? selection)
+    {
+        var actual = report.Items.Where(item => item.Source.SourceType == "FinancialCalculation" &&
+                item.Source.AuthoritativeOwner == ReportingAuthority.FinancialRulesService &&
+                item.Source.RuleId is AssetAllocationDefinition.Id or MonthlyNetCashflowRateDefinition.Id or
+                    MonthlyEmiShareDefinition.Id or MonthlyDebtServiceCoverageDefinition.Id)
+            .Select(item => item.Source.SourceId).Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        var expected = selection is null ? [] : new[]
+        {
+            selection.AssetAllocationCalculationId,
+            selection.MonthlyNetCashflowRateCalculationId,
+            selection.MonthlyEmiShareCalculationId,
+            selection.MonthlyDebtServiceCoverageCalculationId,
+        }.OrderBy(value => value, StringComparer.Ordinal).ToArray();
+        return actual.SequenceEqual(expected, StringComparer.Ordinal);
     }
 
     private static TrustedFinancialReport BuildReport(ReportSourceSnapshot snapshot,

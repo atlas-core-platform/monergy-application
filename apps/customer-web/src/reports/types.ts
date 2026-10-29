@@ -5,6 +5,18 @@ export interface ReportSourceReference {
   evidenceReferenceId: string | null;
   financialProvenanceReferenceId: string | null;
   calculationLineageReferenceId: string | null;
+  ruleId?: string | null;
+  ruleVersion?: string | null;
+  definitionHash?: string | null;
+  numericSemantics?: string | null;
+  sourceCalculationIds?: string[] | null;
+}
+
+export interface FinancialReviewReceiptSelection {
+  assetAllocationCalculationId: string;
+  monthlyNetCashflowRateCalculationId: string;
+  monthlyEmiShareCalculationId: string;
+  monthlyDebtServiceCoverageCalculationId: string;
 }
 
 export interface ReportLineItem {

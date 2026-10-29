@@ -22,6 +22,10 @@ public static class ReportingRegistration
                 services,
                 ProductFinancialProfileReportSourceReader.FinancialProfileClient,
                 TenantAccessIntegration.Required(configuration, "Monergy:ProductReporting:FinancialProfileUrl"));
+            AddSourceClient(
+                services,
+                ProductFinancialProfileReportSourceReader.FinancialRulesClient,
+                TenantAccessIntegration.Required(configuration, "Monergy:ProductReporting:FinancialRulesUrl"));
             services.AddSingleton<IReportSourceReader, ProductFinancialProfileReportSourceReader>();
         }
         else

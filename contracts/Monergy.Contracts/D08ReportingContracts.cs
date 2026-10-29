@@ -9,7 +9,15 @@ public static class ReportingContractNames
     public const string ReportGenerated = "ReportGenerated";
 }
 
-public sealed record GenerateReport(string CustomerId);
+public sealed record FinancialReviewReceiptSelection(
+    string AssetAllocationCalculationId,
+    string MonthlyNetCashflowRateCalculationId,
+    string MonthlyEmiShareCalculationId,
+    string MonthlyDebtServiceCoverageCalculationId);
+
+public sealed record GenerateReport(
+    string CustomerId,
+    FinancialReviewReceiptSelection? FinancialReview = null);
 
 public sealed record GetReport(string CustomerId, string ReportId);
 
@@ -19,7 +27,12 @@ public sealed record ReportSourceReference(
     string AuthoritativeOwner,
     string? EvidenceReferenceId,
     string? FinancialProvenanceReferenceId,
-    string? CalculationLineageReferenceId);
+    string? CalculationLineageReferenceId,
+    string? RuleId = null,
+    string? RuleVersion = null,
+    string? DefinitionHash = null,
+    string? NumericSemantics = null,
+    IReadOnlyList<string>? SourceCalculationIds = null);
 
 public sealed record ReportLineItem(
     string Label,

@@ -5,6 +5,17 @@ import { AccessApiError } from '../access/accessApi';
 import { RequestAccessAction } from '../access/RequestAccess';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import type { TrustedFinancialReport } from '../reports/types';
+import type { FinancialReviewReceiptSelection } from '../reports/types';
+import { getAssetAllocations, validAssetAllocation, validNetWorthPage } from './netWorthApi';
+import {
+  getMonthlyDebtServiceCoverages,
+  getMonthlyEmiShares,
+  getMonthlyNetCashflowRates,
+  validMonthlyCashflowPage,
+  validMonthlyDebtServiceCoverage,
+  validMonthlyEmiShare,
+  validMonthlyNetCashflowRate,
+} from './monthlyCashflowApi';
 import { generateBasicFinancialReport, getBasicFinancialReport } from './productApi';
 import './product.css';
 
@@ -19,7 +30,7 @@ const formatDateTime = (value: string) =>
 const formatValue = (value: number, unit: string) =>
   /^[A-Z]{3}$/.test(unit)
     ? new Intl.NumberFormat(undefined, { style: 'currency', currency: unit }).format(value)
-    : `${String(value)} ${unit}`;
+    : `${new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}${unit === '%' ? '%' : ` ${unit}`}`;
 
 function download(report: TrustedFinancialReport) {
   const blob = new Blob([report.export.content], { type: report.export.mediaType });
@@ -37,10 +48,13 @@ export default function ProductReportsExperience() {
   const capabilities = new Set(product?.capabilities ?? []);
   const canGenerate = capabilities.has('reporting.report.generate');
   const canRead = capabilities.has('reporting.report.read');
+  const canCalculate = capabilities.has('financial-rules.calculation.execute');
   const [report, setReport] = useState<TrustedFinancialReport | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [requestedReportId] = useState(reportFromLocation);
+  const [reviewSelection, setReviewSelection] = useState<FinancialReviewReceiptSelection | null>(null);
+  const [reviewChecked, setReviewChecked] = useState(false);
 
   const message = useCallback((failure: unknown) => {
     if (failure instanceof AccessApiError) {
@@ -72,7 +86,54 @@ export default function ProductReportsExperience() {
     return () => { controller.abort(); };
   }, [api, canRead, message, requestedReportId]);
 
-  const generate = async () => {
+  useEffect(() => {
+    if (!api || !canGenerate || !canCalculate || !product?.customerId) {
+      return;
+    }
+    const controller = new AbortController();
+    void Promise.all([
+      getAssetAllocations(api, undefined, controller.signal),
+      getMonthlyNetCashflowRates(api, controller.signal),
+      getMonthlyEmiShares(api, controller.signal),
+      getMonthlyDebtServiceCoverages(api, controller.signal),
+    ]).then(([allocations, rates, shares, coverages]) => {
+      if (!validNetWorthPage(allocations, item => validAssetAllocation(item, product.customerId), item => item.calculationId) ||
+          !validMonthlyCashflowPage(rates, item => validMonthlyNetCashflowRate(item, product.customerId), item => item.calculationId) ||
+          !validMonthlyCashflowPage(shares, item => validMonthlyEmiShare(item, product.customerId), item => item.calculationId) ||
+          !validMonthlyCashflowPage(coverages, item => validMonthlyDebtServiceCoverage(item, product.customerId), item => item.calculationId))
+        throw new Error('Invalid calculation history');
+      let selection: FinancialReviewReceiptSelection | null = null;
+      for (const coverage of coverages.items.filter(item => item.state === 'CALCULATED')) {
+        const share = shares.items.find(item =>
+          item.calculationId === coverage.sourceMonthlyEmiShare.calculationId &&
+          JSON.stringify(item) === JSON.stringify(coverage.sourceMonthlyEmiShare));
+        const rate = rates.items.find(item => item.state === 'CALCULATED' &&
+          item.sourceMonthlyCashflow.calculationId === coverage.sourceMonthlyCashflow.calculationId);
+        const allocation = allocations.items.find(item => item.state === 'CALCULATED' &&
+          item.sourceNetWorth.position.position.asOfDate === coverage.sourceMonthlyCashflow.position.position.asOfDate &&
+          item.sourceNetWorth.position.position.currency === coverage.sourceMonthlyCashflow.position.position.currency);
+        if (share && rate && allocation) {
+          selection = {
+            assetAllocationCalculationId: allocation.calculationId,
+            monthlyNetCashflowRateCalculationId: rate.calculationId,
+            monthlyEmiShareCalculationId: share.calculationId,
+            monthlyDebtServiceCoverageCalculationId: coverage.calculationId,
+          };
+          break;
+        }
+      }
+      if (!controller.signal.aborted && selection) {
+        setReviewSelection({
+          ...selection,
+        });
+      }
+    }).catch(() => undefined).finally(() => {
+      if (!controller.signal.aborted) setReviewChecked(true);
+    });
+    return () => { controller.abort(); };
+  }, [api, canCalculate, canGenerate, product?.customerId]);
+
+  const generate = async (includeFinancialReview = false) => {
     if (!api || !canGenerate || busy) return;
     setBusy(true);
     setError('');
@@ -80,6 +141,7 @@ export default function ProductReportsExperience() {
       const generated = await generateBasicFinancialReport(
         api,
         globalThis.crypto.randomUUID().replaceAll('-', ''),
+        includeFinancialReview ? reviewSelection ?? undefined : undefined,
       );
       setReport(generated);
       window.history.replaceState(
@@ -102,8 +164,9 @@ export default function ProductReportsExperience() {
           <p className="workspace-eyebrow">BASIC FINANCIAL SUMMARY</p>
           <h1>Bring your trusted financial information into one exportable view.</h1>
           <p>
-            This summary contains the currently supported financial information already in your
-            Financial Profile and keeps each item connected to its source. It is not a formal report
+            This summary contains supported financial information already in your Financial Profile
+            and can include one exact, coherent set of your completed Phase 2 calculation receipts.
+            Every item stays connected to its authoritative source. It is not a formal report
             pack, financial-health score, recommendation, or advice. Included Loan source amounts do not establish verified outstanding balances, EMI, or eligibility. Asset source figures are document-reported values, not independently verified valuations or net-worth totals. Investment source figures are document-stated amounts, not live securities holdings, current NAV, market prices or portfolio returns. Insurance source figures are not verified policy benefits, claims, premiums or cash values. Tax source figures are document-stated amounts, not assessed tax owed, accepted filings or refunds.
           </p>
         </div>
@@ -182,12 +245,16 @@ export default function ProductReportsExperience() {
                     <strong>{formatValue(item.value, item.unit)}</strong>
                   </div>
                   <div className="product-report-item-actions">
-                    {item.source.sourceType === 'FinancialFact' && (
+                    {item.source.sourceType === 'FinancialFact' ? (
                       <Button
                         type="link"
                         href={'/finances?fact=' + encodeURIComponent(item.source.sourceId)}
                       >
                         View source &amp; history
+                      </Button>
+                    ) : (
+                      <Button type="link" href="/finances">
+                        View reviewed calculations
                       </Button>
                     )}
                   </div>
@@ -208,6 +275,11 @@ export default function ProductReportsExperience() {
                             <Descriptions.Item label="Evidence">
                               {item.source.evidenceReferenceId ?? 'Not applicable'}
                             </Descriptions.Item>
+                            {item.source.sourceType === 'FinancialCalculation' && <>
+                              <Descriptions.Item label="Rule">{item.source.ruleId} · {item.source.ruleVersion}</Descriptions.Item>
+                              <Descriptions.Item label="Definition">{item.source.definitionHash}</Descriptions.Item>
+                              <Descriptions.Item label="Source calculations">{item.source.sourceCalculationIds?.join(', ')}</Descriptions.Item>
+                            </>}
                           </Descriptions>
                         ),
                       },
@@ -224,9 +296,10 @@ export default function ProductReportsExperience() {
               <p className="workspace-eyebrow">REPORT BOUNDARY</p>
               <h2>Source-connected summary, not a financial conclusion.</h2>
               <p>
-                Values are copied from your current authoritative Financial Profile without new
-                aggregation, scoring, forecasting, or AI interpretation. The exported file contains
-                the same governed report content shown here.
+                Values are copied from your current authoritative Financial Profile and, when you
+                select the Phase 2 review, from four exact Financial Rules receipts. Reporting does
+                not recalculate, score, forecast, or invoke AI. The exported file contains the same
+                governed content and exact receipt provenance shown here.
               </p>
             </div>
           </section>
@@ -242,17 +315,26 @@ export default function ProductReportsExperience() {
             Monergy will ask the Reporting owner to read your current authorized Financial Profile.
             Nothing in your financial information is changed by generating or exporting this summary.
           </p>
-          <Button type="primary" loading={busy} onClick={() => void generate()}>
+          <Button type="primary" loading={busy} onClick={() => void generate(false)}>
             Generate basic summary
           </Button>
+          {reviewSelection && <Button loading={busy} onClick={() => void generate(true)}>
+            Generate Phase 2 financial review
+          </Button>}
+          {canCalculate && reviewChecked && !reviewSelection && <Alert showIcon type="info"
+            title="Complete one matching set of reviewed calculations to add the Phase 2 financial review."
+            description="Asset allocation, monthly net cash-flow rate, monthly EMI share and monthly debt-service coverage must use one review date and currency." />}
         </section>
       ) : null}
 
       {report && (
         <div className="product-report-refresh">
-          <Button loading={busy} disabled={!canGenerate} onClick={() => void generate()}>
+          <Button loading={busy} disabled={!canGenerate} onClick={() => void generate(false)}>
             Refresh basic summary
           </Button>
+          {reviewSelection && <Button loading={busy} disabled={!canGenerate} onClick={() => void generate(true)}>
+            Refresh Phase 2 financial review
+          </Button>}
           <a href="/finances">View financial information</a>
         </div>
       )}

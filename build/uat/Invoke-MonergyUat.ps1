@@ -489,6 +489,7 @@ if ($Action -in @('Prepare','Start')) {
             } elseif ($onboarding -and $service -eq 'reporting') {
                 $config.Monergy.ProductReporting=@{
                     Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'
+                    FinancialRulesUrl='http://127.0.0.1:5114/'
                 }
             } elseif ($onboarding -and $service -eq 'search-retrieval') {
                 $config.Monergy.ProductSearch=@{

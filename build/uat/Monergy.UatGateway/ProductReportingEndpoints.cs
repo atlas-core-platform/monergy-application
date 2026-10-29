@@ -6,10 +6,20 @@ using Monergy.Platform;
 
 namespace Monergy.UatGateway;
 
-public sealed record ProductReportGenerationRequest(string OperationId);
+public sealed record ProductReportGenerationRequest(
+    string OperationId,
+    FinancialReviewReceiptSelection? FinancialReview = null);
 
 public static class ProductReportingEndpoints
 {
+    private static readonly string[] FinancialReviewRules =
+    [
+        "monergy.asset-allocation",
+        "monergy.customer-reviewed-monthly-debt-service-coverage",
+        "monergy.customer-reviewed-monthly-emi-share",
+        "monergy.monthly-net-cashflow-rate",
+    ];
+
     public static void AddProductReporting(this WebApplicationBuilder builder)
     {
         if (!builder.Configuration.GetValue<bool>("Monergy:Product:Enabled")) return;
@@ -44,7 +54,7 @@ public static class ProductReportingEndpoints
                 null,
                 Security(session, customer.CustomerId, decision),
                 submission.OperationId,
-                new GenerateReport(customer.CustomerId));
+                new GenerateReport(customer.CustomerId, submission.FinancialReview));
 
             var result = await reporting.GenerateAsync(
                 session.TenantId,
@@ -115,19 +125,30 @@ public static class ProductReportingEndpoints
                 _ => 400,
             });
         var report = result.Data;
+        var calculations = report.Items.Where(item => item.Source.SourceType == "FinancialCalculation").ToArray();
+        var facts = report.Items.Where(item => item.Source.SourceType == "FinancialFact").ToArray();
         if (report.CustomerId != customerId ||
             report.State != "GENERATED" ||
             !TenantAccessClient.Identifier(report.ReportId, 160) ||
             !report.ReportId.StartsWith("report-", StringComparison.Ordinal) ||
             report.Items.Length is < 1 or > 100 ||
-            report.Items.Any(item =>
+            report.Items.Length != facts.Length + calculations.Length ||
+            facts.Any(item =>
                 item.Source.SourceType != "FinancialFact" ||
                 item.Source.AuthoritativeOwner != "Financial Profile Service" ||
                 string.IsNullOrWhiteSpace(item.Source.SourceId) ||
                 string.IsNullOrWhiteSpace(item.Source.EvidenceReferenceId) ||
                 string.IsNullOrWhiteSpace(item.Source.FinancialProvenanceReferenceId) ||
-                item.Source.CalculationLineageReferenceId is not null) ||
-            report.CalculationLineageReferences.Length != 0 ||
+                item.Source.CalculationLineageReferenceId is not null ||
+                item.Source.RuleId is not null || item.Source.RuleVersion is not null ||
+                item.Source.DefinitionHash is not null || item.Source.NumericSemantics is not null ||
+                item.Source.SourceCalculationIds is not null) ||
+            calculations.Any(item => !ValidCalculation(item)) ||
+            calculations.Length > 0 &&
+                (!calculations.Select(item => item.Source.RuleId).Distinct(StringComparer.Ordinal).Order()
+                    .SequenceEqual(FinancialReviewRules, StringComparer.Ordinal) ||
+                 report.CalculationLineageReferences.Length != 4) ||
+            calculations.Length == 0 && report.CalculationLineageReferences.Length != 0 ||
             report.AiResponseTraceReference is not null ||
             report.SourceFinancialReferences.Length !=
                 report.Items.Select(item => item.Source.SourceId).Distinct(StringComparer.Ordinal).Count() ||
@@ -137,6 +158,38 @@ public static class ProductReportingEndpoints
             !report.Export.Sha256.All(char.IsAsciiHexDigit))
             throw new TenantBoundaryException("REPORTING_OWNER_RESPONSE_INVALID", 503);
         return report;
+    }
+
+    private static bool ValidCalculation(ReportLineItem item)
+    {
+        var source = item.Source;
+        if (source.AuthoritativeOwner != "Financial Rules Service" ||
+            string.IsNullOrWhiteSpace(source.SourceId) ||
+            source.CalculationLineageReferenceId != source.SourceId ||
+            source.EvidenceReferenceId is not null || source.FinancialProvenanceReferenceId is not null ||
+            source.SourceCalculationIds is null || source.SourceCalculationIds.Count == 0 ||
+            source.SourceCalculationIds.Any(value => !TenantAccessClient.Identifier(value, 160)))
+            return false;
+        return source.RuleId switch
+        {
+            AssetAllocationDefinition.Id => item.Unit == "%" &&
+                source.RuleVersion == AssetAllocationDefinition.Version &&
+                source.DefinitionHash == AssetAllocationDefinition.DefinitionHash &&
+                source.NumericSemantics == AssetAllocationDefinition.Semantics,
+            MonthlyNetCashflowRateDefinition.Id => item.Unit == "%" &&
+                source.RuleVersion == MonthlyNetCashflowRateDefinition.Version &&
+                source.DefinitionHash == MonthlyNetCashflowRateDefinition.DefinitionHash &&
+                source.NumericSemantics == MonthlyNetCashflowRateDefinition.Semantics,
+            MonthlyEmiShareDefinition.Id => item.Unit == "%" &&
+                source.RuleVersion == MonthlyEmiShareDefinition.Version &&
+                source.DefinitionHash == MonthlyEmiShareDefinition.DefinitionHash &&
+                source.NumericSemantics == MonthlyEmiShareDefinition.Semantics,
+            MonthlyDebtServiceCoverageDefinition.Id => item.Unit == "x" &&
+                source.RuleVersion == MonthlyDebtServiceCoverageDefinition.Version &&
+                source.DefinitionHash == MonthlyDebtServiceCoverageDefinition.DefinitionHash &&
+                source.NumericSemantics == MonthlyDebtServiceCoverageDefinition.Semantics,
+            _ => false,
+        };
     }
 
     private static TrustedSecurityContext Security(

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -17,10 +18,13 @@ public sealed class ProductFinancialProfileReportSourceReader(
     IConfiguration configuration) : IReportSourceReader
 {
     public const string FinancialProfileClient = "product-reporting-financial-profile";
+    public const string FinancialRulesClient = "product-reporting-financial-rules";
     private static readonly HashSet<string> SupportedFactTypes = new(StringComparer.Ordinal)
     { "INCOME", "EXPENSE", "LOAN", "ASSET", "INVESTMENT", "INSURANCE", "TAX" };
     private readonly Uri endpoint = TenantAccessIntegration.LoopbackRoot(
         TenantAccessIntegration.Required(configuration, "Monergy:ProductReporting:FinancialProfileUrl"));
+    private readonly Uri rulesEndpoint = TenantAccessIntegration.LoopbackRoot(
+        TenantAccessIntegration.Required(configuration, "Monergy:ProductReporting:FinancialRulesUrl"));
 
     public static bool Selected(IConfiguration configuration) =>
         configuration.GetValue<bool>("Monergy:ProductReporting:Enabled");
@@ -122,11 +126,140 @@ public sealed class ProductFinancialProfileReportSourceReader(
                     null)));
         }
 
+        if (context.FinancialReview is { } review)
+        {
+            foreach (var item in await ReadFinancialReviewAsync(
+                proof, context, review, cancellationToken).ConfigureAwait(false))
+                items.Add(item);
+        }
+
         return new ReportSourceSnapshot(
             context.CustomerId,
             profile.UpdatedAt,
             items.ToImmutable(),
             null);
+    }
+
+    private async Task<IReadOnlyList<ReportLineItem>> ReadFinancialReviewAsync(
+        TenantBoundaryProof proof,
+        ReportSourceReadContext context,
+        FinancialReviewReceiptSelection selection,
+        CancellationToken cancellationToken)
+    {
+        var customerPath = "local/v1/customers/" + Uri.EscapeDataString(context.CustomerId) + "/";
+        var allocation = await ReadRuleAsync<AssetAllocationCalculation>(proof,
+            customerPath + "net-worth/asset-allocations/" + Uri.EscapeDataString(selection.AssetAllocationCalculationId),
+            context.CorrelationId, cancellationToken).ConfigureAwait(false);
+        var cashflowRate = await ReadRuleAsync<MonthlyNetCashflowRateCalculation>(proof,
+            customerPath + "monthly-cashflow/net-cashflow-rates/" + Uri.EscapeDataString(selection.MonthlyNetCashflowRateCalculationId),
+            context.CorrelationId, cancellationToken).ConfigureAwait(false);
+        var emiShare = await ReadRuleAsync<MonthlyEmiShareCalculation>(proof,
+            customerPath + "monthly-cashflow/emi-shares/" + Uri.EscapeDataString(selection.MonthlyEmiShareCalculationId),
+            context.CorrelationId, cancellationToken).ConfigureAwait(false);
+        var coverage = await ReadRuleAsync<MonthlyDebtServiceCoverageCalculation>(proof,
+            customerPath + "monthly-cashflow/debt-service-coverages/" + Uri.EscapeDataString(selection.MonthlyDebtServiceCoverageCalculationId),
+            context.CorrelationId, cancellationToken).ConfigureAwait(false);
+
+        if (!AssetAllocationData.Calculation(allocation, context.CustomerId))
+            throw InconsistentReview(context.CorrelationId, "The asset-allocation receipt is not canonical.");
+        if (!MonthlyNetCashflowRateData.Calculation(cashflowRate, context.CustomerId))
+            throw InconsistentReview(context.CorrelationId, "The monthly net-cash-flow receipt is not canonical.");
+        if (!MonthlyEmiShareData.Calculation(emiShare, context.CustomerId))
+            throw InconsistentReview(context.CorrelationId, "The monthly EMI-share receipt is not canonical.");
+        if (!MonthlyDebtServiceCoverageData.Calculation(coverage, context.CustomerId))
+            throw InconsistentReview(context.CorrelationId, "The monthly debt-service-coverage receipt is not canonical.");
+        if (allocation.CalculationId != selection.AssetAllocationCalculationId ||
+            cashflowRate.CalculationId != selection.MonthlyNetCashflowRateCalculationId ||
+            emiShare.CalculationId != selection.MonthlyEmiShareCalculationId ||
+            coverage.CalculationId != selection.MonthlyDebtServiceCoverageCalculationId)
+            throw InconsistentReview(context.CorrelationId, "Financial Rules returned a different receipt identity.");
+        if (allocation.State != "CALCULATED" || cashflowRate.State != "CALCULATED" ||
+            emiShare.State != "CALCULATED" || coverage.State != "CALCULATED")
+            throw InconsistentReview(context.CorrelationId, "Every selected receipt must be calculated.");
+        if (
+            cashflowRate.SourceMonthlyCashflow.CalculationId != emiShare.SourceMonthlyCashflow.CalculationId ||
+            cashflowRate.SourceMonthlyCashflow.CalculationId != coverage.SourceMonthlyCashflow.CalculationId ||
+            coverage.SourceMonthlyEmiShare.CalculationId != emiShare.CalculationId ||
+            !MonthlyCashflowData.Same(coverage.SourceMonthlyEmiShare, emiShare))
+            throw InconsistentReview(context.CorrelationId, "The selected monthly receipts do not share exact sources.");
+        if (
+            allocation.SourceNetWorth.Position.Position.AsOfDate !=
+                cashflowRate.SourceMonthlyCashflow.Position.Position.AsOfDate ||
+            allocation.SourceNetWorth.Position.Position.Currency !=
+                cashflowRate.SourceMonthlyCashflow.Position.Position.Currency)
+            throw InconsistentReview(context.CorrelationId, "Net worth and monthly receipts must share a date and currency.");
+        if (allocation.RecordedBy != context.Security.Actor.ActorId ||
+            cashflowRate.RecordedBy != context.Security.Actor.ActorId ||
+            emiShare.RecordedBy != context.Security.Actor.ActorId ||
+            coverage.RecordedBy != context.Security.Actor.ActorId)
+            throw InconsistentReview(context.CorrelationId, "The selected receipts were not recorded by the current actor.");
+
+        var items = allocation.Categories.Select(category => CalculationItem(
+                "Asset allocation — " + category.Category.Replace('_', ' ').ToLowerInvariant(),
+                category.Percentage, "%", allocation.CalculationId, allocation.RuleId,
+                allocation.RuleVersion, allocation.DefinitionHash, allocation.NumericSemantics,
+                [allocation.SourceNetWorth.CalculationId]))
+            .Append(CalculationItem("Monthly net cash-flow rate", cashflowRate.RatePercent!, "%",
+                cashflowRate.CalculationId, cashflowRate.RuleId, cashflowRate.RuleVersion,
+                cashflowRate.DefinitionHash, cashflowRate.NumericSemantics,
+                [cashflowRate.SourceMonthlyCashflow.CalculationId]))
+            .Append(CalculationItem("Monthly EMI share", emiShare.RatePercent!, "%",
+                emiShare.CalculationId, emiShare.RuleId, emiShare.RuleVersion,
+                emiShare.DefinitionHash, emiShare.NumericSemantics,
+                [emiShare.SourceMonthlyCashflow.CalculationId, .. emiShare.SourceLoans.Select(loan => loan.LoanRecordId)]))
+            .Append(CalculationItem("Monthly debt-service coverage", coverage.CoverageMultiple!, "x",
+                coverage.CalculationId, coverage.RuleId, coverage.RuleVersion,
+                coverage.DefinitionHash, coverage.NumericSemantics,
+                [coverage.SourceMonthlyCashflow.CalculationId, coverage.SourceMonthlyEmiShare.CalculationId]))
+            .ToArray();
+        return items;
+    }
+
+    private static ReportSourceException InconsistentReview(string correlationId, string message) =>
+        Failure("report.source.financial-review-inconsistent", ContractErrorCategory.AccessDenied,
+            message, correlationId);
+
+    private static ReportLineItem CalculationItem(string label, string value, string unit,
+        string calculationId, string ruleId, string ruleVersion, string definitionHash,
+        string numericSemantics, IReadOnlyList<string> sourceCalculationIds) => new(
+        label,
+        decimal.Parse(value, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign,
+            CultureInfo.InvariantCulture),
+        unit,
+        new ReportSourceReference("FinancialCalculation", calculationId,
+            ReportingAuthority.FinancialRulesService, null, null, calculationId,
+            ruleId, ruleVersion, definitionHash, numericSemantics, sourceCalculationIds));
+
+    private async Task<T> ReadRuleAsync<T>(TenantBoundaryProof proof, string path,
+        string correlationId, CancellationToken cancellationToken)
+    {
+        var client = clients.CreateClient(FinancialRulesClient);
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(rulesEndpoint, path));
+        request.Headers.Add("X-Monergy-Tenant", proof.TenantId);
+        request.Headers.Add("X-Monergy-Session", proof.SessionId);
+        try
+        {
+            using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+                throw Failure("report.source.financial-review-denied", ContractErrorCategory.AccessDenied,
+                    "A selected Financial Rules receipt is unavailable under the current access.", correlationId);
+            if (!response.IsSuccessStatusCode)
+                throw Failure("report.source.financial-rules-unavailable", ContractErrorCategory.DependencyFailure,
+                    "The Financial Rules source is unavailable.", correlationId, true);
+            return await response.Content.ReadFromJsonAsync<T>(ContractJson.Options, cancellationToken)
+                .ConfigureAwait(false) ?? throw Failure("report.source.response-malformed",
+                    ContractErrorCategory.DependencyFailure, "A Financial Rules response is invalid.", correlationId);
+        }
+        catch (JsonException)
+        {
+            throw Failure("report.source.response-malformed", ContractErrorCategory.DependencyFailure,
+                "A Financial Rules response is invalid.", correlationId);
+        }
+        catch (HttpRequestException)
+        {
+            throw Failure("report.source.financial-rules-unavailable", ContractErrorCategory.DependencyFailure,
+                "The Financial Rules source is unavailable.", correlationId, true);
+        }
     }
 
     private static ContractRequest<TPayload> Request<TPayload>(
