@@ -22,12 +22,21 @@ foreach ($privilege in @('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')) {
     }
 }
 $embeddedAccessRequestSource = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/uat/dependencies/source/src/Monergy.AccessManagement/AccessRequests.cs') -Raw
+$runtimeWritePattern = '(?im)\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+am\.(?<table>[a-z0-9_]+)'
+$flowWriteTables = @([regex]::Matches($embeddedAccessRequestSource, $runtimeWritePattern) |
+    ForEach-Object { $_.Groups['table'].Value } | Sort-Object -Unique)
+$probeWriteTables = @([regex]::Matches($bootstrapSource, $runtimeWritePattern) |
+    ForEach-Object { $_.Groups['table'].Value } | Sort-Object -Unique)
+$unprobedFlowTables = @($flowWriteTables | Where-Object { $_ -notin $probeWriteTables })
+if ($unprobedFlowTables.Count -ne 0) {
+    throw "LOCAL-UAT does not exercise runtime writes used by the embedded AM access-request flow: $($unprobedFlowTables -join ', ')."
+}
 if (-not $embeddedAccessRequestSource.Contains('INSERT INTO am.access_request_permission_grants (') -or
     -not $bootstrapSource.Contains('LOCAL_AM_RUNTIME_PROVENANCE_INSERT_FAILED') -or
     -not $bootstrapSource.Contains('await transaction.RollbackAsync()')) {
     throw 'LOCAL-UAT does not exercise the embedded AM fulfillment provenance write through its deployed runtime role.'
 }
-Write-Output 'LOCAL-UAT AM runtime provenance privilege contract passed: SELECT/INSERT allowed; UPDATE/DELETE/TRUNCATE denied; transactional fulfillment probe present.'
+Write-Output "LOCAL-UAT AM runtime provenance privilege contract passed: SELECT/INSERT allowed; UPDATE/DELETE/TRUNCATE denied; $($flowWriteTables.Count) flow tables covered by the transactional probe."
 
 if ($RuntimePrivilegeOnly) { exit 0 }
 
