@@ -34,13 +34,31 @@ public sealed class PhysicalJobAndAuditTests
         await repository.FailClaimAsync(lease!, "dependency.timeout", true,
             JobTestContext.Now.AddMinutes(1), JobTestContext.Now, default);
 
-        var cancelled = await app.CancelJobAsync(JobTestContext.Cancel(jobId));
+        var request = JobTestContext.Cancel(jobId);
+        var cancelled = await app.CancelJobAsync(request);
+        var replay = await app.CancelJobAsync(request);
 
         Assert.Equal(JobState.Cancelled, cancelled.Data?.State);
+        Assert.Equal(cancelled.Data, replay.Data);
         Assert.False(cancelled.Data?.Retryable);
+        Assert.Equal(ContractErrorCategory.Conflict, (await app.CancelJobAsync(request with
+        {
+            Payload = request.Payload with { Reason = "changed-reason" },
+        })).Error?.Category);
         Assert.Null((await repository.GetAsync(jobId, default))?.NextAttemptAt);
         Assert.Null(await repository.ClaimAsync(jobId, "other-worker", JobTestContext.Now.AddHours(1),
             TimeSpan.FromMinutes(1), default));
+        await using var runtime = new NpgsqlConnection(Required("D10_JOB_MANAGEMENT_RUNTIME_CONNECTION"));
+        await runtime.OpenAsync();
+        Assert.Equal(1, await runtime.ExecuteScalarAsync<int>("""
+            SELECT count(*) FROM job_management.idempotency_operations
+            WHERE contract_name=@contract AND customer_id=@customer AND idempotency_key=@key;
+            """, new
+        {
+            contract = Vs02ContractNames.CancelJob,
+            customer = JobTestContext.CustomerId,
+            key = request.IdempotencyKey,
+        }));
     }
 
     [Fact, Trait("Category", "Physical")]

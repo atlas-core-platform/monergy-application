@@ -23,6 +23,16 @@ public sealed record JobSubmission(
     DateTimeOffset RequestedAt,
     DateTimeOffset ScheduledAt);
 
+public sealed record JobCancellation(
+    string ContractName,
+    string ContractVersion,
+    string IdempotencyKey,
+    string PayloadFingerprint,
+    string JobId,
+    string CustomerId,
+    string Reason,
+    DateTimeOffset RequestedAt);
+
 public sealed record DurableJobRecord(
     string JobId,
     string JobName,
@@ -115,8 +125,8 @@ public interface IJobRepository
     Task<DurableJobRecord> CompleteAsync(string jobId, string? outcomeReference, DateTimeOffset now, CancellationToken cancellationToken);
     Task<DurableJobRecord> FailAsync(string jobId, string failureCode, bool retryable,
         DateTimeOffset? nextAttemptAt, DateTimeOffset now, CancellationToken cancellationToken);
-    Task<DurableJobRecord> CancelAsync(string jobId, string customerId, string reason,
-        DateTimeOffset now, CancellationToken cancellationToken);
+    Task<DurableJobRecord> CancelAsync(JobCancellation cancellation,
+        CancellationToken cancellationToken);
     Task<DurableJobRecord> ReplayAsync(string jobId, string customerId, DateTimeOffset now, CancellationToken cancellationToken);
     Task<int> RecoverInterruptedAsync(DateTimeOffset now, CancellationToken cancellationToken);
     Task<DurableJobRecord> ReconcileAsync(string jobId, string customerId, JobReconciliationOutcome outcome,
@@ -231,7 +241,8 @@ public sealed class JobManagementApplication(
     {
         var contextError = ContractGuard.Validate(request, Vs02ContractNames.CancelJob);
         if (contextError is not null) return Reject<ScheduledJob, CancelJob>(request, contextError);
-        if (string.IsNullOrWhiteSpace(request.Payload.JobId) || string.IsNullOrWhiteSpace(request.Payload.Reason) ||
+        if (string.IsNullOrWhiteSpace(request.IdempotencyKey) ||
+            string.IsNullOrWhiteSpace(request.Payload.JobId) || string.IsNullOrWhiteSpace(request.Payload.Reason) ||
             !string.Equals(request.Payload.CustomerId, request.Security.Access.CustomerId, StringComparison.Ordinal))
         {
             return ContractResult<ScheduledJob>.Rejected(request, "job.cancel.invalid",
@@ -240,8 +251,12 @@ public sealed class JobManagementApplication(
 
         try
         {
-            var job = await repository.CancelAsync(request.Payload.JobId, request.Payload.CustomerId,
-                request.Payload.Reason, timeProvider.GetUtcNow(), cancellationToken);
+            var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
+                JsonSerializer.Serialize(request.Payload, ContractJson.Options)))).ToLowerInvariant();
+            var job = await repository.CancelAsync(new(
+                request.ContractName, request.ContractVersion, request.IdempotencyKey, fingerprint,
+                request.Payload.JobId, request.Payload.CustomerId, request.Payload.Reason,
+                timeProvider.GetUtcNow()), cancellationToken);
             Record(request.ContractName, job.State == JobState.Cancelled ? "CANCELLED" : "CANCELLATION_REQUESTED",
                 request.RequestId, request.CorrelationId, request.CausationId, job.JobId);
             return ContractResult<ScheduledJob>.Succeeded(request, job.ToStatus());

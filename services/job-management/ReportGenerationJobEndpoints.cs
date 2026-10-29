@@ -58,6 +58,36 @@ public static class ReportGenerationJobEndpoints
                 return ToResult(result);
             });
         }
+        endpoints.MapPost("/internal/local/v1/jobs/report-generation/cancel", async (
+            HttpRequest http,
+            ContractRequest<CancelJob> request,
+            JobManagementApplication application,
+            IJobRepository repository,
+            IJobAuthorizationPolicy authorization,
+            CancellationToken cancellationToken) =>
+        {
+            Require(http, request.Security, token);
+            var payload = request.Payload;
+            var job = await repository.GetAsync(payload.JobId, cancellationToken).ConfigureAwait(false);
+            if (request.ContractName != Vs02ContractNames.CancelJob ||
+                string.IsNullOrWhiteSpace(request.IdempotencyKey) ||
+                payload.Reason != "customer-requested" ||
+                payload.CustomerId != request.Security.Access.CustomerId ||
+                job is null ||
+                job.CustomerId != payload.CustomerId ||
+                job.JobName != "report-generation" ||
+                job.OwnerService != ReportingIdentity.OwnerService ||
+                job.JobId != ReportingIdentity.JobId(job.PayloadReference) ||
+                job.PayloadReference.Length != 32 ||
+                job.PayloadReference.Any(character =>
+                    !char.IsAsciiHexDigit(character) || char.IsAsciiLetterUpper(character)))
+                return Results.NotFound();
+            var denied = await authorization.AuthorizeAsync(
+                request.Security, job, request.CorrelationId, cancellationToken).ConfigureAwait(false);
+            if (denied is not null)
+                return Results.Json(new { error = denied }, statusCode: StatusCodes.Status403Forbidden);
+            return ToResult(await application.CancelJobAsync(request, cancellationToken).ConfigureAwait(false));
+        });
         return endpoints;
     }
 

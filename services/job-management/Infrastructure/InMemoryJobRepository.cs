@@ -198,16 +198,24 @@ public sealed partial class InMemoryJobRepository : IJobRepository
             UpdatedAt = now,
         }, JobEvent.Failed, now, cancellationToken);
 
-    public Task<DurableJobRecord> CancelAsync(string jobId, string customerId, string reason,
-        DateTimeOffset now, CancellationToken cancellationToken)
+    public Task<DurableJobRecord> CancelAsync(JobCancellation cancellation,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         lock (sync)
         {
-            var current = Required(jobId);
+            var identity = Identity(cancellation);
+            if (idempotency.TryGetValue(identity, out var prior))
+            {
+                if (!string.Equals(prior.Fingerprint, cancellation.PayloadFingerprint, StringComparison.Ordinal) ||
+                    !string.Equals(prior.JobId, cancellation.JobId, StringComparison.Ordinal))
+                    throw new InvalidOperationException("Idempotency key conflict.");
+                return Task.FromResult(Required(prior.JobId));
+            }
+            var current = Required(cancellation.JobId);
             var pendingRetry = current.State == JobState.Failed && current.Retryable &&
                 !current.ReconciliationRequired && current.LeaseToken is null;
-            if (!string.Equals(current.CustomerId, customerId, StringComparison.Ordinal) ||
+            if (!string.Equals(current.CustomerId, cancellation.CustomerId, StringComparison.Ordinal) ||
                 current.State is JobState.Completed or JobState.Cancelled ||
                 (current.State == JobState.Failed && !pendingRetry))
                 throw new InvalidOperationException("Invalid cancellation state.");
@@ -215,21 +223,22 @@ public sealed partial class InMemoryJobRepository : IJobRepository
                 ? current with
                 {
                     State = JobState.Cancelled,
-                    FailureCode = reason,
+                    FailureCode = cancellation.Reason,
                     Retryable = false,
                     NextAttemptAt = null,
-                    CancellationRequestedAt = now,
-                    TerminalAt = now,
-                    UpdatedAt = now,
+                    CancellationRequestedAt = cancellation.RequestedAt,
+                    TerminalAt = cancellation.RequestedAt,
+                    UpdatedAt = cancellation.RequestedAt,
                 }
                 : current with
                 {
                     State = JobState.CancellationRequested,
-                    FailureCode = reason,
-                    CancellationRequestedAt = now,
-                    UpdatedAt = now
+                    FailureCode = cancellation.Reason,
+                    CancellationRequestedAt = cancellation.RequestedAt,
+                    UpdatedAt = cancellation.RequestedAt
                 };
-            jobs[jobId] = next;
+            jobs[cancellation.JobId] = next;
+            idempotency.Add(identity, (cancellation.JobId, cancellation.PayloadFingerprint));
             return Task.FromResult(next);
         }
     }
@@ -497,6 +506,9 @@ public sealed partial class InMemoryJobRepository : IJobRepository
     }
 
     private static string Identity(JobSubmission value) => string.Join('|', value.ContractName,
+        value.ContractVersion, value.CustomerId, value.IdempotencyKey);
+
+    private static string Identity(JobCancellation value) => string.Join('|', value.ContractName,
         value.ContractVersion, value.CustomerId, value.IdempotencyKey);
 }
 

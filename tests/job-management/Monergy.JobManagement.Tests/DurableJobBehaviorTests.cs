@@ -139,7 +139,28 @@ public sealed class DurableJobBehaviorTests
             (await app.CancelJobAsync(JobTestContext.Cancel("job-during"))).Data?.State);
         Assert.Equal(JobState.Completed, (await app.CompleteAsync("job-during")).State);
         Assert.Equal(ContractErrorCategory.Conflict,
-            (await app.CancelJobAsync(JobTestContext.Cancel("job-during"))).Error?.Category);
+            (await app.CancelJobAsync(JobTestContext.Cancel(
+                "job-during", idempotencyKey: "new-cancel-key-job-during"))).Error?.Category);
+    }
+
+    [Fact]
+    public async Task CancellationReplayIsIdempotentAndChangedPayloadConflicts()
+    {
+        var repository = new InMemoryJobRepository();
+        var app = App(repository);
+        await app.ScheduleJobAsync(JobTestContext.Schedule("job-cancel-replay", "key-cancel-replay"));
+        var request = JobTestContext.Cancel("job-cancel-replay");
+
+        var first = await app.CancelJobAsync(request);
+        var replay = await app.CancelJobAsync(request);
+        var changed = await app.CancelJobAsync(request with
+        {
+            Payload = request.Payload with { Reason = "changed-reason" },
+        });
+
+        Assert.Equal(JobState.Cancelled, first.Data?.State);
+        Assert.Equal(first.Data, replay.Data);
+        Assert.Equal(ContractErrorCategory.Conflict, changed.Error?.Category);
     }
 
     [Fact]

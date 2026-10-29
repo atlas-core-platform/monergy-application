@@ -146,7 +146,7 @@ public sealed class JobAndLineageTests
             "correlation-d12",
             null,
             D12TestContext.Security(),
-            null,
+            "cancel-key-job-d12-timeout",
             new CancelJob(lease.Job.JobId, D12TestContext.CustomerId, "bounded delivery timeout")));
         Assert.Equal(JobState.CancellationRequested, cancellation.Data?.State);
 

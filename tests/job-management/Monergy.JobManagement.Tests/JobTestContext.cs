@@ -52,10 +52,11 @@ internal static class JobTestContext
         $"correlation-{jobId}", null, security ?? Security(), null,
         new(jobId, (security ?? Security()).Access.CustomerId));
 
-    public static ContractRequest<CancelJob> Cancel(string jobId, TrustedSecurityContext? security = null) => new(
+    public static ContractRequest<CancelJob> Cancel(string jobId, TrustedSecurityContext? security = null,
+        string? idempotencyKey = null, string reason = "customer-requested") => new(
         Vs02ContractNames.CancelJob, ContractGuard.CurrentVersion, $"cancel-{jobId}",
-        $"correlation-{jobId}", null, security ?? Security(), $"cancel-key-{jobId}",
-        new(jobId, (security ?? Security()).Access.CustomerId, "customer-requested"));
+        $"correlation-{jobId}", null, security ?? Security(), idempotencyKey ?? $"cancel-key-{jobId}",
+        new(jobId, (security ?? Security()).Access.CustomerId, reason));
 }
 
 internal sealed class CountingTarget(JobExecutionResult result) : IJobExecutionTarget
