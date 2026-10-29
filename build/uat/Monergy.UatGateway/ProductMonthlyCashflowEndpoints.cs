@@ -131,6 +131,30 @@ public static class ProductMonthlyCashflowEndpoints
             if(!Page(page.Items,page.HasMore,page.NextBeforeId,x=>DebtToIncomeData.Calculation(x,customer.CustomerId),x=>x.CalculationId)||page.Items.Any(x=>x.CalculationId==cursor))throw Invalid();
             await Confirm(http,owners,access,session,customer,before,calculate:true,documents:page.Items.Any(x=>x.SourceDebtServiceRatio.SourceCalculation.Position.Lines.Any(y=>y.Source is not null))).ConfigureAwait(false);return page;
         });
+        group.MapPost("/net-cashflow-rates",async(HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductMonthlyCashflowClient client)=>
+        {
+            CustomerReviewHttp.NoQuery(http.Request);var(session,customer,before)=await Resolve(http,owners,access,calculate:true).ConfigureAwait(false);
+            var input=await CustomerReviewHttp.ReadAsync<CalculateMonthlyNetCashflowRate>(http).ConfigureAwait(false);if(!MonthlyNetCashflowRateData.Request(input))throw new TenantBoundaryException("MONTHLY_NET_CASHFLOW_RATE_INVALID",400);
+            var source=await client.Calculation(session,customer.CustomerId,input.MonthlyCashflowCalculationId,http.RequestAborted).ConfigureAwait(false);if(!Bound(source,customer.CustomerId))throw Invalid();
+            var receipt=await client.CalculateMonthlyNetCashflowRate(session,customer.CustomerId,input,http.RequestAborted).ConfigureAwait(false);
+            if(!MonthlyNetCashflowRateData.Calculation(receipt,customer.CustomerId)||receipt.OperationId!=input.OperationId||receipt.RecordedBy!=session.ActorId||receipt.SourceMonthlyCashflow.CalculationId!=input.MonthlyCashflowCalculationId||!MonthlyCashflowData.Same(receipt.SourceMonthlyCashflow,source))throw Invalid();
+            var saved=await client.MonthlyNetCashflowRate(session,customer.CustomerId,receipt.CalculationId,http.RequestAborted).ConfigureAwait(false);if(!MonthlyCashflowData.Same(saved,receipt))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:source.Position.Lines.Any(x=>x.Source is not null)).ConfigureAwait(false);return saved;
+        });
+        group.MapGet("/net-cashflow-rates/{calculationId}",async(string calculationId,HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductMonthlyCashflowClient client)=>
+        {
+            CustomerReviewHttp.NoQuery(http.Request);Identifier(calculationId);var(session,customer,before)=await Resolve(http,owners,access,calculate:true).ConfigureAwait(false);
+            var value=await client.MonthlyNetCashflowRate(session,customer.CustomerId,calculationId,http.RequestAborted).ConfigureAwait(false);if(!MonthlyNetCashflowRateData.Calculation(value,customer.CustomerId)||value.CalculationId!=calculationId)throw Invalid();
+            var source=await client.Calculation(session,customer.CustomerId,value.SourceMonthlyCashflow.CalculationId,http.RequestAborted).ConfigureAwait(false);if(!MonthlyCashflowData.Same(source,value.SourceMonthlyCashflow))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:source.Position.Lines.Any(x=>x.Source is not null)).ConfigureAwait(false);return value;
+        });
+        group.MapGet("/net-cashflow-rates",async(HttpContext http,CustomerOwnerClient owners,TenantAccessClient access,ProductMonthlyCashflowClient client)=>
+        {
+            var(session,customer,before)=await Resolve(http,owners,access,calculate:true).ConfigureAwait(false);var cursor=CustomerReviewHttp.Cursor(http.Request);
+            var page=await client.MonthlyNetCashflowRates(session,customer.CustomerId,cursor,http.RequestAborted).ConfigureAwait(false);
+            if(!Page(page.Items,page.HasMore,page.NextBeforeId,x=>MonthlyNetCashflowRateData.Calculation(x,customer.CustomerId),x=>x.CalculationId)||page.Items.Any(x=>x.CalculationId==cursor))throw Invalid();
+            await Confirm(http,owners,access,session,customer,before,calculate:true,documents:page.Items.Any(x=>x.SourceMonthlyCashflow.Position.Lines.Any(y=>y.Source is not null))).ConfigureAwait(false);return page;
+        });
     }
     public static bool Bound(MonthlyCashflowCalculation? value,string customer)=>MonthlyCashflowData.Calculation(value,customer);
     private static bool Page<T>(IReadOnlyList<T>? items,bool more,string? next,Func<T,bool> bound,Func<T,string> id)=>items is not null&&items.Count<=50&&items.All(x=>x is not null&&bound(x))&&items.Select(id).Distinct(StringComparer.Ordinal).Count()==items.Count&&(more?items.Count==50&&next==id(items[^1]):next is null);
@@ -168,6 +192,9 @@ public sealed class ProductMonthlyCashflowClient:IDisposable
     public Task<DebtToIncomeCalculation> CalculateDebtToIncome(CustomerOwnerSession s,string c,CalculateDebtToIncome input,CancellationToken ct)=>Send<DebtToIncomeCalculation>(rules,s,c,"debt-to-income-ratios",input,ct);
     public Task<DebtToIncomeCalculation> DebtToIncome(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>Send<DebtToIncomeCalculation>(rules,s,c,"debt-to-income-ratios/"+Uri.EscapeDataString(id),null,ct);
     public Task<DebtToIncomeCalculationPage> DebtToIncomes(CustomerOwnerSession s,string c,string? cursor,CancellationToken ct)=>Send<DebtToIncomeCalculationPage>(rules,s,c,"debt-to-income-ratios"+Cursor(cursor),null,ct);
+    public Task<MonthlyNetCashflowRateCalculation> CalculateMonthlyNetCashflowRate(CustomerOwnerSession s,string c,CalculateMonthlyNetCashflowRate input,CancellationToken ct)=>Send<MonthlyNetCashflowRateCalculation>(rules,s,c,"net-cashflow-rates",input,ct);
+    public Task<MonthlyNetCashflowRateCalculation> MonthlyNetCashflowRate(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>Send<MonthlyNetCashflowRateCalculation>(rules,s,c,"net-cashflow-rates/"+Uri.EscapeDataString(id),null,ct);
+    public Task<MonthlyNetCashflowRateCalculationPage> MonthlyNetCashflowRates(CustomerOwnerSession s,string c,string? cursor,CancellationToken ct)=>Send<MonthlyNetCashflowRateCalculationPage>(rules,s,c,"net-cashflow-rates"+Cursor(cursor),null,ct);
     private static string Cursor(string? value)=>value is null?"":"?beforeId="+Uri.EscapeDataString(value);
     private async Task<T> Send<T>(Uri root,CustomerOwnerSession session,string customer,string suffix,object? input,CancellationToken ct)
     {
