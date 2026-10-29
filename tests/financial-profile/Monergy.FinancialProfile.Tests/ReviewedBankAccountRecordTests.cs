@@ -4,6 +4,7 @@ using Monergy.Platform;
 using Monergy.Services.FinancialProfile.Application;
 using Monergy.Services.FinancialProfile.Infrastructure;
 using Monergy.UatGateway;
+using Xunit;
 
 namespace Monergy.FinancialProfile.Tests;
 

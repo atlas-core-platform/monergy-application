@@ -281,7 +281,8 @@ public sealed class FinancialProfileAuthorityTests
         var results = await Task.WhenAll(CompetingAssetTypes.Select(type => Task.Run(() =>
             app.NormalizeSourceFactsAsync(NormalizeRequest([Fact(type, "one-source", "Asset figure", 100m)], type, type)))));
         Assert.Single(results, result => result.Outcome == ContractOutcome.Success);
-        Assert.Single(results, result => result.Error?.Category == ContractErrorCategory.Conflict);
+        Assert.Equal(CompetingAssetTypes.Length - 1,
+            results.Count(result => result.Error?.Category == ContractErrorCategory.Conflict));
         var profile = await repository.GetProfileAsync("financial-profile-001", default);
         Assert.Equal(1, profile!.Revision);
         Assert.Single(profile.Facts);
