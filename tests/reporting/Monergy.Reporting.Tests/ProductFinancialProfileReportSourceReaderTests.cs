@@ -13,6 +13,9 @@ namespace Monergy.Reporting.Tests;
 
 public sealed class ProductFinancialProfileReportSourceReaderTests
 {
+    private static readonly string[] ReviewReceiptIds =
+    ["allocation-review", "cashflow-rate-review", "emi-share-review", "coverage-review"];
+
     [Theory]
     [InlineData("ASSET", false)]
     [InlineData("PROPERTY", false)]
@@ -117,6 +120,37 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         Assert.Equal("report.source.provenance-boundary-invalid", failure.Error.Code);
     }
 
+    [Fact]
+    public async Task ExactPhase2ReceiptsAreRefetchedValidatedAndPreservedWithRuleProvenance()
+    {
+        var handler = new FinancialProfileHandler { IncludeFinancialReview = true };
+        var selection = new FinancialReviewReceiptSelection(
+            "allocation-review", "cashflow-rate-review", "emi-share-review", "coverage-review");
+
+        var snapshot = await Reader(handler, Accessor()).ReadAsync(new(
+            "reference-customer", Security(), "review-request", "review-correlation", null, selection),
+            CancellationToken.None);
+
+        Assert.NotNull(snapshot);
+        var calculations = snapshot.Items.Where(item => item.Source.SourceType == "FinancialCalculation").ToArray();
+        Assert.Equal(4, calculations.Select(item => item.Source.RuleId).Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(ReviewReceiptIds.Order(),
+            calculations.Select(item => item.Source.SourceId).Distinct(StringComparer.Ordinal).Order());
+        Assert.All(calculations, item =>
+        {
+            Assert.Equal("Financial Rules Service", item.Source.AuthoritativeOwner);
+            Assert.Equal(item.Source.SourceId, item.Source.CalculationLineageReferenceId);
+            Assert.Equal(64, item.Source.DefinitionHash?.Length);
+            Assert.NotEmpty(item.Source.SourceCalculationIds!);
+        });
+        Assert.Equal(4, handler.RuleRequests.Count);
+        Assert.All(handler.RuleRequests, request =>
+        {
+            Assert.Equal("T001", request.Tenant);
+            Assert.Equal("customer-session", request.Session);
+        });
+    }
+
     private static ProductFinancialProfileReportSourceReader Reader(
         HttpMessageHandler handler,
         IHttpContextAccessor accessor)
@@ -127,6 +161,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                 ["Monergy:ExecutionZone"] = "LOCAL",
                 ["Monergy:ProductReporting:Enabled"] = "true",
                 ["Monergy:ProductReporting:FinancialProfileUrl"] = "http://127.0.0.1:5113/",
+                ["Monergy:ProductReporting:FinancialRulesUrl"] = "http://127.0.0.1:5114/",
             }).Build();
         return new(new TestHttpClientFactory(handler), accessor, configuration);
     }
@@ -161,12 +196,22 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         public bool CanonicalCategories { get; set; }
         public bool CrossCustomerProvenance { get; set; }
         public bool MismatchedTaxProvenance { get; set; }
+        public bool IncludeFinancialReview { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
+        public List<(string Path, string Tenant, string Session)> RuleRequests { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
+            if (request.Method == HttpMethod.Get)
+            {
+                RuleRequests.Add((request.RequestUri!.AbsolutePath,
+                    request.Headers.GetValues("X-Monergy-Tenant").Single(),
+                    request.Headers.GetValues("X-Monergy-Session").Single()));
+                return IncludeFinancialReview ? Review(request.RequestUri.AbsolutePath) :
+                    new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
             var body = await request.Content!.ReadAsStringAsync(cancellationToken);
             using var document = System.Text.Json.JsonDocument.Parse(body);
             Requests.Add((
@@ -181,6 +226,73 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                 "/contracts/cid-033/v1" => Provenance(body),
                 _ => new HttpResponseMessage(HttpStatusCode.NotFound),
             };
+        }
+
+        private static HttpResponseMessage Review(string path)
+        {
+            var receipts = ReviewReceipts();
+            object value = path switch
+            {
+                "/local/v1/customers/reference-customer/net-worth/asset-allocations/allocation-review" => receipts.Allocation,
+                "/local/v1/customers/reference-customer/monthly-cashflow/net-cashflow-rates/cashflow-rate-review" => receipts.Rate,
+                "/local/v1/customers/reference-customer/monthly-cashflow/emi-shares/emi-share-review" => receipts.Share,
+                "/local/v1/customers/reference-customer/monthly-cashflow/debt-service-coverages/coverage-review" => receipts.Coverage,
+                _ => throw new InvalidOperationException("Unexpected Financial Rules path: " + path),
+            };
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(value, options: ContractJson.Options),
+            };
+        }
+
+        private static (AssetAllocationCalculation Allocation, MonthlyNetCashflowRateCalculation Rate,
+            MonthlyEmiShareCalculation Share, MonthlyDebtServiceCoverageCalculation Coverage) ReviewReceipts()
+        {
+            const string customer = "reference-customer";
+            const string actor = "A100";
+            var day = new DateOnly(2026, 9, 30);
+            var at = DateTimeOffset.Parse("2026-10-02T09:00:00Z", CultureInfo.InvariantCulture);
+            var asset = new NetWorthLineDraft(new string('a', 32), "ASSET", "CASH", "Reviewed cash",
+                "1000.00", "USD", day, "Customer reviewed");
+            var netPosition = new ReviewedNetWorthPosition("net-position", new string('b', 32), customer,
+                new(day, "USD", [asset], true, true), [new(asset, null)], actor, at);
+            var netWorth = new NetWorthCalculation("net-worth-review", new string('c', 32), customer,
+                netPosition, NetWorthDefinition.Id, NetWorthDefinition.Version, NetWorthDefinition.DefinitionHash,
+                NetWorthDefinition.Semantics, "CALCULATED", "1000.00", "0.00", "1000.00", [], actor, at);
+            var allocation = new AssetAllocationCalculation("allocation-review", new string('d', 32), customer,
+                netWorth, [new("CASH", "1000.00", "100.00")], AssetAllocationDefinition.Id,
+                AssetAllocationDefinition.Version, AssetAllocationDefinition.DefinitionHash,
+                AssetAllocationDefinition.Semantics, "CALCULATED", "1000.00", [], actor, at);
+
+            var income = new MonthlyCashflowLineDraft(new string('e', 32), "INCOME", "SALARY", "Salary",
+                "10000.00", "USD", day, "Customer reviewed");
+            var expense = new MonthlyCashflowLineDraft(new string('f', 32), "EXPENSE", "HOUSEHOLD", "Household",
+                "5000.00", "USD", day, "Customer reviewed");
+            var cashPosition = new ReviewedMonthlyCashflowPosition("cash-position", new string('1', 32), customer,
+                new(day, "USD", [income, expense], true, true, Household: "Self"),
+                [new(income, null), new(expense, null)], actor, at);
+            var cashflow = new MonthlyCashflowCalculation("cashflow-review", new string('2', 32), customer,
+                cashPosition, MonthlyCashflowDefinition.Id, MonthlyCashflowDefinition.Version,
+                MonthlyCashflowDefinition.DefinitionHash, MonthlyCashflowDefinition.Semantics, "CALCULATED",
+                "10000.00", "5000.00", "5000.00", [], actor, at);
+            var rate = new MonthlyNetCashflowRateCalculation("cashflow-rate-review", new string('3', 32), customer,
+                cashflow, MonthlyNetCashflowRateDefinition.Id, MonthlyNetCashflowRateDefinition.Version,
+                MonthlyNetCashflowRateDefinition.DefinitionHash, MonthlyNetCashflowRateDefinition.Semantics,
+                "CALCULATED", "10000.00", "5000.00", "5000.00", "50.00", [], actor, at);
+            var loan = new ReviewedLoanRecord("loan-review", new string('4', 32), customer,
+                new("Home loan", "Bank", "HOME", 100000m, 80000m, 8m, 2500m, 60,
+                    new(2026, 1, 1), new(2030, 12, 31), day, "fact-loan", 1), "USD",
+                "provenance-loan", "document-version-loan", "evidence-loan", actor, at, 2, "ACTIVE", day);
+            var share = new MonthlyEmiShareCalculation("emi-share-review", new string('5', 32), customer,
+                cashflow, [loan], true, MonthlyEmiShareDefinition.Id, MonthlyEmiShareDefinition.Version,
+                MonthlyEmiShareDefinition.DefinitionHash, MonthlyEmiShareDefinition.Semantics, "CALCULATED",
+                "10000.00", "2500.00", "25.00", [], actor, at);
+            var coverage = new MonthlyDebtServiceCoverageCalculation("coverage-review", new string('6', 32), customer,
+                cashflow, share, true, MonthlyDebtServiceCoverageDefinition.Id,
+                MonthlyDebtServiceCoverageDefinition.Version, MonthlyDebtServiceCoverageDefinition.DefinitionHash,
+                MonthlyDebtServiceCoverageDefinition.Semantics, "CALCULATED", "10000.00", "5000.00",
+                "2500.00", "5000.00", "7500.00", "3.00", [], actor, at);
+            return (allocation, rate, share, coverage);
         }
 
         private HttpResponseMessage Profile(string body)

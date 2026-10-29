@@ -61,6 +61,21 @@ const report = {
   },
 };
 
+const reviewDay = '2026-09-30';
+const netLine = { lineId: 'a'.repeat(32), side: 'ASSET', kind: 'CASH', name: 'Cash', amount: '1000.00', currency: 'USD', valueDate: reviewDay, sourceNote: 'Customer reviewed', record: null };
+const netPosition = { positionId: 'net-position', operationId: 'b'.repeat(32), customerId: 'reference-customer', position: { asOfDate: reviewDay, currency: 'USD', lines: [netLine], assetsComplete: true, liabilitiesComplete: true, replacesPositionId: null }, lines: [{ line: netLine, source: null }], recordedBy: 'A100', recordedAt: '2026-10-02T00:00:00Z' };
+const netWorth = { calculationId: 'net-worth-1', operationId: 'c'.repeat(32), customerId: 'reference-customer', position: netPosition, ruleId: 'monergy.net-worth', ruleVersion: '1.0.0', definitionHash: '1'.repeat(64), numericSemantics: 'Exact customer-reviewed net worth.', state: 'CALCULATED', totalAssets: '1000.00', totalLiabilities: '0.00', netWorth: '1000.00', issues: [], recordedBy: 'A100', recordedAt: '2026-10-02T00:00:00Z' };
+const allocation = { calculationId: 'allocation-1', operationId: 'd'.repeat(32), customerId: 'reference-customer', sourceNetWorth: netWorth, categories: [{ category: 'CASH', amount: '1000.00', percentage: '100.00' }], ruleId: 'monergy.asset-allocation', ruleVersion: '1.0.0', definitionHash: '2'.repeat(64), numericSemantics: 'Exact customer-reviewed asset allocation.', state: 'CALCULATED', totalAssets: '1000.00', issues: [], recordedBy: 'A100', recordedAt: '2026-10-02T00:00:00Z' };
+const incomeLine = { lineId: 'e'.repeat(32), side: 'INCOME', kind: 'SALARY', name: 'Salary', amount: '10000.00', currency: 'USD', valueDate: reviewDay, sourceNote: 'Customer reviewed', record: null, member: 'Self' };
+const expenseLine = { lineId: 'f'.repeat(32), side: 'EXPENSE', kind: 'HOUSEHOLD', name: 'Household', amount: '5000.00', currency: 'USD', valueDate: reviewDay, sourceNote: 'Customer reviewed', record: null, member: 'Self' };
+const cashPosition = { positionId: 'cash-position', operationId: '3'.repeat(32), customerId: 'reference-customer', position: { asOfDate: reviewDay, currency: 'USD', lines: [incomeLine, expenseLine], incomeComplete: true, expensesComplete: true, replacesPositionId: null, household: 'Self' }, lines: [{ line: incomeLine, source: null }, { line: expenseLine, source: null }], recordedBy: 'A100', recordedAt: '2026-10-02T00:00:00Z' };
+const cashflow = { calculationId: 'cashflow-1', operationId: '4'.repeat(32), customerId: 'reference-customer', position: cashPosition, ruleId: 'monergy.monthly-cashflow', ruleVersion: '1.0.0', definitionHash: '5'.repeat(64), numericSemantics: 'Exact customer-reviewed cash flow.', state: 'CALCULATED', totalIncome: '10000.00', totalExpenses: '5000.00', balance: '5000.00', issues: [], recordedBy: 'A100', recordedAt: '2026-10-02T00:00:00Z' };
+const cashflowRate = { calculationId: 'cashflow-rate-1', operationId: '6'.repeat(32), customerId: 'reference-customer', sourceMonthlyCashflow: cashflow, ruleId: 'monergy.monthly-net-cashflow-rate', ruleVersion: '1.0.0', definitionHash: '7'.repeat(64), numericSemantics: 'Exact customer-reviewed rate.', state: 'CALCULATED', monthlyIncome: '10000.00', monthlyExpenses: '5000.00', netCashflow: '5000.00', ratePercent: '50.00', issues: [], recordedBy: 'A100', recordedAt: '2026-10-02T00:00:00Z' };
+const loan = { loanRecordId: 'loan-1', operationId: '8'.repeat(32), customerId: 'reference-customer', loan: { name: 'Home loan', lender: 'Bank', loanType: 'HOME', sanctionedAmount: 100000, outstandingBalance: 80000, interestRatePercent: 8, emi: 2500, tenureMonths: 60, startDate: '2026-01-01', endDate: '2030-12-31', balanceAsOfDate: reviewDay, sourceFinancialFactId: 'fact-loan', sourceRevision: 1 }, currency: 'USD', sourceProvenanceId: 'provenance-loan', documentVersionId: 'version-loan', evidenceId: 'evidence-loan', recordedBy: 'A100', recordedAt: '2026-10-02T00:00:00Z', revision: 2, lifecycleStatus: 'ACTIVE', lifecycleAsOfDate: reviewDay };
+const emiShare = { calculationId: 'emi-share-1', operationId: '9'.repeat(32), customerId: 'reference-customer', sourceMonthlyCashflow: cashflow, sourceLoans: [loan], activeLoansComplete: true, ruleId: 'monergy.customer-reviewed-monthly-emi-share', ruleVersion: '1.0.0', definitionHash: 'a'.repeat(64), numericSemantics: 'Exact customer-reviewed EMI share.', state: 'CALCULATED', monthlyIncome: '10000.00', monthlyEmi: '2500.00', ratePercent: '25.00', issues: [], recordedBy: 'A100', recordedAt: '2026-10-02T00:00:00Z' };
+const coverage = { calculationId: 'coverage-1', operationId: 'b'.repeat(32), customerId: 'reference-customer', sourceMonthlyCashflow: cashflow, sourceMonthlyEmiShare: emiShare, debtServiceIncludedInExpenses: true, ruleId: 'monergy.customer-reviewed-monthly-debt-service-coverage', ruleVersion: '1.0.0', definitionHash: 'c'.repeat(64), numericSemantics: 'Exact descriptive customer-reviewed coverage.', state: 'CALCULATED', monthlyIncome: '10000.00', monthlyExpenses: '5000.00', monthlyEmi: '2500.00', monthlyCashflowBalance: '5000.00', cashAvailableForDebtService: '7500.00', coverageMultiple: '3.00', issues: [], recordedBy: 'A100', recordedAt: '2026-10-02T00:00:00Z' };
+const page = (items: unknown[]) => ({ items, hasMore: false, nextBeforeId: null });
+
 function mount(api: AccessApi, capabilities = ['reporting.report.generate', 'reporting.report.read']) {
   render(
     <FoundationProvider appearance="midnight">
@@ -175,6 +190,51 @@ it('generates an authorized source-connected basic summary without scores or adv
     expect(within(item).queryByText(/recommendation/i)).not.toBeInTheDocument();
   }
   expect(screen.queryByText(/savings ratio/i)).not.toBeInTheDocument();
+});
+
+it('generates a Phase 2 review from exact matching receipt identifiers without posting figures', async () => {
+  const phase2Report = {
+    ...report,
+    reportId: 'report-phase2',
+    items: [{
+      label: 'Monthly debt-service coverage', value: 3, unit: 'x',
+      source: { sourceType: 'FinancialCalculation', sourceId: 'coverage-1',
+        authoritativeOwner: 'Financial Rules Service', evidenceReferenceId: null,
+        financialProvenanceReferenceId: null, calculationLineageReferenceId: 'coverage-1',
+        ruleId: coverage.ruleId, ruleVersion: '1.0.0', definitionHash: coverage.definitionHash,
+        numericSemantics: coverage.numericSemantics, sourceCalculationIds: ['cashflow-1', 'emi-share-1'] },
+    }],
+    sourceFinancialReferences: ['coverage-1'], evidenceReferences: [],
+    financialProvenanceReferences: [], calculationLineageReferences: ['coverage-1'],
+  };
+  const api = new AccessApi(session);
+  const product = vi.spyOn(api, 'product').mockImplementation((path, method) => {
+    if (method === 'POST' && path === 'v1/reports') return Promise.resolve(phase2Report);
+    if (path.endsWith('asset-allocations')) return Promise.resolve(page([allocation]));
+    if (path.endsWith('net-cashflow-rates')) return Promise.resolve(page([cashflowRate]));
+    if (path.endsWith('emi-shares')) return Promise.resolve(page([emiShare]));
+    if (path.endsWith('debt-service-coverages')) return Promise.resolve(page([coverage]));
+    return Promise.reject(new Error('Unexpected path ' + path));
+  });
+  mount(api, ['reporting.report.generate', 'reporting.report.read', 'financial-rules.calculation.execute']);
+
+  const user = userEvent.setup();
+  await user.click(await screen.findByRole('button', { name: 'Generate Phase 2 financial review' }));
+  expect(await screen.findByText('Monthly debt-service coverage')).toBeVisible();
+  expect(screen.getByText('3.00 x')).toBeVisible();
+  const write = product.mock.calls.find(([path, method]) => path === 'v1/reports' && method === 'POST');
+  expect(write?.[2]).toEqual({
+    operationId: expect.stringMatching(/^[0-9a-f]{32}$/),
+    financialReview: {
+      assetAllocationCalculationId: 'allocation-1',
+      monthlyNetCashflowRateCalculationId: 'cashflow-rate-1',
+      monthlyEmiShareCalculationId: 'emi-share-1',
+      monthlyDebtServiceCoverageCalculationId: 'coverage-1',
+    },
+  });
+  expect(JSON.stringify(write?.[2])).not.toContain('10000.00');
+  await user.click(screen.getByRole('button', { name: 'Technical details' }));
+  expect(screen.getByText(coverage.definitionHash)).toBeVisible();
 });
 
 it('reopens a customer report only through the product report-read boundary', async () => {

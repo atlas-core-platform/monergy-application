@@ -30,6 +30,47 @@ public sealed class ReportingBehaviorTests
     }
 
     [Fact]
+    public async Task FinancialReviewSelectionIsServerBoundAndExportPreservesExactRuleProvenance()
+    {
+        var context = new ReportingTestContext();
+        var selection = new FinancialReviewReceiptSelection(
+            "allocation-1", "cashflow-rate-1", "emi-share-1", "coverage-1");
+        var result = await context.Application.GenerateAsync(context.Request(
+            ReportingContractNames.GenerateReport, new GenerateReport("customer-a", selection)));
+
+        Assert.Equal(ContractOutcome.Success, result.Outcome);
+        Assert.Equal(selection, context.Source.LastContext?.FinancialReview);
+        Assert.Contains("calculation-customer-a", result.Data!.Export.Content, StringComparison.Ordinal);
+        Assert.Contains("lineage-customer-a", result.Data.Export.Content, StringComparison.Ordinal);
+        Assert.Contains("allocation-1", result.Data.Export.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FinancialReviewRejectsMalformedOrRepeatedIdentifiersBeforeSourceRead()
+    {
+        var context = new ReportingTestContext();
+        var selection = new FinancialReviewReceiptSelection("same", "same", "emi", "../coverage");
+        var result = await context.Application.GenerateAsync(context.Request(
+            ReportingContractNames.GenerateReport, new GenerateReport("customer-a", selection)));
+        Assert.Equal("report.financial-review.invalid", result.Error?.Code);
+        Assert.Equal(0, context.Source.ReadCount);
+    }
+
+    [Fact]
+    public async Task IdempotencyReplayRejectsAChangedFinancialReviewSelection()
+    {
+        var context = new ReportingTestContext();
+        var first = new FinancialReviewReceiptSelection("allocation-1", "rate-1", "share-1", "coverage-1");
+        var second = first with { MonthlyDebtServiceCoverageCalculationId = "coverage-2" };
+        _ = await context.Application.GenerateAsync(context.Request(ReportingContractNames.GenerateReport,
+            new GenerateReport("customer-a", first), idempotencyKey: "same-review"));
+        var replay = await context.Application.GenerateAsync(context.Request(ReportingContractNames.GenerateReport,
+            new GenerateReport("customer-a", second), idempotencyKey: "same-review"));
+        Assert.Equal("report.idempotency.conflict", replay.Error?.Code);
+        Assert.Equal(1, context.Source.ReadCount);
+    }
+
+    [Fact]
     public async Task SameIdempotencyIdentityReplaysCommittedReportWithoutRegeneration()
     {
         var context = new ReportingTestContext();

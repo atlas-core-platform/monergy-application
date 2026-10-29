@@ -65,10 +65,12 @@ internal sealed class CountingReportSourceReader(IReportSourceReader inner) : IR
     private int readCount;
 
     public int ReadCount => Volatile.Read(ref readCount);
+    public ReportSourceReadContext? LastContext { get; private set; }
 
     public Task<ReportSourceSnapshot?> ReadAsync(ReportSourceReadContext context, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref readCount);
+        LastContext = context;
         return inner.ReadAsync(context, cancellationToken);
     }
 }

@@ -21,8 +21,33 @@ public sealed class ReferenceReportSourceReader : IReportSourceReader
     {
         cancellationToken.ThrowIfCancellationRequested();
         snapshots.TryGetValue(context.CustomerId, out var snapshot);
+        if (snapshot is not null && context.FinancialReview is { } review)
+        {
+            snapshot = snapshot with
+            {
+                Items = snapshot.Items.AddRange(ImmutableArray.Create(
+                    ReviewItem("Asset allocation", review.AssetAllocationCalculationId,
+                        AssetAllocationDefinition.Id, AssetAllocationDefinition.Version,
+                        AssetAllocationDefinition.DefinitionHash, AssetAllocationDefinition.Semantics),
+                    ReviewItem("Monthly net cash-flow rate", review.MonthlyNetCashflowRateCalculationId,
+                        MonthlyNetCashflowRateDefinition.Id, MonthlyNetCashflowRateDefinition.Version,
+                        MonthlyNetCashflowRateDefinition.DefinitionHash, MonthlyNetCashflowRateDefinition.Semantics),
+                    ReviewItem("Monthly EMI share", review.MonthlyEmiShareCalculationId,
+                        MonthlyEmiShareDefinition.Id, MonthlyEmiShareDefinition.Version,
+                        MonthlyEmiShareDefinition.DefinitionHash, MonthlyEmiShareDefinition.Semantics),
+                    ReviewItem("Monthly debt-service coverage", review.MonthlyDebtServiceCoverageCalculationId,
+                        MonthlyDebtServiceCoverageDefinition.Id, MonthlyDebtServiceCoverageDefinition.Version,
+                        MonthlyDebtServiceCoverageDefinition.DefinitionHash, MonthlyDebtServiceCoverageDefinition.Semantics)
+                ))
+            };
+        }
         return Task.FromResult(snapshot);
     }
+
+    private static ReportLineItem ReviewItem(string label, string id, string rule, string version,
+        string definitionHash, string semantics) => new(label, 1m, "RATIO",
+        new("FinancialCalculation", id, ReportingAuthority.FinancialRulesService, null, null, id,
+            rule, version, definitionHash, semantics, ["reference-source"]));
 
     private static IEnumerable<ReportSourceSnapshot> DefaultSnapshots()
     {

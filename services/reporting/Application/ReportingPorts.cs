@@ -19,7 +19,8 @@ public sealed record ReportSourceReadContext(
     TrustedSecurityContext Security,
     string RequestId,
     string CorrelationId,
-    string? CausationId);
+    string? CausationId,
+    FinancialReviewReceiptSelection? FinancialReview = null);
 
 public sealed class ReportSourceException(ContractError error) : Exception(error.Message)
 {
