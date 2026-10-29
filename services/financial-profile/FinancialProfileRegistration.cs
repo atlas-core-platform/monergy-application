@@ -61,6 +61,7 @@ public static class FinancialProfileRegistration
         services.AddSingleton<FinancialProfileApplication>();
         services.AddSingleton<ILoanRecordRepository, InMemoryLoanRecords>();
         services.AddSingleton<IInvestmentRecordRepository, InMemoryInvestmentRecords>();
+        services.AddSingleton<IBankAccountRecordRepository, InMemoryBankAccountRecords>();
         services.AddSingleton<IPropertyRecordRepository, InMemoryPropertyRecords>();
         services.AddSingleton<IVehicleRecordRepository, InMemoryVehicleRecords>();
         services.AddSingleton<IInsuranceRecordRepository, InMemoryInsuranceRecords>();
@@ -76,6 +77,7 @@ services.AddSingleton<IMonthlyCashflowPositionRepository, InMemoryMonthlyCashflo
         services.AddSingleton<ExpenseRecordsApplication>();
         services.AddSingleton<LiabilityRecordsApplication>();
         services.AddSingleton<InvestmentRecordsApplication>();
+        services.AddSingleton<BankAccountRecordsApplication>();
         services.AddSingleton<PropertyRecordsApplication>();
         services.AddSingleton<VehicleRecordsApplication>();
         services.AddSingleton<InsuranceRecordsApplication>();
@@ -99,6 +101,7 @@ services.AddSingleton<GoalContributionsApplication>();
         services.AddSingleton<FinancialProfileApplication>();
         services.AddSingleton<ILoanRecordRepository, PostgresLoanRecords>();
         services.AddSingleton<IInvestmentRecordRepository, PostgresInvestmentRecords>();
+        services.AddSingleton<IBankAccountRecordRepository, PostgresBankAccountRecords>();
         services.AddSingleton<IPropertyRecordRepository, PostgresPropertyRecords>();
         services.AddSingleton<IVehicleRecordRepository, PostgresVehicleRecords>();
         services.AddSingleton<IInsuranceRecordRepository, PostgresInsuranceRecords>();
@@ -114,6 +117,7 @@ services.AddSingleton<IMonthlyCashflowPositionRepository, PostgresMonthlyCashflo
         services.AddSingleton<ExpenseRecordsApplication>();
         services.AddSingleton<LiabilityRecordsApplication>();
         services.AddSingleton<InvestmentRecordsApplication>();
+        services.AddSingleton<BankAccountRecordsApplication>();
         services.AddSingleton<PropertyRecordsApplication>();
         services.AddSingleton<VehicleRecordsApplication>();
         services.AddSingleton<InsuranceRecordsApplication>();

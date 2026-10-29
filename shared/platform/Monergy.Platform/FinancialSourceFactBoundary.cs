@@ -26,7 +26,7 @@ public static class FinancialSourceFactBoundary
     public static string ForCustomer(string ownerType) =>
         ownerType switch
         {
-            "PROPERTY" or "VEHICLE" => "ASSET",
+            "PROPERTY" or "VEHICLE" or "BANK_ACCOUNT" => "ASSET",
             "INSURANCE_POLICY" => "INSURANCE",
             "TAX_RECORD" => "TAX",
             _ => ownerType,
@@ -36,7 +36,7 @@ public static class FinancialSourceFactBoundary
             "fixture-extractor/1.0.0" or "financial-csv/1.0.0" or "financial-xlsx/1.0.0";
 
     public static string? CustomerAssetType(string ownerType) =>
-        ownerType is "PROPERTY" or "VEHICLE" ? ownerType : null;
+        ownerType is "PROPERTY" or "VEHICLE" or "BANK_ACCOUNT" ? ownerType : null;
 
     public static IReadOnlyDictionary<string, string> ReviewedTypes(
         IReadOnlyList<(string SourceFactId, string CustomerType, string? ExtractionVersion)> selected,
@@ -52,7 +52,7 @@ public static class FinancialSourceFactBoundary
         var assigned = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var choice in choices ?? [])
         {
-            if (string.IsNullOrWhiteSpace(choice.SourceFactId) || choice.AssetType is not ("PROPERTY" or "VEHICLE") ||
+            if (string.IsNullOrWhiteSpace(choice.SourceFactId) || choice.AssetType is not ("PROPERTY" or "VEHICLE" or "BANK_ACCOUNT") ||
                 !source.TryGetValue(choice.SourceFactId, out var fact) || !CanReviewAssetType(fact.Type, fact.Version) ||
                 !assigned.TryAdd(choice.SourceFactId, choice.AssetType))
                 throw new FinancialSourceSelectionException(invalid);

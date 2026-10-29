@@ -50,7 +50,7 @@ public sealed record ProductFinancialFactDetailView(
 public static class ProductFinancialProfileEndpoints
 {
     private static readonly HashSet<string> SupportedFactTypes = new(StringComparer.Ordinal)
-    { "INCOME", "EXPENSE", "LOAN", "ASSET", "INVESTMENT", "INSURANCE", "TAX" };
+    { "INCOME", "EXPENSE", "LOAN", "ASSET", "BANK_ACCOUNT", "INVESTMENT", "INSURANCE", "TAX" };
 
     public static void AddProductFinancialProfile(this WebApplicationBuilder builder)
     {
@@ -570,7 +570,7 @@ public static class ProductFinancialProfileEndpoints
             submission.SourceFactIds.Any(id => !TenantAccessClient.Identifier(id, 160)))
             throw new TenantBoundaryException("FINANCIAL_REVIEW_SELECTION_INVALID", 400);
         if (submission.AssetTypes?.Count > 50 || submission.AssetTypes?.Any(choice => choice is null ||
-                !TenantAccessClient.Identifier(choice.SourceFactId, 160) || choice.AssetType is not ("PROPERTY" or "VEHICLE")) == true)
+                !TenantAccessClient.Identifier(choice.SourceFactId, 160) || choice.AssetType is not ("PROPERTY" or "VEHICLE" or "BANK_ACCOUNT")) == true)
             throw new TenantBoundaryException("FINANCIAL_REVIEW_SELECTION_INVALID", 400);
     }
 

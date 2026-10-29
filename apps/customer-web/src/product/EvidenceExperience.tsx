@@ -113,8 +113,8 @@ const typeName = (value: string) =>
   })[value] ?? value;
 interface AssetReviewFact { sourceFactId: string; factType: string; extractionVersion?: string }
 const canChooseAssetType = (fact: AssetReviewFact) => fact.factType === 'ASSET' && ['fixture-extractor/1.0.0', 'financial-csv/1.0.0', 'financial-xlsx/1.0.0'].includes(fact.extractionVersion ?? '');
-const assetReviewIncomplete = (facts: AssetReviewFact[], selected: string[], choices: Record<string, 'PROPERTY' | 'VEHICLE'>) => facts.some((fact) => selected.includes(fact.sourceFactId) && fact.factType === 'ASSET' && (canChooseAssetType(fact) ? !choices[fact.sourceFactId] : !isPropertyExtraction(fact.extractionVersion) && !isRegistrationExtraction(fact.extractionVersion) && !isVehicleExtraction(fact.extractionVersion)));
-const selectedAssetTypes = (selected: string[], choices: Record<string, 'PROPERTY' | 'VEHICLE'>): ProductAssetTypeSelection[] => selected.flatMap((sourceFactId) => { const assetType = choices[sourceFactId]; return assetType ? [{ sourceFactId, assetType }] : []; });
+const assetReviewIncomplete = (facts: AssetReviewFact[], selected: string[], choices: Record<string, 'PROPERTY' | 'VEHICLE' | 'BANK_ACCOUNT'>) => facts.some((fact) => selected.includes(fact.sourceFactId) && fact.factType === 'ASSET' && (canChooseAssetType(fact) ? !choices[fact.sourceFactId] : !isPropertyExtraction(fact.extractionVersion) && !isRegistrationExtraction(fact.extractionVersion) && !isVehicleExtraction(fact.extractionVersion)));
+const selectedAssetTypes = (selected: string[], choices: Record<string, 'PROPERTY' | 'VEHICLE' | 'BANK_ACCOUNT'>): ProductAssetTypeSelection[] => selected.flatMap((sourceFactId) => { const assetType = choices[sourceFactId]; return assetType ? [{ sourceFactId, assetType }] : []; });
 const isVehicleExtraction = (version?: string) => ['vehicle-purchase-invoice-png-ocr/1.0.0', 'vehicle-purchase-invoice-jpeg-ocr/1.0.0', 'vehicle-purchase-invoice-pdf-ocr/1.0.0'].includes(version ?? '');
 const isRegistrationExtraction = (version?: string) => ['property-registration-png-ocr/1.0.0', 'property-registration-jpeg-ocr/1.0.0', 'property-registration-pdf-ocr/1.0.0'].includes(version ?? '');
 const isPropertyExtraction = (version?: string) => ['property-sale-deed-png-ocr/1.0.0', 'property-sale-deed-jpeg-ocr/1.0.0', 'property-sale-deed-pdf-ocr/1.0.0'].includes(version ?? '');
@@ -206,8 +206,8 @@ export default function EvidenceExperience() {
     useState<ProductRecoveredProcessingResult | null>(null);
   const [recoveredResultBusy, setRecoveredResultBusy] = useState(false);
   const [recoveredResultError, setRecoveredResultError] = useState('');
-  const [recoveredAssetTypes, setRecoveredAssetTypes] = useState<Record<string, 'PROPERTY' | 'VEHICLE'>>({});
-  const [selectedAssetTypesById, setSelectedAssetTypesById] = useState<Record<string, 'PROPERTY' | 'VEHICLE'>>({});
+  const [recoveredAssetTypes, setRecoveredAssetTypes] = useState<Record<string, 'PROPERTY' | 'VEHICLE' | 'BANK_ACCOUNT'>>({});
+  const [selectedAssetTypesById, setSelectedAssetTypesById] = useState<Record<string, 'PROPERTY' | 'VEHICLE' | 'BANK_ACCOUNT'>>({});
   const [recoveredSelectedSourceFactIds, setRecoveredSelectedSourceFactIds] = useState<string[]>([]);
   const [recoveredPromotionBusy, setRecoveredPromotionBusy] = useState(false);
   const [recoveredPromotionError, setRecoveredPromotionError] = useState('');
@@ -1174,8 +1174,8 @@ export default function EvidenceExperience() {
                               <div>
                                 <Select aria-label={'Asset type for ' + fact.label} placeholder="Choose asset type" style={{ width: 180 }}
                                   value={recoveredAssetTypes[fact.sourceFactId]} disabled={recoveredPromotionBusy || Boolean(recoveredPromotionResult)}
-                                  options={[{ value: 'PROPERTY', label: 'Property' }, { value: 'VEHICLE', label: 'Vehicle' }]}
-                                  onChange={(value: 'PROPERTY' | 'VEHICLE') => { setRecoveredAssetTypes((current) => ({ ...current, [fact.sourceFactId]: value })); }} />
+                                  options={[{ value: 'PROPERTY', label: 'Property' }, { value: 'VEHICLE', label: 'Vehicle' }, { value: 'BANK_ACCOUNT', label: 'Bank account' }]}
+                                  onChange={(value: 'PROPERTY' | 'VEHICLE' | 'BANK_ACCOUNT') => { setRecoveredAssetTypes((current) => ({ ...current, [fact.sourceFactId]: value })); }} />
                                 <p>Classify this source figure before adding it. Ownership and current value are not verified.</p>
                               </div>
                             )}
@@ -1786,8 +1786,8 @@ export default function EvidenceExperience() {
                           <div>
                             <Select aria-label={'Asset type for ' + fact.label} placeholder="Choose asset type" style={{ width: 180 }}
                               value={selectedAssetTypesById[fact.sourceFactId]} disabled={promotionBusy || Boolean(promotionResult)}
-                              options={[{ value: 'PROPERTY', label: 'Property' }, { value: 'VEHICLE', label: 'Vehicle' }]}
-                              onChange={(value: 'PROPERTY' | 'VEHICLE') => { setSelectedAssetTypesById((current) => ({ ...current, [fact.sourceFactId]: value })); }} />
+                              options={[{ value: 'PROPERTY', label: 'Property' }, { value: 'VEHICLE', label: 'Vehicle' }, { value: 'BANK_ACCOUNT', label: 'Bank account' }]}
+                              onChange={(value: 'PROPERTY' | 'VEHICLE' | 'BANK_ACCOUNT') => { setSelectedAssetTypesById((current) => ({ ...current, [fact.sourceFactId]: value })); }} />
                             <p>Classify this source figure before adding it. Ownership and current value are not verified.</p>
                           </div>
                         )}
