@@ -9,7 +9,7 @@ using Npgsql;
 
 namespace Monergy.Services.Reporting.Infrastructure;
 
-public sealed class PostgresReportRepository : IReportRepository, IAsyncDisposable
+public sealed class PostgresReportRepository : IReportRepository, IReportGenerationIntentRepository, IAsyncDisposable
 {
     private readonly NpgsqlDataSource dataSource;
 
@@ -156,6 +156,70 @@ public sealed class PostgresReportRepository : IReportRepository, IAsyncDisposab
 
     public ValueTask DisposeAsync() => dataSource.DisposeAsync();
 
+    public async Task<(ReportGenerationIntent Intent, bool Created)> GetOrCreateAsync(
+        ReportGenerationIntent intent,
+        CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        var inserted = await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO reporting.report_generation_intents
+                (operation_id, job_id, report_id, customer_id, actor_id, contract_version,
+                 request_id, correlation_id, causation_id, financial_review, fingerprint, submitted_at)
+            VALUES (@OperationId, @JobId, @ReportId, @CustomerId, @ActorId, @ContractVersion,
+                    @RequestId, @CorrelationId, @CausationId, CAST(@FinancialReview AS jsonb),
+                    @Fingerprint, @SubmittedAt)
+            ON CONFLICT (operation_id) DO NOTHING;
+            """, new
+        {
+            intent.OperationId,
+            intent.JobId,
+            intent.ReportId,
+            intent.CustomerId,
+            intent.ActorId,
+            intent.ContractVersion,
+            intent.RequestId,
+            intent.CorrelationId,
+            intent.CausationId,
+            FinancialReview = intent.FinancialReview is null ? null :
+                JsonSerializer.Serialize(intent.FinancialReview, ContractJson.Options),
+            intent.Fingerprint,
+            intent.SubmittedAt,
+        }, cancellationToken: cancellationToken));
+        var current = await GetAsync(connection, intent.OperationId, cancellationToken)
+            ?? throw new InvalidOperationException("Report generation intent was not retained.");
+        if (current.CustomerId != intent.CustomerId || current.ActorId != intent.ActorId ||
+            current.Fingerprint != intent.Fingerprint || current.JobId != intent.JobId ||
+            current.ReportId != intent.ReportId)
+            throw new InvalidOperationException("Report generation operation conflict.");
+        return (current, inserted == 1);
+    }
+
+    public async Task<ReportGenerationIntent?> GetAsync(string operationId, CancellationToken cancellationToken)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return await GetAsync(connection, operationId, cancellationToken);
+    }
+
+    private static async Task<ReportGenerationIntent?> GetAsync(
+        NpgsqlConnection connection,
+        string operationId,
+        CancellationToken cancellationToken)
+    {
+        var row = await connection.QuerySingleOrDefaultAsync<IntentRow>(new CommandDefinition("""
+            SELECT operation_id AS OperationId, job_id AS JobId, report_id AS ReportId,
+                   customer_id AS CustomerId, actor_id AS ActorId, contract_version AS ContractVersion,
+                   request_id AS RequestId, correlation_id AS CorrelationId, causation_id AS CausationId,
+                   financial_review::text AS FinancialReview, fingerprint AS Fingerprint,
+                   submitted_at AS SubmittedAt
+            FROM reporting.report_generation_intents WHERE operation_id=@operationId;
+            """, new { operationId }, cancellationToken: cancellationToken));
+        return row is null ? null : new(row.OperationId, row.JobId, row.ReportId, row.CustomerId,
+            row.ActorId, row.ContractVersion, row.RequestId, row.CorrelationId, row.CausationId,
+            row.FinancialReview is null ? null : JsonSerializer.Deserialize<FinancialReviewReceiptSelection>(
+                row.FinancialReview, ContractJson.Options), row.Fingerprint,
+            new DateTimeOffset(DateTime.SpecifyKind(row.SubmittedAt, DateTimeKind.Utc)));
+    }
+
     private static async Task<TrustedFinancialReport?> FindAsync(NpgsqlConnection connection,
         NpgsqlTransaction? transaction, string customerId, string reportId, CancellationToken cancellationToken)
     {
@@ -214,5 +278,20 @@ public sealed class PostgresReportRepository : IReportRepository, IAsyncDisposab
         public string SubjectType { get; set; } = string.Empty;
         public string SubjectId { get; set; } = string.Empty;
         public string Payload { get; set; } = string.Empty;
+    }
+    private sealed class IntentRow
+    {
+        public string OperationId { get; set; } = string.Empty;
+        public string JobId { get; set; } = string.Empty;
+        public string ReportId { get; set; } = string.Empty;
+        public string CustomerId { get; set; } = string.Empty;
+        public string ActorId { get; set; } = string.Empty;
+        public string ContractVersion { get; set; } = string.Empty;
+        public string RequestId { get; set; } = string.Empty;
+        public string CorrelationId { get; set; } = string.Empty;
+        public string? CausationId { get; set; }
+        public string? FinancialReview { get; set; }
+        public string Fingerprint { get; set; } = string.Empty;
+        public DateTime SubmittedAt { get; set; }
     }
 }

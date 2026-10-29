@@ -33,8 +33,14 @@ public static class ReportingRegistration
             services.AddSingleton<IReportSourceReader>(new ReferenceReportSourceReader(configuration));
         }
         services.AddSingleton<IReportRepository>(new InMemoryReportRepository(configuration));
+        services.AddSingleton<IReportGenerationIntentRepository, InMemoryReportGenerationIntentRepository>();
+        if (configuration.GetValue<bool>("Monergy:ReportGeneration:Enabled"))
+            services.AddSingleton<IReportJobScheduler, HttpReportJobScheduler>();
+        else
+            services.AddSingleton<IReportJobScheduler, ReferenceReportJobScheduler>();
         services.AddSingleton(TimeProvider.System);
         services.AddTransient<ReportingApplication>();
+        services.AddTransient<ReportGenerationJobs>();
         if (TenantBoundaryOptions.Selected(configuration)) services.AddSingleton<IReportingAuthorizationPolicy, TenantReportingAuthorizationPolicy>();
         return services;
     }
@@ -78,13 +84,36 @@ public static class ReportingRegistration
                 provider.GetRequiredService<ReportingOutboxHostedService>());
             services.AddHostedService(provider => provider.GetRequiredService<ReportingOutboxHostedService>());
         }
+        else if (ProductFinancialProfileReportSourceReader.Selected(configuration))
+        {
+            services.AddHttpContextAccessor();
+            AddSourceClient(
+                services,
+                ProductFinancialProfileReportSourceReader.FinancialProfileClient,
+                TenantAccessIntegration.Required(configuration, "Monergy:ProductReporting:FinancialProfileUrl"));
+            AddSourceClient(
+                services,
+                ProductFinancialProfileReportSourceReader.FinancialRulesClient,
+                TenantAccessIntegration.Required(configuration, "Monergy:ProductReporting:FinancialRulesUrl"));
+            services.AddSingleton<IReportSourceReader, ProductFinancialProfileReportSourceReader>();
+        }
         else
         {
             services.AddSingleton<IReportSourceReader>(new ReferenceReportSourceReader(configuration));
         }
-        services.AddSingleton<IReportRepository, PostgresReportRepository>();
+        services.AddSingleton<PostgresReportRepository>();
+        services.AddSingleton<IReportRepository>(provider => provider.GetRequiredService<PostgresReportRepository>());
+        services.AddSingleton<IReportGenerationIntentRepository>(provider =>
+            provider.GetRequiredService<PostgresReportRepository>());
+        if (configuration.GetValue<bool>("Monergy:ReportGeneration:Enabled"))
+            services.AddSingleton<IReportJobScheduler, HttpReportJobScheduler>();
+        else
+            services.AddSingleton<IReportJobScheduler, ReferenceReportJobScheduler>();
         services.AddSingleton(TimeProvider.System);
         services.AddTransient<ReportingApplication>();
+        services.AddTransient<ReportGenerationJobs>();
+        if (TenantBoundaryOptions.Selected(configuration))
+            services.AddSingleton<IReportingAuthorizationPolicy, TenantReportingAuthorizationPolicy>();
         return services;
     }
 

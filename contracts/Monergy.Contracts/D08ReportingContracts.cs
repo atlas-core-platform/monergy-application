@@ -1,4 +1,6 @@
 using System.Collections.Immutable;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Monergy.Contracts;
 
@@ -20,6 +22,29 @@ public sealed record GenerateReport(
     FinancialReviewReceiptSelection? FinancialReview = null);
 
 public sealed record GetReport(string CustomerId, string ReportId);
+
+public sealed record ReportGenerationJob(
+    string JobId,
+    string ReportId,
+    JobState State,
+    int Attempt,
+    string? FailureCode,
+    bool Retryable,
+    DateTimeOffset UpdatedAt);
+
+public static class ReportingIdentity
+{
+    public const string OwnerService = "Reporting Service";
+
+    public static string JobId(string operationId) => $"job-report-{operationId}";
+
+    public static string ReportId(string contractVersion, string customerId, string operationId)
+    {
+        var material = string.Join("|", ReportingContractNames.GenerateReport, contractVersion,
+            customerId, operationId);
+        return $"report-{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(material)))[..20].ToLowerInvariant()}";
+    }
+}
 
 public sealed record ReportSourceReference(
     string SourceType,

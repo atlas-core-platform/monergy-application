@@ -295,7 +295,20 @@ report_operation = 'e' * 32
 report_body = {'operationId': report_operation}
 call(report_path, 'POST', report_body, status=401)
 call(report_path, 'POST', report_body, owner, status=403)
-basic_report = call(report_path, 'POST', report_body, customer)
+scheduled_report = call(report_path, 'POST', report_body, customer, status=202)
+assert scheduled_report['jobId'] == 'job-report-' + report_operation
+assert scheduled_report['state'] == 'Scheduled'
+report_job_path = report_path + '/jobs/' + scheduled_report['jobId']
+call(report_job_path, session=owner, status=403)
+for _ in range(40):
+    report_job = call(report_job_path, session=customer)
+    if report_job['state'] == 'Completed':
+        break
+    assert report_job['state'] in ('Scheduled', 'Running')
+    time.sleep(.25)
+assert report_job['state'] == 'Completed', report_job
+assert report_job['reportId'] == scheduled_report['reportId']
+basic_report = call(report_path + '/' + report_job['reportId'], session=customer)
 assert basic_report['customerId'] == 'reference-customer'
 assert basic_report['state'] == 'GENERATED'
 assert len(basic_report['items']) == 2
@@ -308,7 +321,9 @@ assert all(item['source']['financialProvenanceReferenceId'] for item in basic_re
 assert basic_report['calculationLineageReferences'] == []
 assert basic_report['aiResponseTraceReference'] is None
 assert 'Savings ratio' not in basic_report['export']['content']
-assert call(report_path, 'POST', report_body, customer) == basic_report
+replayed_report = call(report_path, 'POST', report_body, customer, status=202)
+assert replayed_report['jobId'] == scheduled_report['jobId']
+assert replayed_report['reportId'] == scheduled_report['reportId']
 report_read_path = report_path + '/' + basic_report['reportId']
 call(report_read_path, session=owner, status=403)
 call(report_read_path, session=second_customer, status=404)

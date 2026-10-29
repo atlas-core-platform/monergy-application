@@ -126,7 +126,7 @@ if (-not (Test-Path $profileFile)) {
         foreach ($actorId in $localActors) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
     }
     $new = @{ instanceId=[Guid]::NewGuid().ToString('N'); postgresPassword=(Secret); databases=$databases; identities=$identities; tokens=@{}; port=$Port; onboarding=[bool]$EnableOnboarding }
-    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','jobAuditEvent','financialAuditEvent','customerContext','consent','recipientLabel','evidenceIntake','evidenceProcessing','jobControl','documentControl')) { $new.tokens[$name] = Secret }
+    foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','jobAuditEvent','financialAuditEvent','customerContext','consent','recipientLabel','evidenceIntake','evidenceProcessing','jobControl','documentControl','reportJobControl')) { $new.tokens[$name] = Secret }
     Save-Json 'profile.json' $new
 }
 $state = Get-Content $profileFile -Raw | ConvertFrom-Json
@@ -333,7 +333,7 @@ if ($Action -in @('Prepare','Start')) {
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
-        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','recipientLabel','googleDriveProtection','oneDriveProtection','aiModelInternal','financialQaProtection')
+        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','reportJobControl','recipientLabel','googleDriveProtection','oneDriveProtection','aiModelInternal','financialQaProtection')
     }
     foreach ($name in $requiredTokens) {
         if ($null -eq $state.tokens.PSObject.Properties[$name]) {
@@ -491,6 +491,10 @@ if ($Action -in @('Prepare','Start')) {
                     Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'
                     FinancialRulesUrl='http://127.0.0.1:5114/'
                 }
+                $config.Monergy.ReportGeneration=@{
+                    Enabled='true'; JobManagementUrl='http://127.0.0.1:5118/'
+                    JobManagementToken=$state.tokens.jobControl; ControlToken=$state.tokens.reportJobControl
+                }
             } elseif ($onboarding -and $service -eq 'search-retrieval') {
                 $config.Monergy.ProductSearch=@{
                     Enabled='true'; EvidenceUrl='http://127.0.0.1:5111/'
@@ -500,6 +504,10 @@ if ($Action -in @('Prepare','Start')) {
                 $config.Monergy.DocumentProcessing=@{
                     Enabled='true'; DocumentIntelligenceUrl='http://127.0.0.1:5112/'
                     DocumentIntelligenceToken=$state.tokens.documentControl; ControlToken=$state.tokens.jobControl
+                }
+                $config.Monergy.ReportGeneration=@{
+                    Enabled='true'; ReportingUrl='http://127.0.0.1:5116/'
+                    ReportingToken=$state.tokens.reportJobControl; ControlToken=$state.tokens.jobControl
                 }
                 $config.Monergy.AuditDelivery=@{
                     Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.jobAuditEvent

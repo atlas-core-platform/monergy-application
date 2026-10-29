@@ -344,6 +344,47 @@ public sealed class PhysicalJobAndAuditTests
     }
 
     [Fact, Trait("Category", "Physical")]
+    public async Task ReportGenerationIntentIsImmutableIdempotentAndRuntimeLeastPrivilege()
+    {
+        var configuration = JobTestContext.Configuration();
+        var operationId = Guid.NewGuid().ToString("N");
+        var submitted = JobTestContext.Now;
+        var intent = new ReportGenerationIntent(operationId, ReportingIdentity.JobId(operationId),
+            ReportingIdentity.ReportId(ContractGuard.CurrentVersion, JobTestContext.CustomerId, operationId),
+            JobTestContext.CustomerId, "actor-d10", ContractGuard.CurrentVersion,
+            $"request-{operationId}", $"correlation-{operationId}", null, null,
+            new string('a', 64), submitted);
+        await using var reports = new PostgresReportRepository(configuration);
+
+        var first = await reports.GetOrCreateAsync(intent, default);
+        var replay = await reports.GetOrCreateAsync(intent, default);
+
+        Assert.True(first.Created);
+        Assert.False(replay.Created);
+        Assert.Equal(intent, replay.Intent);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => reports.GetOrCreateAsync(
+            intent with { Fingerprint = new string('b', 64) }, default));
+
+        await using var runtime = new NpgsqlConnection(Required("D10_REPORTING_RUNTIME_CONNECTION"));
+        await runtime.OpenAsync();
+        Assert.True(await runtime.ExecuteScalarAsync<bool>(
+            "SELECT has_table_privilege(current_user, 'reporting.report_generation_intents', 'SELECT');"));
+        Assert.True(await runtime.ExecuteScalarAsync<bool>(
+            "SELECT has_table_privilege(current_user, 'reporting.report_generation_intents', 'INSERT');"));
+        Assert.False(await runtime.ExecuteScalarAsync<bool>(
+            "SELECT has_table_privilege(current_user, 'reporting.report_generation_intents', 'UPDATE');"));
+        Assert.False(await runtime.ExecuteScalarAsync<bool>(
+            "SELECT has_table_privilege(current_user, 'reporting.report_generation_intents', 'DELETE');"));
+        await Assert.ThrowsAnyAsync<PostgresException>(() => runtime.ExecuteAsync(
+            "UPDATE reporting.report_generation_intents SET actor_id='forbidden' WHERE operation_id=@operationId;",
+            new { operationId }));
+        await Assert.ThrowsAnyAsync<PostgresException>(() => runtime.ExecuteAsync(
+            "DELETE FROM reporting.report_generation_intents WHERE operation_id=@operationId;",
+            new { operationId }));
+        Assert.Equal(intent, await reports.GetAsync(operationId, default));
+    }
+
+    [Fact, Trait("Category", "Physical")]
     public async Task RuntimeRolesEnforceDatabaseDdlOutboxAndAuditLeastPrivilege()
     {
         await using var jobs = new NpgsqlConnection(Required("D10_JOB_MANAGEMENT_RUNTIME_CONNECTION"));

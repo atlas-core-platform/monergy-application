@@ -1,5 +1,5 @@
-import type { AccessApi } from '../access/accessApi';
-import type { FinancialReviewReceiptSelection, TrustedFinancialReport } from '../reports/types';
+import { AccessApiError, type AccessApi } from '../access/accessApi';
+import type { FinancialReviewReceiptSelection, ReportGenerationJob, TrustedFinancialReport } from '../reports/types';
 import type { SearchResults } from '../search/types';
 
 export interface ProductEvidenceReceipt {
@@ -393,18 +393,68 @@ export function getFinancialFactDetail(
 }
 
 
-export function generateBasicFinancialReport(
+export function scheduleBasicFinancialReport(
   api: AccessApi,
   operationId: string,
   financialReview?: FinancialReviewReceiptSelection,
   signal?: AbortSignal,
-): Promise<TrustedFinancialReport> {
-  return api.product<TrustedFinancialReport>(
+): Promise<ReportGenerationJob> {
+  return api.product<ReportGenerationJob>(
     'v1/reports',
     'POST',
     { operationId, ...(financialReview ? { financialReview } : {}) },
     signal,
   );
+}
+
+export function getBasicFinancialReportJob(
+  api: AccessApi,
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<ReportGenerationJob> {
+  return api.product<ReportGenerationJob>(
+    `v1/reports/jobs/${encodeURIComponent(jobId)}`,
+    'GET',
+    undefined,
+    signal,
+  );
+}
+
+const wait = (milliseconds: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('The report status request was cancelled.', 'AbortError'));
+      return;
+    }
+    const aborted = () => {
+      globalThis.clearTimeout(timer);
+      reject(new DOMException('The report status request was cancelled.', 'AbortError'));
+    };
+    const timer = globalThis.setTimeout(() => {
+      signal?.removeEventListener('abort', aborted);
+      resolve();
+    }, milliseconds);
+    signal?.addEventListener('abort', aborted, { once: true });
+  });
+
+export async function waitForBasicFinancialReport(
+  api: AccessApi,
+  scheduled: ReportGenerationJob,
+  onStatus: (job: ReportGenerationJob) => void,
+  signal?: AbortSignal,
+): Promise<TrustedFinancialReport> {
+  let current = scheduled;
+  for (let check = 0; check < 120; check += 1) {
+    if (current.state === 'Completed')
+      return getBasicFinancialReport(api, current.reportId, signal);
+    if (current.state === 'Failed' || current.state === 'Cancelled')
+      throw new AccessApiError(current.retryable ? 503 : 409,
+        current.failureCode ?? 'REPORT_GENERATION_FAILED');
+    if (check > 0) await wait(500, signal);
+    current = await getBasicFinancialReportJob(api, current.jobId, signal);
+    onStatus(current);
+  }
+  throw new AccessApiError(503, 'REPORT_GENERATION_TIMED_OUT');
 }
 
 export function getBasicFinancialReport(

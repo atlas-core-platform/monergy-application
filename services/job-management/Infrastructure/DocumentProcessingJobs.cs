@@ -56,10 +56,17 @@ public sealed class OwnerBackedJobExecutionPolicy(TenantAccessClient access) : I
         {
             var tenant = LocalTenantSecurityContext.RequireTenant(
                 context.Workload?.WorkloadIdentityId, null, "local-uat-workspace");
+            var capability = job.JobName switch
+            {
+                "document-processing" => "document-intelligence.document.process",
+                "report-generation" => "reporting.report.generate",
+                _ => null,
+            };
+            if (capability is null) return Denied(correlationId);
             var decision = await access.EvaluateCustomerAsync(
                 tenant,
                 context.Actor.AuthenticationContextId,
-                "document-intelligence.document.process",
+                capability,
                 job.CustomerId,
                 cancellationToken).ConfigureAwait(false);
             if (decision.Outcome != "Allow" || decision.ActorId != context.Actor.ActorId)

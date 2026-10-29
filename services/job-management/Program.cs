@@ -1,3 +1,4 @@
+using Monergy.Contracts;
 using Monergy.Platform;
 using Monergy.Services.JobManagement;
 using Monergy.Services.JobManagement.Infrastructure;
@@ -13,7 +14,10 @@ var referenceAdapter = ReferenceAdapterGuard.IsSelected(builder.Configuration);
 var documentProcessing =
     referenceAdapter &&
     builder.Configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled");
-var secondaryHttp = TenantBoundaryOptions.Selected(builder.Configuration) || documentProcessing;
+var reportGeneration =
+    (referenceAdapter || physicalPersistence) &&
+    builder.Configuration.GetValue<bool>("Monergy:ReportGeneration:Enabled");
+var secondaryHttp = TenantBoundaryOptions.Selected(builder.Configuration) || documentProcessing || reportGeneration;
 
 if (physicalPersistence)
 {
@@ -42,6 +46,12 @@ if (documentProcessing)
     var registry = host.Services.GetRequiredService<ReferenceJobExecutionTargetRegistry>();
     registry.Register("Document Intelligence Service", "document-processing",
         host.Services.GetRequiredService<HttpDocumentProcessingTarget>());
+}
+if (reportGeneration)
+{
+    var registry = host.Services.GetRequiredService<ReferenceJobExecutionTargetRegistry>();
+    registry.Register(ReportingIdentity.OwnerService, "report-generation",
+        host.Services.GetRequiredService<HttpReportGenerationTarget>());
 }
 
 await host.RunAsync();
