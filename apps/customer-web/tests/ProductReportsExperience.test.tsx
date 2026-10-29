@@ -275,6 +275,71 @@ it('cancels a scheduled report idempotently and prevents duplicate cancellation 
   expect(screen.queryByRole('button', { name: 'Cancel report request' })).not.toBeInTheDocument();
 });
 
+it('retries one failed retryable report operation and prevents duplicate retry clicks', async () => {
+  const api = new AccessApi(session);
+  let scheduled: Record<string, unknown> = {};
+  let statusChecks = 0;
+  let finishRetry: (value: Record<string, unknown>) => void = () => {
+    throw new Error('Retry request was not started');
+  };
+  const product = vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
+    if (path === 'v1/reports' && method === 'POST') {
+      const operationId = (body as { operationId: string }).operationId;
+      scheduled = { jobId: `job-report-${operationId}`, reportId: report.reportId,
+        state: 'Scheduled', attempt: 0, failureCode: null, retryable: false,
+        updatedAt: '2026-10-29T09:00:00Z' };
+      return Promise.resolve(scheduled);
+    }
+    if (path.endsWith('/retries') && method === 'POST')
+      return new Promise<Record<string, unknown>>((resolve) => { finishRetry = resolve; });
+    if (path.startsWith('v1/reports/jobs/') && method === 'GET') {
+      statusChecks += 1;
+      return Promise.resolve(statusChecks === 1
+        ? { ...scheduled, state: 'Failed', attempt: 1, failureCode: 'reporting.owner.temporarily-unavailable', retryable: true }
+        : { ...scheduled, state: 'Completed', attempt: 2, failureCode: null, retryable: false });
+    }
+    if (path === `v1/reports/${report.reportId}` && method === 'GET') return Promise.resolve(report);
+    return Promise.reject(new Error(`Unexpected product path ${method ?? 'GET'} ${path}`));
+  });
+  mount(api);
+  const user = userEvent.setup();
+
+  await user.click(screen.getByRole('button', { name: 'Generate basic summary' }));
+  expect(await screen.findByText('Your financial summary could not be completed.')).toBeVisible();
+  expect(screen.getByText(/original report intent is unchanged/i)).toBeVisible();
+  const retry = screen.getByRole('button', { name: 'Retry report request' });
+  await user.click(retry);
+  await user.click(retry);
+  const calls = product.mock.calls.filter(([path, method]) =>
+    path.endsWith('/retries') && method === 'POST');
+  expect(calls).toHaveLength(1);
+  expect(calls[0]?.[2]).toEqual({ operationId: expect.stringMatching(/^[0-9a-f]{32}$/) });
+  act(() => { finishRetry({ ...scheduled, state: 'Scheduled', failureCode: null, retryable: false }); });
+  expect(await screen.findByText('Employment income')).toBeVisible();
+});
+
+it('does not offer retry for a non-retryable failed report job', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockImplementation((path, method, body) => {
+    if (path === 'v1/reports' && method === 'POST') {
+      const operationId = (body as { operationId: string }).operationId;
+      return Promise.resolve({ jobId: `job-report-${operationId}`, reportId: report.reportId,
+        state: 'Scheduled', attempt: 0, failureCode: null, retryable: false,
+        updatedAt: '2026-10-29T09:00:00Z' });
+    }
+    if (path.startsWith('v1/reports/jobs/') && method === 'GET')
+      return Promise.resolve({ jobId: path.split('/').at(-1), reportId: report.reportId,
+        state: 'Failed', attempt: 1, failureCode: 'reporting.authorization.denied', retryable: false,
+        updatedAt: '2026-10-29T09:00:01Z' });
+    return Promise.reject(new Error(`Unexpected product path ${method ?? 'GET'} ${path}`));
+  });
+  mount(api);
+
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Generate basic summary' }));
+  expect(await screen.findByText('Your financial summary could not be completed.')).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Retry report request' })).not.toBeInTheDocument();
+});
+
 it('generates a Phase 2 review from exact matching receipt identifiers without posting figures', async () => {
   const phase2Report = {
     ...report,

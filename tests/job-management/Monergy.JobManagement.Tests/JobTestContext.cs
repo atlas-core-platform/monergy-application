@@ -52,6 +52,12 @@ internal static class JobTestContext
         $"correlation-{jobId}", null, security ?? Security(), null,
         new(jobId, (security ?? Security()).Access.CustomerId));
 
+    public static ContractRequest<GetJobStatus> Replay(string jobId, TrustedSecurityContext? security = null,
+        string? idempotencyKey = null) => new(
+        Vs02ContractNames.GetJobStatus, ContractGuard.CurrentVersion, $"replay-{jobId}",
+        $"replay-correlation-{jobId}", null, security ?? Security(), idempotencyKey ?? $"replay-key-{jobId}",
+        new(jobId, (security ?? Security()).Access.CustomerId));
+
     public static ContractRequest<CancelJob> Cancel(string jobId, TrustedSecurityContext? security = null,
         string? idempotencyKey = null, string reason = "customer-requested") => new(
         Vs02ContractNames.CancelJob, ContractGuard.CurrentVersion, $"cancel-{jobId}",

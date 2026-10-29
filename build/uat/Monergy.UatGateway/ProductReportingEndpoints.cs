@@ -12,6 +12,8 @@ public sealed record ProductReportGenerationRequest(
 
 public sealed record ProductReportCancellationRequest(string OperationId);
 
+public sealed record ProductReportRetryRequest(string OperationId);
+
 public static class ProductReportingEndpoints
 {
     private static readonly string[] FinancialReviewRules =
@@ -132,6 +134,41 @@ public static class ProductReportingEndpoints
                 "report-cancel-" + cancellation.OperationId,
                 new CancelJob(jobId, customer.CustomerId, "customer-requested"));
             var scheduled = await jobs.CancelAsync(
+                session.TenantId, request, http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(ReadJob(scheduled, customer.CustomerId, reportOperationId));
+        });
+
+        app.MapPost("/product-api/v1/reports/jobs/{jobId}/retries", async (
+            string jobId,
+            ProductReportRetryRequest retry,
+            HttpContext http,
+            CustomerOwnerClient owners,
+            TenantAccessClient access,
+            ProductReportJobClient jobs) =>
+        {
+            if (!TenantAccessClient.Identifier(jobId, 160) ||
+                !jobId.StartsWith("job-report-", StringComparison.Ordinal))
+                throw new TenantBoundaryException("REPORT_JOB_ID_INVALID", 400);
+            var reportOperationId = jobId["job-report-".Length..];
+            ValidateOperation(reportOperationId);
+            ValidateOperation(retry.OperationId);
+            var session = await owners.SessionAsync(http).ConfigureAwait(false);
+            var customer = await owners.OwnedCustomerAsync(
+                session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
+                ?? throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
+            var decision = await access.EvaluateCustomerAsync(
+                http, "reporting.report.generate", customer.CustomerId).ConfigureAwait(false);
+            if (decision.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
+            var request = new ContractRequest<GetJobStatus>(
+                Vs02ContractNames.GetJobStatus,
+                ContractGuard.CurrentVersion,
+                "request-product-report-retry-" + retry.OperationId,
+                "correlation-product-report-retry-" + retry.OperationId,
+                null,
+                Security(session, customer.CustomerId, decision),
+                "report-retry-" + retry.OperationId,
+                new GetJobStatus(jobId, customer.CustomerId));
+            var scheduled = await jobs.RetryAsync(
                 session.TenantId, request, http.RequestAborted).ConfigureAwait(false);
             return Results.Ok(ReadJob(scheduled, customer.CustomerId, reportOperationId));
         });
@@ -463,6 +500,13 @@ public sealed class ProductReportJobClient : IDisposable
         ContractRequest<CancelJob> request,
         CancellationToken cancellationToken) =>
         SendAsync(tenantId, "internal/local/v1/jobs/report-generation/cancel", request,
+            request.Payload.JobId, request.Payload.CustomerId, cancellationToken);
+
+    public Task<ScheduledJob> RetryAsync(
+        string tenantId,
+        ContractRequest<GetJobStatus> request,
+        CancellationToken cancellationToken) =>
+        SendAsync(tenantId, "internal/local/v1/jobs/report-generation/retry", request,
             request.Payload.JobId, request.Payload.CustomerId, cancellationToken);
 
     private async Task<ScheduledJob> SendAsync<TPayload>(

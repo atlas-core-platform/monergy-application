@@ -19,6 +19,42 @@ namespace Monergy.JobManagement.Tests;
 public sealed class PhysicalJobAndAuditTests
 {
     [Fact, Trait("Category", "Physical")]
+    public async Task FailedPostgresReplayIsIdempotentAndPersistsOneReceipt()
+    {
+        var configuration = JobTestContext.Configuration();
+        var suffix = Guid.NewGuid().ToString("N");
+        var jobId = $"job-replay-{suffix}";
+        await using var repository = new PostgresJobRepository(configuration);
+        var app = new JobManagementApplication(repository, new CapturingTelemetry(),
+            new MutableTimeProvider(JobTestContext.Now));
+        await app.ScheduleJobAsync(JobTestContext.Schedule(jobId, $"key-{suffix}"));
+        var lease = await repository.ClaimAsync(jobId, "worker", JobTestContext.Now,
+            TimeSpan.FromMinutes(1), default);
+        Assert.NotNull(lease);
+        await repository.FailClaimAsync(lease!, "dependency.timeout", true,
+            JobTestContext.Now.AddMinutes(1), JobTestContext.Now, default);
+        var request = JobTestContext.Replay(jobId);
+
+        var first = await app.ReplayAsync(request);
+        var replay = await app.ReplayAsync(request);
+
+        Assert.Equal(JobState.Scheduled, first.Data?.State);
+        Assert.Equal(first.Data, replay.Data);
+        Assert.Equal(1, (await repository.GetAsync(jobId, default))?.ReplayCount);
+        await using var runtime = new NpgsqlConnection(Required("D10_JOB_MANAGEMENT_RUNTIME_CONNECTION"));
+        await runtime.OpenAsync();
+        Assert.Equal(1, await runtime.ExecuteScalarAsync<int>("""
+            SELECT count(*) FROM job_management.idempotency_operations
+            WHERE contract_name=@contract AND customer_id=@customer AND idempotency_key=@key;
+            """, new
+        {
+            contract = Vs02ContractNames.GetJobStatus,
+            customer = JobTestContext.CustomerId,
+            key = request.IdempotencyKey,
+        }));
+    }
+
+    [Fact, Trait("Category", "Physical")]
     public async Task PendingPostgresRetryCanBeCancelledAndCannotBeClaimed()
     {
         var configuration = JobTestContext.Configuration();
