@@ -13,4 +13,6 @@ public sealed class InMemoryProductAuditLog:IProductAuditLog
  {ct.ThrowIfCancellationRequested();lock(gate)return Task.FromResult(records.Values.Select(x=>ProductAuditLog.View(x.Record,x.At)).SingleOrDefault(x=>x.TenantId==tenant&&x.EvidenceId==id));}
  public Task<SignInSecuritySummary> ReviewSignInSecurityAsync(string tenant,DateTimeOffset observedAt,CancellationToken ct)
  {ct.ThrowIfCancellationRequested();var start=observedAt.AddMinutes(-ProductAuditLog.SignInWindowMinutes);lock(gate){var failures=records.Values.LongCount(x=>x.Record.TenantId==tenant&&x.Record.Action=="LOGIN"&&x.Record.Phase=="RESULT"&&x.Record.Outcome=="HTTP_FAILED"&&x.Record.OccurredAt>=start&&x.Record.OccurredAt<=observedAt);return Task.FromResult(ProductAuditLog.SignInSummary(tenant,observedAt,failures));}}
+ public Task<OperationalOutcomeSummary> ReviewOperationalOutcomesAsync(string tenant,DateTimeOffset observedAt,CancellationToken ct)
+ {ct.ThrowIfCancellationRequested();var start=observedAt.AddMinutes(-ProductAuditLog.OperationalWindowMinutes);lock(gate){var unconfirmed=records.Values.LongCount(x=>x.Record.TenantId==tenant&&x.Record.Phase=="RESULT"&&x.Record.Outcome=="UNKNOWN"&&x.Record.OccurredAt>=start&&x.Record.OccurredAt<=observedAt);return Task.FromResult(ProductAuditLog.OperationalSummary(tenant,observedAt,unconfirmed));}}
 }
