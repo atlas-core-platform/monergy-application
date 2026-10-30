@@ -65,6 +65,16 @@ public static class ProductFinancialGoalEndpoints
             await ConfirmAsync(http,owners,access,session,customer,false).ConfigureAwait(false);
             return record;
         });
+        group.MapGet("/{financialGoalId}/progress", async (string financialGoalId, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductFinancialGoalClient client) =>
+        {
+            var (session, customer) = await ResolveAsync(http, owners, access, false).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(financialGoalId, 80)) throw new TenantBoundaryException("FINANCIAL_GOAL_INVALID", 400);
+            var progress = await client.ProgressAsync(session, customer.CustomerId, financialGoalId, http.RequestAborted).ConfigureAwait(false);
+            if (!Bound(progress, customer.CustomerId, financialGoalId))
+                throw new TenantBoundaryException("GOAL_PROGRESS_RESPONSE_INVALID", 503);
+            await ConfirmAsync(http, owners, access, session, customer, false).ConfigureAwait(false);
+            return progress;
+        });
         group.MapGet("/{financialGoalId}/history", async (string financialGoalId, int? beforeRevision, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductFinancialGoalClient client) =>
         {
             var (session, customer) = await ResolveAsync(http, owners, access, false).ConfigureAwait(false);
@@ -131,6 +141,26 @@ public static class ProductFinancialGoalEndpoints
         value.Goal.TargetAmount is > 0 and <= 999999999999.99m && decimal.Round(value.Goal.TargetAmount,2)==value.Goal.TargetAmount &&
         value.Goal.Currency is { Length:3 } && value.Goal.Currency.All(char.IsAsciiLetterUpper) && value.Goal.TargetDate.Year is >= 1900 and <= 2199 &&
         value.DeclarationStatus == "CUSTOMER_DEFINED" && TenantAccessClient.Identifier(value.RecordedBy,160) && value.RecordedAt != default;
+    private static bool Bound(FinancialGoalProgress? value, string customer, string financialGoalId)
+    {
+        if (value is not { Goal: not null, Sources: not null } || value.CustomerId != customer || value.FinancialGoalId != financialGoalId ||
+            value.GoalRevision < 1 || string.IsNullOrWhiteSpace(value.Goal.Name) || value.Goal.Name != value.Goal.Name.Trim() || value.Goal.Name.Length > 120 || value.Goal.Name.Any(char.IsControl) ||
+            value.Goal.TargetAmount is <= 0 or > 999999999999.99m || decimal.Round(value.Goal.TargetAmount, 2) != value.Goal.TargetAmount ||
+            value.Goal.Currency is not { Length: 3 } || value.Goal.Currency.Any(character => !char.IsAsciiLetterUpper(character)) ||
+            value.Goal.TargetDate.Year is < 1900 or > 2199 || value.IncludedContributionCount != value.Sources.Count || value.WithdrawnContributionCount < 0 || value.Sources.Count + value.WithdrawnContributionCount > 200 ||
+            value.ProgressBasis != "CUSTOMER_REPORTED" || value.AchievementStatus != "NOT_DETERMINED" || value.ObservedAt == default ||
+            value.Sources.Select(source => source.GoalContributionId).Distinct(StringComparer.Ordinal).Count() != value.Sources.Count ||
+            value.Sources.Any(source => !TenantAccessClient.Identifier(source.GoalContributionId, 80) || source.ContributionRevision < 1 || source.GoalRevision < 1 ||
+                source.Amount is <= 0 or > 999999999999.99m || decimal.Round(source.Amount, 2) != source.Amount || source.ContributionDate.Year is < 1900 or > 2199)) return false;
+        decimal total;
+        try { total = value.Sources.Aggregate(0m, static (sum, source) => checked(sum + source.Amount)); }
+        catch (OverflowException) { return false; }
+        total = decimal.Round(total, 2, MidpointRounding.AwayFromZero);
+        var remaining = decimal.Round(decimal.Max(0m, value.Goal.TargetAmount - total), 2, MidpointRounding.AwayFromZero);
+        var percent = decimal.Round(total / value.Goal.TargetAmount * 100m, 2, MidpointRounding.AwayFromZero);
+        DateOnly? latest = value.Sources.Count == 0 ? null : value.Sources.Max(source => source.ContributionDate);
+        return value.ReportedContributionAmount == total && value.RemainingAmount == remaining && value.ProgressPercent == percent && value.LatestContributionDate == latest;
+    }
     private static async Task<(CustomerOwnerSession Session, CustomerOwnerWorkspace Customer)> ResolveAsync(
         HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, bool write)
     {
@@ -183,6 +213,8 @@ public sealed class ProductFinancialGoalClient : IDisposable
         SendAsync<CustomerFinancialGoal>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
     public Task<FinancialGoalHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
         SendAsync<FinancialGoalHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
+    public Task<FinancialGoalProgress> ProgressAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct) =>
+        SendAsync<FinancialGoalProgress>(session, customer, "/" + Uri.EscapeDataString(id) + "/progress", null, ct);
     private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, object? input, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(input is null ? HttpMethod.Get : HttpMethod.Post,
