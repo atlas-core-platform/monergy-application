@@ -10,6 +10,9 @@ export interface ReportSourceReference {
   definitionHash?: string | null;
   numericSemantics?: string | null;
   sourceCalculationIds?: string[] | null;
+  financialFactReferenceId?: string | null;
+  financialFactRevision?: number | null;
+  documentVersionReferenceId?: string | null;
 }
 
 export interface FinancialReviewReceiptSelection {

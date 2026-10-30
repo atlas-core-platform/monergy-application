@@ -57,7 +57,10 @@ public sealed record ReportSourceReference(
     string? RuleVersion = null,
     string? DefinitionHash = null,
     string? NumericSemantics = null,
-    IReadOnlyList<string>? SourceCalculationIds = null);
+    IReadOnlyList<string>? SourceCalculationIds = null,
+    string? FinancialFactReferenceId = null,
+    int? FinancialFactRevision = null,
+    string? DocumentVersionReferenceId = null);
 
 public sealed record ReportLineItem(
     string Label,

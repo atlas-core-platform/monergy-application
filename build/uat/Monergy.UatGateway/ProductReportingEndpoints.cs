@@ -236,12 +236,13 @@ public static class ProductReportingEndpoints
         var report = result.Data;
         var calculations = report.Items.Where(item => item.Source.SourceType == "FinancialCalculation").ToArray();
         var facts = report.Items.Where(item => item.Source.SourceType == "FinancialFact").ToArray();
+        var taxRecords = report.Items.Where(item => item.Source.SourceType == "TaxRecord").ToArray();
         if (report.CustomerId != customerId ||
             report.State != "GENERATED" ||
             !TenantAccessClient.Identifier(report.ReportId, 160) ||
             !report.ReportId.StartsWith("report-", StringComparison.Ordinal) ||
             report.Items.Length is < 1 or > 100 ||
-            report.Items.Length != facts.Length + calculations.Length ||
+            report.Items.Length != facts.Length + calculations.Length + taxRecords.Length ||
             facts.Any(item =>
                 item.Source.SourceType != "FinancialFact" ||
                 item.Source.AuthoritativeOwner != "Financial Profile Service" ||
@@ -251,7 +252,11 @@ public static class ProductReportingEndpoints
                 item.Source.CalculationLineageReferenceId is not null ||
                 item.Source.RuleId is not null || item.Source.RuleVersion is not null ||
                 item.Source.DefinitionHash is not null || item.Source.NumericSemantics is not null ||
-                item.Source.SourceCalculationIds is not null) ||
+                item.Source.SourceCalculationIds is not null ||
+                item.Source.FinancialFactReferenceId is not null ||
+                item.Source.FinancialFactRevision is not null ||
+                item.Source.DocumentVersionReferenceId is not null) ||
+            taxRecords.Any(item => !ValidTaxRecord(item)) ||
             calculations.Any(item => !ValidCalculation(item)) ||
             calculations.Length > 0 &&
                 (!calculations.Select(item => item.Source.RuleId).Distinct(StringComparer.Ordinal).Order()
@@ -267,6 +272,22 @@ public static class ProductReportingEndpoints
             !report.Export.Sha256.All(char.IsAsciiHexDigit))
             throw new TenantBoundaryException("REPORTING_OWNER_RESPONSE_INVALID", 503);
         return report;
+    }
+
+    private static bool ValidTaxRecord(ReportLineItem item)
+    {
+        var source = item.Source;
+        return source.AuthoritativeOwner == "Financial Profile Service" &&
+            TenantAccessClient.Identifier(source.SourceId, 80) &&
+            TenantAccessClient.Identifier(source.EvidenceReferenceId, 160) &&
+            TenantAccessClient.Identifier(source.FinancialProvenanceReferenceId, 160) &&
+            source.CalculationLineageReferenceId is null &&
+            source.RuleId is null && source.RuleVersion is null && source.DefinitionHash is null &&
+            source.NumericSemantics is null && source.SourceCalculationIds is null &&
+            TenantAccessClient.Identifier(source.FinancialFactReferenceId, 160) &&
+            source.FinancialFactRevision is > 0 &&
+            TenantAccessClient.Identifier(source.DocumentVersionReferenceId, 160) &&
+            item.Unit.Length == 3 && item.Unit.All(char.IsAsciiLetterUpper);
     }
 
     private static ReportGenerationJob ReadJobResult(
@@ -318,6 +339,8 @@ public static class ProductReportingEndpoints
             string.IsNullOrWhiteSpace(source.SourceId) ||
             source.CalculationLineageReferenceId != source.SourceId ||
             source.EvidenceReferenceId is not null || source.FinancialProvenanceReferenceId is not null ||
+            source.FinancialFactReferenceId is not null || source.FinancialFactRevision is not null ||
+            source.DocumentVersionReferenceId is not null ||
             source.SourceCalculationIds is null || source.SourceCalculationIds.Count == 0 ||
             source.SourceCalculationIds.Any(value => !TenantAccessClient.Identifier(value, 160)))
             return false;

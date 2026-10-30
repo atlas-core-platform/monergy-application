@@ -86,7 +86,6 @@ public sealed class ProductFinancialProfileReportSourceReader(
             .OrderBy(fact => fact.FactType, StringComparer.Ordinal)
             .ThenBy(fact => fact.Label, StringComparer.Ordinal)
             .ToArray();
-        if (supported.Length == 0) return null;
 
         var items = ImmutableArray.CreateBuilder<ReportLineItem>(supported.Length);
         foreach (var fact in supported)
@@ -126,6 +125,10 @@ public sealed class ProductFinancialProfileReportSourceReader(
                     null)));
         }
 
+        foreach (var item in await ReadTaxRecordsAsync(
+            proof, context, sourceSecurity, profileId, cancellationToken).ConfigureAwait(false))
+            items.Add(item);
+
         if (context.FinancialReview is { } review)
         {
             foreach (var item in await ReadFinancialReviewAsync(
@@ -133,12 +136,171 @@ public sealed class ProductFinancialProfileReportSourceReader(
                 items.Add(item);
         }
 
+        if (items.Count == 0) return null;
+
         return new ReportSourceSnapshot(
             context.CustomerId,
             profile.UpdatedAt,
             items.ToImmutable(),
             null);
     }
+
+    private async Task<IReadOnlyList<ReportLineItem>> ReadTaxRecordsAsync(
+        TenantBoundaryProof proof,
+        ReportSourceReadContext context,
+        TrustedSecurityContext sourceSecurity,
+        string profileId,
+        CancellationToken cancellationToken)
+    {
+        var list = await GetOwnerAsync<TaxRecordList>(proof,
+            "local/v1/customers/" + Uri.EscapeDataString(context.CustomerId) + "/tax-records",
+            context.CorrelationId, cancellationToken).ConfigureAwait(false);
+        if (list.Items is null || list.Items.Count > 200 || list.HasMore ||
+            list.Items.Select(item => item?.TaxRecordId).Distinct(StringComparer.Ordinal).Count() !=
+                list.Items.Count)
+        {
+            throw Failure("report.source.tax-record-corpus-incomplete",
+                ContractErrorCategory.DependencyFailure,
+                "The reviewed tax-record source is not a complete supported corpus.",
+                context.CorrelationId, true);
+        }
+
+        var items = new List<ReportLineItem>(list.Items.Count);
+        foreach (var record in list.Items.OrderBy(item => item.Tax.Name, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(item => item.TaxRecordId, StringComparer.Ordinal))
+        {
+            if (!ValidTaxRecord(record, context.CustomerId))
+                throw TaxRecordBoundary(context.CorrelationId);
+
+            var factRequest = Request(
+                ReportingSourceRequestId("tax-record-source"),
+                context,
+                sourceSecurity,
+                Vs02ContractNames.GetFinancialFact,
+                new GetFinancialFact(record.Tax.SourceFinancialFactId, context.CustomerId,
+                    record.Tax.SourceRevision));
+            var factResult = await SendAsync<GetFinancialFact, AuthoritativeFinancialFact>(
+                proof, "contracts/cid-032/v1", factRequest, cancellationToken).ConfigureAwait(false);
+            if (factResult.Outcome != ContractOutcome.Success || factResult.Data is null)
+                throw OwnerFailure(factResult.Error, context.CorrelationId);
+            var fact = factResult.Data;
+            if (fact.CustomerId != context.CustomerId || fact.FinancialProfileId != profileId ||
+                fact.FinancialFactId != record.Tax.SourceFinancialFactId ||
+                fact.Revision != record.Tax.SourceRevision ||
+                FinancialSourceFactBoundary.ForCustomer(fact.FactType) != "TAX" ||
+                fact.Currency != record.Currency ||
+                fact.FinancialProvenanceId != record.SourceProvenanceId)
+                throw TaxRecordBoundary(context.CorrelationId);
+
+            var provenanceRequest = Request(
+                ReportingSourceRequestId("tax-record-provenance"),
+                context,
+                sourceSecurity,
+                Vs02ContractNames.GetFinancialProvenance,
+                new GetFinancialProvenance(record.SourceProvenanceId, context.CustomerId));
+            var provenanceResult = await SendAsync<GetFinancialProvenance, FinancialProvenance>(
+                proof, "contracts/cid-033/v1", provenanceRequest, cancellationToken).ConfigureAwait(false);
+            if (provenanceResult.Outcome != ContractOutcome.Success || provenanceResult.Data is null)
+                throw OwnerFailure(provenanceResult.Error, context.CorrelationId);
+            var provenance = provenanceResult.Data;
+            if (provenance.CustomerId != context.CustomerId ||
+                provenance.FinancialFactId != fact.FinancialFactId ||
+                provenance.FinancialProvenanceId != record.SourceProvenanceId ||
+                provenance.EvidenceId != record.EvidenceId ||
+                provenance.DocumentVersionId != record.DocumentVersionId)
+                throw TaxRecordBoundary(context.CorrelationId);
+
+            items.Add(new ReportLineItem(
+                record.Tax.Name + " — " + TaxAmountKind(record.Tax.AmountKind),
+                record.Tax.Amount,
+                record.Currency,
+                new ReportSourceReference(
+                    SourceType: "TaxRecord",
+                    SourceId: record.TaxRecordId,
+                    AuthoritativeOwner: ReportingAuthority.FinancialProfileService,
+                    EvidenceReferenceId: record.EvidenceId,
+                    FinancialProvenanceReferenceId: record.SourceProvenanceId,
+                    CalculationLineageReferenceId: null,
+                    FinancialFactReferenceId: record.Tax.SourceFinancialFactId,
+                    FinancialFactRevision: record.Tax.SourceRevision,
+                    DocumentVersionReferenceId: record.DocumentVersionId)));
+        }
+
+        return items;
+    }
+
+    private async Task<T> GetOwnerAsync<T>(
+        TenantBoundaryProof proof,
+        string path,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        var client = clients.CreateClient(FinancialProfileClient);
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(endpoint, path));
+        request.Headers.Add("X-Monergy-Tenant", proof.TenantId);
+        request.Headers.Add("X-Monergy-Session", proof.SessionId);
+        try
+        {
+            using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                throw Failure("report.source.financial-profile-denied",
+                    ContractErrorCategory.AccessDenied,
+                    "Current financial profile authorization is required.", correlationId);
+            if (!response.IsSuccessStatusCode)
+                throw Failure("report.source.financial-profile-unavailable",
+                    ContractErrorCategory.DependencyFailure,
+                    "The financial profile source is unavailable.", correlationId, true);
+            return await response.Content.ReadFromJsonAsync<T>(ContractJson.Options, cancellationToken)
+                .ConfigureAwait(false) ?? throw Failure("report.source.response-malformed",
+                    ContractErrorCategory.DependencyFailure,
+                    "The financial profile response is invalid.", correlationId);
+        }
+        catch (JsonException)
+        {
+            throw Failure("report.source.response-malformed", ContractErrorCategory.DependencyFailure,
+                "The financial profile response is invalid.", correlationId);
+        }
+        catch (HttpRequestException)
+        {
+            throw Failure("report.source.financial-profile-unavailable",
+                ContractErrorCategory.DependencyFailure,
+                "The financial profile source is unavailable.", correlationId, true);
+        }
+    }
+
+    private static bool ValidTaxRecord(ReviewedTaxRecord? record, string customerId) =>
+        record is { Tax: not null } && record.CustomerId == customerId &&
+        TenantAccessClient.Identifier(record.TaxRecordId, 80) &&
+        Guid.TryParseExact(record.OperationId, "N", out _) && record.Revision > 0 &&
+        record.VerificationStatus == "CUSTOMER_REVIEWED" &&
+        Text(record.Tax.Name) && Text(record.Tax.Jurisdiction) && Text(record.Tax.TaxType) &&
+        Text(record.Tax.TaxYearLabel, 30) && record.Tax.Amount is >= 0 and <= 999999999999.99m &&
+        decimal.Round(record.Tax.Amount, 2) == record.Tax.Amount &&
+        record.Tax.AmountKind is "PAID" or "DUE" or "WITHHELD" &&
+        record.Tax.PeriodStart.Year >= 1900 && record.Tax.PeriodEnd >= record.Tax.PeriodStart &&
+        TenantAccessClient.Identifier(record.Tax.SourceFinancialFactId, 160) &&
+        record.Tax.SourceRevision > 0 && record.Currency.Length == 3 &&
+        record.Currency.All(char.IsAsciiLetterUpper) &&
+        TenantAccessClient.Identifier(record.SourceProvenanceId, 160) &&
+        TenantAccessClient.Identifier(record.DocumentVersionId, 160) &&
+        TenantAccessClient.Identifier(record.EvidenceId, 160) &&
+        TenantAccessClient.Identifier(record.RecordedBy, 160) && record.RecordedAt != default;
+
+    private static bool Text(string? value, int maximum = 120) =>
+        !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= maximum &&
+        !value.Any(char.IsControl);
+
+    private static string TaxAmountKind(string value) => value switch
+    {
+        "PAID" => "tax paid",
+        "DUE" => "tax due",
+        "WITHHELD" => "tax withheld",
+        _ => throw new ArgumentOutOfRangeException(nameof(value)),
+    };
+
+    private static ReportSourceException TaxRecordBoundary(string correlationId) =>
+        Failure("report.source.tax-record-boundary-invalid", ContractErrorCategory.AccessDenied,
+            "A reviewed tax record is outside the current customer boundary.", correlationId);
 
     private async Task<IReadOnlyList<ReportLineItem>> ReadFinancialReviewAsync(
         TenantBoundaryProof proof,

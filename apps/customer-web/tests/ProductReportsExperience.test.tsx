@@ -137,20 +137,22 @@ afterEach(() => {
   window.history.replaceState(null, '', '/reports');
 });
 
-it('includes a reviewed Tax source figure and exports exact Reporting content with provenance', async () => {
+it('includes a customer-reviewed tax record with exact source history and exports governed content', async () => {
   const taxItem = {
-    label: 'Tax source figure', value: 14000, unit: 'USD',
+    label: 'Income tax return — tax paid', value: 14000, unit: 'USD',
     source: {
-      sourceType: 'FinancialFact', sourceId: 'ff-tax',
+      sourceType: 'TaxRecord', sourceId: 'tax-record-001',
       authoritativeOwner: 'Financial Profile Service', evidenceReferenceId: 'evidence-tax',
       financialProvenanceReferenceId: 'provenance-tax', calculationLineageReferenceId: null,
+      financialFactReferenceId: 'ff-tax', financialFactRevision: 1,
+      documentVersionReferenceId: 'document-version-tax',
     },
   };
   const content = JSON.stringify({ reportId: 'report-tax', items: [taxItem] });
   const api = new AccessApi(session);
   mockReportLifecycle(api, {
     ...report, reportId: 'report-tax', items: [taxItem],
-    sourceFinancialReferences: ['ff-tax'], evidenceReferences: ['evidence-tax'],
+    sourceFinancialReferences: ['tax-record-001'], evidenceReferences: ['evidence-tax'],
     financialProvenanceReferences: ['provenance-tax'],
     export: { ...report.export, content },
   });
@@ -161,11 +163,15 @@ it('includes a reviewed Tax source figure and exports exact Reporting content wi
   mount(api);
   const user = userEvent.setup();
   await user.click(screen.getByRole('button', { name: 'Generate basic summary' }));
-  expect(await screen.findByText('Tax source figure')).toBeVisible();
+  expect(await screen.findByText('Income tax return — tax paid')).toBeVisible();
   expect(screen.getByText('$14,000.00')).toBeVisible();
-  expect(screen.getByText(/not assessed tax owed, accepted filings or refunds/i)).toBeVisible();
-  expect(screen.getByRole('link', { name: 'View source & history' }))
-    .toHaveAttribute('href', '/finances?fact=ff-tax');
+  expect(screen.getByText(/do not establish assessed tax liability, an accepted filing, payment confirmation, refund entitlement or tax advice/i)).toBeVisible();
+  expect(screen.getByText('REVIEWED TAX RECORD')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View tax record & history' }))
+    .toHaveAttribute('href', '/finances?type=TAX&taxRecord=tax-record-001');
+  await user.click(screen.getByRole('button', { name: 'Technical details' }));
+  expect(screen.getByText('ff-tax · revision 1')).toBeVisible();
+  expect(screen.getByText('document-version-tax')).toBeVisible();
   await user.click(screen.getByRole('button', { name: 'Export basic summary' }));
   const blob = createObjectURL.mock.calls[0]?.[0];
   expect(blob).toBeInstanceOf(Blob);
