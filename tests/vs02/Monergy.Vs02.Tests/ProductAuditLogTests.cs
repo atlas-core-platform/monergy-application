@@ -27,6 +27,17 @@ public sealed class ProductAuditLogTests
   var sql=Assert.IsType<string>(method!.Invoke(null,[projection]));
   Assert.Contains(")\n" + projection + "\nWHERE",sql.Replace("\r\n","\n"));
  }
+ [Fact]
+ public void PostgreSqlDomainLedgerRetainsTheGovernedOwnerEventMeaning()
+ {
+  var method=typeof(PostgresTenantAccessAudit).GetMethod("SearchStatement",
+   System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static);
+  var sql=Assert.IsType<string>(method!.Invoke(null,["SELECT entry::text FROM ledger"]));
+  Assert.Contains("'reason',e.event_name",sql);
+  Assert.DoesNotContain("'reason','Unrecorded'",sql);
+  Assert.Contains("'sourceContractId',e.source_contract_id",sql);
+  Assert.Contains("'resourceId',e.subject_id",sql);
+ }
  private static ProductAuditRecord Row(string tenant="T001",string action="API_ACCESS",string? id=null)=>new(tenant,"",id??Guid.NewGuid().ToString("N"),"REQUESTED","A900","USER","C001",action,"Product Gateway","api",null,null,DateTimeOffset.UtcNow,"REQUESTED","GET");
  private static ProductAuditRecord Begin(ProductAuditRecord r)=>r with{EventId=r.RequestId+":REQUESTED"};
  [Fact]public async Task AppendIsImmutableExactReplayAndResultRemainsSeparateFromRequest()
