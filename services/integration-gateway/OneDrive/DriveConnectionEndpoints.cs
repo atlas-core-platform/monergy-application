@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Monergy.Platform;
+using Monergy.Services.IntegrationGateway;
 
 namespace Monergy.Services.IntegrationGateway.OneDrive;
 
@@ -73,8 +74,8 @@ public static class DriveConnectionEndpoints
     {
         Secure(http);
         try { return Results.Ok(await action()); }
-        catch (TenantBoundaryException error) { return Results.Json(new { error = error.Code }, statusCode: error.Status); }
+        catch (TenantBoundaryException error) { return DriveFailurePolicy.Result(http, error, "OneDrive"); }
         catch (Exception error) when (error is HttpRequestException or JsonException or TaskCanceledException or InvalidOperationException or FormatException or KeyNotFoundException)
-        { return Results.Json(new { error = "DRIVE_UNAVAILABLE" }, statusCode: 503); }
+        { return DriveFailurePolicy.Unavailable(http, "OneDrive"); }
     }
 }

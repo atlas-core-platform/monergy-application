@@ -2,7 +2,7 @@ import { FoundationProvider } from '@monergy/ui-foundation';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { AccessApi } from '../src/access/accessApi';
+import { AccessApi, AccessApiError } from '../src/access/accessApi';
 import { Context } from '../src/access/workspaceSession';
 import OneDriveExperience from '../src/product/OneDriveExperience';
 
@@ -73,6 +73,28 @@ it('retains an ambiguous import and retries the exact provider version', async (
   expect(imports).toHaveLength(2);
   expect(imports[0]?.[1]).toEqual({ version: 3, id: 'file-1', fileVersion: 'a'.repeat(64) });
   expect(imports[1]?.[1]).toEqual(imports[0]?.[1]);
+});
+it('requires provider permission recovery without blindly retrying', async () => {
+  const api = new AccessApi(session); const owner = vi.spyOn(api, 'oneDrive').mockImplementation(action =>
+    action === 'files' ? Promise.reject(new AccessApiError(503, 'DRIVE_RECONNECT_REQUIRED')) : Promise.resolve(baseline));
+  mount(api); await screen.findByText('Connected');
+  await userEvent.click(screen.getByRole('button', { name: 'Refresh files' }));
+  expect(await screen.findByText(/permission has expired/)).toBeVisible();
+  expect(owner.mock.calls.filter(call => call[0] === 'files')).toHaveLength(1);
+  expect(screen.queryByText('DRIVE_RECONNECT_REQUIRED')).not.toBeInTheDocument();
+});
+it('clears an exact import intent after a definitive file-version conflict', async () => {
+  const api = new AccessApi(session); vi.spyOn(api, 'oneDrive').mockImplementation(action => {
+    if (action === 'files') return Promise.resolve({ items: [file, { ...file, id: 'file-2', name: 'Other.txt' }], nextPageToken: null });
+    if (action === 'import') return Promise.reject(new AccessApiError(409, 'DRIVE_FILE_CHANGED'));
+    return Promise.resolve(baseline);
+  });
+  mount(api); await screen.findByText('Connected');
+  await userEvent.click(screen.getByRole('button', { name: 'Refresh files' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Import Statement.txt' }));
+  expect(await screen.findByText(/connection or file changed/)).toBeVisible();
+  expect(screen.queryByRole('button', { name: 'Retry exact import' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Import Other.txt' })).toBeEnabled();
 });
 it('confirms disconnect and distinguishes local stop from unconfirmed Microsoft revocation', async () => {
   const api = new AccessApi(session); const owner = vi.spyOn(api, 'oneDrive').mockResolvedValue(baseline);

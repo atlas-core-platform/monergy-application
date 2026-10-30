@@ -101,6 +101,38 @@ public sealed class IntegrationGatewayBehaviorTests
     }
 
     [Fact]
+    public async Task ExhaustedTransientFailurePublishesOneSafeTerminalResult()
+    {
+        var harness = new GatewayHarness(maximumAttempts: 2);
+        harness.Connector.Enqueue(ConnectorAttemptResult.Failure(ConnectorAttemptOutcome.TransientFailure,
+            "integration.synthetic.transient", true));
+        harness.Connector.Enqueue(ConnectorAttemptResult.Failure(ConnectorAttemptOutcome.TransientFailure,
+            "integration.synthetic.transient", true));
+
+        var result = await harness.App.ExecuteAsync(harness.Execute("retry-exhausted"));
+
+        Assert.Equal(ProviderOperationState.Failed, result.Data!.State);
+        Assert.Equal(2, result.Data.AttemptCount);
+        Assert.True(result.Data.Failure!.Retryable);
+        Assert.Equal(2, harness.Connector.ExecutionCount);
+        Assert.Single(harness.Events.Messages.OfType<DomainEvent<ProviderOperationFailedPayload>>());
+    }
+
+    [Fact]
+    public async Task RateLimitDoesNotHammerTheProvider()
+    {
+        var harness = new GatewayHarness(maximumAttempts: 2);
+        harness.Connector.Enqueue(ConnectorAttemptResult.Failure(ConnectorAttemptOutcome.RateLimited,
+            "integration.synthetic.rate-limited", true));
+
+        var result = await harness.App.ExecuteAsync(harness.Execute("rate-limited"));
+
+        Assert.Equal(ProviderOperationState.RateLimited, result.Data!.State);
+        Assert.Equal(1, result.Data.AttemptCount);
+        Assert.Equal(1, harness.Connector.ExecutionCount);
+    }
+
+    [Fact]
     public async Task ConcurrentDuplicatesShareOneLogicalExecution()
     {
         var harness = new GatewayHarness();

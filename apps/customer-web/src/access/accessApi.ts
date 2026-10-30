@@ -77,9 +77,11 @@ export interface ImportResult {
 }
 
 export class AccessApiError extends Error {
+  public readonly retryAfterSeconds: number | undefined;
   constructor(
     public readonly status: number,
     public readonly code: string,
+    retryAfterSeconds?: number,
   ) {
     super(
       status === 401
@@ -93,6 +95,9 @@ export class AccessApiError extends Error {
               : 'The request could not be completed. Review the details and try again.',
     );
     this.name = 'AccessApiError';
+    this.retryAfterSeconds = retryAfterSeconds !== undefined && Number.isInteger(retryAfterSeconds) && retryAfterSeconds >= 1 && retryAfterSeconds <= 900
+      ? retryAfterSeconds
+      : undefined;
   }
 }
 
@@ -123,7 +128,11 @@ async function read<T>(url: string, options: RequestInit): Promise<T> {
       /^[A-Z_]{1,100}$/.test(data.error)
         ? data.error
         : 'REQUEST_FAILED';
-    throw new AccessApiError(response.status, code);
+    const retryAfter = response.headers.get('Retry-After');
+    const retryAfterSeconds = retryAfter && /^[1-9]\d{0,2}$/.test(retryAfter) && Number(retryAfter) <= 900
+      ? Number(retryAfter)
+      : undefined;
+    throw new AccessApiError(response.status, code, retryAfterSeconds);
   }
   try {
     return (await response.json()) as T;
