@@ -5,7 +5,8 @@ import { useWorkspaceSession } from '../access/workspaceSession';
 import './product.css';
 
 type ConnectionState = 'Not configured' | 'Ready to connect' | 'Setup in progress' | 'Connected' | 'Needs attention' | 'Unavailable';
-interface ConnectionSummary { providerCode: string; provider: string; state: ConnectionState; managePath: string; lastConfirmedAt: string | null }
+type PermissionState = 'Not requested' | 'Pending' | 'Current' | 'Review required' | 'Unavailable';
+interface ConnectionSummary { providerCode: string; provider: string; state: ConnectionState; permissionState: PermissionState; managePath: string; lastConfirmedAt: string | null }
 interface Overview { tenantId: string; customerId: string; generatedAt: string; connections: ConnectionSummary[] }
 interface State { api: AccessApi; scope: string; overview: Overview | null; busy: boolean; error: string }
 
@@ -14,6 +15,10 @@ const expected = new Map([
   ['onedrive', { provider: 'OneDrive', path: '/connections/onedrive' }],
 ]);
 const states = new Set<ConnectionState>(['Not configured', 'Ready to connect', 'Setup in progress', 'Connected', 'Needs attention', 'Unavailable']);
+const permissions: Record<ConnectionState, PermissionState> = {
+  'Not configured': 'Not requested', 'Ready to connect': 'Not requested', 'Setup in progress': 'Pending',
+  Connected: 'Current', 'Needs attention': 'Review required', Unavailable: 'Unavailable',
+};
 function validOverview(value: Overview | null | undefined, tenant: string, customer: string) {
   if (value?.tenantId !== tenant || value.customerId !== customer || !Number.isFinite(Date.parse(value.generatedAt)) ||
       !Array.isArray(value.connections) || value.connections.length !== expected.size) return false;
@@ -21,13 +26,15 @@ function validOverview(value: Overview | null | undefined, tenant: string, custo
   for (const item of value.connections) {
     const definition = expected.get(item.providerCode);
     if (!definition || seen.has(item.providerCode) || definition.provider !== item.provider || definition.path !== item.managePath ||
-        !states.has(item.state) || item.lastConfirmedAt !== null && !Number.isFinite(Date.parse(item.lastConfirmedAt)) ||
+        !states.has(item.state) || permissions[item.state] !== item.permissionState ||
+        item.lastConfirmedAt !== null && !Number.isFinite(Date.parse(item.lastConfirmedAt)) ||
         item.state !== 'Connected' && item.lastConfirmedAt !== null) return false;
     seen.add(item.providerCode);
   }
   return seen.size === expected.size;
 }
 const color = (state: ConnectionState) => state === 'Connected' ? 'success' : state === 'Needs attention' || state === 'Unavailable' ? 'warning' : 'default';
+const permissionColor = (state: PermissionState) => state === 'Current' ? 'success' : state === 'Review required' || state === 'Unavailable' ? 'warning' : 'default';
 
 export default function ConnectionsOverviewExperience() {
   const { api, session, authorization } = useWorkspaceSession();
@@ -68,12 +75,15 @@ export default function ConnectionsOverviewExperience() {
     <Button disabled={current?.busy ?? true} onClick={load}>Refresh connections</Button>
     {current?.overview && <Space orientation="vertical" size="middle" style={{ width: '100%', marginTop: 16 }}>
       {current.overview.connections.map(item => <Card key={item.providerCode} title={item.provider} extra={<Tag color={color(item.state)}>{item.state}</Tag>}>
+        <p><strong>Permission:</strong> <Tag color={permissionColor(item.permissionState)}>{item.permissionState}</Tag></p>
         {item.state === 'Not configured' && <p>Your organization has not configured this provider. Its settings can be supplied during onboarding.</p>}
         {item.state === 'Ready to connect' && <p>The provider is configured and ready for you to review its permission before connecting.</p>}
         {item.state === 'Setup in progress' && <p>Connection setup has started. Open the provider to continue or review the selected folder.</p>}
         {item.state === 'Connected' && <p>{item.lastConfirmedAt ? `Last confirmed ${new Date(item.lastConfirmedAt).toLocaleString()}.` : 'The provider reports a current connection.'}</p>}
         {item.state === 'Needs attention' && <p>Open the provider to review current permission, configuration and folder access.</p>}
         {item.state === 'Unavailable' && <p>Current provider status could not be confirmed. No connection result has been inferred.</p>}
+        {item.permissionState === 'Current' && <p>Current permission was confirmed by the connection owner. It is checked again before provider operations.</p>}
+        {item.permissionState === 'Review required' && <p>Current permission could not be confirmed. Open the provider to review it; this page cannot grant permission.</p>}
         <Button href={item.managePath}>Manage {item.provider}</Button>
       </Card>)}
     </Space>}
