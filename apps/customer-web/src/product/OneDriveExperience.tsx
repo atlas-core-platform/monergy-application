@@ -2,6 +2,7 @@ import { Alert, Button, Checkbox, Select, Tag } from 'antd';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import type { AccessApi } from '../access/accessApi';
+import { driveFailureGuidance } from './driveFailureGuidance';
 import './product.css';
 
 interface Receipt { fileId: string; fileVersion: string; name: string; documentId: string; documentVersionId: string; sha256: string; importedAt: string }
@@ -10,7 +11,7 @@ interface File { id: string; name: string; mimeType: string; version: string; si
 interface Page { items: File[]; nextPageToken: string | null }
 interface State { api: AccessApi; scope: string; view: View | null; page: Page | null; folders: boolean; busy: boolean; error: string; notice: string; authorizationUrl?: string }
 interface PendingImport { scope: string; connectionVersion: number; fileId: string; fileVersion: string; name: string }
-interface RunOptions { preservePage?: boolean; failure?: string; confirmed?: () => void }
+interface RunOptions { preservePage?: boolean; failure?: (error: unknown) => string; confirmed?: () => void; failed?: (error: unknown) => void }
 const identifier = (value: unknown) => typeof value === 'string' && /^[A-Za-z0-9_!-]{1,200}$/.test(value);
 const contentTypes = new Set(['application/pdf', 'image/png', 'image/jpeg', 'text/plain', 'text/csv', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
 function validReceipt(value: Receipt | null | undefined) { return value && identifier(value.fileId) && /^[a-f0-9]{64}$/.test(value.fileVersion) &&
@@ -58,9 +59,12 @@ export default function OneDriveExperience() {
         options.confirmed?.();
         setState({ ...previous, ...result, busy: false, error: '' });
       }
-    } catch {
-      if (!controller.signal.aborted && context.current.api === api && context.current.scope === scope)
-        setState({ ...previous, page: options.preservePage ? previous.page : null, busy: false, error: options.failure ?? 'The connection could not be updated. Refresh to check permission and configuration. Reconnect if permission has expired; try again later if Microsoft or an owner service is unavailable.' });
+    } catch (error) {
+      if (!controller.signal.aborted && context.current.api === api && context.current.scope === scope) {
+        options.failed?.(error);
+        setState({ ...previous, page: options.preservePage ? previous.page : null, busy: false,
+          error: options.failure?.(error) ?? driveFailureGuidance(error, 'OneDrive').message });
+      }
     }
   }, [api, customer, allowed, scope, state]);
   const load = useCallback(async (signal: AbortSignal): Promise<Partial<State>> => {
@@ -100,7 +104,10 @@ export default function OneDriveExperience() {
       return { ...updated, notice: `${intent.name} import confirmed. Open Documents to review and process it.` };
     }, {
       preservePage: true,
-      failure: 'The import result was not confirmed. Retry this exact file version before starting another import. If the earlier request succeeded, Monergy will return its existing document receipt without importing it again.',
+      failure: error => { const guidance = driveFailureGuidance(error, 'OneDrive'); return guidance.retainExactImport
+        ? `The import result was not confirmed. ${guidance.message} Retry this exact file version before starting another import.`
+        : guidance.message; },
+      failed: error => { if (!driveFailureGuidance(error, 'OneDrive').retainExactImport) setPendingImport(null); },
       confirmed: () => { setPendingImport(null); },
     });
   };

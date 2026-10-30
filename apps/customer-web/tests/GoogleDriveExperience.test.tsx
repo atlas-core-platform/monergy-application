@@ -2,7 +2,7 @@ import { FoundationProvider } from '@monergy/ui-foundation';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
-import { AccessApi } from '../src/access/accessApi';
+import { AccessApi, AccessApiError } from '../src/access/accessApi';
 import { Context } from '../src/access/workspaceSession';
 import GoogleDriveExperience from '../src/product/GoogleDriveExperience';
 
@@ -73,6 +73,28 @@ it('retains an ambiguous import and retries the exact provider version', async (
   expect(imports).toHaveLength(2);
   expect(imports[0]?.[1]).toEqual({ version: 3, id: 'file-1', fileVersion: '15' });
   expect(imports[1]?.[1]).toEqual(imports[0]?.[1]);
+});
+it('shows the governed provider delay without automatically retrying a rate-limited file refresh', async () => {
+  const api = new AccessApi(session); const owner = vi.spyOn(api, 'googleDrive').mockImplementation(action =>
+    action === 'files' ? Promise.reject(new AccessApiError(429, 'DRIVE_RATE_LIMITED', 60)) : Promise.resolve(baseline));
+  mount(api); await screen.findByText('Connected');
+  await userEvent.click(screen.getByRole('button', { name: 'Refresh files' }));
+  expect(await screen.findByText(/Wait 60 seconds before retrying/)).toBeVisible();
+  expect(owner.mock.calls.filter(call => call[0] === 'files')).toHaveLength(1);
+  expect(screen.queryByText('DRIVE_RATE_LIMITED')).not.toBeInTheDocument();
+});
+it('retains the exact import identity after a confirmed provider rate limit', async () => {
+  const api = new AccessApi(session); vi.spyOn(api, 'googleDrive').mockImplementation(action => {
+    if (action === 'files') return Promise.resolve({ items: [file, { ...file, id: 'file-2', name: 'Other.txt' }], nextPageToken: null });
+    if (action === 'import') return Promise.reject(new AccessApiError(429, 'DRIVE_RATE_LIMITED', 60));
+    return Promise.resolve(baseline);
+  });
+  mount(api); await screen.findByText('Connected');
+  await userEvent.click(screen.getByRole('button', { name: 'Refresh files' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Import Statement.txt' }));
+  expect(await screen.findByText(/Wait 60 seconds before retrying/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Retry exact import' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Import Other.txt' })).toBeDisabled();
 });
 it('confirms disconnect and distinguishes local stop from unconfirmed Google revocation', async () => {
   const api = new AccessApi(session); const owner = vi.spyOn(api, 'googleDrive').mockResolvedValue(baseline);
