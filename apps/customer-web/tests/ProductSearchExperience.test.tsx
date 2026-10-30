@@ -164,6 +164,43 @@ it('opens an exact customer-reviewed tax record without implying assessed or acc
   expect(screen.queryByText(/accepted by a tax authority|refund approved/i)).not.toBeInTheDocument();
 });
 
+it('opens an exact Customer-defined financial goal without implying advice or verified achievement', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    query: 'emergency',
+    matchMode: 'Lexical',
+    items: [{
+      searchRecordId: 'search-financial-goal-goal-001',
+      resultType: 'Financial',
+      title: 'Emergency fund',
+      summary: 'Customer-defined goal: target 500000.00 USD by 2030-06-30; reported status Paused; customer priority High. This is not advice, a required contribution, savings allocation, eligibility or independently verified achievement.',
+      authoritativeOwner: 'Financial Profile Service',
+      representationState: 'DERIVED_REBUILDABLE',
+      score: 1,
+      source: {
+        sourceObjectType: 'FinancialGoal',
+        sourceObjectId: 'goal-001',
+        sourceReferenceId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        provenanceReferenceId: null,
+        calculationLineageReferenceId: null,
+      },
+    }],
+  });
+  mount(api);
+
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Search query'), 'emergency');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+
+  expect(await screen.findByText('1 result for “emergency”')).toBeVisible();
+  expect(screen.getByText(/not advice, a required contribution/i)).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute(
+    'href',
+    '/finances?type=GOAL&goal=goal-001',
+  );
+  expect(screen.queryByText(/recommended allocation|achievement confirmed/i)).not.toBeInTheDocument();
+});
+
 it('lets the customer bound the query to Financial information', async () => {
   const api = new AccessApi(session);
   const product = vi.spyOn(api, 'product').mockResolvedValue({

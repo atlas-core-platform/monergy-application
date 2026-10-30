@@ -11,7 +11,7 @@ const record: ProductFinancialGoal = { financialGoalId: 'goal-saved', operationI
 const list = (items: ProductFinancialGoal[] = []) => ({ items, hasMore: false, dataDurability: 'Temporary data' });
 function element(api: AccessApi, canCreate = true, canRead = true) { return <FoundationProvider appearance="midnight"><FinancialGoalsExperience api={api} canCreate={canCreate} canRead={canRead} /></FoundationProvider>; }
 const mount = (api: AccessApi, canCreate = true, canRead = true) => render(element(api, canCreate, canRead));
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, '', '/'); });
 async function fill(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Add goal' })); const drawer = screen.getByRole('dialog', { name: 'Add goal' });
   expect(within(drawer).getByLabelText('Goal amount')).toHaveValue(null); expect(within(drawer).getByLabelText('Currency')).toHaveValue('');
@@ -23,6 +23,22 @@ it('saves explicit targets without documents and displays exact owner confirmati
   const request = vi.spyOn(api, 'product').mockImplementation((path, method, input) => { expect(path).toBe('v1/financial-goals'); if (method === 'GET') return Promise.resolve(list(saved ? [record] : [])); expect(input).toEqual({ operationId: record.operationId, goal }); saved = true; return Promise.resolve(record); });
   mount(api); const user = userEvent.setup(); const drawer = await fill(user); expect(request.mock.calls.filter(([, method]) => method === 'POST')).toHaveLength(0); await user.click(within(drawer).getByRole('button', { name: 'Save goal' })); expect(await screen.findByText('Goal saved: Education fund')).toBeVisible();
   await user.click(await screen.findByRole('button', { name: 'View goal: Education fund' })); const details = screen.getByRole('dialog', { name: 'Goal details' }); expect(details).toHaveTextContent(goal.targetDate); expect(details).toHaveTextContent('Customer defined'); expect(details).toHaveTextContent('Progress is available from saved customer-reported contributions. Future required contributions and independent achievement are not calculated.');
+});
+it('opens the exact current goal requested by an authorized Search result', async () => {
+  window.history.replaceState(null, '', '/finances?type=GOAL&goal=goal-saved');
+  const api = new AccessApi(session); vi.spyOn(api, 'product').mockResolvedValue(list([record]));
+  mount(api, false);
+  const details = await screen.findByRole('dialog', { name: 'Goal details' });
+  expect(within(details).getByText('Education fund')).toBeVisible();
+  expect(within(details).getByText('Customer defined')).toBeVisible();
+  expect(details).toHaveTextContent('Record version1');
+});
+it('does not substitute another goal when a Search result is no longer current', async () => {
+  window.history.replaceState(null, '', '/finances?type=GOAL&goal=goal-missing');
+  const api = new AccessApi(session); vi.spyOn(api, 'product').mockResolvedValue(list([record]));
+  mount(api, false);
+  expect(await screen.findByText('This financial goal is not available in your current records.')).toBeVisible();
+  expect(screen.queryByRole('dialog', { name: 'Goal details' })).not.toBeInTheDocument();
 });
 it('retries the identical uncertain submission after closing and reopening', async () => {
   const api = new AccessApi(session); let attempts = 0; vi.spyOn(crypto, 'randomUUID').mockReturnValue('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');

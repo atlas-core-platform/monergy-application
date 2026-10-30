@@ -27,6 +27,7 @@ const money = (goal: ProductFinancialGoalDraft) => new Intl.NumberFormat(undefin
 
 export default function FinancialGoalsExperience({ api, canRead, canCreate }: { api: AccessApi; canRead: boolean; canCreate: boolean }) {
   const context = useMemo(() => ({ api, canRead, canCreate }), [api, canRead, canCreate]);
+  const requestedGoal = useMemo(() => new URLSearchParams(window.location.search).get('goal'), []);
   const scope = useRef(context);
   useLayoutEffect(() => { scope.current = context; return () => { scope.current = { ...context, canRead: false, canCreate: false }; }; }, [context]);
   const sequence = useRef(0); const pending = useRef<AbortController | null>(null);
@@ -47,6 +48,7 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
   const [priorityBusy,setPriorityBusy]=useState<typeof context|null>(null);
   const [priorityError,setPriorityError]=useState<{context:typeof context;text:string}|null>(null);
   const [selected, setSelected] = useState<{ context: typeof context; record: ProductFinancialGoal } | null>(null);
+  const [routeDismissed, setRouteDismissed] = useState(false);
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!canRead) return;
     const generation = ++sequence.current; pending.current?.abort(); const controller = new AbortController(); pending.current = controller;
@@ -63,6 +65,8 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
   useEffect(() => { const controller = new AbortController(); const timer = window.setTimeout(() => { void load(controller.signal); }, 0); return () => { window.clearTimeout(timer); controller.abort(); pending.current?.abort(); }; }, [load]);
   const current = editor?.context === context ? editor : null; const isSaving = saving === context;
   const list = loaded?.context === context ? loaded.list : null;
+  const routed = !routeDismissed && requestedGoal ? list?.items.find(item => item.financialGoalId === requestedGoal) ?? null : null;
+  const routeMissing = Boolean(requestedGoal && list && !routed && !routeDismissed);
   const draft = current ? { name: current.values.name, targetAmount: Number(current.values.targetAmount), currency: current.values.currency, targetDate: current.values.targetDate } : null;
   const valid = draft && current?.values.targetAmount !== '' && validGoal(draft) && !current?.conflict;
   const open = (record?: ProductFinancialGoal) => {
@@ -91,7 +95,7 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
       if (conflict || invalid) setEditor({ ...current, submission: null, conflict });
     } finally { setSaving(active => active === context ? null : active); }
   };
-  const visible = selected?.context === context ? selected.record : null;
+  const visible = selected?.context === context ? selected.record : routed;
   const lifecycleCurrent=lifecycle?.context===context?lifecycle:null;const isLifecycleBusy=lifecycleBusy===context;
   const openLifecycle=(record:ProductFinancialGoal)=>{if(!canCreate||isLifecycleBusy)return;setLifecycleError(null);setLifecycle({context,record,status:record.lifecycleStatus==='IN_PROGRESS'?'PAUSED':'IN_PROGRESS',asOfDate:new Date().toISOString().slice(0,10),operationId:crypto.randomUUID().replaceAll('-',''),submission:null,conflict:false});};
   const saveLifecycle=async()=>{if(!lifecycleCurrent||!canCreate||isLifecycleBusy||lifecycleCurrent.conflict||!validDate(lifecycleCurrent.asOfDate)||lifecycleCurrent.status===lifecycleCurrent.record.lifecycleStatus)return;
@@ -113,6 +117,7 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
     <Space wrap><h2>Financial goals</h2><Button disabled={busy === context || isSaving} onClick={() => { void load(); }}>Refresh goals</Button>
       {canCreate && <Button disabled={isSaving} onClick={() => { open(); }}>{current?.submission ? 'Continue save confirmation' : 'Add goal'}</Button>}</Space>
     <p>Set your own goal amount and target date. Progress can use your saved contribution reports; future required contributions are not calculated.</p>
+    {routeMissing && <Alert type="warning" title="This financial goal is not available in your current records." />}
     {saved?.context === context && <Alert type="success" title={'Goal saved: ' + saved.record.goal.name} />}
     {error?.context === context && <Alert type="error" title={error.text} action={<Button onClick={() => { void load(); }}>Retry goals</Button>} />}
     {busy === context && <p role="status">Loading goals…</p>}{list?.items.length === 0 && <p>No financial goals added yet. Add a goal you want to work towards.</p>}
@@ -138,7 +143,7 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
       <p>Saving records the objective you defined. It does not allocate savings or confirm that the goal has been achieved.</p>
       <Button type="primary" loading={isSaving} disabled={!canCreate || !current?.submission && !valid} onClick={() => { void save(); }}>{current?.submission ? 'Retry save confirmation' : current?.original ? 'Save goal changes' : 'Save goal'}</Button>
     </Drawer>
-    <Drawer title="Goal details" open={Boolean(visible)} onClose={() => { setSelected(null); }} size={520} destroyOnHidden>
+    <Drawer title="Goal details" open={Boolean(visible)} onClose={() => { setSelected(null); setRouteDismissed(true); }} size={520} destroyOnHidden>
       {visible && <GoalDetails record={visible} />}
     </Drawer>
     <Drawer title="Update goal status" open={Boolean(lifecycleCurrent)} onClose={()=>{if(!isLifecycleBusy)setLifecycle(null);}} size={520} closable={!isLifecycleBusy} mask={{closable:!isLifecycleBusy}} destroyOnHidden>

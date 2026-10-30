@@ -161,9 +161,16 @@ public sealed class ProductSearchProjectionSource(
             profileRequest,
             cancellationToken).ConfigureAwait(false);
 
+        var builder = ImmutableArray.CreateBuilder<DerivedSearchRecord>();
         if (profileResult.Outcome == ContractOutcome.Rejected &&
             profileResult.Error?.Category == ContractErrorCategory.NotFound)
-            return [];
+        {
+            foreach (var record in await ReadFinancialGoalsAsync(
+                proof, customerId, authorizationContextId,
+                correlationId, cancellationToken).ConfigureAwait(false))
+                builder.Add(record);
+            return builder.ToImmutable();
+        }
         if (profileResult.Outcome != ContractOutcome.Success || profileResult.Data is null)
             throw OwnerFailure(profileResult.Error, "search.source.financial-profile-unavailable", correlationId);
 
@@ -172,7 +179,6 @@ public sealed class ProductSearchProjectionSource(
             throw Failure("search.source.financial-boundary-invalid", ContractErrorCategory.AccessDenied,
                 "Financial search sources are outside the current customer boundary.", correlationId);
 
-        var builder = ImmutableArray.CreateBuilder<DerivedSearchRecord>();
         foreach (var fact in profile.Facts
             .Select(fact => fact with { FactType = FinancialSourceFactBoundary.ForCustomer(fact.FactType) })
                      .Where(fact => SupportedFactTypes.Contains(fact.FactType))
@@ -229,6 +235,64 @@ public sealed class ProductSearchProjectionSource(
             correlationId, cancellationToken).ConfigureAwait(false))
             builder.Add(record);
 
+        foreach (var record in await ReadFinancialGoalsAsync(
+            proof, customerId, authorizationContextId,
+            correlationId, cancellationToken).ConfigureAwait(false))
+            builder.Add(record);
+
+        return builder.ToImmutable();
+    }
+
+    private async Task<ImmutableArray<DerivedSearchRecord>> ReadFinancialGoalsAsync(
+        TenantBoundaryProof proof,
+        string customerId,
+        string authorizationContextId,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        var client = clients.CreateClient(FinancialProfileClient);
+        var root = "local/v1/customers/" + Uri.EscapeDataString(customerId) + "/financial-goals";
+        var list = await GetOwnerAsync<FinancialGoalList>(
+            client, financialEndpoint, proof, root, correlationId, cancellationToken).ConfigureAwait(false);
+        if (list.Items is null || list.Items.Count > 200 || list.HasMore || list.Items.Any(item => item is null) ||
+            list.Items.Select(item => item?.FinancialGoalId).Distinct(StringComparer.Ordinal).Count() != list.Items.Count)
+            throw Failure("search.source.corpus-limit", ContractErrorCategory.DependencyFailure,
+                "Financial goal search exceeds the supported complete corpus.", correlationId);
+
+        var builder = ImmutableArray.CreateBuilder<DerivedSearchRecord>(list.Items.Count);
+        foreach (var listed in list.Items.OrderBy(item => item.Goal.Name, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(item => item.FinancialGoalId, StringComparer.Ordinal))
+        {
+            if (!Valid(listed, customerId))
+                throw Failure("search.source.financial-goal-boundary-invalid", ContractErrorCategory.AccessDenied,
+                    "A financial goal is outside the current customer boundary.", correlationId);
+            var exact = await GetOwnerAsync<CustomerFinancialGoal>(
+                client, financialEndpoint, proof,
+                root + "/" + Uri.EscapeDataString(listed.FinancialGoalId) +
+                "?revision=" + listed.Revision.ToString(CultureInfo.InvariantCulture),
+                correlationId, cancellationToken).ConfigureAwait(false);
+            if (!Valid(exact, customerId) || exact != listed)
+                throw Failure("search.source.financial-goal-boundary-invalid", ContractErrorCategory.AccessDenied,
+                    "A financial goal version is outside the current customer boundary.", correlationId);
+
+            var amount = exact.Goal.TargetAmount.ToString("0.00", CultureInfo.InvariantCulture);
+            builder.Add(new DerivedSearchRecord(
+                "search-financial-goal-" + exact.FinancialGoalId,
+                customerId,
+                authorizationContextId,
+                SearchResultType.Financial,
+                exact.Goal.Name,
+                $"Customer-defined goal: target {amount} {exact.Goal.Currency} by {exact.Goal.TargetDate:yyyy-MM-dd}; " +
+                $"reported status {LifecycleLabel(exact.LifecycleStatus)}; customer priority {PriorityLabel(exact.PriorityLevel)}. " +
+                "This is not advice, a required contribution, savings allocation, eligibility or independently verified achievement.",
+                SearchAuthority.FinancialProfileService,
+                new SearchSourceReference(
+                    "FinancialGoal",
+                    exact.FinancialGoalId,
+                    exact.OperationId,
+                    null,
+                    null)));
+        }
         return builder.ToImmutable();
     }
 
@@ -332,6 +396,44 @@ public sealed class ProductSearchProjectionSource(
         TenantAccessClient.Identifier(record.DocumentVersionId, 160) &&
         TenantAccessClient.Identifier(record.EvidenceId, 160) &&
         TenantAccessClient.Identifier(record.RecordedBy, 160) && record.RecordedAt != default;
+
+    private static bool Valid(CustomerFinancialGoal? record, string customerId) =>
+        record is { Goal: not null } && record.CustomerId == customerId &&
+        TenantAccessClient.Identifier(record.FinancialGoalId, 80) &&
+        Guid.TryParseExact(record.OperationId, "N", out _) &&
+        !record.OperationId.Any(char.IsAsciiLetterUpper) && record.Revision > 0 &&
+        record.DeclarationStatus == "CUSTOMER_DEFINED" &&
+        Text(record.Goal.Name) && record.Goal.Name == record.Goal.Name.Trim() &&
+        record.Goal.TargetAmount is > 0 and <= 999999999999.99m &&
+        decimal.Round(record.Goal.TargetAmount, 2) == record.Goal.TargetAmount &&
+        record.Goal.Currency is { Length: 3 } && record.Goal.Currency.All(char.IsAsciiLetterUpper) &&
+        record.Goal.TargetDate.Year is >= 1900 and <= 2199 &&
+        record.LifecycleBasis == "CUSTOMER_REPORTED" &&
+        (record.LifecycleStatus == "IN_PROGRESS" &&
+             (record.LifecycleAsOfDate is null || record.LifecycleAsOfDate.Value.Year >= 1900) ||
+         record.LifecycleStatus is "PAUSED" or "REPORTED_ACHIEVED" or "STOPPED" &&
+             record.LifecycleAsOfDate is { Year: >= 1900 }) &&
+        record.PriorityBasis == "CUSTOMER_REPORTED" &&
+        record.PriorityLevel is "NOT_SET" or "LOW" or "MEDIUM" or "HIGH" &&
+        (record.PriorityLevel == "NOT_SET" && record.PriorityAsOfDate is null ||
+         record.PriorityAsOfDate is { Year: >= 1900 }) &&
+        TenantAccessClient.Identifier(record.RecordedBy, 160) && record.RecordedAt != default;
+
+    private static string LifecycleLabel(string value) => value switch
+    {
+        "IN_PROGRESS" => "In progress",
+        "PAUSED" => "Paused",
+        "REPORTED_ACHIEVED" => "Reported achieved",
+        _ => "Stopped",
+    };
+
+    private static string PriorityLabel(string value) => value switch
+    {
+        "NOT_SET" => "not set",
+        "LOW" => "Low",
+        "MEDIUM" => "Medium",
+        _ => "High",
+    };
 
     private static bool Text(string? value, int maximum = 120) =>
         !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= maximum && !value.Any(char.IsControl);
