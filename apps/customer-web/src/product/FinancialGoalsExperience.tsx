@@ -3,8 +3,8 @@ import FinancialGoalProgressExperience from './FinancialGoalProgressExperience';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Drawer, Input, Space, Tag } from 'antd';
 import { AccessApiError, type AccessApi } from '../access/accessApi';
-import { createFinancialGoal, getFinancialGoals, reviseFinancialGoal, getFinancialGoalHistory, reportFinancialGoalLifecycle } from './productApi';
-import type { ProductFinancialGoal, ProductFinancialGoalDraft, ProductFinancialGoalList, ProductFinancialGoalHistory, ProductFinancialGoalLifecycleStatus } from './productApi';
+import { createFinancialGoal, getFinancialGoals, reviseFinancialGoal, getFinancialGoalHistory, reportFinancialGoalLifecycle, reportFinancialGoalPriority } from './productApi';
+import type { ProductFinancialGoal, ProductFinancialGoalDraft, ProductFinancialGoalList, ProductFinancialGoalHistory, ProductFinancialGoalLifecycleStatus, ProductFinancialGoalPriority } from './productApi';
 
 interface Submission { operationId: string; goal: ProductFinancialGoalDraft; expectedRevision?: number };
 interface Values { name: string; targetAmount: string; currency: string; targetDate: string };
@@ -14,10 +14,13 @@ const validGoal = (goal: ProductFinancialGoalDraft | null | undefined) => typeof
   /^[A-Z]{3}$/u.test(goal.currency) && /^(19|20|21)\d{2}-\d{2}-\d{2}$/u.test(goal.targetDate) && !Number.isNaN(Date.parse(goal.targetDate)) && new Date(goal.targetDate).toISOString().slice(0, 10) === goal.targetDate;
 const statuses: ProductFinancialGoalLifecycleStatus[] = ['IN_PROGRESS', 'PAUSED', 'REPORTED_ACHIEVED', 'STOPPED'];
 const statusLabel = (status: ProductFinancialGoalLifecycleStatus) => ({ IN_PROGRESS: 'In progress', PAUSED: 'Paused', REPORTED_ACHIEVED: 'Reported achieved', STOPPED: 'Stopped' })[status];
+const priorities: ProductFinancialGoalPriority[] = ['NOT_SET', 'LOW', 'MEDIUM', 'HIGH'];
+const priorityLabel = (priority: ProductFinancialGoalPriority) => ({ NOT_SET: 'Priority not set', LOW: 'Low priority', MEDIUM: 'Medium priority', HIGH: 'High priority' })[priority];
 const validDate = (value: string | null) => value !== null && /^(19|20|21)\d{2}-\d{2}-\d{2}$/u.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 const bound = (record: ProductFinancialGoal | null | undefined) => record != null && typeof record.financialGoalId === 'string' && record.financialGoalId.length > 0 &&
   typeof record.customerId === 'string' && record.customerId.length > 0 && record.declarationStatus === 'CUSTOMER_DEFINED' && Reflect.get(record, 'lifecycleBasis') === 'CUSTOMER_REPORTED' &&
   statuses.includes(record.lifecycleStatus) && (record.lifecycleStatus === 'IN_PROGRESS' && record.lifecycleAsOfDate === null || validDate(record.lifecycleAsOfDate)) &&
+  Reflect.get(record, 'priorityBasis') === 'CUSTOMER_REPORTED' && priorities.includes(record.priorityLevel) && (record.priorityAsOfDate === null ? record.priorityLevel === 'NOT_SET' : validDate(record.priorityAsOfDate)) &&
   Number.isInteger(record.revision) && record.revision > 0 && validGoal(record.goal);
 const sameGoal = (a: ProductFinancialGoalDraft, b: ProductFinancialGoalDraft) => a.name === b.name.trim() && a.targetAmount === b.targetAmount && a.currency === b.currency && a.targetDate === b.targetDate;
 const money = (goal: ProductFinancialGoalDraft) => new Intl.NumberFormat(undefined, { style: 'currency', currency: goal.currency }).format(goal.targetAmount);
@@ -40,6 +43,9 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
   const [lifecycle,setLifecycle]=useState<{context:typeof context;record:ProductFinancialGoal;status:ProductFinancialGoalLifecycleStatus;asOfDate:string;operationId:string;submission:{operationId:string;expectedRevision:number;status:ProductFinancialGoalLifecycleStatus;asOfDate:string}|null;conflict:boolean}|null>(null);
   const [lifecycleBusy,setLifecycleBusy]=useState<typeof context|null>(null);
   const [lifecycleError,setLifecycleError]=useState<{context:typeof context;text:string}|null>(null);
+  const [priority,setPriority]=useState<{context:typeof context;record:ProductFinancialGoal;priority:ProductFinancialGoalPriority;asOfDate:string;operationId:string;submission:{operationId:string;expectedRevision:number;priority:ProductFinancialGoalPriority;asOfDate:string}|null;conflict:boolean}|null>(null);
+  const [priorityBusy,setPriorityBusy]=useState<typeof context|null>(null);
+  const [priorityError,setPriorityError]=useState<{context:typeof context;text:string}|null>(null);
   const [selected, setSelected] = useState<{ context: typeof context; record: ProductFinancialGoal } | null>(null);
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!canRead) return;
@@ -94,6 +100,14 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
     try{const result=await reportFinancialGoalLifecycle(api,lifecycleCurrent.record.financialGoalId,submission);if(!bound(result)||result.financialGoalId!==lifecycleCurrent.record.financialGoalId||result.customerId!==lifecycleCurrent.record.customerId||result.operationId!==submission.operationId||result.revision!==submission.expectedRevision+1||result.lifecycleStatus!==submission.status||result.lifecycleAsOfDate!==submission.asOfDate||Reflect.get(result,'lifecycleBasis')!=='CUSTOMER_REPORTED'||!sameGoal(result.goal,lifecycleCurrent.record.goal))throw new Error('Invalid confirmation');if(scope.current!==context)return;setSaved({context,record:result});setLifecycle(null);await load();}
     catch(failure){if(scope.current!==context)return;const conflict=failure instanceof AccessApiError&&failure.status===409;const invalid=failure instanceof AccessApiError&&failure.status===400;setLifecycleError({context,text:conflict?'The goal changed. Refresh goals and review its latest status before trying again.':invalid?'Choose a different status and a valid effective date.':'The status change has not been confirmed. Retry the same request before making another change.'});if(conflict||invalid)setLifecycle({...lifecycleCurrent,submission:null,conflict});}
     finally{setLifecycleBusy(active=>active===context?null:active);}};
+  const priorityCurrent=priority?.context===context?priority:null;const isPriorityBusy=priorityBusy===context;
+  const openPriority=(record:ProductFinancialGoal)=>{if(!canCreate||isPriorityBusy||!['IN_PROGRESS','PAUSED'].includes(record.lifecycleStatus))return;setPriorityError(null);setPriority({context,record,priority:record.priorityLevel==='NOT_SET'?'MEDIUM':record.priorityLevel==='HIGH'?'MEDIUM':'HIGH',asOfDate:new Date().toISOString().slice(0,10),operationId:crypto.randomUUID().replaceAll('-',''),submission:null,conflict:false});};
+  const savePriority=async()=>{if(!priorityCurrent||!canCreate||isPriorityBusy||priorityCurrent.conflict||!validDate(priorityCurrent.asOfDate)||priorityCurrent.priority===priorityCurrent.record.priorityLevel)return;
+    const submission=priorityCurrent.submission??{operationId:priorityCurrent.operationId,expectedRevision:priorityCurrent.record.revision,priority:priorityCurrent.priority,asOfDate:priorityCurrent.asOfDate};
+    setPriority({...priorityCurrent,submission});setPriorityBusy(context);setPriorityError(null);
+    try{const result=await reportFinancialGoalPriority(api,priorityCurrent.record.financialGoalId,submission);if(!bound(result)||result.financialGoalId!==priorityCurrent.record.financialGoalId||result.customerId!==priorityCurrent.record.customerId||result.operationId!==submission.operationId||result.revision!==submission.expectedRevision+1||result.priorityLevel!==submission.priority||result.priorityAsOfDate!==submission.asOfDate||result.priorityBasis!=='CUSTOMER_REPORTED'||result.lifecycleStatus!==priorityCurrent.record.lifecycleStatus||result.lifecycleAsOfDate!==priorityCurrent.record.lifecycleAsOfDate||!sameGoal(result.goal,priorityCurrent.record.goal))throw new Error('Invalid confirmation');if(scope.current!==context)return;setSaved({context,record:result});setPriority(null);await load();}
+    catch(failure){if(scope.current!==context)return;const conflict=failure instanceof AccessApiError&&failure.status===409;const invalid=failure instanceof AccessApiError&&failure.status===400;setPriorityError({context,text:conflict?'The goal changed. Refresh goals and review its latest priority before trying again.':invalid?'Choose a different priority and a valid effective date.':'The priority change has not been confirmed. Retry the same request before making another change.'});if(conflict||invalid)setPriority({...priorityCurrent,submission:null,conflict});}
+    finally{setPriorityBusy(active=>active===context?null:active);}};
   if (!canRead) return <Alert type="info" title="Financial goals are not included in your current access." />;
   return <section aria-label="Financial goals" style={{ marginBlock: 24 }}>
     <Space wrap><h2>Financial goals</h2><Button disabled={busy === context || isSaving} onClick={() => { void load(); }}>Refresh goals</Button>
@@ -103,11 +117,12 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
     {error?.context === context && <Alert type="error" title={error.text} action={<Button onClick={() => { void load(); }}>Retry goals</Button>} />}
     {busy === context && <p role="status">Loading goals…</p>}{list?.items.length === 0 && <p>No financial goals added yet. Add a goal you want to work towards.</p>}
     {list?.hasMore && <Alert type="info" title="Showing the 200 most recently added goals." />}
-    {list?.items.map(record => <Card key={record.financialGoalId} size="small" style={{ marginBlock: 12 }}><Space wrap><strong>{record.goal.name}</strong><Tag>Customer defined</Tag><Tag>{statusLabel(record.lifecycleStatus)}</Tag></Space>
+    {list?.items.map(record => <Card key={record.financialGoalId} size="small" style={{ marginBlock: 12 }}><Space wrap><strong>{record.goal.name}</strong><Tag>Customer defined</Tag><Tag>{statusLabel(record.lifecycleStatus)}</Tag><Tag>{priorityLabel(record.priorityLevel)}</Tag></Space>
       <p>Goal amount: {money(record.goal)} · Target date: {record.goal.targetDate}</p>
       <Button onClick={() => { setSelected({ context, record }); }}>View goal: {record.goal.name}</Button>
       {canCreate && <Button disabled={isSaving || Boolean(current?.submission)} onClick={() => { open(record); }}>Edit goal: {record.goal.name}</Button>}
       {canCreate && <Button disabled={isLifecycleBusy} onClick={()=>{openLifecycle(record);}}>Update status: {record.goal.name}</Button>}
+      {canCreate && ['IN_PROGRESS','PAUSED'].includes(record.lifecycleStatus) && <Button disabled={isPriorityBusy} onClick={()=>{openPriority(record);}}>Set priority: {record.goal.name}</Button>}
       <Button onClick={() => {setProgress({context,record});}}>View progress: {record.goal.name}</Button>
       <Button onClick={() => {setContributions({context,record});}}>View contributions: {record.goal.name}</Button>
       <Button onClick={() => { setHistory({ context, record }); }}>View goal history: {record.goal.name}</Button></Card>)}
@@ -133,6 +148,13 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
           <div style={{marginBlock:14}}><label htmlFor="goal-lifecycle-date">Effective date</label><Input id="goal-lifecycle-date" type="date" min={lifecycleCurrent.record.lifecycleAsOfDate??'1900-01-01'} max={new Date().toISOString().slice(0,10)} value={lifecycleCurrent.asOfDate} onChange={event=>{setLifecycle({...lifecycleCurrent,asOfDate:event.target.value});}}/></div>
         </fieldset><Button type="primary" loading={isLifecycleBusy} disabled={!validDate(lifecycleCurrent.asOfDate)||lifecycleCurrent.status===lifecycleCurrent.record.lifecycleStatus||lifecycleCurrent.conflict} onClick={()=>{void saveLifecycle();}}>{lifecycleCurrent.submission?'Retry status confirmation':'Save status'}</Button></>}
     </Drawer>
+    <Drawer title="Set goal priority" open={Boolean(priorityCurrent)} onClose={()=>{if(!isPriorityBusy)setPriority(null);}} size={520} closable={!isPriorityBusy} mask={{closable:!isPriorityBusy}} destroyOnHidden>
+      {priorityCurrent&&<><p>Current priority: <strong>{priorityLabel(priorityCurrent.record.priorityLevel)}</strong>. Priority is what you report; it is not financial advice, a score, a required contribution, or proof of achievement.</p>
+        {priorityError?.context===context&&<Alert type="error" title={priorityError.text}/>}<fieldset disabled={isPriorityBusy||Boolean(priorityCurrent.submission)||priorityCurrent.conflict} style={{border:0,padding:0}}>
+          <div style={{marginBlock:14}}><label htmlFor="goal-priority">Priority</label><select id="goal-priority" value={priorityCurrent.priority} onChange={event=>{setPriority({...priorityCurrent,priority:event.target.value as ProductFinancialGoalPriority});}}>{priorities.filter(value=>value!==priorityCurrent.record.priorityLevel).map(value=><option key={value} value={value}>{priorityLabel(value)}</option>)}</select></div>
+          <div style={{marginBlock:14}}><label htmlFor="goal-priority-date">Effective date</label><Input id="goal-priority-date" type="date" min={priorityCurrent.record.priorityAsOfDate??'1900-01-01'} max={new Date().toISOString().slice(0,10)} value={priorityCurrent.asOfDate} onChange={event=>{setPriority({...priorityCurrent,asOfDate:event.target.value});}}/></div>
+        </fieldset><Button type="primary" loading={isPriorityBusy} disabled={!validDate(priorityCurrent.asOfDate)||priorityCurrent.priority===priorityCurrent.record.priorityLevel||priorityCurrent.conflict} onClick={()=>{void savePriority();}}>{priorityCurrent.submission?'Retry priority confirmation':'Save priority'}</Button></>}
+    </Drawer>
     <Drawer title="Goal contributions" open={contributions?.context === context} onClose={() => {setContributions(null);}} size={620} destroyOnHidden>
       {contributions?.context === context && <GoalContributionsExperience key={contributions.record.financialGoalId} api={api} goal={list?.items.find(item=>item.financialGoalId===contributions.record.financialGoalId) ?? contributions.record} canRead={canRead} canCreate={canCreate} />}
     </Drawer>
@@ -145,9 +167,10 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
   </section>;
 }
 function GoalDetails({ record }: { record: ProductFinancialGoal }) {
-  return <section aria-label={'Saved goal version ' + String(record.revision)}><h3>{record.goal.name}</h3><Tag>Customer defined</Tag><Tag>{statusLabel(record.lifecycleStatus)}</Tag><dl>
+  return <section aria-label={'Saved goal version ' + String(record.revision)}><h3>{record.goal.name}</h3><Tag>Customer defined</Tag><Tag>{statusLabel(record.lifecycleStatus)}</Tag><Tag>{priorityLabel(record.priorityLevel)}</Tag><dl>
     <dt>Goal amount</dt><dd>{money(record.goal)}</dd><dt>Currency</dt><dd>{record.goal.currency}</dd><dt>Target date</dt><dd>{record.goal.targetDate}</dd>
     <dt>Reported status</dt><dd>{statusLabel(record.lifecycleStatus)}</dd><dt>Status effective date</dt><dd>{record.lifecycleAsOfDate??'Not recorded'}</dd><dt>Status basis</dt><dd>Customer reported</dd>
+    <dt>Reported priority</dt><dd>{priorityLabel(record.priorityLevel)}</dd><dt>Priority effective date</dt><dd>{record.priorityAsOfDate??'Not recorded'}</dd><dt>Priority basis</dt><dd>Customer reported</dd>
     <dt>Record version</dt><dd>{record.revision}</dd><dt>Recorded</dt><dd>{record.recordedAt}</dd></dl><p>Progress is available from saved customer-reported contributions. Future required contributions and independent achievement are not calculated.</p></section>;
 }
 function GoalHistory({ api, record }: { api: AccessApi; record: ProductFinancialGoal }) {
@@ -166,9 +189,9 @@ function GoalHistory({ api, record }: { api: AccessApi; record: ProductFinancial
     } catch { if (active()) setFailure(true); } finally { signal?.removeEventListener('abort', abort); if (active()) setLoading(false); }
   }, [api, record]);
   useEffect(() => { const controller = new AbortController(); const timer = window.setTimeout(() => { void load(undefined, controller.signal); }, 0); return () => { window.clearTimeout(timer); controller.abort(); pending.current?.abort(); }; }, [load]);
-  return <section aria-label="Financial goal change history"><h3>{record.goal.name}</h3><p>Each saved version retains your objective, amount, currency and target date.</p>
+  return <section aria-label="Financial goal change history"><h3>{record.goal.name}</h3><p>Each saved version retains your objective, amount, currency, target date, reported status and reported priority.</p>
     {loading && <p role="status">Loading goal history…</p>}{failure && <Alert type="error" title="Goal history is unavailable." action={<Button onClick={() => { void load(); }}>Retry goal history</Button>} />}
-    {page?.items.map(item => <Card key={item.revision} size="small" style={{ marginBlock: 12 }}><strong>Version {item.revision}</strong><p>{item.goal.name} · {money(item.goal)} · {item.goal.targetDate} · {statusLabel(item.lifecycleStatus)}</p><Button onClick={() => { setSelected(item); }}>View version {item.revision}</Button></Card>)}
+    {page?.items.map(item => <Card key={item.revision} size="small" style={{ marginBlock: 12 }}><strong>Version {item.revision}</strong><p>{item.goal.name} · {money(item.goal)} · {item.goal.targetDate} · {statusLabel(item.lifecycleStatus)} · {priorityLabel(item.priorityLevel)}</p><Button onClick={() => { setSelected(item); }}>View version {item.revision}</Button></Card>)}
     {page?.hasMore && page.nextBeforeRevision !== null && <Button disabled={loading} onClick={() => { void load(page.nextBeforeRevision ?? undefined); }}>Earlier versions</Button>}
     {page && <Button disabled={loading} onClick={() => { void load(); }}>Latest versions</Button>}{selected && <GoalDetails record={selected} />}
   </section>;
