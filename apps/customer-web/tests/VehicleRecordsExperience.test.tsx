@@ -12,7 +12,8 @@ const source: ProductFinancialFact = { financialFactId: 'ff-vehicle', factType: 
 const vehicle: ProductVehicleDraft = { name:'Family car', registrationNumber:'TS 09 AB 1234', vehicleType:'Car',
   purchaseValue:500000, currentValue:400000, valueAsOfDate:'2026-10-01', sourceFinancialFactId:'ff-vehicle', sourceRevision:2 };
 const record: ProductVehicleRecord = { vehicleRecordId:'vehicle-saved',operationId:'a'.repeat(32),customerId:'reference-customer',vehicle,
-  currency:'USD',sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-vehicle',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',revision:1 };
+  currency:'USD',sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-vehicle',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',revision:1,
+  ownershipStatus:'UNREVIEWED',ownershipAsOfDate:null };
 function mount(api: AccessApi, canCreate = true, canRead = true, facts: ProductFinancialFact[] = [source]) {
   return render(<FoundationProvider appearance="midnight"><VehicleRecordsExperience api={api} canCreate={canCreate} canRead={canRead} facts={facts} /></FoundationProvider>);
 }

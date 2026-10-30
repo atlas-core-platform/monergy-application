@@ -74,7 +74,8 @@ public sealed class InMemoryVehicleRecords : IVehicleRecordRepository
             var items=records.Where(x=>x.Key.Tenant==tenant && x.Key.Customer==customer)
                 .OrderByDescending(x=>x.Value.Record.RecordedAt).ThenBy(x=>x.Key.Id,StringComparer.Ordinal)
                 .Select(x=>revisions.GetValueOrDefault(x.Key)?.LastOrDefault() ?? x.Value.Record)
-                .Where(x=>x.Currency==currency && x.Vehicle.ValueAsOfDate==asOfDate).Take(201).ToArray();
+                .Where(x=>x.Currency==currency && x.Vehicle.ValueAsOfDate==asOfDate &&
+                    (x.OwnershipStatus!="DISPOSED" || x.OwnershipAsOfDate>asOfDate)).Take(201).ToArray();
             return Task.FromResult(new VehicleRecordList(items.Take(200).ToArray(),items.Length>200));
         }
     }

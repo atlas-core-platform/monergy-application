@@ -61,6 +61,38 @@ public sealed class VehicleRecordsApplication(IFinancialProfileRepository financ
         var original = await ReadAsync(tenant, customer, id, ct, 1).ConfigureAwait(false);
         if (original.Vehicle.SourceFinancialFactId != input.Vehicle.SourceFinancialFactId || original.Vehicle.SourceRevision != input.Vehicle.SourceRevision)
             throw new TenantBoundaryException("VEHICLE_SOURCE_IMMUTABLE", 400);
+        var previous = await repository.ReadAsync(tenant, customer, id, ct, input.ExpectedRevision).ConfigureAwait(false)
+            ?? throw new TenantBoundaryException("VEHICLE_REVISION_CONFLICT", 409);
+        if (previous.OwnershipStatus == "DISPOSED" && input.Vehicle.ValueAsOfDate > previous.OwnershipAsOfDate)
+            throw new TenantBoundaryException("VEHICLE_RECORD_INVALID", 400);
+        await EnsureOriginalSourceAsync(original, customer, ct).ConfigureAwait(false);
+        var normalized = input with { Vehicle = input.Vehicle with { Name = input.Vehicle.Name.Trim(), RegistrationNumber = string.IsNullOrWhiteSpace(input.Vehicle.RegistrationNumber) ? null : input.Vehicle.RegistrationNumber.Trim(), VehicleType = input.Vehicle.VehicleType.Trim() } };
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(normalized, ContractJson.Options)));
+        var record = original with { OperationId = input.OperationId, Vehicle = normalized.Vehicle, RecordedBy = actor,
+            RecordedAt = clock.GetUtcNow(), Revision = input.ExpectedRevision + 1,
+            OwnershipStatus = previous.OwnershipStatus, OwnershipAsOfDate = previous.OwnershipAsOfDate };
+        return await repository.ReviseAsync(tenant, customer, actor, fingerprint, input.ExpectedRevision, record, ct).ConfigureAwait(false);
+    }
+    public async Task<ReviewedVehicleRecord> ReviewOwnershipAsync(string tenant, string customer, string actor, string id,
+        ReviewVehicleOwnership input, CancellationToken ct)
+    {
+        if (input is null || input.ExpectedRevision is < 1 or int.MaxValue || !Guid.TryParseExact(input.OperationId, "N", out _) ||
+            input.OperationId.Any(char.IsAsciiLetterUpper) || input.Status is not ("OWNED" or "DISPOSED") || input.AsOfDate.Year < 1900 ||
+            input.AsOfDate > DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime.AddHours(14)))
+            throw new TenantBoundaryException("VEHICLE_RECORD_INVALID", 400);
+        var original = await ReadAsync(tenant, customer, id, ct, 1).ConfigureAwait(false);
+        var previous = await repository.ReadAsync(tenant, customer, id, ct, input.ExpectedRevision).ConfigureAwait(false)
+            ?? throw new TenantBoundaryException("VEHICLE_REVISION_CONFLICT", 409);
+        if (input.AsOfDate < previous.Vehicle.ValueAsOfDate || input.AsOfDate < previous.OwnershipAsOfDate)
+            throw new TenantBoundaryException("VEHICLE_RECORD_INVALID", 400);
+        await EnsureOriginalSourceAsync(original, customer, ct).ConfigureAwait(false);
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(input, ContractJson.Options)));
+        var record = previous with { OperationId = input.OperationId, RecordedBy = actor, RecordedAt = clock.GetUtcNow(),
+            Revision = input.ExpectedRevision + 1, OwnershipStatus = input.Status, OwnershipAsOfDate = input.AsOfDate };
+        return await repository.ReviseAsync(tenant, customer, actor, fingerprint, input.ExpectedRevision, record, ct).ConfigureAwait(false);
+    }
+    private async Task EnsureOriginalSourceAsync(ReviewedVehicleRecord original, string customer, CancellationToken ct)
+    {
         var source = await financial.GetFactAsync(original.Vehicle.SourceFinancialFactId, original.Vehicle.SourceRevision, ct).ConfigureAwait(false);
         var provenance = await financial.GetProvenanceAsync(original.SourceProvenanceId, ct).ConfigureAwait(false);
         if (source is null || source.CustomerId != customer || source.FactType != FinancialObjectTypes.Vehicle ||
@@ -68,11 +100,6 @@ public sealed class VehicleRecordsApplication(IFinancialProfileRepository financ
             provenance is null || provenance.CustomerId != customer || provenance.FinancialFactId != source.FinancialFactId ||
             provenance.SourceFactId != source.SourceFactId || provenance.EvidenceId != original.EvidenceId || provenance.DocumentVersionId != original.DocumentVersionId)
             throw new TenantBoundaryException("VEHICLE_SOURCE_UNAVAILABLE", 503);
-        var normalized = input with { Vehicle = input.Vehicle with { Name = input.Vehicle.Name.Trim(), RegistrationNumber = string.IsNullOrWhiteSpace(input.Vehicle.RegistrationNumber) ? null : input.Vehicle.RegistrationNumber.Trim(), VehicleType = input.Vehicle.VehicleType.Trim() } };
-        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(normalized, ContractJson.Options)));
-        var record = original with { OperationId = input.OperationId, Vehicle = normalized.Vehicle, RecordedBy = actor,
-            RecordedAt = clock.GetUtcNow(), Revision = input.ExpectedRevision + 1 };
-        return await repository.ReviseAsync(tenant, customer, actor, fingerprint, input.ExpectedRevision, record, ct).ConfigureAwait(false);
     }
     public async Task<VehicleRecordHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct)
     {
