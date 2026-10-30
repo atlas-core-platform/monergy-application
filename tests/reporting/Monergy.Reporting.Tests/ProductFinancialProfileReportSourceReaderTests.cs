@@ -38,7 +38,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
 
         Assert.NotNull(snapshot);
         Assert.Equal("reference-customer", snapshot.CustomerId);
-        Assert.Equal(8, snapshot.Items.Length);
+        Assert.Equal(9, snapshot.Items.Length);
         Assert.Contains(snapshot.Items, item =>
             item.Label == "Employment income" &&
             item.Value == 125000m &&
@@ -76,6 +76,16 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             item.Source.FinancialProvenanceReferenceId == "provenance-tax" &&
             item.Source.DocumentVersionReferenceId == "document-version-tax" &&
             item.Source.CalculationLineageReferenceId is null);
+        Assert.Contains(snapshot.Items, item =>
+            item.Label == "Emergency fund — customer-defined target" && item.Value == 25000m &&
+            item.Unit == "USD" && item.Source.SourceType == "FinancialGoal" &&
+            item.Source.SourceId == "financial-goal-001" && item.Source.FinancialGoal is
+            {
+                Revision: 3,
+                OperationId: "dddddddddddddddddddddddddddddddd",
+                LifecycleStatus: "PAUSED",
+                PriorityLevel: "HIGH",
+            });
         Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-unsupported");
         Assert.All(handler.Requests, request =>
         {
@@ -168,6 +178,63 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
     }
 
     [Fact]
+    public async Task CustomerDefinedGoalUsesExactCurrentOwnerRevisionAndOperationReceipt()
+    {
+        var handler = new FinancialProfileHandler();
+        var snapshot = await Reader(handler, Accessor()).ReadAsync(new(
+            "reference-customer", Security(), "goal-report-request", "goal-report-correlation", null),
+            CancellationToken.None);
+
+        var item = Assert.Single(snapshot!.Items, value => value.Source.SourceType == "FinancialGoal");
+        Assert.Equal("financial-goal-001", item.Source.SourceId);
+        Assert.Null(item.Source.EvidenceReferenceId);
+        Assert.Null(item.Source.FinancialProvenanceReferenceId);
+        Assert.Null(item.Source.CalculationLineageReferenceId);
+        Assert.Equal(3, item.Source.FinancialGoal!.Revision);
+        Assert.Equal(new string('d', 32), item.Source.FinancialGoal.OperationId);
+        Assert.Equal(new DateOnly(2027, 12, 31), item.Source.FinancialGoal.TargetDate);
+        Assert.Equal("PAUSED", item.Source.FinancialGoal.LifecycleStatus);
+        Assert.Equal(new DateOnly(2026, 10, 20), item.Source.FinancialGoal.LifecycleAsOfDate);
+        Assert.Equal("HIGH", item.Source.FinancialGoal.PriorityLevel);
+        Assert.Equal(new DateOnly(2026, 10, 21), item.Source.FinancialGoal.PriorityAsOfDate);
+        Assert.Contains(handler.Requests,
+            request => request.Path == "/local/v1/customers/reference-customer/financial-goals");
+        Assert.Contains(handler.Requests,
+            request => request.Path == "/local/v1/customers/reference-customer/financial-goals/financial-goal-001");
+    }
+
+    [Fact]
+    public async Task CustomerDefinedGoalRemainsReportableWithoutASeparateSourceFactProfile()
+    {
+        var snapshot = await Reader(new FinancialProfileHandler { ProfileNotFound = true }, Accessor())
+            .ReadAsync(new("reference-customer", Security(), "goal-only-request", "goal-only-correlation", null),
+                CancellationToken.None);
+
+        var item = Assert.Single(snapshot!.Items);
+        Assert.Equal("FinancialGoal", item.Source.SourceType);
+        Assert.Equal(DateTimeOffset.Parse("2026-10-29T10:00:00Z", CultureInfo.InvariantCulture),
+            snapshot.AsOf);
+    }
+
+    [Theory]
+    [InlineData("customer", "report.source.financial-goal-boundary-invalid")]
+    [InlineData("operation", "report.source.financial-goal-boundary-invalid")]
+    [InlineData("lifecycle", "report.source.financial-goal-boundary-invalid")]
+    [InlineData("priority", "report.source.financial-goal-boundary-invalid")]
+    [InlineData("exact", "report.source.financial-goal-boundary-invalid")]
+    [InlineData("duplicate", "report.source.financial-goal-corpus-incomplete")]
+    [InlineData("has-more", "report.source.financial-goal-corpus-incomplete")]
+    public async Task InvalidOrIncompleteCustomerDefinedGoalReportFailsClosed(string mutation, string code)
+    {
+        var failure = await Assert.ThrowsAsync<ReportSourceException>(() =>
+            Reader(new FinancialProfileHandler { FinancialGoalMutation = mutation }, Accessor()).ReadAsync(new(
+                "reference-customer", Security(), "goal-report-request", "goal-report-correlation", null),
+                CancellationToken.None));
+
+        Assert.Equal(code, failure.Error.Code);
+    }
+
+    [Fact]
     public async Task ExactPhase2ReceiptsAreRefetchedValidatedAndPreservedWithRuleProvenance()
     {
         var handler = new FinancialProfileHandler { IncludeFinancialReview = true };
@@ -244,7 +311,9 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         public bool CrossCustomerProvenance { get; set; }
         public bool MismatchedTaxProvenance { get; set; }
         public bool IncludeFinancialReview { get; set; }
+        public bool ProfileNotFound { get; set; }
         public string? TaxRecordMutation { get; set; }
+        public string? FinancialGoalMutation { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
         public List<(string Path, string Tenant, string Session)> RuleRequests { get; } = [];
 
@@ -260,6 +329,20 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                         request.Headers.GetValues("X-Monergy-Tenant").Single(),
                         request.Headers.GetValues("X-Monergy-Session").Single(), "reporting"));
                     return TaxRecords();
+                }
+                if (request.RequestUri.AbsolutePath.EndsWith("/financial-goals", StringComparison.Ordinal))
+                {
+                    Requests.Add((request.RequestUri.AbsolutePath,
+                        request.Headers.GetValues("X-Monergy-Tenant").Single(),
+                        request.Headers.GetValues("X-Monergy-Session").Single(), "reporting"));
+                    return FinancialGoals();
+                }
+                if (request.RequestUri.AbsolutePath.Contains("/financial-goals/", StringComparison.Ordinal))
+                {
+                    Requests.Add((request.RequestUri.AbsolutePath,
+                        request.Headers.GetValues("X-Monergy-Tenant").Single(),
+                        request.Headers.GetValues("X-Monergy-Session").Single(), "reporting"));
+                    return FinancialGoal(exact: true);
                 }
                 RuleRequests.Add((request.RequestUri!.AbsolutePath,
                     request.Headers.GetValues("X-Monergy-Tenant").Single(),
@@ -314,6 +397,42 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
                 TaxRecordMutation == "fact-type" ? "EXPENSE" : "TAX_RECORD", "Tax source figure", 14000m,
                 "USD", new DateOnly(2026, 10, 1), 1, "provenance-tax"));
         }
+
+        private HttpResponseMessage FinancialGoals()
+        {
+            var content = FinancialGoalRecord(exact: false);
+            IReadOnlyList<CustomerFinancialGoal> items = FinancialGoalMutation == "duplicate"
+                ? [content, content]
+                : [content];
+            return new(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new FinancialGoalList(items,
+                    FinancialGoalMutation == "has-more"), options: ContractJson.Options),
+            };
+        }
+
+        private HttpResponseMessage FinancialGoal(bool exact)
+        {
+            return new(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(FinancialGoalRecord(exact), options: ContractJson.Options),
+            };
+        }
+
+        private CustomerFinancialGoal FinancialGoalRecord(bool exact) =>
+            new(
+                "financial-goal-001",
+                FinancialGoalMutation == "operation" ? new string('D', 32) : new string('d', 32),
+                FinancialGoalMutation == "customer" ? "other-customer" : "reference-customer",
+                new FinancialGoalDraft("Emergency fund",
+                    exact && FinancialGoalMutation == "exact" ? 26000m : 25000m,
+                    "USD", new DateOnly(2027, 12, 31)),
+                "A100", DateTimeOffset.Parse("2026-10-29T10:00:00Z", CultureInfo.InvariantCulture),
+                "CUSTOMER_DEFINED", 3,
+                FinancialGoalMutation == "lifecycle" ? "VERIFIED" : "PAUSED",
+                new DateOnly(2026, 10, 20), "CUSTOMER_REPORTED",
+                FinancialGoalMutation == "priority" ? "URGENT" : "HIGH",
+                new DateOnly(2026, 10, 21), "CUSTOMER_REPORTED");
 
         private static HttpResponseMessage Review(string path)
         {
@@ -386,6 +505,14 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         {
             var request = System.Text.Json.JsonSerializer.Deserialize<ContractRequest<GetFinancialProfile>>(
                 body, ContractJson.Options)!;
+            if (ProfileNotFound)
+                return new(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(
+                        ContractResult<FinancialProfileDetails>.Rejected(request, "financial-profile.not-found",
+                            ContractErrorCategory.NotFound, "No financial profile is available."),
+                        options: ContractJson.Options),
+                };
             var at = DateTimeOffset.Parse("2026-10-16T09:00:00Z", CultureInfo.InvariantCulture);
             var facts = new[]
             {

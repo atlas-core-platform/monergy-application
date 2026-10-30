@@ -7,7 +7,7 @@
   },
   "d03": {
     "initialApplicationShell": {
-      "file": "index-CG2jygVM.js",
+      "file": "index-B8DlAfNm.js",
       "minifiedBytes": 185791,
       "minifiedKb": 185.79,
       "gzipKb": 50.72
@@ -19,20 +19,20 @@
       "gzipKb": 0.36
     },
     "vs02LazyRouteChunk": {
-      "file": "Vs02Experience-RDl7DaHU.js",
+      "file": "Vs02Experience-DteX4xBu.js",
       "minifiedBytes": 10893,
       "minifiedKb": 10.89,
       "gzipKb": 4.46
     },
     "javascriptChunks": [
       {
-        "file": "AccessExperience-BBvOcnai.js",
+        "file": "AccessExperience-Bb_Oo92A.js",
         "minifiedBytes": 127596,
         "minifiedKb": 127.59,
-        "gzipKb": 34.52
+        "gzipKb": 34.51
       },
       {
-        "file": "AdvisorWorkspace-DiThY-x3.js",
+        "file": "AdvisorWorkspace-zOy1Y450.js",
         "minifiedBytes": 10121,
         "minifiedKb": 10.12,
         "gzipKb": 3.61
@@ -56,7 +56,7 @@
         "gzipKb": 2.26
       },
       {
-        "file": "ConsentExperience-uWqdOP7W.js",
+        "file": "ConsentExperience-DM2k1Cjs.js",
         "minifiedBytes": 17375,
         "minifiedKb": 17.37,
         "gzipKb": 5.73
@@ -74,19 +74,19 @@
         "gzipKb": 2.52
       },
       {
-        "file": "CustomerProfileExperience-DkR4eGSo.js",
+        "file": "CustomerProfileExperience-Csv8s1rc.js",
         "minifiedBytes": 15449,
         "minifiedKb": 15.44,
         "gzipKb": 5.2
       },
       {
-        "file": "CustomerWorkspaceSetupExperience-EKl7flnx.js",
+        "file": "CustomerWorkspaceSetupExperience-vi1z74kU.js",
         "minifiedBytes": 3074,
         "minifiedKb": 3.07,
-        "gzipKb": 1.31
+        "gzipKb": 1.32
       },
       {
-        "file": "EvidenceExperience-BFMejhPC.js",
+        "file": "EvidenceExperience-CL9I1rn_.js",
         "minifiedBytes": 100042,
         "minifiedKb": 100.04,
         "gzipKb": 26.56
@@ -98,13 +98,13 @@
         "gzipKb": 0.55
       },
       {
-        "file": "FinancialProfileExperience-BK3tdttw.js",
+        "file": "FinancialProfileExperience-kIxAAi66.js",
         "minifiedBytes": 262383,
         "minifiedKb": 262.38,
         "gzipKb": 39.96
       },
       {
-        "file": "FinancialQaExperience-BxOAUuTY.js",
+        "file": "FinancialQaExperience-BPYeJqbK.js",
         "minifiedBytes": 14602,
         "minifiedKb": 14.6,
         "gzipKb": 5.03
@@ -116,13 +116,13 @@
         "gzipKb": 4.09
       },
       {
-        "file": "MonthlyCashflowExperience-xj5hMudp.js",
+        "file": "MonthlyCashflowExperience-B1f-khmN.js",
         "minifiedBytes": 43713,
         "minifiedKb": 43.71,
         "gzipKb": 10.51
       },
       {
-        "file": "NetWorthExperience-CTU4wFz2.js",
+        "file": "NetWorthExperience-DQEJju-N.js",
         "minifiedBytes": 29242,
         "minifiedKb": 29.24,
         "gzipKb": 8.22
@@ -134,19 +134,19 @@
         "gzipKb": 4.11
       },
       {
-        "file": "ProductActionCentreExperience-iOtOJp5e.js",
+        "file": "ProductActionCentreExperience-B_SmmLYq.js",
         "minifiedBytes": 12101,
         "minifiedKb": 12.1,
         "gzipKb": 3.52
       },
       {
-        "file": "ProductReportsExperience-D4qweliw.js",
-        "minifiedBytes": 14923,
-        "minifiedKb": 14.92,
-        "gzipKb": 4.79
+        "file": "ProductReportsExperience-CEB5omc_.js",
+        "minifiedBytes": 16569,
+        "minifiedKb": 16.56,
+        "gzipKb": 5.21
       },
       {
-        "file": "ProductSearchExperience-qEEEsuYk.js",
+        "file": "ProductSearchExperience-BYUh_1AA.js",
         "minifiedBytes": 8996,
         "minifiedKb": 8.99,
         "gzipKb": 3.14
@@ -170,13 +170,13 @@
         "gzipKb": 0.67
       },
       {
-        "file": "SelfSessionsExperience-CIfejjoW.js",
+        "file": "SelfSessionsExperience-BRDAcXt8.js",
         "minifiedBytes": 5983,
         "minifiedKb": 5.98,
         "gzipKb": 2.42
       },
       {
-        "file": "TenantSetup-r37PczqC.js",
+        "file": "TenantSetup-BBpkhLaF.js",
         "minifiedBytes": 440,
         "minifiedKb": 0.44,
         "gzipKb": 0.28
@@ -188,7 +188,7 @@
         "gzipKb": 9.27
       },
       {
-        "file": "Vs02Experience-RDl7DaHU.js",
+        "file": "Vs02Experience-DteX4xBu.js",
         "minifiedBytes": 10893,
         "minifiedKb": 10.89,
         "gzipKb": 4.46
@@ -266,7 +266,7 @@
         "gzipKb": 9.49
       },
       {
-        "file": "index-CG2jygVM.js",
+        "file": "index-B8DlAfNm.js",
         "minifiedBytes": 185791,
         "minifiedKb": 185.79,
         "gzipKb": 50.72
@@ -290,7 +290,7 @@
         "gzipKb": 3.3
       },
       {
-        "file": "onboarding-BDWTJW4U.js",
+        "file": "onboarding-B8d7hliH.js",
         "minifiedBytes": 27581,
         "minifiedKb": 27.58,
         "gzipKb": 9.49
@@ -444,34 +444,34 @@
     ],
     "totalJavaScript": {
       "files": [
-        "AccessExperience-BBvOcnai.js",
-        "AdvisorWorkspace-DiThY-x3.js",
+        "AccessExperience-Bb_Oo92A.js",
+        "AdvisorWorkspace-zOy1Y450.js",
         "BasicKycExperience-Ds7YnXt3.js",
         "CheckOutlined-94HdhvZ5.js",
         "ConnectionsOverviewExperience-DCXqrszA.js",
-        "ConsentExperience-uWqdOP7W.js",
+        "ConsentExperience-DM2k1Cjs.js",
         "ContextIsolator-BEpyvk4h.js",
         "CustomerAccountAgreementsExperience-DAybVYqn.js",
-        "CustomerProfileExperience-DkR4eGSo.js",
-        "CustomerWorkspaceSetupExperience-EKl7flnx.js",
-        "EvidenceExperience-BFMejhPC.js",
+        "CustomerProfileExperience-Csv8s1rc.js",
+        "CustomerWorkspaceSetupExperience-vi1z74kU.js",
+        "EvidenceExperience-CL9I1rn_.js",
         "FileOutlined-TfvSWAuC.js",
-        "FinancialProfileExperience-BK3tdttw.js",
-        "FinancialQaExperience-BxOAUuTY.js",
+        "FinancialProfileExperience-kIxAAi66.js",
+        "FinancialQaExperience-BPYeJqbK.js",
         "GoogleDriveExperience-CWgBq6ov.js",
-        "MonthlyCashflowExperience-xj5hMudp.js",
-        "NetWorthExperience-CTU4wFz2.js",
+        "MonthlyCashflowExperience-B1f-khmN.js",
+        "NetWorthExperience-DQEJju-N.js",
         "OneDriveExperience-CZk1UUdn.js",
-        "ProductActionCentreExperience-iOtOJp5e.js",
-        "ProductReportsExperience-D4qweliw.js",
-        "ProductSearchExperience-qEEEsuYk.js",
+        "ProductActionCentreExperience-B_SmmLYq.js",
+        "ProductReportsExperience-CEB5omc_.js",
+        "ProductSearchExperience-BYUh_1AA.js",
         "PurePanel-BQdFtiiD.js",
         "RightOutlined-5tKoZJVt.js",
         "SearchOutlined-BDKA8H0y.js",
-        "SelfSessionsExperience-CIfejjoW.js",
-        "TenantSetup-r37PczqC.js",
+        "SelfSessionsExperience-BRDAcXt8.js",
+        "TenantSetup-BBpkhLaF.js",
         "TextArea-BK1uM0Gl.js",
-        "Vs02Experience-RDl7DaHU.js",
+        "Vs02Experience-DteX4xBu.js",
         "WorkspaceIcon-Cv0LRed9.js",
         "accessApi-Ckgindlk.js",
         "basicKycApi-D2S1z_Ao.js",
@@ -484,11 +484,11 @@
         "driveFailureGuidance-DiS_yP9F.js",
         "empty-CaFyqfUy.js",
         "form-DWQZwqkj.js",
-        "index-CG2jygVM.js",
+        "index-B8DlAfNm.js",
         "input-CgFY4VqF.js",
         "jsx-runtime-D72hXfc2.js",
         "monthlyCashflowApi-DAjd-xaz.js",
-        "onboarding-BDWTJW4U.js",
+        "onboarding-B8d7hliH.js",
         "progress-Wr04JqNP.js",
         "radio-DNxRFMSI.js",
         "rolldown-runtime-CbXtAM7H.js",
@@ -511,9 +511,9 @@
         "workspaceSession-DgGoBWRk.js",
         "zoom-j2i7uSwr.js"
       ],
-      "minifiedBytes": 1976718,
-      "minifiedKb": 1976.49,
-      "gzipKb": 583.14
+      "minifiedBytes": 1978364,
+      "minifiedKb": 1978.13,
+      "gzipKb": 583.56
     },
     "totalCss": {
       "files": [
@@ -527,34 +527,34 @@
     },
     "totalJavaScriptAndCss": {
       "files": [
-        "AccessExperience-BBvOcnai.js",
-        "AdvisorWorkspace-DiThY-x3.js",
+        "AccessExperience-Bb_Oo92A.js",
+        "AdvisorWorkspace-zOy1Y450.js",
         "BasicKycExperience-Ds7YnXt3.js",
         "CheckOutlined-94HdhvZ5.js",
         "ConnectionsOverviewExperience-DCXqrszA.js",
-        "ConsentExperience-uWqdOP7W.js",
+        "ConsentExperience-DM2k1Cjs.js",
         "ContextIsolator-BEpyvk4h.js",
         "CustomerAccountAgreementsExperience-DAybVYqn.js",
-        "CustomerProfileExperience-DkR4eGSo.js",
-        "CustomerWorkspaceSetupExperience-EKl7flnx.js",
-        "EvidenceExperience-BFMejhPC.js",
+        "CustomerProfileExperience-Csv8s1rc.js",
+        "CustomerWorkspaceSetupExperience-vi1z74kU.js",
+        "EvidenceExperience-CL9I1rn_.js",
         "FileOutlined-TfvSWAuC.js",
-        "FinancialProfileExperience-BK3tdttw.js",
-        "FinancialQaExperience-BxOAUuTY.js",
+        "FinancialProfileExperience-kIxAAi66.js",
+        "FinancialQaExperience-BPYeJqbK.js",
         "GoogleDriveExperience-CWgBq6ov.js",
-        "MonthlyCashflowExperience-xj5hMudp.js",
-        "NetWorthExperience-CTU4wFz2.js",
+        "MonthlyCashflowExperience-B1f-khmN.js",
+        "NetWorthExperience-DQEJju-N.js",
         "OneDriveExperience-CZk1UUdn.js",
-        "ProductActionCentreExperience-iOtOJp5e.js",
-        "ProductReportsExperience-D4qweliw.js",
-        "ProductSearchExperience-qEEEsuYk.js",
+        "ProductActionCentreExperience-B_SmmLYq.js",
+        "ProductReportsExperience-CEB5omc_.js",
+        "ProductSearchExperience-BYUh_1AA.js",
         "PurePanel-BQdFtiiD.js",
         "RightOutlined-5tKoZJVt.js",
         "SearchOutlined-BDKA8H0y.js",
-        "SelfSessionsExperience-CIfejjoW.js",
-        "TenantSetup-r37PczqC.js",
+        "SelfSessionsExperience-BRDAcXt8.js",
+        "TenantSetup-BBpkhLaF.js",
         "TextArea-BK1uM0Gl.js",
-        "Vs02Experience-RDl7DaHU.js",
+        "Vs02Experience-DteX4xBu.js",
         "WorkspaceIcon-Cv0LRed9.js",
         "accessApi-Ckgindlk.js",
         "basicKycApi-D2S1z_Ao.js",
@@ -567,11 +567,11 @@
         "driveFailureGuidance-DiS_yP9F.js",
         "empty-CaFyqfUy.js",
         "form-DWQZwqkj.js",
-        "index-CG2jygVM.js",
+        "index-B8DlAfNm.js",
         "input-CgFY4VqF.js",
         "jsx-runtime-D72hXfc2.js",
         "monthlyCashflowApi-DAjd-xaz.js",
-        "onboarding-BDWTJW4U.js",
+        "onboarding-B8d7hliH.js",
         "progress-Wr04JqNP.js",
         "radio-DNxRFMSI.js",
         "rolldown-runtime-CbXtAM7H.js",
@@ -597,9 +597,9 @@
         "index-CoUSbS5I.css",
         "product-CUk6oWXA.css"
       ],
-      "minifiedBytes": 2070469,
-      "minifiedKb": 2070.22,
-      "gzipKb": 600.79
+      "minifiedBytes": 2072115,
+      "minifiedKb": 2071.86,
+      "gzipKb": 601.21
     }
   },
   "d02ToD03InitialShellDelta": {
