@@ -1,4 +1,5 @@
 import GoalContributionsExperience from './GoalContributionsExperience';
+import FinancialGoalProgressExperience from './FinancialGoalProgressExperience';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Drawer, Input, Space, Tag } from 'antd';
 import { AccessApiError, type AccessApi } from '../access/accessApi';
@@ -30,6 +31,7 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
   const [saved, setSaved] = useState<{ context: typeof context; record: ProductFinancialGoal } | null>(null);
   const [history, setHistory] = useState<{ context: typeof context; record: ProductFinancialGoal } | null>(null);
   const [contributions,setContributions]=useState<{context:typeof context;record:ProductFinancialGoal}|null>(null);
+  const [progress,setProgress]=useState<{context:typeof context;record:ProductFinancialGoal}|null>(null);
   const [selected, setSelected] = useState<{ context: typeof context; record: ProductFinancialGoal } | null>(null);
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!canRead) return;
@@ -80,7 +82,7 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
   return <section aria-label="Financial goals" style={{ marginBlock: 24 }}>
     <Space wrap><h2>Financial goals</h2><Button disabled={busy === context || isSaving} onClick={() => { void load(); }}>Refresh goals</Button>
       {canCreate && <Button disabled={isSaving} onClick={() => { open(); }}>{current?.submission ? 'Continue save confirmation' : 'Add goal'}</Button>}</Space>
-    <p>Set your own goal amount and target date. Progress and required contributions are not calculated yet.</p>
+    <p>Set your own goal amount and target date. Progress can use your saved contribution reports; future required contributions are not calculated.</p>
     {saved?.context === context && <Alert type="success" title={'Goal saved: ' + saved.record.goal.name} />}
     {error?.context === context && <Alert type="error" title={error.text} action={<Button onClick={() => { void load(); }}>Retry goals</Button>} />}
     {busy === context && <p role="status">Loading goals…</p>}{list?.items.length === 0 && <p>No financial goals added yet. Add a goal you want to work towards.</p>}
@@ -89,6 +91,7 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
       <p>Goal amount: {money(record.goal)} · Target date: {record.goal.targetDate}</p>
       <Button onClick={() => { setSelected({ context, record }); }}>View goal: {record.goal.name}</Button>
       {canCreate && <Button disabled={isSaving || Boolean(current?.submission)} onClick={() => { open(record); }}>Edit goal: {record.goal.name}</Button>}
+      <Button onClick={() => {setProgress({context,record});}}>View progress: {record.goal.name}</Button>
       <Button onClick={() => {setContributions({context,record});}}>View contributions: {record.goal.name}</Button>
       <Button onClick={() => { setHistory({ context, record }); }}>View goal history: {record.goal.name}</Button></Card>)}
     <Drawer title={current?.original ? 'Edit goal' : 'Add goal'} open={Boolean(current?.open && canCreate)} onClose={() => { if (current) setEditor({ ...current, open: false }); }} size={520} closable={!isSaving} mask={{ closable: !isSaving }} destroyOnHidden>
@@ -109,6 +112,9 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
     <Drawer title="Goal contributions" open={contributions?.context === context} onClose={() => {setContributions(null);}} size={620} destroyOnHidden>
       {contributions?.context === context && <GoalContributionsExperience key={contributions.record.financialGoalId} api={api} goal={list?.items.find(item=>item.financialGoalId===contributions.record.financialGoalId) ?? contributions.record} canRead={canRead} canCreate={canCreate} />}
     </Drawer>
+    <Drawer title="Goal progress" open={progress?.context === context} onClose={() => {setProgress(null);}} size={620} destroyOnHidden>
+      {progress?.context === context && <FinancialGoalProgressExperience key={`${progress.record.financialGoalId}:${String(progress.record.revision)}`} api={api} goal={list?.items.find(item=>item.financialGoalId===progress.record.financialGoalId) ?? progress.record} />}
+    </Drawer>
     <Drawer title="Goal history" open={history?.context === context} onClose={() => { setHistory(null); }} size={520} destroyOnHidden>
       {history?.context === context && <GoalHistory key={history.record.financialGoalId} api={api} record={history.record} />}
     </Drawer>
@@ -117,7 +123,7 @@ export default function FinancialGoalsExperience({ api, canRead, canCreate }: { 
 function GoalDetails({ record }: { record: ProductFinancialGoal }) {
   return <section aria-label={'Saved goal version ' + String(record.revision)}><h3>{record.goal.name}</h3><Tag>Customer defined</Tag><dl>
     <dt>Goal amount</dt><dd>{money(record.goal)}</dd><dt>Currency</dt><dd>{record.goal.currency}</dd><dt>Target date</dt><dd>{record.goal.targetDate}</dd>
-    <dt>Record version</dt><dd>{record.revision}</dd><dt>Recorded</dt><dd>{record.recordedAt}</dd></dl><p>Progress, required contributions and achievement have not been calculated.</p></section>;
+    <dt>Record version</dt><dd>{record.revision}</dd><dt>Recorded</dt><dd>{record.recordedAt}</dd></dl><p>Progress is available from saved customer-reported contributions. Future required contributions and achievement are not calculated.</p></section>;
 }
 function GoalHistory({ api, record }: { api: AccessApi; record: ProductFinancialGoal }) {
   const sequence = useRef(0); const pending = useRef<AbortController | null>(null);

@@ -128,6 +128,52 @@ public sealed partial class CustomerGoalContributionTests
     {
         await using var h=await Harness.Create();using var client=h.Client();await client.PostAsJsonAsync("/product-api/v1/goal-contributions",Input(),ContractJson.Options);var first=Assert.Single((await h.Records.ListAsync("T001",Customer,GoalId,default)).Items);var path="/product-api/v1/goal-contributions/"+first.GoalContributionId+"/corrections";var change=Change(first);h.Authority.ResetEvaluations();h.Authority.DenyAfterEvaluations=6;Assert.Equal(HttpStatusCode.Forbidden,(await client.PostAsJsonAsync(path,change,ContractJson.Options)).StatusCode);var second=(await h.Records.ReadAsync("T001",Customer,first.GoalContributionId,default))!;Assert.Equal(2,second.Revision);h.Authority.DenyAfterEvaluations=0;await client.PostAsJsonAsync(path,Change(second),ContractJson.Options);Assert.Equal(second,await(await client.PostAsJsonAsync(path,change,ContractJson.Options)).Content.ReadFromJsonAsync<ReportedGoalContribution>(ContractJson.Options));
     }
+    [Fact]
+    public async Task GoalProgressUsesLatestActiveReportsAndRetainsExactSourceVersions()
+    {
+        var goals=new InMemoryFinancialGoals();var goal=await Seed(goals);var records=new InMemoryGoalContributions();var contributions=new GoalContributionsApplication(goals,records,TimeProvider.System);var progress=new FinancialGoalProgressApplication(goals,records,TimeProvider.System);
+        var first=await contributions.CreateAsync("T001",Customer,"actor-001",Input(),default);var revised=await contributions.ReviseAsync("T001",Customer,"actor-001",first.GoalContributionId,Change(first),default);
+        var secondInput=Input() with {OperationId=Guid.NewGuid().ToString("N"),Contribution=Input().Contribution with {Amount=2500m,ContributionDate=new(2026,10,3)}};var second=await contributions.CreateAsync("T001",Customer,"actor-001",secondInput,default);
+        await contributions.WithdrawAsync("T001",Customer,"actor-001",second.GoalContributionId,new(Guid.NewGuid().ToString("N"),1,"Entered against the wrong goal."),default);
+        var currentGoal=await new FinancialGoalsApplication(goals,TimeProvider.System).ReviseAsync("T001",Customer,"actor-001",GoalId,new(Guid.NewGuid().ToString("N"),1,goal.Goal with {TargetAmount=125000m}),default);
+        var result=await progress.ReadAsync("T001",Customer,GoalId,default);
+        Assert.Equal(currentGoal.Revision,result.GoalRevision);Assert.Equal(1250m,result.ReportedContributionAmount);Assert.Equal(123750m,result.RemainingAmount);Assert.Equal(1m,result.ProgressPercent);Assert.Equal(1,result.IncludedContributionCount);Assert.Equal(1,result.WithdrawnContributionCount);Assert.Equal(new DateOnly(2026,10,2),result.LatestContributionDate);
+        var source=Assert.Single(result.Sources);Assert.Equal(revised.GoalContributionId,source.GoalContributionId);Assert.Equal(2,source.ContributionRevision);Assert.Equal(1,source.GoalRevision);Assert.Equal("CUSTOMER_REPORTED",result.ProgressBasis);Assert.Equal("NOT_DETERMINED",result.AchievementStatus);
+    }
+    [Fact]
+    public async Task GoalProgressStartsAtZeroWithoutInferringAchievementOrRequiredContributions()
+    {
+        var goals=new InMemoryFinancialGoals();await Seed(goals);var result=await new FinancialGoalProgressApplication(goals,new InMemoryGoalContributions(),TimeProvider.System).ReadAsync("T001",Customer,GoalId,default);
+        Assert.Equal(0m,result.ReportedContributionAmount);Assert.Equal(100000m,result.RemainingAmount);Assert.Equal(0m,result.ProgressPercent);Assert.Empty(result.Sources);Assert.Null(result.LatestContributionDate);Assert.Equal("NOT_DETERMINED",result.AchievementStatus);
+    }
+    [Fact]
+    public async Task GoalCurrencyChangeFailsClosedInsteadOfConvertingHistoricalReports()
+    {
+        var goals=new InMemoryFinancialGoals();var goal=await Seed(goals);var records=new InMemoryGoalContributions();var contributions=new GoalContributionsApplication(goals,records,TimeProvider.System);await contributions.CreateAsync("T001",Customer,"actor-001",Input(),default);
+        await new FinancialGoalsApplication(goals,TimeProvider.System).ReviseAsync("T001",Customer,"actor-001",GoalId,new(Guid.NewGuid().ToString("N"),1,goal.Goal with {Currency="USD"}),default);
+        var error=await Assert.ThrowsAsync<TenantBoundaryException>(()=>new FinancialGoalProgressApplication(goals,records,TimeProvider.System).ReadAsync("T001",Customer,GoalId,default));Assert.Equal(409,error.Status);Assert.Equal("GOAL_PROGRESS_CURRENCY_CHANGED",error.Code);
+    }
+    [Fact]
+    public async Task IncompleteContributionPageCannotProduceUnderstatedProgress()
+    {
+        var goals=new InMemoryFinancialGoals();await Seed(goals);var records=new InMemoryGoalContributions();var contributions=new GoalContributionsApplication(goals,records,TimeProvider.System);
+        for(var index=0;index<201;index++)await contributions.CreateAsync("T001",Customer,"actor-001",Input() with {OperationId=Guid.NewGuid().ToString("N"),Contribution=Input().Contribution with {Amount=1m}},default);
+        var error=await Assert.ThrowsAsync<TenantBoundaryException>(()=>new FinancialGoalProgressApplication(goals,records,TimeProvider.System).ReadAsync("T001",Customer,GoalId,default));Assert.Equal(503,error.Status);Assert.Equal("GOAL_PROGRESS_INCOMPLETE",error.Code);
+    }
+    [Fact]
+    public async Task ProductGoalProgressRequiresCurrentSelfAuthorityBeforeAndAfterOwnerRead()
+    {
+        await using var h=await Harness.Create();using var client=h.Client();await client.PostAsJsonAsync("/product-api/v1/goal-contributions",Input(),ContractJson.Options);var path="/product-api/v1/financial-goals/"+GoalId+"/progress";
+        var response=await client.GetAsync(path);Assert.Equal(HttpStatusCode.OK,response.StatusCode);Assert.Equal("no-store",response.Headers.CacheControl?.ToString());var result=(await response.Content.ReadFromJsonAsync<FinancialGoalProgress>(ContractJson.Options))!;Assert.Equal(1000m,result.ReportedContributionAmount);
+        h.Authority.Failure="read";Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync(path)).StatusCode);h.Authority.Failure="";h.Authority.ResetEvaluations();h.Authority.DenyAfterEvaluations=2;Assert.Equal(HttpStatusCode.Forbidden,(await client.GetAsync(path)).StatusCode);
+    }
+    [Fact]
+    public async Task ProductGoalProgressRejectsForeignTenantAndCrossCurrencyAggregation()
+    {
+        await using var h=await Harness.Create();using var client=h.Client();await client.PostAsJsonAsync("/product-api/v1/goal-contributions",Input(),ContractJson.Options);var path="/product-api/v1/financial-goals/"+GoalId+"/progress";
+        h.Authority.AllowForeignTenant=true;using var foreign=h.Client("T002");Assert.Equal(HttpStatusCode.Unauthorized,(await foreign.GetAsync(path)).StatusCode);h.Authority.AllowForeignTenant=false;
+        var goal=(await h.Goals.ReadAsync("T001",Customer,GoalId,default))!;await new FinancialGoalsApplication(h.Goals,TimeProvider.System).ReviseAsync("T001",Customer,"actor-001",GoalId,new(Guid.NewGuid().ToString("N"),goal.Revision,goal.Goal with {Currency="USD"}),default);Assert.Equal(HttpStatusCode.Conflict,(await client.GetAsync(path)).StatusCode);
+    }
     private sealed class TamperHandler(string scenario):DelegatingHandler(new SocketsHttpHandler {AllowAutoRedirect=false,UseProxy=false})
     {
         private bool corrected;
@@ -191,13 +237,13 @@ public sealed partial class CustomerGoalContributionTests
             var ob = WebApplication.CreateSlimBuilder(); ob.WebHost.UseUrls("http://127.0.0.1:0"); ob.Configuration.AddInMemoryCollection(values);
             ob.Services.AddSingleton(new TenantAccessClient(ob.Configuration, new HttpClient(authority,false)));
             ob.Services.AddSingleton(new TenantBoundaryOptions { Service="financial-profile", CapabilityPrefix="financial-profile.", CustomerTenants=new Dictionary<string,string> { [Customer]="T001" }, ProbeUrl="http://127.0.0.1:5199/" });
-            ob.Services.AddSingleton(new GoalContributionsApplication(goals,records,TimeProvider.System)); ob.Services.AddSingleton(new FinancialGoalsApplication(goals,TimeProvider.System));var owner=ob.Build();owner.MapFinancialGoals(); owner.MapGoalContributions(); await owner.StartAsync();
+            ob.Services.AddSingleton(new GoalContributionsApplication(goals,records,TimeProvider.System)); ob.Services.AddSingleton(new FinancialGoalsApplication(goals,TimeProvider.System));ob.Services.AddSingleton(new FinancialGoalProgressApplication(goals,records,TimeProvider.System));var owner=ob.Build();owner.MapFinancialGoals(); owner.MapGoalContributions(); await owner.StartAsync();
             values["Monergy:Product:FinancialProfileUrl"]=owner.Urls.Single()+"/";
             var gb=WebApplication.CreateSlimBuilder(); gb.WebHost.UseUrls("http://127.0.0.1:0"); gb.Configuration.AddInMemoryCollection(values);
             gb.Services.AddSingleton(new CustomerOwnerClient(gb.Configuration,new HttpClient(authority,false)));
             gb.Services.AddSingleton(new TenantAccessClient(gb.Configuration,new HttpClient(authority,false))); gb.AddProductFinancialGoals();gb.AddProductGoalContributions();
             if(tamper is not null) gb.Services.AddSingleton(new ProductGoalContributionClient(gb.Configuration,new HttpClient(new TamperHandler(tamper))));
-            var gateway=gb.Build(); gateway.MapProductGoalContributions(); await gateway.StartAsync(); return new(owner,gateway,authority,records,goals);
+            var gateway=gb.Build(); gateway.MapProductFinancialGoals();gateway.MapProductGoalContributions(); await gateway.StartAsync(); return new(owner,gateway,authority,records,goals);
         }
         public HttpClient Client(string? tenant="T001") => ClientFor(gateway,tenant);
         public HttpClient OwnerClient(string tenant="T001") => ClientFor(owner,tenant);

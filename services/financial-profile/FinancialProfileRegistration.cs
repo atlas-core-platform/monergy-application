@@ -86,6 +86,7 @@ services.AddSingleton<IMonthlyCashflowPositionRepository, InMemoryMonthlyCashflo
 services.AddSingleton<TaxRecordsApplication>();
 services.AddSingleton<FinancialGoalsApplication>();
 services.AddSingleton<GoalContributionsApplication>();
+services.AddSingleton<FinancialGoalProgressApplication>();
         services.AddSingleton<NetWorthPositionsApplication>();
         services.AddSingleton<MonthlyCashflowPositionsApplication>();
         services.AddSingleton<AssetSnapshotApplication>();
@@ -128,6 +129,7 @@ services.AddSingleton<IMonthlyCashflowPositionRepository, PostgresMonthlyCashflo
 services.AddSingleton<TaxRecordsApplication>();
 services.AddSingleton<FinancialGoalsApplication>();
 services.AddSingleton<GoalContributionsApplication>();
+services.AddSingleton<FinancialGoalProgressApplication>();
         services.AddSingleton<NetWorthPositionsApplication>();
         services.AddSingleton<MonthlyCashflowPositionsApplication>();
         services.AddSingleton<AssetSnapshotApplication>();

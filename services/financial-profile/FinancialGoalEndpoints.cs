@@ -32,6 +32,11 @@ public static class FinancialGoalEndpoints
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
             return await owner.ReadAsync(tenant, customerId, financialGoalId, http.RequestAborted, revision).ConfigureAwait(false);
         });
+        group.MapGet("/{financialGoalId}/progress", async (string customerId, string financialGoalId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, FinancialGoalProgressApplication owner) =>
+        {
+            var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
+            return await owner.ReadAsync(tenant, customerId, financialGoalId, http.RequestAborted).ConfigureAwait(false);
+        });
         group.MapGet("/{financialGoalId}/history", async (string customerId, string financialGoalId, int? beforeRevision, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, FinancialGoalsApplication owner) =>
         {
             var (tenant, _) = await AuthorizeAsync(http, customerId, access, bindings, false).ConfigureAwait(false);
