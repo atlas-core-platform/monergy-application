@@ -276,6 +276,7 @@ export default function ProductReportsExperience() {
             and can include one exact, coherent set of your completed Phase 2 calculation receipts.
             Every item stays connected to its authoritative source. It is not a formal report
             pack, financial-health score, recommendation, or advice. Included Loan source amounts do not establish verified outstanding balances, EMI, or eligibility. Asset source figures are document-reported values, not independently verified valuations or net-worth totals. Investment source figures are document-stated amounts, not live securities holdings, current NAV, market prices or portfolio returns. Insurance source figures are not verified policy benefits, claims, premiums or cash values. Tax source figures are document-stated amounts, not assessed tax owed, accepted filings or refunds.
+            Customer-reviewed tax records retain the reviewed amount meaning and period, but do not establish assessed tax liability, an accepted filing, payment confirmation, refund entitlement or tax advice.
           </p>
         </div>
         <Tag className="product-environment">
@@ -376,7 +377,8 @@ export default function ProductReportsExperience() {
               {report.items.map((item) => (
                 <article className="product-report-item" key={item.source.sourceId}>
                   <div>
-                    <Tag>{item.source.sourceType === 'FinancialFact' ? 'FINANCIAL INFORMATION' : item.source.sourceType}</Tag>
+                    <Tag>{item.source.sourceType === 'FinancialFact' ? 'FINANCIAL INFORMATION' :
+                      item.source.sourceType === 'TaxRecord' ? 'REVIEWED TAX RECORD' : item.source.sourceType}</Tag>
                     <h3>{item.label}</h3>
                     <strong>{formatValue(item.value, item.unit)}</strong>
                   </div>
@@ -387,6 +389,13 @@ export default function ProductReportsExperience() {
                         href={'/finances?fact=' + encodeURIComponent(item.source.sourceId)}
                       >
                         View source &amp; history
+                      </Button>
+                    ) : item.source.sourceType === 'TaxRecord' ? (
+                      <Button
+                        type="link"
+                        href={'/finances?type=TAX&taxRecord=' + encodeURIComponent(item.source.sourceId)}
+                      >
+                        View tax record &amp; history
                       </Button>
                     ) : (
                       <Button type="link" href="/finances">
@@ -402,9 +411,17 @@ export default function ProductReportsExperience() {
                         label: 'Technical details',
                         children: (
                           <Descriptions column={1} size="small">
-                            <Descriptions.Item label="Financial fact">
+                            <Descriptions.Item label={item.source.sourceType === 'TaxRecord' ? 'Tax record' : 'Financial fact'}>
                               {item.source.sourceId}
                             </Descriptions.Item>
+                            {item.source.sourceType === 'TaxRecord' && <>
+                              <Descriptions.Item label="Source financial fact">
+                                {item.source.financialFactReferenceId} · revision {item.source.financialFactRevision}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Document version">
+                                {item.source.documentVersionReferenceId}
+                              </Descriptions.Item>
+                            </>}
                             <Descriptions.Item label="Financial provenance">
                               {item.source.financialProvenanceReferenceId ?? 'Not applicable'}
                             </Descriptions.Item>
@@ -434,7 +451,8 @@ export default function ProductReportsExperience() {
               <p>
                 Values are copied from your current authoritative Financial Profile and, when you
                 select the Phase 2 review, from four exact Financial Rules receipts. Reporting does
-                not recalculate, score, forecast, or invoke AI. The exported file contains the same
+                not recalculate, score, forecast, or invoke AI. Customer-reviewed tax records retain
+                their exact historical Financial Fact revision and evidence provenance. The exported file contains the same
                 governed content and exact receipt provenance shown here.
               </p>
             </div>

@@ -38,7 +38,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
 
         Assert.NotNull(snapshot);
         Assert.Equal("reference-customer", snapshot.CustomerId);
-        Assert.Equal(7, snapshot.Items.Length);
+        Assert.Equal(8, snapshot.Items.Length);
         Assert.Contains(snapshot.Items, item =>
             item.Label == "Employment income" &&
             item.Value == 125000m &&
@@ -68,6 +68,14 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             item.Source.CalculationLineageReferenceId is null);
         Assert.Contains(snapshot.Items, item => item.Label == "Insurance source figure" && item.Source.SourceId == "ff-insurance" && item.Source.FinancialProvenanceReferenceId == "provenance-insurance" && item.Source.CalculationLineageReferenceId is null);
         Assert.Contains(snapshot.Items, item => item.Label == "Tax source figure" && item.Value == 14000m && item.Source.SourceId == "ff-tax" && item.Source.EvidenceReferenceId == "evidence-tax" && item.Source.FinancialProvenanceReferenceId == "provenance-tax" && item.Source.CalculationLineageReferenceId is null);
+        Assert.Contains(snapshot.Items, item =>
+            item.Label == "Income tax return — tax paid" && item.Value == 14000m && item.Unit == "USD" &&
+            item.Source.SourceType == "TaxRecord" && item.Source.SourceId == "tax-record-001" &&
+            item.Source.FinancialFactReferenceId == "ff-tax" && item.Source.FinancialFactRevision == 1 &&
+            item.Source.EvidenceReferenceId == "evidence-tax" &&
+            item.Source.FinancialProvenanceReferenceId == "provenance-tax" &&
+            item.Source.DocumentVersionReferenceId == "document-version-tax" &&
+            item.Source.CalculationLineageReferenceId is null);
         Assert.DoesNotContain(snapshot.Items, item => item.Source.SourceId == "ff-unsupported");
         Assert.All(handler.Requests, request =>
         {
@@ -118,6 +126,45 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             .ReadAsync(new("reference-customer", Security(), "tax-request", "tax-correlation", null),
                 CancellationToken.None));
         Assert.Equal("report.source.provenance-boundary-invalid", failure.Error.Code);
+    }
+
+    [Fact]
+    public async Task ReviewedTaxRecordUsesExactHistoricalSourceAndProvenance()
+    {
+        var handler = new FinancialProfileHandler();
+        var snapshot = await Reader(handler, Accessor()).ReadAsync(new(
+            "reference-customer", Security(), "tax-record-request", "tax-record-correlation", null),
+            CancellationToken.None);
+
+        var item = Assert.Single(snapshot!.Items, value => value.Source.SourceType == "TaxRecord");
+        Assert.Equal("tax-record-001", item.Source.SourceId);
+        Assert.Equal("ff-tax", item.Source.FinancialFactReferenceId);
+        Assert.Equal(1, item.Source.FinancialFactRevision);
+        Assert.Equal("provenance-tax", item.Source.FinancialProvenanceReferenceId);
+        Assert.Equal("evidence-tax", item.Source.EvidenceReferenceId);
+        Assert.Equal("document-version-tax", item.Source.DocumentVersionReferenceId);
+        Assert.Contains(handler.Requests,
+            request => request.Path == "/local/v1/customers/reference-customer/tax-records");
+        Assert.Contains(handler.Requests, request => request.Path == "/contracts/cid-032/v1");
+    }
+
+    [Theory]
+    [InlineData("customer", "report.source.tax-record-boundary-invalid")]
+    [InlineData("source", "report.source.tax-record-boundary-invalid")]
+    [InlineData("provenance", "report.source.tax-record-boundary-invalid")]
+    [InlineData("evidence", "report.source.tax-record-boundary-invalid")]
+    [InlineData("document", "report.source.tax-record-boundary-invalid")]
+    [InlineData("fact-type", "report.source.tax-record-boundary-invalid")]
+    [InlineData("duplicate", "report.source.tax-record-corpus-incomplete")]
+    [InlineData("has-more", "report.source.tax-record-corpus-incomplete")]
+    public async Task InvalidOrIncompleteReviewedTaxRecordReportFailsClosed(string mutation, string code)
+    {
+        var failure = await Assert.ThrowsAsync<ReportSourceException>(() =>
+            Reader(new FinancialProfileHandler { TaxRecordMutation = mutation }, Accessor()).ReadAsync(new(
+                "reference-customer", Security(), "tax-record-request", "tax-record-correlation", null),
+                CancellationToken.None));
+
+        Assert.Equal(code, failure.Error.Code);
     }
 
     [Fact]
@@ -197,6 +244,7 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         public bool CrossCustomerProvenance { get; set; }
         public bool MismatchedTaxProvenance { get; set; }
         public bool IncludeFinancialReview { get; set; }
+        public string? TaxRecordMutation { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
         public List<(string Path, string Tenant, string Session)> RuleRequests { get; } = [];
 
@@ -206,6 +254,13 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
         {
             if (request.Method == HttpMethod.Get)
             {
+                if (request.RequestUri!.AbsolutePath.EndsWith("/tax-records", StringComparison.Ordinal))
+                {
+                    Requests.Add((request.RequestUri.AbsolutePath,
+                        request.Headers.GetValues("X-Monergy-Tenant").Single(),
+                        request.Headers.GetValues("X-Monergy-Session").Single(), "reporting"));
+                    return TaxRecords();
+                }
                 RuleRequests.Add((request.RequestUri!.AbsolutePath,
                     request.Headers.GetValues("X-Monergy-Tenant").Single(),
                     request.Headers.GetValues("X-Monergy-Session").Single()));
@@ -223,9 +278,41 @@ public sealed class ProductFinancialProfileReportSourceReaderTests
             return request.RequestUri.AbsolutePath switch
             {
                 "/contracts/cid-030/v1" => Profile(body),
+                "/contracts/cid-032/v1" => TaxFact(body),
                 "/contracts/cid-033/v1" => Provenance(body),
                 _ => new HttpResponseMessage(HttpStatusCode.NotFound),
             };
+        }
+
+        private HttpResponseMessage TaxRecords()
+        {
+            var record = new ReviewedTaxRecord(
+                "tax-record-001", new string('a', 32),
+                TaxRecordMutation == "customer" ? "other-customer" : "reference-customer",
+                new TaxRecordDraft("Income tax return", "India", "Income tax", 14000m, "PAID", "2025-26",
+                    new DateOnly(2025, 4, 1), new DateOnly(2026, 3, 31),
+                    TaxRecordMutation == "source" ? "ff-other" : "ff-tax", 1),
+                "USD", TaxRecordMutation == "provenance" ? "provenance-other" : "provenance-tax",
+                TaxRecordMutation == "document" ? "document-version-other" : "document-version-tax",
+                TaxRecordMutation == "evidence" ? "evidence-other" : "evidence-tax", "A100",
+                DateTimeOffset.Parse("2026-10-16T10:00:00Z", CultureInfo.InvariantCulture),
+                "CUSTOMER_REVIEWED");
+            IReadOnlyList<ReviewedTaxRecord> items = TaxRecordMutation == "duplicate" ? [record, record] : [record];
+            return new(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new TaxRecordList(items, TaxRecordMutation == "has-more"),
+                    options: ContractJson.Options),
+            };
+        }
+
+        private HttpResponseMessage TaxFact(string body)
+        {
+            var request = System.Text.Json.JsonSerializer.Deserialize<ContractRequest<GetFinancialFact>>(
+                body, ContractJson.Options)!;
+            return Success(request, new AuthoritativeFinancialFact(
+                "ff-tax", "financial-profile-reference-customer", "reference-customer",
+                TaxRecordMutation == "fact-type" ? "EXPENSE" : "TAX_RECORD", "Tax source figure", 14000m,
+                "USD", new DateOnly(2026, 10, 1), 1, "provenance-tax"));
         }
 
         private static HttpResponseMessage Review(string path)
