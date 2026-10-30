@@ -12,7 +12,8 @@ const source: ProductFinancialFact = { financialFactId: 'ff-insurance', factType
 const insurance: ProductInsuranceDraft = { name:'Family policy', provider:'Example provider', policyType:'Life',
   sumAssured:500000, premiumAmount:400000, policyAsOfDate:'2026-10-01', maturityDate:null, sourceFinancialFactId:'ff-insurance', sourceRevision:2 };
 const record: ProductInsuranceRecord = { insuranceRecordId:'insurance-saved',operationId:'a'.repeat(32),customerId:'reference-customer',insurance,
-  currency:'USD',sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-insurance',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',revision:1 };
+  currency:'USD',sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-insurance',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',revision:1,
+  lifecycleStatus:'UNREVIEWED',lifecycleAsOfDate:null };
 function mount(api: AccessApi, canCreate = true, canRead = true, facts: ProductFinancialFact[] = [source]) {
   return render(<FoundationProvider appearance="midnight"><InsuranceRecordsExperience api={api} canCreate={canCreate} canRead={canRead} facts={facts} /></FoundationProvider>);
 }

@@ -723,6 +723,7 @@ export interface ProductInsuranceDraft {
 export interface ProductInsuranceRecord {
   insuranceRecordId: string; operationId: string; customerId: string; insurance: ProductInsuranceDraft; currency: string;
   sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
+  lifecycleStatus: 'UNREVIEWED' | 'ACTIVE' | 'CLOSED'; lifecycleAsOfDate: string | null;
 }
 export interface ProductInsuranceRecordList { items: ProductInsuranceRecord[]; hasMore: boolean; dataDurability: string }
 export const getInsuranceRecords = (api: AccessApi, signal?: AbortSignal) => api.product<ProductInsuranceRecordList>('v1/insurance-records', 'GET', undefined, signal);
@@ -732,6 +733,9 @@ export const createInsuranceRecord = (api: AccessApi, input: { operationId: stri
 export interface ProductInsuranceRecordHistory { items: ProductInsuranceRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
 export const reviseInsuranceRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; insurance: ProductInsuranceDraft }) =>
   api.product<ProductInsuranceRecord>('v1/insurance-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export interface ProductInsuranceStatusReview { operationId: string; expectedRevision: number; status: 'ACTIVE' | 'CLOSED'; asOfDate: string }
+export const reviewInsuranceRecordStatus = (api: AccessApi, id: string, input: ProductInsuranceStatusReview) =>
+  api.product<ProductInsuranceRecord>('v1/insurance-records/' + encodeURIComponent(id) + '/lifecycle', 'POST', input);
 export const getInsuranceRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductInsuranceRecordHistory>('v1/insurance-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
 

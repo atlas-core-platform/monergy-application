@@ -83,15 +83,40 @@ public static class ProductInsuranceRecordEndpoints
             var original = await client.ReadAsync(session, customer.CustomerId, insuranceRecordId, http.RequestAborted, 1).ConfigureAwait(false);
             if (!Bound(original,customer.CustomerId) || original.Revision != 1 || original.InsuranceRecordId != insuranceRecordId)
                 throw new TenantBoundaryException("INSURANCE_POLICY_RECORD_RESPONSE_INVALID",503);
+            var previous = input.ExpectedRevision == 1 ? original :
+                await client.ReadAsync(session, customer.CustomerId, insuranceRecordId, http.RequestAborted, input.ExpectedRevision).ConfigureAwait(false);
+            if (!Bound(previous, customer.CustomerId) || previous.Revision != input.ExpectedRevision || previous.InsuranceRecordId != insuranceRecordId)
+                throw new TenantBoundaryException("INSURANCE_POLICY_RECORD_RESPONSE_INVALID", 503);
             var receipt = await client.ReviseAsync(session, customer.CustomerId, insuranceRecordId, input, http.RequestAborted).ConfigureAwait(false);
             if (!Bound(original,customer.CustomerId) || original.Revision != 1 || !Bound(receipt,customer.CustomerId) || original.InsuranceRecordId != insuranceRecordId || receipt.InsuranceRecordId != insuranceRecordId ||
                 receipt.OperationId != input.OperationId || receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision + 1 ||
                 receipt.Insurance != input.Insurance with { Name = input.Insurance.Name.Trim(), Provider = input.Insurance.Provider.Trim(), PolicyType = input.Insurance.PolicyType.Trim() } ||
                 receipt.Currency != original.Currency || receipt.SourceProvenanceId != original.SourceProvenanceId || receipt.DocumentVersionId != original.DocumentVersionId || receipt.EvidenceId != original.EvidenceId ||
-                receipt.Insurance.SourceFinancialFactId != original.Insurance.SourceFinancialFactId || receipt.Insurance.SourceRevision != original.Insurance.SourceRevision)
+                receipt.Insurance.SourceFinancialFactId != original.Insurance.SourceFinancialFactId || receipt.Insurance.SourceRevision != original.Insurance.SourceRevision ||
+                receipt.LifecycleStatus != previous.LifecycleStatus || receipt.LifecycleAsOfDate != previous.LifecycleAsOfDate)
                 throw new TenantBoundaryException("INSURANCE_POLICY_RECORD_RESPONSE_INVALID",503);
             var saved = await client.ReadAsync(session, customer.CustomerId, insuranceRecordId, http.RequestAborted, receipt.Revision).ConfigureAwait(false);
             if (saved != receipt) throw new TenantBoundaryException("INSURANCE_POLICY_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
+            return saved;
+        });
+        group.MapPost("/{insuranceRecordId}/lifecycle", async (string insuranceRecordId, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductInsuranceRecordClient client) =>
+        {
+            var (session, customer) = await ResolveAsync(http, owners, access, true).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(insuranceRecordId, 80)) throw new TenantBoundaryException("INSURANCE_POLICY_RECORD_INVALID", 400);
+            var input = await ReadInputAsync<ReviewInsuranceRecordStatus>(http).ConfigureAwait(false);
+            if (input.ExpectedRevision is < 1 or int.MaxValue) throw new TenantBoundaryException("INSURANCE_POLICY_RECORD_INVALID", 400);
+            var previous = await client.ReadAsync(session, customer.CustomerId, insuranceRecordId, http.RequestAborted, input.ExpectedRevision).ConfigureAwait(false);
+            if (!Bound(previous, customer.CustomerId) || previous.InsuranceRecordId != insuranceRecordId)
+                throw new TenantBoundaryException("INSURANCE_POLICY_RECORD_RESPONSE_INVALID", 503);
+            var receipt = await client.ReviewStatusAsync(session, customer.CustomerId, insuranceRecordId, input, http.RequestAborted).ConfigureAwait(false);
+            if (!Bound(receipt, customer.CustomerId) || receipt.InsuranceRecordId != insuranceRecordId || receipt.OperationId != input.OperationId ||
+                receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision + 1 || receipt.LifecycleStatus != input.Status ||
+                receipt.LifecycleAsOfDate != input.AsOfDate || receipt.Insurance != previous.Insurance || receipt.Currency != previous.Currency ||
+                receipt.SourceProvenanceId != previous.SourceProvenanceId || receipt.DocumentVersionId != previous.DocumentVersionId || receipt.EvidenceId != previous.EvidenceId)
+                throw new TenantBoundaryException("INSURANCE_POLICY_RECORD_RESPONSE_INVALID", 503);
+            var saved = await client.ReadAsync(session, customer.CustomerId, insuranceRecordId, http.RequestAborted, receipt.Revision).ConfigureAwait(false);
+            if (saved != receipt) throw new TenantBoundaryException("INSURANCE_POLICY_RECORD_RESPONSE_INVALID", 503);
             await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
             return saved;
         });
@@ -118,7 +143,7 @@ public static class ProductInsuranceRecordEndpoints
         }
         else if(element.ValueKind == JsonValueKind.Array) foreach(var item in element.EnumerateArray()) RejectDuplicates(item);
     }
-    private static bool Bound(ReviewedInsuranceRecord? value, string customer) => value is { Insurance: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
+    internal static bool Bound(ReviewedInsuranceRecord? value, string customer) => value is { Insurance: not null, Currency: not null, SourceProvenanceId: not null, DocumentVersionId: not null } && value.CustomerId == customer &&
         value.Revision > 0 && TenantAccessClient.Identifier(value.InsuranceRecordId, 80) && Guid.TryParseExact(value.OperationId, "N", out _) &&
         value.Currency.Length == 3 && value.Currency.All(char.IsAsciiLetterUpper) &&
         Text(value.Insurance.Name) && Text(value.Insurance.Provider) && Text(value.Insurance.PolicyType) &&
@@ -126,7 +151,9 @@ public static class ProductInsuranceRecordEndpoints
         value.Insurance.PolicyAsOfDate <= DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime.AddHours(14)) &&
         TenantAccessClient.Identifier(value.Insurance.SourceFinancialFactId,160) && value.Insurance.SourceRevision > 0 &&
         TenantAccessClient.Identifier(value.SourceProvenanceId,160) && TenantAccessClient.Identifier(value.DocumentVersionId,160) &&
-        TenantAccessClient.Identifier(value.EvidenceId,160) && TenantAccessClient.Identifier(value.RecordedBy,160) && value.RecordedAt != default;
+        TenantAccessClient.Identifier(value.EvidenceId,160) && TenantAccessClient.Identifier(value.RecordedBy,160) && value.RecordedAt != default &&
+        (value.LifecycleStatus == "UNREVIEWED" && value.LifecycleAsOfDate is null ||
+         value.LifecycleStatus is "ACTIVE" or "CLOSED" && value.LifecycleAsOfDate is { } statusDate && statusDate >= value.Insurance.PolicyAsOfDate);
     private static bool Text(string? value) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= 120 && !value.Any(char.IsControl);
     private static bool Money(decimal value) => value is >= 0 and <= 999999999999999m && decimal.Round(value,2)==value;
     private static async Task<(CustomerOwnerSession Session, CustomerOwnerWorkspace Customer)> ResolveAsync(
@@ -181,6 +208,8 @@ public sealed class ProductInsuranceRecordClient : IDisposable
         SendAsync<ReviewedInsuranceRecord>(session, customer, "", input, ct);
     public Task<ReviewedInsuranceRecord> ReviseAsync(CustomerOwnerSession session, string customer, string id, ReviseInsuranceRecord input, CancellationToken ct) =>
         SendAsync<ReviewedInsuranceRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
+    public Task<ReviewedInsuranceRecord> ReviewStatusAsync(CustomerOwnerSession session, string customer, string id, ReviewInsuranceRecordStatus input, CancellationToken ct) =>
+        SendAsync<ReviewedInsuranceRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/lifecycle", input, ct);
     public Task<InsuranceRecordHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
         SendAsync<InsuranceRecordHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
     private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, object? input, CancellationToken ct)
