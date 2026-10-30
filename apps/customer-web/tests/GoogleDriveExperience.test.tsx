@@ -49,7 +49,30 @@ it('imports the selected exact provider version and links the Evidence version',
   await userEvent.click(await screen.findByRole('button', { name: 'Import Statement.txt' }));
   expect(owner).toHaveBeenCalledWith('import', { version: 3, id: 'file-1', fileVersion: '15' }, expect.any(AbortSignal));
   expect(await screen.findByRole('link', { name: 'Open document' })).toHaveAttribute('href', '/evidence?version=version-1');
-  expect(await screen.findByText(/Statement.txt imported/)).toBeVisible();
+  expect(await screen.findByText(/Statement.txt import confirmed/)).toBeVisible();
+});
+it('retains an ambiguous import and retries the exact provider version', async () => {
+  const api = new AccessApi(session); let attempts = 0; let imported = false;
+  const owner = vi.spyOn(api, 'googleDrive').mockImplementation(action => {
+    if (action === 'files') return Promise.resolve({ items: [file, { ...file, id: 'file-2', name: 'Other.txt' }], nextPageToken: null });
+    if (action === 'import') {
+      attempts++; imported = true;
+      return attempts === 1 ? Promise.reject(new Error('response lost')) : Promise.resolve(receipt);
+    }
+    return Promise.resolve({ ...baseline, imports: imported ? [receipt] : [] });
+  });
+  mount(api); await screen.findByText('Connected');
+  await userEvent.click(screen.getByRole('button', { name: 'Refresh files' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Import Statement.txt' }));
+  expect(await screen.findByText(/import result was not confirmed/i)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Import Other.txt' })).toBeDisabled();
+  await userEvent.click(screen.getByRole('button', { name: 'Retry exact import' }));
+  expect(await screen.findByRole('link', { name: 'Open document' })).toHaveAttribute('href', '/evidence?version=version-1');
+  expect(await screen.findByText(/Statement.txt import confirmed/)).toBeVisible();
+  const imports = owner.mock.calls.filter(call => call[0] === 'import');
+  expect(imports).toHaveLength(2);
+  expect(imports[0]?.[1]).toEqual({ version: 3, id: 'file-1', fileVersion: '15' });
+  expect(imports[1]?.[1]).toEqual(imports[0]?.[1]);
 });
 it('confirms disconnect and distinguishes local stop from unconfirmed Google revocation', async () => {
   const api = new AccessApi(session); const owner = vi.spyOn(api, 'googleDrive').mockResolvedValue(baseline);
