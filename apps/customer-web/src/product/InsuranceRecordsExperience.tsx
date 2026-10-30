@@ -2,16 +2,18 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Alert, Button, Card, Drawer, Input, Select, Space, Tag } from 'antd';
 import type { AccessApi} from '../access/accessApi';
 import { AccessApiError } from '../access/accessApi';
-import { createInsuranceRecord, getInsuranceRecords, reviseInsuranceRecord, getInsuranceRecordHistory } from './productApi';
-import type { ProductFinancialFact, ProductInsuranceDraft, ProductInsuranceRecord, ProductInsuranceRecordList, ProductInsuranceRecordHistory } from './productApi';
+import { createInsuranceRecord, getInsuranceRecords, reviseInsuranceRecord, getInsuranceRecordHistory, reviewInsuranceRecordStatus } from './productApi';
+import type { ProductFinancialFact, ProductInsuranceDraft, ProductInsuranceRecord, ProductInsuranceRecordList, ProductInsuranceRecordHistory, ProductInsuranceStatusReview } from './productApi';
 
 const numberFields = [ ['sumAssured', 'Sum assured'], ['premiumAmount', 'Premium amount'] ] as const;
 const dateFields = [ ['policyAsOfDate', 'Policy information as of'] ] as const;
 type FormValues = Record<string, string>;
 interface Submission { operationId: string; insurance: ProductInsuranceDraft; expectedRevision?: number }
 interface Editor { api: AccessApi; open: boolean; values: FormValues; operationId: string; submission: Submission | null; original: ProductInsuranceRecord | null; conflict?: boolean }
+interface StatusEditor { api: AccessApi; open: boolean; record: ProductInsuranceRecord; status?: 'ACTIVE' | 'CLOSED'; asOfDate: string; operationId: string; submission: ProductInsuranceStatusReview | null; conflict?: boolean }
 const money = (value: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency }).format(value);
 const terms = (record: ProductInsuranceRecord) => record.insurance.policyType;
+const statusLabel = (record: ProductInsuranceRecord) => record.lifecycleStatus === 'ACTIVE' ? 'Active — customer reported' : record.lifecycleStatus === 'CLOSED' ? 'Closed — customer reported' : 'Status not reviewed';
 
 export default function InsuranceRecordsExperience({ api, facts, canRead, canCreate }: {
   api: AccessApi; facts: ProductFinancialFact[]; canRead: boolean; canCreate: boolean;
@@ -26,7 +28,9 @@ export default function InsuranceRecordsExperience({ api, facts, canRead, canCre
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [saved, setSaved] = useState<ProductInsuranceRecord | null>(null);
+  const [saved, setSaved] = useState<{ api: AccessApi; record: ProductInsuranceRecord; statusReview: boolean } | null>(null);
+  const [statusEditor, setStatusEditor] = useState<StatusEditor | null>(null);
+  const [statusError, setStatusError] = useState('');
   const [history, setHistory] = useState<{ api: AccessApi; record: ProductInsuranceRecord } | null>(null);
   const [selected, setSelected] = useState<{ api: AccessApi; record: ProductInsuranceRecord } | null>(null);
   const load = useCallback(async (signal?: AbortSignal) => {
@@ -53,6 +57,7 @@ export default function InsuranceRecordsExperience({ api, facts, canRead, canCre
     return () => { window.clearTimeout(start); controller.abort(); activeLoad.current?.abort(); };
   }, [load]);
   const current = editor?.api === api ? editor : null;
+  const currentStatus = statusEditor?.api === api ? statusEditor : null;
   const list = loaded?.api === api && canRead ? loaded.list : null;
   const source = facts.find((fact) => fact.financialFactId === current?.values.sourceFinancialFactId && fact.revision === Number(current.values.sourceRevision) && fact.factType === 'INSURANCE');
   const valid = current && (current.original ?? source) && !current.conflict && current.values.name?.trim() && current.values.provider?.trim() && current.values.policyType?.trim() &&
@@ -73,7 +78,7 @@ export default function InsuranceRecordsExperience({ api, facts, canRead, canCre
     if (current && !current.submission && !current.conflict && !saving) setEditor({ ...current, values: { ...current.values, [key]: value } });
   };
   const save = async () => {
-    if (!current || !canRead || !canCreate || saving || (!current.submission && !valid)) return;
+    if (!current || !canRead || !canCreate || saving || currentStatus?.submission || (!current.submission && !valid)) return;
     const maturity = current.values.maturityDate ?? '';
     const submission = current.submission ?? { operationId: current.operationId, ...(current.original ? {expectedRevision:current.original.revision}:{}), insurance: {
       name: current.values.name ?? '', provider: current.values.provider ?? '', policyType: current.values.policyType ?? '',
@@ -87,9 +92,11 @@ export default function InsuranceRecordsExperience({ api, facts, canRead, canCre
         ? await reviseInsuranceRecord(api,current.original.insuranceRecordId,{...submission,expectedRevision:submission.expectedRevision})
         : await createInsuranceRecord(api, submission);
       if (record.operationId !== submission.operationId || record.insurance.sourceFinancialFactId !== submission.insurance.sourceFinancialFactId ||
-          record.insurance.sourceRevision !== submission.insurance.sourceRevision || !record.insuranceRecordId || current.original && (record.insuranceRecordId !== current.original.insuranceRecordId || record.revision !== (submission.expectedRevision ?? 0)+1)) throw new Error('Invalid confirmation');
+          record.insurance.sourceRevision !== submission.insurance.sourceRevision || !record.insuranceRecordId || current.original &&
+          (record.insuranceRecordId !== current.original.insuranceRecordId || record.revision !== (submission.expectedRevision ?? 0)+1 ||
+           record.lifecycleStatus !== current.original.lifecycleStatus || record.lifecycleAsOfDate !== current.original.lifecycleAsOfDate)) throw new Error('Invalid confirmation');
       if (scope.current.api !== api || !scope.current.canRead || !scope.current.canCreate) return;
-      setSaved(record); setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, open: false, submission: null } : active); await load();
+      setSaved({ api, record, statusReview: false }); setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, open: false, submission: null } : active); await load();
     } catch (error) {
       if (scope.current.api !== api || !scope.current.canRead || !scope.current.canCreate) return;
       const conflict = error instanceof AccessApiError && error.code === 'INSURANCE_POLICY_REVISION_CONFLICT';
@@ -99,25 +106,61 @@ export default function InsuranceRecordsExperience({ api, facts, canRead, canCre
       if (conflict || error instanceof AccessApiError && error.status === 400) setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, submission: null, conflict } : active);
     } finally { setSaving(false); }
   };
+  const openStatus = (record: ProductInsuranceRecord) => {
+    if (saving || current?.submission) return;
+    setSaved(null); setStatusError('');
+    if (current) setEditor({ ...current, open: false });
+    if (currentStatus?.submission) setStatusEditor({ ...currentStatus, open: true });
+    else setStatusEditor({ api, record, open: true, asOfDate: '', operationId: crypto.randomUUID().replaceAll('-', ''), submission: null });
+  };
+  const saveStatus = async () => {
+    if (!currentStatus || !canCreate || saving || current?.submission || currentStatus.conflict || (!currentStatus.submission && (!currentStatus.status || !currentStatus.asOfDate))) return;
+    let submission = currentStatus.submission;
+    if (!submission) {
+      if (!currentStatus.status) return;
+      submission = { operationId: currentStatus.operationId, expectedRevision: currentStatus.record.revision, status: currentStatus.status, asOfDate: currentStatus.asOfDate };
+    }
+    setStatusEditor({ ...currentStatus, submission }); setSaving(true); setStatusError('');
+    try {
+      const record = await reviewInsuranceRecordStatus(api, currentStatus.record.insuranceRecordId, submission);
+      if (record.insuranceRecordId !== currentStatus.record.insuranceRecordId || record.operationId !== submission.operationId ||
+          record.revision !== submission.expectedRevision + 1 || record.lifecycleStatus !== submission.status || record.lifecycleAsOfDate !== submission.asOfDate ||
+          record.insurance.sourceFinancialFactId !== currentStatus.record.insurance.sourceFinancialFactId || record.insurance.sourceRevision !== currentStatus.record.insurance.sourceRevision)
+        throw new Error('Invalid confirmation');
+      setSaved({ api, record, statusReview: true });
+      setStatusEditor((active) => active?.api === api && active.operationId === currentStatus.operationId ? { ...currentStatus, open: false, submission: null } : active);
+      await load();
+    } catch (error) {
+      const conflict = error instanceof AccessApiError && error.code === 'INSURANCE_POLICY_REVISION_CONFLICT';
+      setStatusError(conflict ? 'A newer version has been saved. Close this form, refresh insurance policies and review that version before changing status.' :
+        error instanceof AccessApiError && error.status === 400 ? 'Check the status and date. The date must follow the policy information date and latest reviewed status, and cannot be in the future.' :
+        'The status save has not been confirmed. Retry confirmation using the same request.');
+      if (conflict || error instanceof AccessApiError && error.status === 400)
+        setStatusEditor((active) => active?.api === api && active.operationId === currentStatus.operationId ? { ...currentStatus, submission: null, conflict } : active);
+    } finally { setSaving(false); }
+  };
   const visible = selected?.api === api && canRead ? selected.record : null;
   if (!canRead) return <Alert type="info" title="Document access is required to view insurance policies and their sources." />;
   return <section aria-label="Insurance policies" style={{ marginBlock: 24 }}>
     <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}><h2>Insurance policies</h2>
       <Button disabled={loading || saving} onClick={() => { void load(); }}>Refresh insurance policies</Button>
-      {canCreate && <Button onClick={open} disabled={saving || (!current?.submission && facts.every((fact) => !(fact.factType === 'INSURANCE')))}>
+      {canCreate && <Button onClick={open} disabled={Boolean(currentStatus?.submission) || saving || (!current?.submission && facts.every((fact) => fact.factType !== 'INSURANCE'))}>
         {current?.submission ? 'Continue save confirmation' : 'Add insurance record'}</Button>}
     </Space>
-    <p>Record the policy information you have reviewed. Enter sum assured and premium separately; the source figure does not fill either amount. These are customer-reported policy terms, not verified active cover. Premium frequency and payment status are not inferred.</p>
-    {saved && editor?.api === api && <Alert type="success" title={'Insurance record saved: ' + saved.insurance.name} />}
+    {canCreate && currentStatus?.submission && <Button onClick={() => { setStatusEditor({ ...currentStatus, open: true }); }}>Continue insurance status confirmation</Button>}
+    <p>Record the policy information and lifecycle status you have reviewed. Enter sum assured and premium separately; the source figure does not fill either amount. Status is customer reported, not provider-confirmed active cover. Premium payment, benefits and claims are not inferred.</p>
+    {saved?.api === api && <Alert type="success" title={(saved.statusReview ? 'Insurance status saved: ' : 'Insurance record saved: ') + saved.record.insurance.name} />}
     {failure?.api === api && <Alert type="error" title={failure.text} action={<Button onClick={() => { void load(); }}>Retry insurance policies</Button>} />}
     {loading && <p role="status">Loading insurance policies…</p>}
     {list?.items.length === 0 && <p>No insurance policies added yet. Review an insurance source figure in Documents, then add the holding and values here.</p>}
     {list?.hasMore && <Alert type="info" title="Showing the 200 most recently added insurance policies." />}
     {list?.items.map((record) => <Card key={record.insuranceRecordId} size="small" style={{ marginBlock: 12 }}>
-      <Space wrap><strong>{record.insurance.name}</strong><Tag>Customer reviewed</Tag><span>{record.insurance.provider} · {terms(record)}</span></Space>
+      <Space wrap><strong>{record.insurance.name}</strong><Tag>Customer reviewed</Tag><Tag>{statusLabel(record)}</Tag><span>{record.insurance.provider} · {terms(record)}</span></Space>
+      {record.lifecycleAsOfDate && <p>Insurance status as of {record.lifecycleAsOfDate}</p>}
       <p>Premium amount: {money(record.insurance.premiumAmount, record.currency)} · as of {record.insurance.policyAsOfDate}</p>
       <Button onClick={() => { setSelected({ api, record }); }}>View insurance record: {record.insurance.name}</Button>
-      {canCreate && <Button disabled={saving || Boolean(current?.submission)} onClick={() => {edit(record);}}>Edit insurance record: {record.insurance.name}</Button>}
+      {canCreate && <Button disabled={saving || Boolean(current?.submission) || Boolean(currentStatus?.submission)} onClick={() => {edit(record);}}>Edit insurance record: {record.insurance.name}</Button>}
+      {canCreate && <Button disabled={saving || Boolean(current?.submission) || Boolean(currentStatus?.submission)} onClick={() => { openStatus(record); }}>Review insurance status: {record.insurance.name}</Button>}
       <Button onClick={() => {setHistory({api,record});}}>View insurance history: {record.insurance.name}</Button>
     </Card>)}
     <Drawer title={current?.original ? "Edit insurance record" : "Add insurance record"} open={Boolean(current?.open && canCreate)} onClose={() => { if (current) setEditor({ ...current, open: false }); }}
@@ -148,17 +191,34 @@ export default function InsuranceRecordsExperience({ api, facts, canRead, canCre
         <Input id="insurance-maturity" type="date" min="1900-01-01" value={current?.values.maturityDate ?? ''} onChange={event=>{change('maturityDate',event.target.value);}} />
       </fieldset>
       <p>Saving retains your reviewed terms and exact source. It does not verify active coverage,provider confirmation,premium payment or benefit eligibility. Maturity does not determine coverage status.</p>
-      <Button type="primary" loading={saving} disabled={!canCreate || (!current?.submission && !valid)} onClick={() => { void save(); }}>
+      <Button type="primary" loading={saving} disabled={!canCreate || Boolean(currentStatus?.submission) || (!current?.submission && !valid)} onClick={() => { void save(); }}>
         {current?.submission ? 'Retry save confirmation' : current?.original ? 'Save reviewed corrections' : 'Save reviewed insurance record'}</Button>
+    </Drawer>
+    <Drawer title="Review insurance status" open={Boolean(currentStatus?.open && canCreate)} onClose={() => { if (currentStatus) setStatusEditor({ ...currentStatus, open: false }); }}
+      size={480} closable={!saving} mask={{ closable: !saving }} destroyOnHidden>
+      {currentStatus && <><h2>{currentStatus.record.insurance.name}</h2><p>{statusLabel(currentStatus.record)} · Record version {currentStatus.record.revision}</p>
+        <p>Report the policy status you reviewed and its effective date. This records the customer's review; it does not confirm cover, payment, benefits or claims with the provider.</p>
+        <p>Policy information: {money(currentStatus.record.insurance.premiumAmount, currentStatus.record.currency)} premium as of {currentStatus.record.insurance.policyAsOfDate}</p>
+        {statusError && <Alert type="error" title={statusError} />}
+        <label htmlFor="insurance-lifecycle-status">Insurance status</label><Select id="insurance-lifecycle-status" aria-label="Insurance status" style={{ width: '100%', marginBlock: 12 }}
+          disabled={saving || Boolean(currentStatus.submission) || Boolean(currentStatus.conflict)} value={currentStatus.status}
+          options={[{ value: 'ACTIVE', label: currentStatus.record.lifecycleStatus === 'CLOSED' ? 'Active — reopen record' : 'Active' }, { value: 'CLOSED', label: 'Closed' }]}
+          onChange={(status: 'ACTIVE' | 'CLOSED') => { setStatusEditor({ ...currentStatus, status }); }} />
+        <label htmlFor="insurance-lifecycle-date">Status as of</label><Input id="insurance-lifecycle-date" type="date" style={{ marginBlock: 12 }} value={currentStatus.asOfDate}
+          disabled={saving || Boolean(currentStatus.submission) || Boolean(currentStatus.conflict)} onChange={(event) => { setStatusEditor({ ...currentStatus, asOfDate: event.target.value }); }} />
+        {currentStatus.status === 'ACTIVE' && currentStatus.record.lifecycleStatus === 'CLOSED' && <Alert type="info" title="This will reopen the record as customer reported. The earlier closed version stays in history." />}
+        <Button type="primary" loading={saving} disabled={!canCreate || Boolean(currentStatus.conflict) || !currentStatus.submission && (!currentStatus.status || !currentStatus.asOfDate)} onClick={() => { void saveStatus(); }}>
+          {currentStatus.submission ? 'Retry status confirmation' : 'Save reviewed insurance status'}</Button></>}
     </Drawer>
     <Drawer title="Insurance record details" open={Boolean(visible)} onClose={() => { setSelected(null); }} size={560} destroyOnHidden>
       {visible && <><h2>{visible.insurance.name}</h2><Tag>Customer reviewed</Tag><dl>
+        <dt>Customer-reported insurance status</dt><dd>{statusLabel(visible)}{visible.lifecycleAsOfDate ? ' as of ' + visible.lifecycleAsOfDate : ''}</dd>
         <dt>Insurance provider</dt><dd>{visible.insurance.provider}</dd><dt>Policy type</dt><dd>{terms(visible)}</dd>
         <dt>Maturity or expiry date</dt><dd>{visible.insurance.maturityDate ?? 'Not supplied'}</dd><dt>Currency</dt><dd>{visible.currency}</dd><dt>Sum assured</dt><dd>{money(visible.insurance.sumAssured, visible.currency)}</dd>
         <dt>Premium amount</dt><dd>{money(visible.insurance.premiumAmount, visible.currency)} as of {visible.insurance.policyAsOfDate}</dd>
         <dt>Record version</dt><dd>{visible.revision}</dd><dt>Source revision</dt><dd>{visible.insurance.sourceRevision}</dd><dt>Recorded</dt><dd>{visible.recordedAt}</dd>
       </dl><a href={'/finances?fact=' + encodeURIComponent(visible.insurance.sourceFinancialFactId)}>View exact insurance source history</a>
-      <p>Policy terms were entered and reviewed by the customer. Active cover,premium frequency,payment and benefit eligibility have not been verified.</p></>}
+      <p>Policy terms and status were entered and reviewed by the customer. Cover, premium frequency, payment, benefits, claims and provider confirmation have not been verified.</p></>}
     </Drawer>
     <Drawer title="Insurance record history" open={history?.api === api} onClose={() => {setHistory(null);}} size={560} destroyOnHidden>
       {history?.api === api && <InsuranceHistory key={history.record.insuranceRecordId} api={api} record={history.record} />}
@@ -191,16 +251,18 @@ function InsuranceHistory({ api, record }: { api: AccessApi; record: ProductInsu
     return () => { window.clearTimeout(start); initial.abort();controller.current?.abort(); };
   }, [load]);
   return <section aria-label="Reviewed insurance change history"><h2>{record.insurance.name}</h2>
-    <p>Each version retains the reviewed policy terms and original source. History does not verify active cover,premium payment or benefit eligibility.</p>
+    <p>Each version retains the reviewed policy terms, customer-reported status and original source. History does not verify cover, premium payment, benefits, claims or provider confirmation.</p>
     {loading && <p role="status">Loading insurance history…</p>}
     {failure && <Alert type="error" title="Insurance history is unavailable." action={<Button onClick={() => { void load(); }}>Retry insurance history</Button>} />}
     {page?.items.map((item) => <Card key={item.revision} size="small" style={{ marginBlock: 12 }}>
       <strong>Version {item.revision}</strong><p>{item.insurance.name} · {item.insurance.provider} · {money(item.insurance.premiumAmount,item.currency)} as of {item.insurance.policyAsOfDate}</p>
+      <p>{statusLabel(item)}{item.lifecycleAsOfDate ? ' as of ' + item.lifecycleAsOfDate : ''}</p>
       <p>Reviewed {item.recordedAt}</p><Button onClick={() => { setVersion(item); }}>View version {item.revision}</Button>
     </Card>)}
     {page?.hasMore && page.nextBeforeRevision !== null && <Button disabled={loading} onClick={() => { void load(page.nextBeforeRevision ?? undefined); }}>Earlier versions</Button>}
     {page && <Button disabled={loading} onClick={() => { void load(); }}>Latest versions</Button>}
     {version && <section aria-label={'Saved insurance version ' + String(version.revision)}><h3>Saved version {version.revision}</h3><dl>
+      <dt>Customer-reported insurance status</dt><dd>{statusLabel(version)}{version.lifecycleAsOfDate ? ' as of ' + version.lifecycleAsOfDate : ''}</dd>
       <dt>Policy name</dt><dd>{version.insurance.name}</dd><dt>Insurance provider</dt><dd>{version.insurance.provider}</dd><dt>Policy type</dt><dd>{terms(version)}</dd>
       <dt>Maturity or expiry date</dt><dd>{version.insurance.maturityDate ?? 'Not supplied'}</dd><dt>Currency</dt><dd>{version.currency}</dd><dt>Sum assured</dt><dd>{money(version.insurance.sumAssured,version.currency)}</dd>
       <dt>Premium amount</dt><dd>{money(version.insurance.premiumAmount,version.currency)} as of {version.insurance.policyAsOfDate}</dd>

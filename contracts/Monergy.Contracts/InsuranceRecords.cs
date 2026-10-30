@@ -9,8 +9,11 @@ public sealed record InsuranceRecordDraft(string Name, string Provider, string P
 public sealed record CreateInsuranceRecord(string OperationId, InsuranceRecordDraft Insurance);
 public sealed record ReviewedInsuranceRecord(string InsuranceRecordId, string OperationId, string CustomerId,
     InsuranceRecordDraft Insurance, string Currency, string SourceProvenanceId, string DocumentVersionId,
-    string EvidenceId, string RecordedBy, DateTimeOffset RecordedAt, int Revision = 1);
+    string EvidenceId, string RecordedBy, DateTimeOffset RecordedAt, int Revision = 1,
+    string LifecycleStatus = "UNREVIEWED", DateOnly? LifecycleAsOfDate = null);
 public sealed record InsuranceRecordList(IReadOnlyList<ReviewedInsuranceRecord> Items, bool HasMore);
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ReviseInsuranceRecord(string OperationId, int ExpectedRevision, InsuranceRecordDraft Insurance);
+[JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+public sealed record ReviewInsuranceRecordStatus(string OperationId, int ExpectedRevision, string Status, DateOnly AsOfDate);
 public sealed record InsuranceRecordHistory(IReadOnlyList<ReviewedInsuranceRecord> Items, bool HasMore, int? NextBeforeRevision);

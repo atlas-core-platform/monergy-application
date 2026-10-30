@@ -19,7 +19,7 @@ public sealed partial class ReviewedInsuranceRecordTests
     {
         var (financial,source)=await Seed();var app=new InsuranceRecordsApplication(financial,new InMemoryInsuranceRecords(),TimeProvider.System);
         var first=await app.CreateAsync("T001",Customer,"actor-001",Input(source.FinancialFactId),default);
-        var legacy=JsonSerializer.Serialize(first,ContractJson.Options).Replace(",\"revision\":1}","}",StringComparison.Ordinal);
+        var legacy=JsonSerializer.Serialize(first,ContractJson.Options).Replace(",\"revision\":1",string.Empty,StringComparison.Ordinal);
         Assert.DoesNotContain("\"revision\"",legacy,StringComparison.Ordinal);
         Assert.Equal(first,JsonSerializer.Deserialize<ReviewedInsuranceRecord>(legacy,ContractJson.Options));
     }
