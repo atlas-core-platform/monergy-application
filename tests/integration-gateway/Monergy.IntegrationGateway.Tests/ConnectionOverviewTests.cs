@@ -24,7 +24,10 @@ public sealed class ConnectionOverviewTests
         Assert.Equal(["google-drive", "onedrive"], result.Connections.Select(item => item.ProviderCode));
         Assert.Equal("Connected", result.Connections[0].State);
         Assert.Equal("Current", result.Connections[0].PermissionState);
+        Assert.Equal("Status available", result.Connections[0].HealthState);
         Assert.Equal("Review required", result.Connections[1].PermissionState);
+        Assert.Equal("Attention required", result.Connections[1].HealthState);
+        Assert.All(result.Connections, item => Assert.Equal(DateTimeOffset.Parse("2026-10-30T06:15:00Z"), item.CheckedAt));
         Assert.NotNull(result.Connections[0].LastConfirmedAt);
         Assert.Null(result.Connections[1].LastConfirmedAt);
     }
@@ -43,6 +46,7 @@ public sealed class ConnectionOverviewTests
         Assert.Equal("Connected", result.Connections[0].State);
         Assert.Equal("Unavailable", result.Connections[1].State);
         Assert.Equal("Unavailable", result.Connections[1].PermissionState);
+        Assert.Equal("Status unavailable", result.Connections[1].HealthState);
         Assert.DoesNotContain("SECRET_OWNER_FAILURE", System.Text.Json.JsonSerializer.Serialize(result), StringComparison.Ordinal);
     }
 
@@ -68,6 +72,7 @@ public sealed class ConnectionOverviewTests
 
         Assert.Equal("Unavailable", Assert.Single(result.Connections).State);
         Assert.Equal("Unavailable", Assert.Single(result.Connections).PermissionState);
+        Assert.Equal("Status unavailable", Assert.Single(result.Connections).HealthState);
         Assert.DoesNotContain("provider-secret-state", System.Text.Json.JsonSerializer.Serialize(result), StringComparison.Ordinal);
     }
 
@@ -82,6 +87,19 @@ public sealed class ConnectionOverviewTests
     {
         Assert.Equal(expected, ConnectionPermissionProjection.From(state));
         Assert.Equal("Unavailable", ConnectionPermissionProjection.From("provider-private-permission"));
+    }
+
+    [Theory]
+    [InlineData("Not configured", "Not configured")]
+    [InlineData("Ready to connect", "Status available")]
+    [InlineData("Setup in progress", "Status available")]
+    [InlineData("Connected", "Status available")]
+    [InlineData("Needs attention", "Attention required")]
+    [InlineData("Unavailable", "Status unavailable")]
+    public void OperationalHealthIsCanonicalAndDoesNotExposeCounters(string state, string expected)
+    {
+        Assert.Equal(expected, ConnectionHealthProjection.From(state));
+        Assert.Equal("Status unavailable", ConnectionHealthProjection.From("provider-private-health"));
     }
 
     private sealed class Owners(Exception? failure = null) : IConnectionOverviewOwners
