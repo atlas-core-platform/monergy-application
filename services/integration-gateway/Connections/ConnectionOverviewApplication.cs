@@ -1,11 +1,13 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Monergy.Platform;
 
 namespace Monergy.Services.IntegrationGateway.Connections;
 
 public sealed record ConnectionOverviewOwner(string TenantId, string ActorId, string CustomerId, long CustomerVersion);
 public sealed record ConnectionSourceSnapshot(string State, DateTimeOffset? LastConfirmedAt = null);
-public sealed record ConnectionSummary(string ProviderCode, string Provider, string State, string PermissionState, string ManagePath,
-    DateTimeOffset? LastConfirmedAt);
+public sealed record ConnectionSummary(string ProviderCode, string Provider, string State, string PermissionState, string HealthState,
+    string ManagePath, DateTimeOffset CheckedAt, DateTimeOffset? LastConfirmedAt);
 public sealed record ConnectionOverview(string TenantId, string CustomerId, DateTimeOffset GeneratedAt,
     IReadOnlyList<ConnectionSummary> Connections);
 
@@ -43,7 +45,8 @@ public sealed class ConnectionOverviewOwners(CustomerOwnerClient identity, Tenan
 public sealed class ConnectionOverviewApplication(
     IConnectionOverviewOwners owners,
     IEnumerable<IConnectionSummarySource> sources,
-    TimeProvider clock)
+    TimeProvider clock,
+    ILogger<ConnectionOverviewApplication>? logger = null)
 {
     private static readonly HashSet<string> States = new(StringComparer.Ordinal)
     {
@@ -54,6 +57,7 @@ public sealed class ConnectionOverviewApplication(
     {
         var owner = await owners.AuthorizeAsync(http).ConfigureAwait(false);
         var summaries = new List<ConnectionSummary>();
+        var checkedAt = clock.GetUtcNow();
         foreach (var source in sources.OrderBy(item => item.ProviderCode, StringComparer.Ordinal))
         {
             ConnectionSourceSnapshot snapshot;
@@ -71,11 +75,27 @@ public sealed class ConnectionOverviewApplication(
             }
 
             var state = States.Contains(snapshot.State) ? snapshot.State : "Unavailable";
-            summaries.Add(new(source.ProviderCode, source.Provider, state, ConnectionPermissionProjection.From(state), source.ManagePath,
-                state == "Connected" ? snapshot.LastConfirmedAt : null));
+            var permissionState = ConnectionPermissionProjection.From(state);
+            var healthState = ConnectionHealthProjection.From(state);
+            summaries.Add(new(source.ProviderCode, source.Provider, state, permissionState, healthState, source.ManagePath,
+                checkedAt, state == "Connected" ? snapshot.LastConfirmedAt : null));
+            logger?.LogInformation(
+                "Connection health projected. Provider {ProviderCode}; state {ConnectionState}; permission {PermissionState}; health {HealthState}.",
+                source.ProviderCode, state, permissionState, healthState);
         }
-        return new(owner.TenantId, owner.CustomerId, clock.GetUtcNow(), summaries);
+        return new(owner.TenantId, owner.CustomerId, checkedAt, summaries);
     }
+}
+
+internal static class ConnectionHealthProjection
+{
+    public static string From(string state) => state switch
+    {
+        "Not configured" => "Not configured",
+        "Ready to connect" or "Setup in progress" or "Connected" => "Status available",
+        "Needs attention" => "Attention required",
+        _ => "Status unavailable",
+    };
 }
 
 internal static class ConnectionPermissionProjection
