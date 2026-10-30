@@ -14,10 +14,13 @@ import './product.css';
 const resultLabel = (result: SearchHit) =>
   result.resultType === 'Document' ? 'Document' : 'Financial information';
 
-const resultHref = (result: SearchHit) =>
-  result.resultType === 'Document'
-    ? '/evidence?version=' + encodeURIComponent(result.source.sourceObjectId)
-    : '/finances?fact=' + encodeURIComponent(result.source.sourceObjectId);
+const resultHref = (result: SearchHit) => {
+  if (result.resultType === 'Document')
+    return '/evidence?version=' + encodeURIComponent(result.source.sourceObjectId);
+  if (result.source.sourceObjectType === 'TaxRecord')
+    return '/finances?type=TAX&taxRecord=' + encodeURIComponent(result.source.sourceObjectId);
+  return '/finances?fact=' + encodeURIComponent(result.source.sourceObjectId);
+};
 
 export default function ProductSearchExperience() {
   const { session, authorization } = useWorkspaceSession();
@@ -97,9 +100,9 @@ function ProductSearchPanel() {
           <p className="workspace-eyebrow">SEARCH</p>
           <h1>Find information already in your Monergy workspace.</h1>
           <p>
-            Search your current Documents and trusted Income, Expense, Loan, Asset, Investment or Insurance or Tax source facts. Results are
+            Search your current Documents, trusted financial source facts and customer-reviewed tax records. Results are
             rebuilt from the current authorized sources and link back to the exact document or
-            financial item. Loan source amounts are not verified outstanding balances, EMI or eligibility; Asset source figures are not certified valuations or net worth; Investment source figures are not live holdings, NAV or market values; Insurance source figures are not verified policy coverage, claim benefits, premiums or cash value. Tax source figures are not assessed tax owed, filed returns or refunds. This search uses lexical matching only.
+            financial item. Loan source amounts are not verified outstanding balances, EMI or eligibility; Asset source figures are not certified valuations or net worth; Investment source figures are not live holdings, NAV or market values; Insurance source figures are not verified policy coverage, claim benefits, premiums or cash value. Tax source figures and reviewed tax records are not assessed tax owed, accepted filings, payment confirmation, refunds or tax advice. This search uses lexical matching only.
           </p>
         </div>
         <Tag className="product-environment">

@@ -29,6 +29,7 @@ export default function TaxRecordsExperience({ api, facts, canRead, canCreate }:
   const [saveError, setSaveError] = useState('');
   const [saved, setSaved] = useState<ProductTaxRecord | null>(null);
   const [history, setHistory] = useState<{ api: AccessApi; record: ProductTaxRecord } | null>(null);
+  const [dismissedRouteRecord, setDismissedRouteRecord] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ api: AccessApi; record: ProductTaxRecord } | null>(null);
   const load = useCallback(async (signal?: AbortSignal) => {
     if (!canRead) return;
@@ -55,6 +56,11 @@ export default function TaxRecordsExperience({ api, facts, canRead, canCreate }:
   }, [load]);
   const current = editor?.api === api ? editor : null;
   const list = loaded?.api === api && canRead ? loaded.list : null;
+  const requestedRouteRecord = new URLSearchParams(window.location.search).get('taxRecord');
+  const routeRecord = requestedRouteRecord && requestedRouteRecord !== dismissedRouteRecord
+    ? list?.items.find(item => item.taxRecordId === requestedRouteRecord)
+    : undefined;
+  const visibleHistory = history?.api === api ? history : routeRecord ? { api, record: routeRecord } : null;
   const source = facts.find((fact) => fact.financialFactId === current?.values.sourceFinancialFactId && fact.revision === Number(current.values.sourceRevision) && fact.factType === 'TAX');
   const valid = current && (current.original ?? source) && !current.conflict && current.values.name?.trim() && current.values.jurisdiction?.trim() && current.values.taxType?.trim() && current.values.taxYearLabel?.trim() && current.values.amountKind &&
     numberFields.every(([key]) => current.values[key] !== undefined && current.values[key] !== '' && Number.isFinite(Number(current.values[key]))) &&
@@ -162,8 +168,11 @@ export default function TaxRecordsExperience({ api, facts, canRead, canCreate }:
       </dl><a href={'/finances?fact=' + encodeURIComponent(visible.tax.sourceFinancialFactId)}>View exact tax source history</a>
       <p>Tax details,amount meaning and period were reviewed by the customer. Payment,filing,compliance and refunds have not been independently verified.</p></>}
     </Drawer>
-    <Drawer title="Tax record history" open={history?.api === api} onClose={() => {setHistory(null);}} size={560} destroyOnHidden>
-      {history?.api === api && <TaxHistory key={history.record.taxRecordId} api={api} record={history.record} />}
+    <Drawer title="Tax record history" open={Boolean(visibleHistory)} onClose={() => {
+      if (routeRecord && visibleHistory?.record.taxRecordId === routeRecord.taxRecordId) setDismissedRouteRecord(routeRecord.taxRecordId);
+      setHistory(null);
+    }} size={560} destroyOnHidden>
+      {visibleHistory && <TaxHistory key={visibleHistory.record.taxRecordId} api={api} record={visibleHistory.record} />}
     </Drawer>
   </section>;
 }

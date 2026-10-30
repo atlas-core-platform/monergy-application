@@ -127,6 +127,43 @@ it('searches current Documents and Financial information through the product bou
   expect(screen.queryByText(/semantic/i)).not.toBeInTheDocument();
 });
 
+it('opens an exact customer-reviewed tax record without implying assessed or accepted tax status', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'product').mockResolvedValue({
+    query: 'income tax',
+    matchMode: 'Lexical',
+    items: [{
+      searchRecordId: 'search-financial-tax-record-tax-record-001',
+      resultType: 'Financial',
+      title: 'Income tax return',
+      summary: 'Customer-reviewed tax record for India: Income tax; paid 14000.00 USD; tax year 2025-26. This is not assessed tax liability, an accepted filing, payment confirmation, refund entitlement or tax advice.',
+      authoritativeOwner: 'Financial Profile Service',
+      representationState: 'DERIVED_REBUILDABLE',
+      score: 1,
+      source: {
+        sourceObjectType: 'TaxRecord',
+        sourceObjectId: 'tax-record-001',
+        sourceReferenceId: 'ff-tax',
+        provenanceReferenceId: 'provenance-tax',
+        calculationLineageReferenceId: null,
+      },
+    }],
+  });
+  mount(api);
+
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Search query'), 'income tax');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+
+  expect(await screen.findByText('1 result for “income tax”')).toBeVisible();
+  expect(screen.getByText(/not assessed tax liability/i)).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View source & history' })).toHaveAttribute(
+    'href',
+    '/finances?type=TAX&taxRecord=tax-record-001',
+  );
+  expect(screen.queryByText(/accepted by a tax authority|refund approved/i)).not.toBeInTheDocument();
+});
+
 it('lets the customer bound the query to Financial information', async () => {
   const api = new AccessApi(session);
   const product = vi.spyOn(api, 'product').mockResolvedValue({
