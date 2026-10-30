@@ -23,6 +23,7 @@ public sealed class CustomerFinancialGoalTests
     private static FinancialGoalsApplication Owner(InMemoryFinancialGoals? repository=null)=>new(repository??new(),TimeProvider.System);
     private static ReviseFinancialGoal Change(CustomerFinancialGoal goal)=>new(Guid.NewGuid().ToString("N"),goal.Revision,goal.Goal with {TargetAmount=125000m,TargetDate=new(2031,1,1)});
     private static ReportFinancialGoalLifecycle Lifecycle(CustomerFinancialGoal goal,string status="PAUSED")=>new(Guid.NewGuid().ToString("N"),goal.Revision,status,DateOnly.FromDateTime(DateTime.UtcNow));
+    private static ReportFinancialGoalPriority Priority(CustomerFinancialGoal goal,string priority="HIGH")=>new(Guid.NewGuid().ToString("N"),goal.Revision,priority,DateOnly.FromDateTime(DateTime.UtcNow));
     [Theory,InlineData("operation"),InlineData("uppercase"),InlineData("name"),InlineData("long"),InlineData("control"),InlineData("zero"),InlineData("negative"),InlineData("precision"),InlineData("large"),InlineData("currency"),InlineData("lower-currency"),InlineData("date-early"),InlineData("date-late")]
     public async Task InvalidExplicitTermsNeverWrite(string field)
     {
@@ -86,11 +87,36 @@ public sealed class CustomerFinancialGoalTests
         Assert.Equal(first,await app.ReadAsync("T001",Customer,first.FinancialGoalId,default));
     }
     [Fact]
+    public async Task CustomerReportedPriorityIsVersionedIdempotentAndPreservedWithoutAdviceOrAchievement()
+    {
+        var app=Owner();var first=await app.CreateAsync("T001",Customer,"actor-001",Input(),default);
+        Assert.Equal("NOT_SET",first.PriorityLevel);Assert.Null(first.PriorityAsOfDate);Assert.Equal("CUSTOMER_REPORTED",first.PriorityBasis);
+        var input=Priority(first);var high=await app.ReportPriorityAsync("T001",Customer,"actor-001",first.FinancialGoalId,input,default);
+        Assert.Equal("HIGH",high.PriorityLevel);Assert.Equal(input.AsOfDate,high.PriorityAsOfDate);Assert.Equal("CUSTOMER_REPORTED",high.PriorityBasis);Assert.Equal(2,high.Revision);
+        Assert.Equal(high,await app.ReportPriorityAsync("T001",Customer,"actor-001",first.FinancialGoalId,input,default));
+        var corrected=await app.ReviseAsync("T001",Customer,"actor-001",first.FinancialGoalId,Change(high),default);
+        Assert.Equal("HIGH",corrected.PriorityLevel);Assert.Equal(high.PriorityAsOfDate,corrected.PriorityAsOfDate);
+        var paused=await app.ReportLifecycleAsync("T001",Customer,"actor-001",first.FinancialGoalId,Lifecycle(corrected),default);
+        var medium=await app.ReportPriorityAsync("T001",Customer,"actor-001",first.FinancialGoalId,Priority(paused,"MEDIUM"),default);
+        var stopped=await app.ReportLifecycleAsync("T001",Customer,"actor-001",first.FinancialGoalId,Lifecycle(medium,"STOPPED"),default);
+        Assert.Equal(400,(await Assert.ThrowsAsync<TenantBoundaryException>(()=>app.ReportPriorityAsync("T001",Customer,"actor-001",first.FinancialGoalId,Priority(stopped,"LOW"),default))).Status);
+        Assert.Equal(["MEDIUM","MEDIUM","HIGH","HIGH","HIGH","NOT_SET"],(await app.HistoryAsync("T001",Customer,first.FinancialGoalId,null,default)).Items.Select(x=>x.PriorityLevel));
+        Assert.Equal(409,(await Assert.ThrowsAsync<TenantBoundaryException>(()=>app.ReportPriorityAsync("T001",Customer,"actor-001",first.FinancialGoalId,Priority(first,"LOW"),default))).Status);
+    }
+    [Theory,InlineData("priority"),InlineData("operation"),InlineData("date"),InlineData("same"),InlineData("stale-date")]
+    public async Task InvalidPriorityReportsNeverMutateCurrentGoal(string kind)
+    {
+        var app=Owner();var first=await app.CreateAsync("T001",Customer,"actor-001",Input(),default);var current=await app.ReportPriorityAsync("T001",Customer,"actor-001",first.FinancialGoalId,Priority(first),default);var input=Priority(current,"LOW");
+        input=kind switch {"priority"=>input with{Priority="URGENT"},"operation"=>input with{OperationId="bad"},"date"=>input with{AsOfDate=new(2200,1,1)},"same"=>input with{Priority="HIGH"},_=>input with{AsOfDate=new(1900,1,1)}};
+        Assert.Equal(400,(await Assert.ThrowsAsync<TenantBoundaryException>(()=>app.ReportPriorityAsync("T001",Customer,"actor-001",first.FinancialGoalId,input,default))).Status);
+        Assert.Equal(current,await app.ReadAsync("T001",Customer,first.FinancialGoalId,default));
+    }
+    [Fact]
     public void HistoricalGoalPayloadsRestoreAsCustomerReportedInProgressWithoutInventingAnEffectiveDate()
     {
         var value=new CustomerFinancialGoal("goal-legacy",new string('a',32),Customer,Input().Goal,"actor-001",DateTimeOffset.UtcNow,"CUSTOMER_DEFINED");
-        var json=JsonNode.Parse(JsonSerializer.Serialize(value,ContractJson.Options))!.AsObject();json.Remove("lifecycleStatus");json.Remove("lifecycleAsOfDate");json.Remove("lifecycleBasis");
-        var restored=json.Deserialize<CustomerFinancialGoal>(ContractJson.Options);Assert.NotNull(restored);Assert.Equal("IN_PROGRESS",restored.LifecycleStatus);Assert.Null(restored.LifecycleAsOfDate);Assert.Equal("CUSTOMER_REPORTED",restored.LifecycleBasis);
+        var json=JsonNode.Parse(JsonSerializer.Serialize(value,ContractJson.Options))!.AsObject();json.Remove("lifecycleStatus");json.Remove("lifecycleAsOfDate");json.Remove("lifecycleBasis");json.Remove("priorityLevel");json.Remove("priorityAsOfDate");json.Remove("priorityBasis");
+        var restored=json.Deserialize<CustomerFinancialGoal>(ContractJson.Options);Assert.NotNull(restored);Assert.Equal("IN_PROGRESS",restored.LifecycleStatus);Assert.Null(restored.LifecycleAsOfDate);Assert.Equal("CUSTOMER_REPORTED",restored.LifecycleBasis);Assert.Equal("NOT_SET",restored.PriorityLevel);Assert.Null(restored.PriorityAsOfDate);Assert.Equal("CUSTOMER_REPORTED",restored.PriorityBasis);
     }
     [Fact]
     public async Task TenantCustomerActorAndListBoundsRemainExplicit()
@@ -132,6 +158,17 @@ public sealed class CustomerFinancialGoalTests
         Assert.Equal(paused,await (await client.PostAsJsonAsync(path+"/lifecycle",input,ContractJson.Options)).Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options));
         Assert.Equal([paused,first],(await client.GetFromJsonAsync<FinancialGoalHistory>(path+"/history",ContractJson.Options))!.Items);
         h.Authority.Failure="update";Assert.Equal(HttpStatusCode.Forbidden,(await client.PostAsJsonAsync(path+"/lifecycle",Lifecycle(paused,"STOPPED"),ContractJson.Options)).StatusCode);
+    }
+    [Fact]
+    public async Task ProductPriorityRouteBindsCurrentCustomerActorTermsAndHistory()
+    {
+        await using var h=await Harness.Create();using var client=h.Client();var first=(await (await client.PostAsJsonAsync("/product-api/v1/financial-goals",Input(),ContractJson.Options)).Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options))!;
+        var input=Priority(first);var path="/product-api/v1/financial-goals/"+first.FinancialGoalId;
+        var high=(await (await client.PostAsJsonAsync(path+"/priority",input,ContractJson.Options)).Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options))!;
+        Assert.Equal("HIGH",high.PriorityLevel);Assert.Equal(input.AsOfDate,high.PriorityAsOfDate);Assert.Equal("CUSTOMER_REPORTED",high.PriorityBasis);Assert.Equal(first.Goal,high.Goal);Assert.Equal(first.LifecycleStatus,high.LifecycleStatus);
+        Assert.Equal(high,await (await client.PostAsJsonAsync(path+"/priority",input,ContractJson.Options)).Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options));
+        Assert.Equal([high,first],(await client.GetFromJsonAsync<FinancialGoalHistory>(path+"/history",ContractJson.Options))!.Items);
+        h.Authority.Failure="update";Assert.Equal(HttpStatusCode.Forbidden,(await client.PostAsJsonAsync(path+"/priority",Priority(high,"LOW"),ContractJson.Options)).StatusCode);
     }
     [Theory,InlineData("deny",403),InlineData("advisor",403),InlineData("unavailable",503),InlineData("update",403),InlineData("read",403),InlineData("missing",401),InlineData("tenant",401)]
     public async Task CurrentSelfAuthorityIsRequiredBeforeWrite(string failure,int status)
