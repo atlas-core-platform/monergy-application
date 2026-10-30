@@ -78,7 +78,7 @@ public sealed class JobManagementHttpAdapterWorker(
         }
         if (reportGeneration) app.MapReportGenerationJobs(configuration, includeStatusEndpoint: !documentProcessing);
 
-        if(administration)app.MapJobAdministration(documentProcessing);
+        if(administration)app.MapJobAdministration(documentProcessing,reportGeneration);
         await app.StartAsync(stoppingToken).ConfigureAwait(false);
         try
         {
