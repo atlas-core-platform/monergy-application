@@ -7,7 +7,7 @@ public sealed record ProductAuditRecord(string TenantId,string EventId,string Re
     string? IpAddress=null,string? Device=null);
 public static class ProductAuditProtocol
 {
-    public static readonly string[] Actions=["LOGIN","CONSENT_GRANT","CONSENT_REVOKE","DOCUMENT_UPLOAD","DOCUMENT_VIEW","DOCUMENT_UPDATE","REPORT_GENERATION","DATA_EXPORT","API_ACCESS"];
+    public static readonly string[] Actions=["LOGIN","CONSENT_GRANT","CONSENT_REVOKE","DOCUMENT_UPLOAD","DOCUMENT_VIEW","DOCUMENT_UPDATE","REPORT_GENERATION","JOB_RECOVERY","DATA_EXPORT","API_ACCESS"];
     public static void Validate(ProductAuditRecord r)
     {
         if(!TenantAccessClient.Identifier(r.TenantId,64)||!Guid.TryParseExact(r.RequestId,"N",out _)||r.RequestId.Any(c=>c is >='A' and <='F')||
