@@ -29,7 +29,15 @@ public static class ProductAuditCapture
   if(path.StartsWith("/product-api/v1/evidence",StringComparison.Ordinal))return method=="GET"?"DOCUMENT_VIEW":method=="POST"&&!path.Contains("/processing",StringComparison.Ordinal)?"DOCUMENT_UPLOAD":"DOCUMENT_UPDATE";
   if(path.StartsWith("/connections-api/",StringComparison.Ordinal))return path.EndsWith("/import",StringComparison.Ordinal)?"DOCUMENT_UPLOAD":"API_ACCESS";
   if(path.Contains("/reports",StringComparison.Ordinal)&&method=="POST")return "REPORT_GENERATION";
+  if(method=="POST"&&Resource(path,"JOB_RECOVERY") is not null)return "JOB_RECOVERY";
   return "API_ACCESS";
+ }
+ public static string? Resource(string path,string action)
+ {
+  var parts=path.Split('/',StringSplitOptions.RemoveEmptyEntries);
+  if(action.StartsWith("DOCUMENT_",StringComparison.Ordinal)&&parts.Length>3&&TenantAccessClient.Identifier(parts[3],160))return parts[3];
+  if(action=="JOB_RECOVERY"&&parts.Length==7&&parts[0]=="jobs-api"&&parts[1]=="local"&&parts[2]=="v1"&&parts[3]=="administration"&&parts[4]=="processing"&&parts[6]=="changes"&&TenantAccessClient.Identifier(parts[5],128))return parts[5];
+  return null;
  }
  public static void UseProductAudit(this WebApplication app)
  {
@@ -47,8 +55,8 @@ public static class ProductAuditCapture
    {try{var session=await owners.SessionAsync(http);actor=session.ActorId;customer=(await owners.OwnedCustomerForSetupAsync(tenant!,actor,http.RequestAborted))?.CustomerId;}catch(TenantBoundaryException e){identityUnavailable=e.Status==503;}}
    var path=http.Request.Path.Value??"";var action=Action(path,http.Request.Method);
    // A route template/category is evidence; caller path/query text and arbitrary target IDs are not.
-   var parts=path.Split('/',StringSplitOptions.RemoveEmptyEntries);var requestedResource=action.StartsWith("DOCUMENT_",StringComparison.Ordinal)&&parts.Length>3&&TenantAccessClient.Identifier(parts[3],160)?parts[3]:null;
-   var r=new ProductAuditRecord(tenant!,"",Guid.NewGuid().ToString("N"),"REQUESTED",actor,actor is not null?"USER":identityUnavailable?"UNRECORDED":"UNAUTHENTICATED",customer,action,"Product Gateway",action.ToLowerInvariant(),requestedResource,null,DateTimeOffset.UtcNow,"REQUESTED",http.Request.Method);
+   var requestedResource=Resource(path,action);
+   var r=new ProductAuditRecord(tenant!,"",Guid.NewGuid().ToString("N"),"REQUESTED",actor,actor is not null?"USER":identityUnavailable?"UNRECORDED":"UNAUTHENTICATED",action=="JOB_RECOVERY"?null:customer,action,"Product Gateway",action.ToLowerInvariant(),requestedResource,null,DateTimeOffset.UtcNow,"REQUESTED",http.Request.Method);
    r=r with{EventId=r.RequestId+":REQUESTED"};var writer=http.RequestServices.GetRequiredService<IProductAuditWriter>();await writer.AppendAsync(r,http.RequestAborted);
    var original=http.Response.Body;await using var buffer=new AuditResponseBuffer();http.Response.Body=buffer;
    try
@@ -78,8 +86,15 @@ public static class ProductAuditCapture
   if(json.ValueKind!=JsonValueKind.Object)return r;
   string? Field(string name,int max)=>json.TryGetProperty(name,out var v)&&v.ValueKind==JsonValueKind.String&&TenantAccessClient.Identifier(v.GetString(),max)?v.GetString():null;
   if(Field("tenantId",64) is string tenant&&tenant!=r.TenantId)throw new TenantBoundaryException("AUDIT_RESPONSE_TENANT_INVALID",503);
+  string? recoveryCustomer=null;
+  if(r.Action=="JOB_RECOVERY")
+  {
+   var job=Field("jobId",128);if(job is null||job!=r.ResourceId)throw new TenantBoundaryException("AUDIT_RESPONSE_RESOURCE_INVALID",503);
+   string? Customer(string name)=>json.TryGetProperty(name,out var value)&&value.ValueKind==JsonValueKind.Object&&value.TryGetProperty("customerId",out var customer)&&customer.ValueKind==JsonValueKind.String&&TenantAccessClient.Identifier(customer.GetString(),128)?customer.GetString():null;
+   var before=Customer("before");var after=Customer("after");if(before is null||after!=before||r.CustomerId is not null&&r.CustomerId!=before)throw new TenantBoundaryException("AUDIT_RESPONSE_CUSTOMER_INVALID",503);recoveryCustomer=before;
+  }
   var actor=r.Action=="LOGIN"?Field("actorId",128):null;
-  return r with{ActorId=actor??r.ActorId,ActorType=actor is null?r.ActorType:"USER",CustomerId=r.CustomerId??Field("customerId",128),DocumentId=r.Action.StartsWith("DOCUMENT_",StringComparison.Ordinal)?Field("documentId",160):null};
+  return r with{ActorId=actor??r.ActorId,ActorType=actor is null?r.ActorType:"USER",CustomerId=recoveryCustomer??r.CustomerId??Field("customerId",128),DocumentId=r.Action.StartsWith("DOCUMENT_",StringComparison.Ordinal)?Field("documentId",160):null};
  }
  private sealed class AuditResponseBuffer:MemoryStream
  {

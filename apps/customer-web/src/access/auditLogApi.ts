@@ -1,5 +1,5 @@
 import type { AuditEntry, AuditPage } from './AuditLog';
-export const actions = ['LOGIN', 'CONSENT_GRANT', 'CONSENT_REVOKE', 'DOCUMENT_UPLOAD', 'DOCUMENT_VIEW', 'DOCUMENT_UPDATE', 'REPORT_GENERATION', 'DATA_EXPORT', 'API_ACCESS', 'DOMAIN_EVENT'];
+export const actions = ['LOGIN', 'CONSENT_GRANT', 'CONSENT_REVOKE', 'DOCUMENT_UPLOAD', 'DOCUMENT_VIEW', 'DOCUMENT_UPDATE', 'REPORT_GENERATION', 'JOB_RECOVERY', 'DATA_EXPORT', 'API_ACCESS', 'DOMAIN_EVENT'];
 export const outcomes = ['REQUESTED', 'HTTP_SUCCEEDED', 'HTTP_FAILED', 'ACCEPTED', 'UNKNOWN', 'RECORDED'];
 const id = (x: string) => /^[A-Za-z0-9][A-Za-z0-9._:-]{0,239}$/.test(x);
 const date = (x: string) => Number.isFinite(Date.parse(x)) && Date.parse(x) >= 0;
