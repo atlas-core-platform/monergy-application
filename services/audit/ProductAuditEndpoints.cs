@@ -12,6 +12,9 @@ public static class ProductAuditEndpoints
    try{return await next(context);}catch(TenantBoundaryException e){return Results.Json(new{error=e.Code},statusCode:e.Status);}catch(Monergy.Contracts.TenantAccessException e){return Results.Json(new{error=e.Code},statusCode:e.StatusCode);}catch(Exception e)when(e is HttpRequestException or System.Data.Common.DbException or InvalidOperationException){return Results.StatusCode(503);}catch(OperationCanceledException)when(!http.RequestAborted.IsCancellationRequested){return Results.StatusCode(503);}
   });
   group.MapGet("",async(HttpContext http,TenantAccessClient access,IProductAuditLog repo)=>await Page(http,access,repo));
+  group.MapGet("/sign-in-attention",async(HttpContext http,TenantAccessClient access,IProductAuditLog repo)=>{
+   var admin=await access.RequireAdministratorAsync(http);if(http.Request.Query.Count!=0)throw Bad();var summary=await repo.ReviewSignInSecurityAsync(admin.TenantId,DateTimeOffset.UtcNow,http.RequestAborted);ProductAuditLog.Bound(summary,admin.TenantId);await Confirm(http,access,admin);return summary;
+  });
   group.MapGet("/export",async(HttpContext http,TenantAccessClient access,IProductAuditLog repo)=>{
    var page=await Page(http,access,repo);http.Response.Headers.ContentDisposition="attachment; filename=monergy-audit-page.json";
    return Results.Json(new{schemaVersion="1.0",exportedAt=DateTimeOffset.UtcNow,scope="Current filtered page only; use nextCursor to continue. No unrecorded fields are inferred.",page});

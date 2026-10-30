@@ -19,6 +19,11 @@ public sealed class ProductAuditCaptureTests
 {
  [Theory]
  [InlineData("/identity-api/local/v1/tenant-sessions","POST","LOGIN")]
+ [InlineData("/identity-api/local/v1/customer-registration/sign-in","POST","LOGIN")]
+ [InlineData("/identity-api/local/v1/persona-credentials/sign-in","POST","LOGIN")]
+ [InlineData("/identity-api/local/v1/customer-email-access/confirm","POST","LOGIN")]
+ [InlineData("/identity-api/local/v1/customer-email-access/request","POST","API_ACCESS")]
+ [InlineData("/identity-api/local/v1/tenant-sessions/revoke","POST","API_ACCESS")]
  [InlineData("/consent-api/local/v1/consents/customers/C001/sharing","POST","CONSENT_GRANT")]
  [InlineData("/consent-api/local/v1/consents/customers/C001/grants/G001","DELETE","CONSENT_REVOKE")]
  [InlineData("/product-api/v1/evidence","POST","DOCUMENT_UPLOAD")]
