@@ -14,10 +14,14 @@ const session = {
   expiresAt: '2027-01-01T00:00:00Z',
 };
 
-function mount(api: AccessApi, capabilities = ['search.query.execute']) {
+const fullSearchCapabilities = [
+  'search.query.execute', 'evidence.document.read', 'financial-profile.profile.read',
+];
+
+function mount(api: AccessApi, capabilities = fullSearchCapabilities) {
   return render(element(api, capabilities));
 }
-function element(api: AccessApi, capabilities = ['search.query.execute'], customerId = 'reference-customer') {
+function element(api: AccessApi, capabilities = fullSearchCapabilities, customerId = 'reference-customer') {
   return (
     <FoundationProvider appearance="midnight">
       <Context
@@ -153,6 +157,69 @@ it('does not expose a search action before the Customer role receives Search acc
   expect(screen.getByText("Search isn't included in your current access")).toBeVisible();
   expect(screen.getByLabelText('Search query')).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled();
+});
+
+it('preserves Document search and exposes canonical Financial information Request Access', async () => {
+  const api = new AccessApi(session);
+  const product = vi.spyOn(api, 'product').mockResolvedValue({ query: 'statement', matchMode: 'Lexical', items: [] });
+  vi.spyOn(api, 'request').mockResolvedValue({
+    tenantId: 'T001', actorId: 'A100', policyVersion: 8, subjectVersion: 2,
+    items: [{ requestId: null, target: 'customer.financial-information', targetLabel: 'Financial information',
+      grantExplanation: 'Allows this customer to view and update their financial information.',
+      state: 'NotRequested', hasAccess: false, canRequest: true, createdAt: null, decisionAt: null,
+      fulfilledAt: null, decisionReason: null }],
+  });
+  mount(api, ['search.query.execute', 'evidence.document.read']);
+
+  expect(screen.getByText('Financial search access required')).toBeVisible();
+  expect(await screen.findByRole('button', { name: 'Request access' })).toBeVisible();
+  expect(screen.getByText('All', { selector: 'span' }).closest('label')).toHaveClass('ant-radio-button-wrapper-disabled');
+  expect(screen.getByText('Financial information', { selector: 'span' }).closest('label')).toHaveClass('ant-radio-button-wrapper-disabled');
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Search query'), 'statement');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+  expect(product).toHaveBeenCalledWith('v1/search', 'POST', { query: 'statement', scope: 'documents' }, expect.any(AbortSignal));
+});
+
+it('preserves Financial-information search and exposes canonical Documents Request Access', async () => {
+  const api = new AccessApi(session);
+  const product = vi.spyOn(api, 'product').mockResolvedValue({ query: 'income', matchMode: 'Lexical', items: [] });
+  vi.spyOn(api, 'request').mockResolvedValue({
+    tenantId: 'T001', actorId: 'A100', policyVersion: 8, subjectVersion: 2,
+    items: [{ requestId: null, target: 'customer.documents', targetLabel: 'Documents',
+      grantExplanation: 'Allows this customer to view and add their Documents.',
+      state: 'NotRequested', hasAccess: false, canRequest: true, createdAt: null, decisionAt: null,
+      fulfilledAt: null, decisionReason: null }],
+  });
+  mount(api, ['search.query.execute', 'financial-profile.profile.read']);
+
+  expect(screen.getByText('Document search access required')).toBeVisible();
+  expect(await screen.findByRole('button', { name: 'Request access' })).toBeVisible();
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Search query'), 'income');
+  await user.click(screen.getByRole('button', { name: 'Search' }));
+  expect(product).toHaveBeenCalledWith('v1/search', 'POST', { query: 'income', scope: 'financial' }, expect.any(AbortSignal));
+});
+
+it('does not call the protected Search route when neither source permission is current', () => {
+  const api = new AccessApi(session);
+  const product = vi.spyOn(api, 'product');
+  vi.spyOn(api, 'request').mockResolvedValue({
+    tenantId: 'T001', actorId: 'A100', policyVersion: 8, subjectVersion: 2,
+    items: [
+      { requestId: null, target: 'customer.documents', targetLabel: 'Documents', grantExplanation: 'Allows Documents.',
+        state: 'NotRequested', hasAccess: false, canRequest: true, createdAt: null, decisionAt: null, fulfilledAt: null, decisionReason: null },
+      { requestId: null, target: 'customer.financial-information', targetLabel: 'Financial information', grantExplanation: 'Allows financial information.',
+        state: 'NotRequested', hasAccess: false, canRequest: true, createdAt: null, decisionAt: null, fulfilledAt: null, decisionReason: null },
+    ],
+  });
+  mount(api, ['search.query.execute']);
+
+  expect(screen.getByText('Document search access required')).toBeVisible();
+  expect(screen.getByText('Financial search access required')).toBeVisible();
+  expect(screen.getByLabelText('Search query')).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled();
+  expect(product).not.toHaveBeenCalled();
 });
 
 

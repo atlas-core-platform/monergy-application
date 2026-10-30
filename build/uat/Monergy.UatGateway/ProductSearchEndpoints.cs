@@ -39,10 +39,9 @@ public static class ProductSearchEndpoints
             var customer = await owners.OwnedCustomerAsync(
                 session.TenantId, session.ActorId, http.RequestAborted).ConfigureAwait(false)
                 ?? throw new TenantBoundaryException("PRODUCT_CUSTOMER_REQUIRED", 403);
-            var decision = await access.EvaluateCustomerAsync(
-                http, "search.query.execute", customer.CustomerId).ConfigureAwait(false);
-            if (decision.Outcome != "Allow") throw new TenantBoundaryException("ACCESS_DENIED", 403);
-            var security = Security(session, customer.CustomerId, decision);
+            var authorization = await RequireAuthorizationAsync(
+                http, access, customer.CustomerId, scope).ConfigureAwait(false);
+            var security = Security(session, customer.CustomerId, authorization.SearchDecisionId);
 
             var combined = new List<SearchHit>();
             if (scope is "all" or "documents")
@@ -77,8 +76,37 @@ public static class ProductSearchEndpoints
                 .ThenBy(item => item.SearchRecordId, StringComparer.Ordinal)
                 .Take(20)
                 .ToImmutableArray();
+            // Fail closed if Search or source access changes while owners are being read.
+            _ = await RequireAuthorizationAsync(
+                http, access, customer.CustomerId, scope).ConfigureAwait(false);
             return Results.Ok(new SearchResults(query, SearchMatchMode.Lexical, items));
         });
+    }
+
+    private static async Task<ProductSearchAuthorizationReceipt> RequireAuthorizationAsync(
+        HttpContext http,
+        TenantAccessClient access,
+        string customerId,
+        string scope)
+    {
+        try
+        {
+            return await ProductSearchAuthorizationPolicy.RequireAsync(
+                scope,
+                async (capability, _) =>
+                {
+                    var decision = await access.EvaluateCustomerAsync(
+                        http, capability, customerId).ConfigureAwait(false);
+                    return new(decision.CapabilityId, decision.DecisionId, decision.Outcome);
+                },
+                http.RequestAborted).ConfigureAwait(false);
+        }
+        catch (ProductSearchAuthorizationException failure)
+        {
+            throw new TenantBoundaryException(
+                failure.Code,
+                failure.Code == "SEARCH_AUTHORIZATION_RESPONSE_INVALID" ? 503 : 403);
+        }
     }
 
     private static ContractRequest<TPayload> Request<TPayload>(
@@ -144,10 +172,10 @@ public static class ProductSearchEndpoints
     private static TrustedSecurityContext Security(
         CustomerOwnerSession session,
         string customerId,
-        CustomerAccessDecision decision) => new(
+        string searchDecisionId) => new(
         new ActorContext(session.ActorId, "Customer", DateTimeOffset.UtcNow, session.AuthenticationContextId),
         new WorkloadContext("customer-web", "local-uat-workspace:" + session.TenantId),
-        new AccessContext("customer-advice", null, decision.DecisionId, customerId));
+        new AccessContext("customer-advice", null, searchDecisionId, customerId));
 }
 
 public sealed class ProductSearchClient : IDisposable

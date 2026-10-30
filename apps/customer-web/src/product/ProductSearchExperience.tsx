@@ -2,6 +2,7 @@ import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Collapse, Empty, Input, Radio, Skeleton, Tag } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AccessApiError } from '../access/accessApi';
+import { RequestAccessAction } from '../access/RequestAccess';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import type { SearchHit, SearchResults } from '../search/types';
 import {
@@ -26,7 +27,11 @@ export default function ProductSearchExperience() {
 function ProductSearchPanel() {
   const { api, authorization } = useWorkspaceSession();
   const product = authorization?.area === 'product' ? authorization.context : null;
-  const canSearch = product?.capabilities.includes('search.query.execute') ?? false;
+  const capabilities = new Set(product?.capabilities ?? []);
+  const canSearch = capabilities.has('search.query.execute');
+  const canDocuments = canSearch && capabilities.has('evidence.document.read');
+  const canFinancial = canSearch && capabilities.has('financial-profile.profile.read');
+  const canAll = canDocuments && canFinancial;
   const [scope, setScope] = useState<ProductSearchScope>('all');
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<SearchResults | null>(null);
@@ -34,10 +39,15 @@ function ProductSearchPanel() {
   const [error, setError] = useState('');
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => { active.current?.abort(); }, []);
-  const canAsk = ['ai-intelligence.analysis.execute', 'search.query.execute', 'financial-profile.profile.read', 'evidence.document.read'].every(capability => product?.capabilities.includes(capability));
+  const canAsk = ['ai-intelligence.analysis.execute', 'search.query.execute', 'financial-profile.profile.read', 'evidence.document.read'].every(capability => capabilities.has(capability));
 
   const trimmed = query.trim();
-  const canSubmit = canSearch && !busy && trimmed.length > 0;
+  const selectedScopeAvailable = scope === 'all' ? canAll : scope === 'documents' ? canDocuments : canFinancial;
+  const effectiveScope: ProductSearchScope = selectedScopeAvailable
+    ? scope
+    : canAll ? 'all' : canDocuments ? 'documents' : canFinancial ? 'financial' : 'all';
+  const scopeAvailable = effectiveScope === 'all' ? canAll : effectiveScope === 'documents' ? canDocuments : canFinancial;
+  const canSubmit = canSearch && scopeAvailable && !busy && trimmed.length > 0;
 
   const message = (failure: unknown) => {
     if (failure instanceof AccessApiError) {
@@ -59,7 +69,7 @@ function ProductSearchPanel() {
     setError('');
     setResult(null);
     try {
-      const value = await searchProductInformation(api, trimmed, scope, controller.signal);
+      const value = await searchProductInformation(api, trimmed, effectiveScope, controller.signal);
       if (!controller.signal.aborted) setResult(value);
     } catch (failure) {
       if (!controller.signal.aborted) setError(message(failure));
@@ -112,6 +122,18 @@ function ProductSearchPanel() {
           description="Your organization can review the recommended Customer access update before enabling this journey."
         />
       )}
+      {canSearch && !canDocuments && <RequestAccessAction
+        target="customer.documents"
+        requiredCapabilities={['evidence.document.read']}
+        title="Document search access required"
+        description="Request access to search your current Documents. Financial-information search remains available when permitted."
+      />}
+      {canSearch && !canFinancial && <RequestAccessAction
+        target="customer.financial-information"
+        requiredCapabilities={['financial-profile.profile.read']}
+        title="Financial search access required"
+        description="Request access to search trusted financial information. Document search remains available when permitted."
+      />}
       {error && <Alert showIcon type="error" title={error} />}
 
       <section className="product-panel product-search-controls" aria-label="Search your information">
@@ -125,7 +147,7 @@ function ProductSearchPanel() {
             placeholder="Try salary, rent, statement, or a filename"
             enterButton="Search"
             loading={busy}
-            disabled={!canSearch}
+            disabled={!canSearch || !canDocuments && !canFinancial}
             onChange={(event) => { setQuery(event.target.value); }}
             onSearch={() => {
               void submit();
@@ -135,21 +157,21 @@ function ProductSearchPanel() {
         <div>
           <span className="product-search-label">Where to search</span>
           <Radio.Group
-            value={scope}
-            disabled={!canSearch || busy}
+            value={effectiveScope}
+            disabled={!canSearch || !canDocuments && !canFinancial || busy}
             onChange={(event) => { setScope(event.target.value as ProductSearchScope); }}
             optionType="button"
             buttonStyle="solid"
           >
-            <Radio.Button value="all">All</Radio.Button>
-            <Radio.Button value="documents">Documents</Radio.Button>
-            <Radio.Button value="financial">Financial information</Radio.Button>
+            <Radio.Button value="all" disabled={!canAll}>All</Radio.Button>
+            <Radio.Button value="documents" disabled={!canDocuments}>Documents</Radio.Button>
+            <Radio.Button value="financial" disabled={!canFinancial}>Financial information</Radio.Button>
           </Radio.Group>
         </div>
         <p className="product-search-note">
           <WorkspaceIcon name="shield" size={14} />
-          Search does not broaden your access. Every query is rechecked against your current
-          customer relationship and permissions.
+          Search does not broaden your access. Only currently permitted sources can be selected,
+          and every query is rechecked before and after the owner reads.
         </p>
       </section>
 
@@ -236,9 +258,9 @@ function ProductSearchPanel() {
               <div className="product-panel product-search-empty">
                 <Empty
                   description={
-                    scope === 'documents'
+                    effectiveScope === 'documents'
                       ? 'No current Documents matched this query.'
-                      : scope === 'financial'
+                      : effectiveScope === 'financial'
                         ? 'No trusted financial information matched this query.'
                         : 'No current Documents or trusted financial information matched this query.'
                   }
