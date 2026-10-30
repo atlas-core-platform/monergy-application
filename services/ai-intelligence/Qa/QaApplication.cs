@@ -6,13 +6,14 @@ namespace Monergy.Services.AiIntelligence.Qa;
 
 public sealed class QaApplication(IQaOwners owners, QaStore store)
 {
-    public const string PromptVersion = "monergy-basic-qa/3";
+    public const string PromptVersion = FinancialQaSafety.PromptVersion;
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
     public static QaPlan ParsePlan(string content)
     {
         var plan = Parse<QaPlan>(content);
-        if (plan.Mode is not ("lookup" or "calculation" or "unsupported") || !NetWorthData.Text(plan.Query, 256)) throw Invalid();
+        if (plan.Mode is not ("lookup" or "calculation" or "unsupported") || !NetWorthData.Text(plan.Query, 256) ||
+            FinancialQaSafety.ContainsInstructionOverride(plan.Query)) throw Invalid();
         return plan;
     }
     public static IReadOnlyList<QaClaim> Select(string content, IReadOnlyList<QaClaim> claims)
@@ -70,6 +71,17 @@ public sealed class QaApplication(IQaOwners owners, QaStore store)
             records.Add(new(customer.Session.TenantId, customer.Workspace.CustomerId, customer.Session.ActorId, requestHash,
                 attempt, [], [], "", "", "", true, settings.Notice, input.DocumentVersionId, input.NetWorthPositionId));
             await store.CheckpointAsync(records);
+            if (FinancialQaSafety.ContainsInstructionOverride(input.Question))
+            {
+                CustomerReviewHttp.Confirm(customer.Decision, (await owners.Authorize(http)).Decision);
+                if ((await owners.Configuration(http)).Revision != settings.Revision) throw new TenantBoundaryException("AI_PERMISSION_CHANGED", 409);
+                var blocked = new QaAnswer(attempt.AnswerId, input.OperationId, input.Question, "UNSUPPORTED",
+                    "This request was not answered because the question contained instruction-like content that cannot be used as a financial question. Ask a factual question about the authorized records instead.",
+                    [], DateTimeOffset.UtcNow, "", PromptVersion, settings.Revision);
+                records[recordIndex] = new(customer.Session.TenantId, customer.Workspace.CustomerId, customer.Session.ActorId, requestHash, blocked,
+                    [], [], "", "", "", true, settings.Notice, input.DocumentVersionId, input.NetWorthPositionId);
+                return blocked;
+            }
             var planResult = summary ? new QaModelResult("", "{\"mode\":\"lookup\",\"query\":\"reviewed financial summary\"}") : await owners.Generate(http, new("plan", input.Question, settings.Revision, true, [], basis));
             var plan = ParsePlan(planResult.Content); var searchIds = new List<string>();
             IReadOnlyList<QaClaim> retrieved = []; IReadOnlyList<QaClaim> selected = [];
@@ -83,6 +95,18 @@ public sealed class QaApplication(IQaOwners owners, QaStore store)
                     "net-worth" => await owners.Calculate(http, customer, input.NetWorthPositionId!, input.OperationId),
                     _ => await owners.Retrieve(http, customer, plan.Query, searchIds)
                 };
+                if (retrieved.Any(claim => FinancialQaSafety.ContainsInstructionOverride(claim.Text)))
+                {
+                    await owners.Validate(http, customer, retrieved);
+                    CustomerReviewHttp.Confirm(customer.Decision, (await owners.Authorize(http)).Decision);
+                    if ((await owners.Configuration(http)).Revision != settings.Revision) throw new TenantBoundaryException("AI_PERMISSION_CHANGED", 409);
+                    var blocked = new QaAnswer(attempt.AnswerId, input.OperationId, input.Question, "UNSUPPORTED",
+                        "This request was not answered because the selected source contained instruction-like content that cannot be used as financial evidence. Review the source and ask a factual question about authorized records.",
+                        [], DateTimeOffset.UtcNow, planResult.Model, PromptVersion, settings.Revision);
+                    records[recordIndex] = new(customer.Session.TenantId, customer.Workspace.CustomerId, customer.Session.ActorId, requestHash, blocked,
+                        searchIds, [], planResult.Content, "", planResult.Model, true, settings.Notice, input.DocumentVersionId, input.NetWorthPositionId);
+                    return blocked;
+                }
                 records[recordIndex] = records[recordIndex] with { SearchRecordIds = searchIds, RetrievedClaims = retrieved, PlanJson = planResult.Content, PlanModel = planResult.Model };
                 await store.CheckpointAsync(records);
                 if (summary && retrieved.Any(x => x.Id.EndsWith("-incomplete",StringComparison.Ordinal))) selected = retrieved;
