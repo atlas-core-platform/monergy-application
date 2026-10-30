@@ -7,7 +7,7 @@ import FinancialGoalProgressExperience from '../src/product/FinancialGoalProgres
 import type { ProductFinancialGoal, ProductFinancialGoalProgress } from '../src/product/productApi';
 
 const session = { tenantId: 'T001', actorId: 'A100', authenticationContextId: 'customer-session', subjectVersion: 2, expiresAt: '2027-01-01T00:00:00Z' };
-const goal: ProductFinancialGoal = { financialGoalId: 'goal-saved', operationId: 'a'.repeat(32), customerId: 'reference-customer', goal: { name: 'Education fund', targetAmount: 100000, currency: 'INR', targetDate: '2030-06-30' }, recordedBy: 'A100', recordedAt: '2026-10-20T00:00:00Z', declarationStatus: 'CUSTOMER_DEFINED', revision: 2 };
+const goal: ProductFinancialGoal = { financialGoalId: 'goal-saved', operationId: 'a'.repeat(32), customerId: 'reference-customer', goal: { name: 'Education fund', targetAmount: 100000, currency: 'INR', targetDate: '2030-06-30' }, recordedBy: 'A100', recordedAt: '2026-10-20T00:00:00Z', declarationStatus: 'CUSTOMER_DEFINED', revision: 2, lifecycleStatus: 'IN_PROGRESS', lifecycleAsOfDate: '2026-10-20', lifecycleBasis: 'CUSTOMER_REPORTED' };
 const value: ProductFinancialGoalProgress = { customerId: goal.customerId, financialGoalId: goal.financialGoalId, goalRevision: goal.revision, goal: goal.goal, reportedContributionAmount: 25000, remainingAmount: 75000, progressPercent: 25, includedContributionCount: 2, withdrawnContributionCount: 1, latestContributionDate: '2026-10-15', sources: [
   { goalContributionId: 'contribution-a', contributionRevision: 2, goalRevision: 1, amount: 10000, contributionDate: '2026-10-01' },
   { goalContributionId: 'contribution-b', contributionRevision: 1, goalRevision: 2, amount: 15000, contributionDate: '2026-10-15' },

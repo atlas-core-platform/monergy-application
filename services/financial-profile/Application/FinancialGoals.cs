@@ -32,7 +32,9 @@ public sealed class FinancialGoalsApplication(IFinancialGoalRepository repositor
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(normalized, ContractJson.Options)));
         var id = "goal-" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(
             string.Create(CultureInfo.InvariantCulture, $"{tenant}|{customer}|{actor}|{input.OperationId}")))).ToLowerInvariant();
-        var record = new CustomerFinancialGoal(id,input.OperationId,customer,normalized.Goal,actor,clock.GetUtcNow(),"CUSTOMER_DEFINED");
+        var now = clock.GetUtcNow();
+        var record = new CustomerFinancialGoal(id,input.OperationId,customer,normalized.Goal,actor,now,"CUSTOMER_DEFINED",1,
+            "IN_PROGRESS",DateOnly.FromDateTime(now.UtcDateTime),"CUSTOMER_REPORTED");
         return await repository.CreateAsync(tenant, customer, actor, fingerprint, record, ct).ConfigureAwait(false);
     }
     public Task<FinancialGoalList> ListAsync(string tenant, string customer, CancellationToken ct) => repository.ListAsync(tenant, customer, ct);
@@ -43,11 +45,31 @@ public sealed class FinancialGoalsApplication(IFinancialGoalRepository repositor
             !Valid(new(input.OperationId, input.Goal)))
             throw new TenantBoundaryException("FINANCIAL_GOAL_INVALID", 400);
         var original = await ReadAsync(tenant,customer,id,ct,1).ConfigureAwait(false);
+        var previous = await repository.ReadAsync(tenant, customer, id, ct, input.ExpectedRevision).ConfigureAwait(false)
+            ?? throw new TenantBoundaryException("FINANCIAL_GOAL_REVISION_CONFLICT", 409);
         var normalized = input with { Goal = input.Goal with { Name = input.Goal.Name.Trim() } };
         var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(normalized, ContractJson.Options)));
         var record = original with { OperationId = input.OperationId, Goal = normalized.Goal, RecordedBy = actor,
-            RecordedAt = clock.GetUtcNow(), Revision = input.ExpectedRevision + 1 };
+            RecordedAt = clock.GetUtcNow(), Revision = input.ExpectedRevision + 1, LifecycleStatus = previous.LifecycleStatus,
+            LifecycleAsOfDate = previous.LifecycleAsOfDate, LifecycleBasis = previous.LifecycleBasis };
         return await repository.ReviseAsync(tenant, customer, actor, fingerprint, input.ExpectedRevision, record, ct).ConfigureAwait(false);
+    }
+    public async Task<CustomerFinancialGoal> ReportLifecycleAsync(string tenant, string customer, string actor, string id,
+        ReportFinancialGoalLifecycle input, CancellationToken ct)
+    {
+        if (!TenantAccessClient.Identifier(id,80) || input is null || input.ExpectedRevision is < 1 or int.MaxValue || !Guid.TryParseExact(input.OperationId,"N",out _) ||
+            input.OperationId.Any(char.IsAsciiLetterUpper) || input.Status is not ("IN_PROGRESS" or "PAUSED" or "REPORTED_ACHIEVED" or "STOPPED") ||
+            input.AsOfDate.Year < 1900 || input.AsOfDate > DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime.AddHours(14)))
+            throw new TenantBoundaryException("FINANCIAL_GOAL_INVALID",400);
+        var previous = await repository.ReadAsync(tenant,customer,id,ct,input.ExpectedRevision).ConfigureAwait(false)
+            ?? throw new TenantBoundaryException("FINANCIAL_GOAL_REVISION_CONFLICT",409);
+        if (previous.LifecycleBasis != "CUSTOMER_REPORTED" || previous.LifecycleStatus == input.Status || input.AsOfDate < previous.LifecycleAsOfDate)
+            throw new TenantBoundaryException("FINANCIAL_GOAL_INVALID",400);
+        var fingerprint = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(input,ContractJson.Options)));
+        var record = previous with { OperationId=input.OperationId, RecordedBy=actor, RecordedAt=clock.GetUtcNow(),
+            Revision=input.ExpectedRevision+1, LifecycleStatus=input.Status, LifecycleAsOfDate=input.AsOfDate,
+            LifecycleBasis="CUSTOMER_REPORTED" };
+        return await repository.ReviseAsync(tenant,customer,actor,fingerprint,input.ExpectedRevision,record,ct).ConfigureAwait(false);
     }
     public async Task<FinancialGoalHistory> HistoryAsync(string tenant, string customer, string id, int? beforeRevision, CancellationToken ct)
     {
