@@ -19,7 +19,7 @@ public sealed class SelfSessionsTests
     private static readonly TenantSessionLookup Lookup = new("T001", "current-session");
     private static readonly string Other = new('a', 64);
     private static SelfSessionRevocation Change => new(Guid.NewGuid().ToString("N"), Other);
-    private static SelfSessionEntry Entry => new("A100", Other, DateTimeOffset.UtcNow.AddMinutes(-10), DateTimeOffset.UtcNow.AddMinutes(20), "Active", false);
+    private static SelfSessionEntry Entry => new("A100", Other, DateTimeOffset.UtcNow.AddMinutes(-10), DateTimeOffset.UtcNow.AddMinutes(20), "Active", false, "Desktop", "Chrome");
 
     [Fact]
     public async Task ListDerivesIdentityAndNeverReturnsTheBearerCredential()
@@ -30,6 +30,8 @@ public sealed class SelfSessionsTests
         Assert.Equal("A100", f.Repository.Current?.ActorId); Assert.Equal(2, f.Membership.Calls);
         Assert.DoesNotContain("current-session", JsonSerializer.Serialize(page), StringComparison.Ordinal);
         Assert.Equal(64, SelfSessionReferences.Hash("current-session").Length);
+        Assert.Equal("Desktop", Assert.Single(page.Items).DeviceClass);
+        Assert.Equal("Chrome", Assert.Single(page.Items).ClientFamily);
     }
     [Theory]
     [InlineData("T002", "current-session")]
@@ -74,6 +76,8 @@ public sealed class SelfSessionsTests
     [InlineData("duplicate")]
     [InlineData("current")]
     [InlineData("status")]
+    [InlineData("device")]
+    [InlineData("client")]
     [InlineData("dates")]
     [InlineData("cursor")]
     [InlineData("oversized")]
@@ -88,6 +92,8 @@ public sealed class SelfSessionsTests
             "duplicate" => page with { Items = [Entry, Entry] },
             "current" => page with { Items = [Entry with { IsCurrent = true }] },
             "status" => page with { Items = [Entry with { Status = "VerifiedDevice" }] },
+            "device" => page with { Items = [Entry with { DeviceClass = "Phone one" }] },
+            "client" => page with { Items = [Entry with { ClientFamily = "Private browser" }] },
             "dates" => page with { Items = [Entry with { ExpiresAt = Entry.EstablishedAt.AddMinutes(-1) }] },
             "cursor" => page with { NextCursor = Other },
             _ => page with { Items = Enumerable.Repeat(Entry, 101).ToArray() }

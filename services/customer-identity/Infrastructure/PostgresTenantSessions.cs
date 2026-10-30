@@ -33,6 +33,10 @@ public sealed class PostgresTenantSessions : ITenantSessionRepository, IAsyncDis
     }
 
     public async Task<TenantSessionContext> CreateAsync(string tenantId, string actorId, string sessionId, long subjectVersion, CancellationToken cancellationToken)
+        => await CreateAsync(tenantId, actorId, sessionId, subjectVersion, SessionClientDescriptor.Unknown, cancellationToken).ConfigureAwait(false);
+
+    public async Task<TenantSessionContext> CreateAsync(string tenantId, string actorId, string sessionId, long subjectVersion,
+        SessionClientDescriptor client, CancellationToken cancellationToken)
     {
         TenantAccessProtocol.Identifier(actorId);
         TenantAccessProtocol.Identifier(sessionId, 160);
@@ -45,9 +49,10 @@ public sealed class PostgresTenantSessions : ITenantSessionRepository, IAsyncDis
             """, new { ActorId = actorId }, transaction, cancellationToken)).ConfigureAwait(false);
         if (subjectVersion < minimum) throw new TenantAccessException("MEMBERSHIP_CHANGED");
         var expires = await connection.ExecuteScalarAsync<DateTime>(Command("""
-            INSERT INTO customer_identity.trusted_sessions(session_hash,actor_id,subject_version)
-            VALUES (@Hash,@ActorId,@SubjectVersion) RETURNING expires_at;
-            """, new { Hash = SessionHash(sessionId), ActorId = actorId, SubjectVersion = subjectVersion }, transaction, cancellationToken)).ConfigureAwait(false);
+            INSERT INTO customer_identity.trusted_sessions(session_hash,actor_id,subject_version,device_class,client_family)
+            VALUES (@Hash,@ActorId,@SubjectVersion,@DeviceClass,@ClientFamily) RETURNING expires_at;
+            """, new { Hash = SessionHash(sessionId), ActorId = actorId, SubjectVersion = subjectVersion,
+                client.DeviceClass, client.ClientFamily }, transaction, cancellationToken)).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return new(tenantId, actorId, sessionId, subjectVersion, Utc(expires));
     }
@@ -169,8 +174,12 @@ public sealed class PostgresTenantSessions : ITenantSessionRepository, IAsyncDis
                     AND NOT has_database_privilege(current_user,current_database(),'CREATE')
                     AND NOT has_table_privilege(current_user,'customer_identity.tenant_identity','INSERT,UPDATE,DELETE,TRUNCATE')
                     AND NOT has_table_privilege(current_user,'customer_identity.access_event_inbox','UPDATE,DELETE,TRUNCATE')
+                    AND has_column_privilege(current_user,'customer_identity.trusted_sessions','device_class','INSERT')
+                    AND has_column_privilege(current_user,'customer_identity.trusted_sessions','client_family','INSERT')
                     AND NOT has_column_privilege(current_user,'customer_identity.trusted_sessions','subject_version','UPDATE')
                     AND NOT has_column_privilege(current_user,'customer_identity.trusted_sessions','expires_at','UPDATE')
+                    AND NOT has_column_privilege(current_user,'customer_identity.trusted_sessions','device_class','UPDATE')
+                    AND NOT has_column_privilege(current_user,'customer_identity.trusted_sessions','client_family','UPDATE')
                     AND NOT EXISTS(SELECT 1 FROM pg_roles WHERE rolname=current_user AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication));
                 """, new { TenantId = tenantId }, cancellationToken: cancellationToken)).ConfigureAwait(false);
             if (!valid) throw new TenantAccessException("TENANT_BINDING_INVALID", 503);

@@ -8,6 +8,8 @@ import './product.css';
 interface SessionItem {
   actorId: string; sessionReference: string; establishedAt: string; expiresAt: string;
   status: 'Active' | 'Ended' | 'Expired' | 'AccessChanged'; isCurrent: boolean;
+  deviceClass: 'Desktop' | 'Tablet' | 'Mobile' | 'Unknown';
+  clientFamily: 'Chrome' | 'Edge' | 'Firefox' | 'Safari' | 'Other' | 'Unknown';
 }
 interface SessionPage { tenantId: string; actorId: string; items: SessionItem[]; nextCursor: string | null }
 interface View { api: AccessApi; scope: string; page: SessionPage | null; after?: string; loading: boolean; busy: boolean; uncertain: boolean; error: string; notice: string }
@@ -20,6 +22,8 @@ function validPage(value: unknown, tenant: string, actor: string): value is Sess
       !(p.nextCursor === null || reference(p.nextCursor) && p.items.length === 100 && p.nextCursor === p.items.at(-1)?.sessionReference)) return false;
   return p.items.every((x: SessionItem | null) => x?.actorId === actor && reference(x.sessionReference) && date(x.establishedAt) && date(x.expiresAt) &&
     Date.parse(x.expiresAt) > Date.parse(x.establishedAt) && ['Active', 'Ended', 'Expired', 'AccessChanged'].includes(x.status) &&
+    ['Desktop', 'Tablet', 'Mobile', 'Unknown'].includes(x.deviceClass) &&
+    ['Chrome', 'Edge', 'Firefox', 'Safari', 'Other', 'Unknown'].includes(x.clientFamily) &&
     typeof x.isCurrent === 'boolean' && (!x.isCurrent || x.status === 'Active')) &&
     new Set(p.items.map(x => x.sessionReference)).size === p.items.length && p.items.filter(x => x.isCurrent).length <= 1;
 }
@@ -80,8 +84,8 @@ export default function SelfSessionsExperience() {
   };
   if (!api || !customer) return <Alert type="warning" showIcon title="Connect to your own customer workspace to review sessions." />;
   return <section className="product-page" aria-labelledby="self-sessions-title">
-    <header className="product-page-header"><div><p className="workspace-eyebrow">SETTINGS</p><h1 id="self-sessions-title">Sessions</h1>
-      <p>Review your session activity and end a session you no longer use. Device and location details are unavailable.</p></div>
+    <header className="product-page-header"><div><p className="workspace-eyebrow">SETTINGS</p><h1 id="self-sessions-title">Devices &amp; sessions</h1>
+      <p>Review successful sign-in sessions and end one you no longer use. Location and device fingerprints are not collected.</p></div>
       <Button disabled={!!current && (current.busy || current.loading)} onClick={() => { void load(current?.after); }}>Reload sessions</Button>
     </header>
     {current?.error && <Alert type="error" showIcon title={current.error} />}
@@ -90,6 +94,7 @@ export default function SelfSessionsExperience() {
       {current.page.items.length === 0 ? <Empty description="No sessions on this page." /> : <ul aria-label="Your sessions" style={{ listStyle: 'none', padding: 0 }}>
         {current.page.items.map(item => <li key={item.sessionReference}><Card size="small" title={`Started ${new Date(item.establishedAt).toLocaleString()}`} style={{ marginBottom: 12 }}>
           <Space wrap><Tag color={item.status === 'Active' ? 'green' : undefined}>{statusLabel[item.status]}</Tag>{item.isCurrent && <Tag color="blue">Current session</Tag>}</Space>
+          <p>{item.deviceClass === 'Unknown' || item.clientFamily === 'Unknown' ? 'Device details were not recorded for this session.' : `Browser-reported device: ${item.deviceClass} · ${item.clientFamily}`}</p>
           <p>Expires {new Date(item.expiresAt).toLocaleString()}</p>
           {item.isCurrent ? <p>Use Sign out to end the session you are using now.</p> : item.status === 'Active' && <Button danger disabled={current.busy || current.uncertain} onClick={() => { setSelection({ api, scope, item }); }}>End session</Button>}
         </Card></li>)}

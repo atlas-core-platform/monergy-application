@@ -61,6 +61,8 @@ public sealed class CustomerRegistration(ICustomerRegistrationRepository reposit
         return new(identity.TenantId,identity.ActorId,identity.CustomerId,true);
     }
     public async Task<TenantSessionContext> SignInAsync(PasswordSignIn request,CancellationToken ct)
+        => await SignInAsync(request, SessionClientDescriptor.Unknown, ct).ConfigureAwait(false);
+    public async Task<TenantSessionContext> SignInAsync(PasswordSignIn request,SessionClientDescriptor client,CancellationToken ct)
     {
         TenantAccessProtocol.Identifier(request.TenantId,64);
         var email=CustomerEmailAccess.NormalizeEmail(request.Email);
@@ -71,7 +73,7 @@ public sealed class CustomerRegistration(ICustomerRegistrationRepository reposit
         // A lost enrollment receipt is resumed with verified credentials, never
         // by replaying an OTP or replacing an existing imported principal.
         if(!identity.Enrolled)await Enroll(identity,ct);
-        var session=await sessions.EstablishVerifiedAsync(identity.TenantId,identity.ActorId,ct);
+        var session=await sessions.EstablishVerifiedAsync(identity.TenantId,identity.ActorId,client,ct);
         try
         {
             if(!await repository.CurrentAsync(identity,ct))throw new TenantAccessException("AUTHENTICATION_REQUIRED",401);

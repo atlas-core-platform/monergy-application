@@ -2,14 +2,14 @@ import { FoundationProvider } from '@monergy/ui-foundation';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { App } from '../src/App';
-import { AccessApi, AccessApiError } from '../src/access/accessApi';
+import { AccessApi, AccessApiError, sessionClientHeaders } from '../src/access/accessApi';
 import { Context } from '../src/access/workspaceSession';
 import type { WorkspaceSessionState } from '../src/access/workspaceSession';
 import SelfSessionsExperience from '../src/product/SelfSessionsExperience';
 
 const session = { tenantId: 'T001', actorId: 'A100', authenticationContextId: 'current-session', subjectVersion: 3, expiresAt: '2027-01-01T00:00:00Z' };
 const target = 'a'.repeat(64);
-const entry = () => ({ actorId: 'A100', sessionReference: target, establishedAt: '2026-10-18T01:00:00Z', expiresAt: '2026-10-18T01:30:00Z', status: 'Active', isCurrent: false });
+const entry = () => ({ actorId: 'A100', sessionReference: target, establishedAt: '2026-10-18T01:00:00Z', expiresAt: '2026-10-18T01:30:00Z', status: 'Active', isCurrent: false, deviceClass: 'Desktop', clientFamily: 'Chrome' });
 const page = () => ({ tenantId: 'T001', actorId: 'A100', items: [entry(), { ...entry(), sessionReference: 'b'.repeat(64), isCurrent: true }], nextCursor: null as string | null });
 function state(api: AccessApi): WorkspaceSessionState {
   return { status: 'authorized', session, api, authorization: { area: 'product', context: { tenantId: 'T001', actorId: 'A100', customerId: 'C001', customerName: 'Customer', capabilities: [], environment: 'Test environment', dataDurability: 'Temporary data', productionAccepted: false } },
@@ -30,11 +30,29 @@ afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); window
 it('shows only session activity, marks the current session and never offers to end it as another session', async () => {
   const api = new AccessApi(session); vi.spyOn(api, 'selfSessions').mockResolvedValue(page()); mount(state(api));
   expect(await screen.findByText('Current session')).toBeVisible();
-  expect(screen.getByText(/Device and location details are unavailable/)).toBeVisible();
+  expect(screen.getAllByText('Browser-reported device: Desktop · Chrome')).toHaveLength(2);
+  expect(screen.getByText(/Location and device fingerprints are not collected/)).toBeVisible();
   const current = screen.getByText('Current session').closest('li'); if (!current) throw new Error('Missing session row');
   expect(within(current).queryByRole('button', { name: 'End session' })).not.toBeInTheDocument();
   expect(screen.getAllByRole('button', { name: 'End session' })).toHaveLength(1);
   expect(screen.queryByText(session.authenticationContextId)).not.toBeInTheDocument();
+});
+
+it('classifies only a bounded device type and browser family without sending a raw user agent', () => {
+  expect(sessionClientHeaders('Mozilla/5.0 (iPhone) AppleWebKit/605.1 Version/17.0 Mobile/15E148 Safari/604.1')).toEqual({
+    'X-Monergy-Device-Class': 'Mobile', 'X-Monergy-Client-Family': 'Safari',
+  });
+  expect(sessionClientHeaders('Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 Chrome/120.0 Safari/537.36 Edg/120.0')).toEqual({
+    'X-Monergy-Device-Class': 'Desktop', 'X-Monergy-Client-Family': 'Edge',
+  });
+  expect(Object.values(sessionClientHeaders('private-client/1.0')).join(' ')).not.toContain('private-client');
+});
+
+it('shows a safe unknown state for sessions issued before client classification existed', async () => {
+  const api = new AccessApi(session);
+  vi.spyOn(api, 'selfSessions').mockResolvedValue({ ...page(), items: [{ ...entry(), deviceClass: 'Unknown', clientFamily: 'Unknown' }] });
+  mount(state(api));
+  expect(await screen.findByText('Device details were not recorded for this session.')).toBeVisible();
 });
 
 it('requires confirmation and binds the exact selected session and operation before verifying the ended state', async () => {

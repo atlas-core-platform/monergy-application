@@ -16,6 +16,7 @@ public sealed class PostgresSelfSessions(PostgresTenantSessions sessions) : ISel
         if (after is not null && cursor is null) throw new TenantAccessException("SESSION_CURSOR_INVALID", 400);
         var rows = (await connection.QueryAsync<SessionRow>(new CommandDefinition("""
             SELECT actor_id AS ActorId,session_hash AS SessionReference,established_at AS EstablishedAt,expires_at AS ExpiresAt,
+                device_class AS DeviceClass,client_family AS ClientFamily,
                 CASE WHEN revoked THEN 'Ended' WHEN expires_at<=clock_timestamp() THEN 'Expired'
                     WHEN subject_version<>@Version THEN 'AccessChanged' ELSE 'Active' END AS Status
             FROM customer_identity.trusted_sessions
@@ -25,7 +26,8 @@ public sealed class PostgresSelfSessions(PostgresTenantSessions sessions) : ISel
                 At = cursor?.EstablishedAt ?? DateTime.UnixEpoch }, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
         var reference = SelfSessionReferences.Hash(current.AuthenticationContextId);
         return new(current.TenantId, current.ActorId, rows.Take(100).Select(x => new SelfSessionEntry(x.ActorId,
-            x.SessionReference, Utc(x.EstablishedAt), Utc(x.ExpiresAt), x.Status, x.SessionReference == reference)).ToArray(),
+            x.SessionReference, Utc(x.EstablishedAt), Utc(x.ExpiresAt), x.Status, x.SessionReference == reference,
+            x.DeviceClass, x.ClientFamily)).ToArray(),
             rows.Length > 100 ? rows[99].SessionReference : null);
     }
     public async Task<SelfSessionReceipt> RevokeAsync(TenantSessionContext current, SelfSessionRevocation change, CancellationToken ct)
@@ -86,5 +88,7 @@ public sealed class PostgresSelfSessions(PostgresTenantSessions sessions) : ISel
         public DateTime EstablishedAt { get; set; }
         public DateTime ExpiresAt { get; set; }
         public string Status { get; set; } = "";
+        public string DeviceClass { get; set; } = "";
+        public string ClientFamily { get; set; } = "";
     }
 }

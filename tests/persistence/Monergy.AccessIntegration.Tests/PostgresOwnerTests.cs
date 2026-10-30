@@ -46,6 +46,25 @@ public sealed class PostgresOwnerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task SessionHistoryPersistsOnlyBoundedClientClassification()
+    {
+        await using var sessions = new PostgresTenantSessions(Config());
+        await sessions.CreateAsync("T001", "A100", "classified-session", 1,
+            new("Tablet", "Safari"), default);
+        await using var owner = await OpenAsync("CI", "T001", "OWNER");
+        var evidence = await owner.QuerySingleAsync<(string DeviceClass, string ClientFamily)>("""
+            SELECT device_class AS DeviceClass,client_family AS ClientFamily
+            FROM customer_identity.trusted_sessions;
+            """);
+        Assert.Equal(("Tablet", "Safari"), evidence);
+        await using var runtime = await OpenAsync("CI", "T001", "RUNTIME");
+        await Assert.ThrowsAsync<PostgresException>(() => runtime.ExecuteAsync(
+            "UPDATE customer_identity.trusted_sessions SET device_class='Desktop';"));
+        await Assert.ThrowsAsync<PostgresException>(() => runtime.ExecuteAsync(
+            "UPDATE customer_identity.trusted_sessions SET client_family='Chrome';"));
+    }
+
+    [Fact]
     public async Task OlderEventsCannotRevokeNewerSessionsOrLowerWatermarks()
     {
         await using var sessions = new PostgresTenantSessions(Config());
