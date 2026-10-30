@@ -16,7 +16,7 @@ const record: ProductTaxRecord = {taxRecordId:'tax-saved',operationId:'a'.repeat
 function mount(api: AccessApi, canCreate = true, canRead = true, facts: ProductFinancialFact[] = [source]) {
   return render(<FoundationProvider appearance="midnight"><TaxRecordsExperience api={api} canCreate={canCreate} canRead={canRead} facts={facts} /></FoundationProvider>);
 }
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState(null, '', '/'); });
 async function fill(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await screen.findByRole('button', { name: 'Add tax record' }));
   const drawer = screen.getByRole('dialog', { name: 'Add tax record' });
@@ -72,6 +72,19 @@ it('leaves the form editable after a confirmed validation rejection', async () =
 it('keeps read-only records visible and hides creation without update access', async () => {
   const api=new AccessApi(session);vi.spyOn(api,'product').mockResolvedValue({items:[record],hasMore:false,dataDurability:'Temporary data'});mount(api,false);
   expect(await screen.findByRole('button',{name:'View tax record: Tax statement'})).toBeVisible();expect(screen.queryByRole('button',{name:'Add tax record'})).not.toBeInTheDocument();
+});
+it('opens the exact tax record history from a reviewed Search result route', async () => {
+  window.history.replaceState(null, '', '/finances?type=TAX&taxRecord=tax-saved');
+  const api=new AccessApi(session);
+  const request=vi.spyOn(api,'product').mockImplementation(path=>path==='v1/tax-records'
+    ?Promise.resolve({items:[record],hasMore:false,dataDurability:'Temporary data'})
+    :path==='v1/tax-records/tax-saved/history'
+      ?Promise.resolve({items:[record],hasMore:false,nextBeforeRevision:null})
+      :Promise.reject(new Error('unexpected route')));
+  mount(api,false);
+  const drawer=await screen.findByRole('dialog',{name:'Tax record history'});
+  expect(within(drawer).getByRole('button',{name:'View version 1'})).toBeVisible();
+  expect(request).toHaveBeenCalledWith('v1/tax-records/tax-saved/history','GET',undefined,expect.any(AbortSignal));
 });
 it('makes no record request without document access', () => {
   const api=new AccessApi(session);const request=vi.spyOn(api,'product');mount(api,true,false);

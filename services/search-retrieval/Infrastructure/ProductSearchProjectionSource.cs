@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -222,7 +223,153 @@ public sealed class ProductSearchProjectionSource(
                     fact.FinancialProvenanceId,
                     null)));
         }
+
+        foreach (var record in await ReadTaxRecordsAsync(
+            proof, customerId, authorizationContextId, security, profileId,
+            correlationId, cancellationToken).ConfigureAwait(false))
+            builder.Add(record);
+
         return builder.ToImmutable();
+    }
+
+    private async Task<ImmutableArray<DerivedSearchRecord>> ReadTaxRecordsAsync(
+        TenantBoundaryProof proof,
+        string customerId,
+        string authorizationContextId,
+        TrustedSecurityContext security,
+        string profileId,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        var list = await GetOwnerAsync<TaxRecordList>(
+            clients.CreateClient(FinancialProfileClient), financialEndpoint, proof,
+            "local/v1/customers/" + Uri.EscapeDataString(customerId) + "/tax-records",
+            correlationId, cancellationToken).ConfigureAwait(false);
+        if (list.Items is null || list.Items.Count > 200 || list.HasMore ||
+            list.Items.Select(item => item?.TaxRecordId).Distinct(StringComparer.Ordinal).Count() != list.Items.Count)
+            throw Failure("search.source.corpus-limit", ContractErrorCategory.DependencyFailure,
+                "Reviewed tax record search exceeds the supported complete corpus.", correlationId);
+
+        var builder = ImmutableArray.CreateBuilder<DerivedSearchRecord>(list.Items.Count);
+        foreach (var record in list.Items.OrderBy(item => item.Tax.Name, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(item => item.TaxRecordId, StringComparer.Ordinal))
+        {
+            if (!Valid(record, customerId))
+                throw Failure("search.source.tax-record-boundary-invalid", ContractErrorCategory.AccessDenied,
+                    "A reviewed tax record is outside the current customer boundary.", correlationId);
+
+            var factRequest = new ContractRequest<GetFinancialFact>(
+                Vs02ContractNames.GetFinancialFact, ContractGuard.CurrentVersion,
+                RequestId("tax-record-source"), correlationId, null, security, null,
+                new GetFinancialFact(record.Tax.SourceFinancialFactId, customerId, record.Tax.SourceRevision));
+            var factResult = await SendAsync<GetFinancialFact, AuthoritativeFinancialFact>(
+                clients.CreateClient(FinancialProfileClient), financialEndpoint, proof,
+                "contracts/cid-032/v1", factRequest, cancellationToken).ConfigureAwait(false);
+            if (factResult.Outcome != ContractOutcome.Success || factResult.Data is null)
+                throw OwnerFailure(factResult.Error, "search.source.financial-profile-unavailable", correlationId);
+            var fact = factResult.Data;
+            if (fact.CustomerId != customerId || fact.FinancialProfileId != profileId ||
+                fact.FinancialFactId != record.Tax.SourceFinancialFactId ||
+                fact.Revision != record.Tax.SourceRevision ||
+                FinancialSourceFactBoundary.ForCustomer(fact.FactType) != "TAX" ||
+                fact.Currency != record.Currency || fact.FinancialProvenanceId != record.SourceProvenanceId)
+                throw Failure("search.source.tax-record-boundary-invalid", ContractErrorCategory.AccessDenied,
+                    "A reviewed tax record source is outside the current customer boundary.", correlationId);
+
+            var provenanceRequest = new ContractRequest<GetFinancialProvenance>(
+                Vs02ContractNames.GetFinancialProvenance, ContractGuard.CurrentVersion,
+                RequestId("tax-record-provenance"), correlationId, null, security, null,
+                new GetFinancialProvenance(record.SourceProvenanceId, customerId));
+            var provenanceResult = await SendAsync<GetFinancialProvenance, FinancialProvenance>(
+                clients.CreateClient(FinancialProfileClient), financialEndpoint, proof,
+                "contracts/cid-033/v1", provenanceRequest, cancellationToken).ConfigureAwait(false);
+            if (provenanceResult.Outcome != ContractOutcome.Success || provenanceResult.Data is null)
+                throw OwnerFailure(provenanceResult.Error, "search.source.financial-profile-unavailable", correlationId);
+            var provenance = provenanceResult.Data;
+            if (provenance.CustomerId != customerId || provenance.FinancialFactId != fact.FinancialFactId ||
+                provenance.FinancialProvenanceId != record.SourceProvenanceId ||
+                provenance.EvidenceId != record.EvidenceId || provenance.DocumentVersionId != record.DocumentVersionId)
+                throw Failure("search.source.tax-record-boundary-invalid", ContractErrorCategory.AccessDenied,
+                    "Reviewed tax record provenance is outside the current customer boundary.", correlationId);
+
+            var amount = record.Tax.Amount.ToString("0.00", CultureInfo.InvariantCulture);
+            builder.Add(new DerivedSearchRecord(
+                "search-financial-tax-record-" + record.TaxRecordId,
+                customerId,
+                authorizationContextId,
+                SearchResultType.Financial,
+                record.Tax.Name,
+                $"Customer-reviewed tax record for {record.Tax.Jurisdiction}: {record.Tax.TaxType}; " +
+                $"{record.Tax.AmountKind.ToLowerInvariant()} {amount} {record.Currency}; " +
+                $"tax year {record.Tax.TaxYearLabel}; period {record.Tax.PeriodStart:yyyy-MM-dd} to {record.Tax.PeriodEnd:yyyy-MM-dd}. " +
+                "This is not assessed tax liability, an accepted filing, payment confirmation, refund entitlement or tax advice.",
+                SearchAuthority.FinancialProfileService,
+                new SearchSourceReference(
+                    "TaxRecord",
+                    record.TaxRecordId,
+                    record.Tax.SourceFinancialFactId,
+                    record.SourceProvenanceId,
+                    null)));
+        }
+        return builder.ToImmutable();
+    }
+
+    private static bool Valid(ReviewedTaxRecord? record, string customerId) =>
+        record is { Tax: not null } && record.CustomerId == customerId &&
+        TenantAccessClient.Identifier(record.TaxRecordId, 80) &&
+        Guid.TryParseExact(record.OperationId, "N", out _) &&
+        record.Revision > 0 && record.VerificationStatus == "CUSTOMER_REVIEWED" &&
+        Text(record.Tax.Name) && Text(record.Tax.Jurisdiction) && Text(record.Tax.TaxType) &&
+        Text(record.Tax.TaxYearLabel, 30) &&
+        record.Tax.Amount is >= 0 and <= 999999999999.99m &&
+        decimal.Round(record.Tax.Amount, 2) == record.Tax.Amount &&
+        record.Tax.AmountKind is "PAID" or "DUE" or "WITHHELD" &&
+        record.Tax.PeriodStart.Year >= 1900 && record.Tax.PeriodEnd >= record.Tax.PeriodStart &&
+        TenantAccessClient.Identifier(record.Tax.SourceFinancialFactId, 160) &&
+        record.Tax.SourceRevision > 0 && record.Currency.Length == 3 &&
+        record.Currency.All(char.IsAsciiLetterUpper) &&
+        TenantAccessClient.Identifier(record.SourceProvenanceId, 160) &&
+        TenantAccessClient.Identifier(record.DocumentVersionId, 160) &&
+        TenantAccessClient.Identifier(record.EvidenceId, 160) &&
+        TenantAccessClient.Identifier(record.RecordedBy, 160) && record.RecordedAt != default;
+
+    private static bool Text(string? value, int maximum = 120) =>
+        !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= maximum && !value.Any(char.IsControl);
+
+    private static async Task<T> GetOwnerAsync<T>(
+        HttpClient client,
+        Uri endpoint,
+        TenantBoundaryProof proof,
+        string path,
+        string correlationId,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(endpoint, path));
+        request.Headers.Add("X-Monergy-Tenant", proof.TenantId);
+        request.Headers.Add("X-Monergy-Session", proof.SessionId);
+        try
+        {
+            using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
+            if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                throw Failure("search.source.owner-denied", ContractErrorCategory.AccessDenied,
+                    "Current source authorization is required.", correlationId);
+            if (!response.IsSuccessStatusCode)
+                throw Failure("search.source.owner-unavailable", ContractErrorCategory.DependencyFailure,
+                    "A search source is unavailable.", correlationId, true);
+            return await response.Content.ReadFromJsonAsync<T>(ContractJson.Options, cancellationToken)
+                .ConfigureAwait(false) ?? throw Failure("search.source.response-malformed",
+                    ContractErrorCategory.DependencyFailure, "A search source response is invalid.", correlationId);
+        }
+        catch (JsonException)
+        {
+            throw Failure("search.source.response-malformed", ContractErrorCategory.DependencyFailure,
+                "A search source response is invalid.", correlationId);
+        }
+        catch (HttpRequestException)
+        {
+            throw Failure("search.source.owner-unavailable", ContractErrorCategory.DependencyFailure,
+                "A search source is unavailable.", correlationId, true);
+        }
     }
 
     private static async Task<ContractResult<TData>> SendAsync<TPayload, TData>(

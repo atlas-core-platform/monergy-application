@@ -62,7 +62,7 @@ public sealed class ProductSearchProjectionSourceTests
             "search-correlation",
             CancellationToken.None);
 
-        Assert.Equal(7, records.Length);
+        Assert.Equal(8, records.Length);
         Assert.Contains(records, item =>
             item.ResultType == SearchResultType.Financial &&
             item.Title == "Employment income" &&
@@ -84,6 +84,13 @@ public sealed class ProductSearchProjectionSourceTests
             item.Source.ProvenanceReferenceId == "provenance-investment");
         Assert.Contains(records, item => item.Source.SourceObjectId == "ff-insurance" && item.Source.ProvenanceReferenceId == "provenance-insurance" && item.SearchableText.Contains("not verified coverage", StringComparison.Ordinal));
         Assert.Contains(records, item => item.Source.SourceObjectId == "ff-tax" && item.Source.ProvenanceReferenceId == "provenance-tax" && item.SearchableText.Contains("not assessed liability", StringComparison.Ordinal));
+        Assert.Contains(records, item =>
+            item.Source.SourceObjectType == "TaxRecord" &&
+            item.Source.SourceObjectId == "tax-record-001" &&
+            item.Source.SourceReferenceId == "ff-tax" &&
+            item.Source.ProvenanceReferenceId == "provenance-tax" &&
+            item.Title == "Income tax return" &&
+            item.SearchableText.Contains("not assessed tax liability", StringComparison.Ordinal));
         Assert.DoesNotContain(records, item => item.Source.SourceObjectId == "ff-unsupported");
         Assert.DoesNotContain(records, item => item.ResultType == SearchResultType.Calculation);
     }
@@ -115,9 +122,9 @@ public sealed class ProductSearchProjectionSourceTests
             CancellationToken.None);
 
         Assert.Single(documentRecords);
-        Assert.Equal(7, records.Length);
+        Assert.Equal(8, records.Length);
         Assert.DoesNotContain(records, item => item.ResultType == SearchResultType.Document);
-        Assert.Equal(7, records.Count(item => item.ResultType == SearchResultType.Financial));
+        Assert.Equal(8, records.Count(item => item.ResultType == SearchResultType.Financial));
     }
 
     [Fact]
@@ -165,9 +172,9 @@ public sealed class ProductSearchProjectionSourceTests
         var handler = new OwnerHandler();
         var source = Source(handler, Accessor(operation));
         var records = await source.ReadCurrentCustomerAsync("reference-customer", "decision-search", Security(), operation, "correlation", CancellationToken.None);
-        Assert.Equal(8, records.Length);
+        Assert.Equal(9, records.Length);
         Assert.Single(records, x => x.ResultType == SearchResultType.Document);
-        Assert.Equal(7, records.Count(x => x.ResultType == SearchResultType.Financial));
+        Assert.Equal(8, records.Count(x => x.ResultType == SearchResultType.Financial));
         Assert.Contains(handler.Requests, x => x.Path == "/contracts/app-02/evidence-list/v1");
         Assert.Contains(handler.Requests, x => x.Path == "/contracts/cid-030/v1");
         Assert.Throws<InvalidOperationException>(() => source.ReadAll());
@@ -182,6 +189,38 @@ public sealed class ProductSearchProjectionSourceTests
         var source = Source(new OwnerHandler { CrossCustomerProvenance = true }, Accessor(operation));
         var error = await Assert.ThrowsAsync<SearchSourceException>(() => source.ReadCurrentCustomerAsync("reference-customer", "decision-search", Security(), operation, "correlation", CancellationToken.None));
         Assert.Equal(ContractErrorCategory.AccessDenied, error.Error.Category);
+    }
+
+    [Fact]
+    public async Task ReviewedTaxRecordUsesExactHistoricalSourceAndProvenance()
+    {
+        var handler = new OwnerHandler();
+        var records = await Source(handler, Accessor(SearchContractNames.SearchFinancialData)).ReadCurrentCustomerAsync(
+            "reference-customer", "decision-search", Security(), SearchContractNames.SearchFinancialData,
+            "correlation", CancellationToken.None);
+
+        var record = Assert.Single(records, item => item.Source.SourceObjectType == "TaxRecord");
+        Assert.Equal("tax-record-001", record.Source.SourceObjectId);
+        Assert.Equal("ff-tax", record.Source.SourceReferenceId);
+        Assert.Equal("provenance-tax", record.Source.ProvenanceReferenceId);
+        Assert.Contains(handler.Requests, request => request.Path == "/local/v1/customers/reference-customer/tax-records");
+        Assert.Contains(handler.Requests, request => request.Path == "/contracts/cid-032/v1");
+    }
+
+    [Theory]
+    [InlineData("customer", "search.source.tax-record-boundary-invalid")]
+    [InlineData("source", "search.source.tax-record-boundary-invalid")]
+    [InlineData("provenance", "search.source.tax-record-boundary-invalid")]
+    [InlineData("duplicate", "search.source.corpus-limit")]
+    [InlineData("has-more", "search.source.corpus-limit")]
+    public async Task InvalidOrIncompleteTaxRecordProjectionFailsClosed(string mutation, string code)
+    {
+        var handler = new OwnerHandler { TaxRecordMutation = mutation };
+        var error = await Assert.ThrowsAsync<SearchSourceException>(() =>
+            Source(handler, Accessor(SearchContractNames.SearchFinancialData)).ReadCurrentCustomerAsync(
+                "reference-customer", "decision-search", Security(), SearchContractNames.SearchFinancialData,
+                "correlation", CancellationToken.None));
+        Assert.Equal(code, error.Error.Code);
     }
 
     [Fact]
@@ -264,27 +303,49 @@ public sealed class ProductSearchProjectionSourceTests
         public string AssetType { get; set; } = "ASSET";
         public bool CanonicalCategories { get; set; }
         public bool CrossCustomerProvenance { get; set; }
+        public string? TaxRecordMutation { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
         {
-            var body = await request.Content!.ReadAsStringAsync(cancellationToken);
-            using var document = JsonDocument.Parse(body);
+            var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
+            using var document = body.Length == 0 ? null : JsonDocument.Parse(body);
             Requests.Add((
                 request.RequestUri!.AbsolutePath,
                 request.Headers.GetValues("X-Monergy-Tenant").Single(),
                 request.Headers.GetValues("X-Monergy-Session").Single(),
-                document.RootElement.GetProperty("security").GetProperty("workload")
+                document is null ? "search-retrieval" : document.RootElement.GetProperty("security").GetProperty("workload")
                     .GetProperty("workloadId").GetString()!));
 
             return request.RequestUri.AbsolutePath switch
             {
                 "/contracts/app-02/evidence-list/v1" => Evidence(body),
                 "/contracts/cid-030/v1" => Profile(body),
+                "/contracts/cid-032/v1" => Fact(body),
                 "/contracts/cid-033/v1" => Provenance(body),
+                "/local/v1/customers/reference-customer/tax-records" => TaxRecords(),
                 _ => new HttpResponseMessage(HttpStatusCode.NotFound),
+            };
+        }
+
+        private HttpResponseMessage TaxRecords()
+        {
+            var record = new ReviewedTaxRecord(
+                "tax-record-001", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                TaxRecordMutation == "customer" ? "other-customer" : "reference-customer",
+                new TaxRecordDraft("Income tax return", "India", "Income tax", 14000m, "PAID", "2025-26",
+                    new DateOnly(2025, 4, 1), new DateOnly(2026, 3, 31),
+                    TaxRecordMutation == "source" ? "ff-other" : "ff-tax", 1),
+                "USD", TaxRecordMutation == "provenance" ? "provenance-other" : "provenance-tax",
+                "document-version-tax", "evidence-tax", "A100",
+                DateTimeOffset.Parse("2026-10-16T10:00:00Z", CultureInfo.InvariantCulture),
+                "CUSTOMER_REVIEWED");
+            IReadOnlyList<ReviewedTaxRecord> items = TaxRecordMutation == "duplicate" ? [record, record] : [record];
+            return new(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new TaxRecordList(items, TaxRecordMutation == "has-more"), options: ContractJson.Options),
             };
         }
 
@@ -360,6 +421,16 @@ public sealed class ProductSearchProjectionSourceTests
                 3,
                 at,
                 facts));
+        }
+
+        private static HttpResponseMessage Fact(string body)
+        {
+            var request = JsonSerializer.Deserialize<ContractRequest<GetFinancialFact>>(body, ContractJson.Options)!;
+            var fact = new AuthoritativeFinancialFact(
+                "ff-tax", "financial-profile-reference-customer", "reference-customer",
+                FinancialObjectTypes.TaxRecord, "Tax source figure", 14000m, "USD",
+                new DateOnly(2026, 10, 1), 1, "provenance-tax");
+            return Success(request, fact);
         }
 
         private HttpResponseMessage Provenance(string body)
