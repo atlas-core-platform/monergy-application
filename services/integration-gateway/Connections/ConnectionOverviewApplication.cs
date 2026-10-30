@@ -4,7 +4,7 @@ namespace Monergy.Services.IntegrationGateway.Connections;
 
 public sealed record ConnectionOverviewOwner(string TenantId, string ActorId, string CustomerId, long CustomerVersion);
 public sealed record ConnectionSourceSnapshot(string State, DateTimeOffset? LastConfirmedAt = null);
-public sealed record ConnectionSummary(string ProviderCode, string Provider, string State, string ManagePath,
+public sealed record ConnectionSummary(string ProviderCode, string Provider, string State, string PermissionState, string ManagePath,
     DateTimeOffset? LastConfirmedAt);
 public sealed record ConnectionOverview(string TenantId, string CustomerId, DateTimeOffset GeneratedAt,
     IReadOnlyList<ConnectionSummary> Connections);
@@ -71,11 +71,23 @@ public sealed class ConnectionOverviewApplication(
             }
 
             var state = States.Contains(snapshot.State) ? snapshot.State : "Unavailable";
-            summaries.Add(new(source.ProviderCode, source.Provider, state, source.ManagePath,
+            summaries.Add(new(source.ProviderCode, source.Provider, state, ConnectionPermissionProjection.From(state), source.ManagePath,
                 state == "Connected" ? snapshot.LastConfirmedAt : null));
         }
         return new(owner.TenantId, owner.CustomerId, clock.GetUtcNow(), summaries);
     }
+}
+
+internal static class ConnectionPermissionProjection
+{
+    public static string From(string state) => state switch
+    {
+        "Not configured" or "Ready to connect" => "Not requested",
+        "Setup in progress" => "Pending",
+        "Connected" => "Current",
+        "Needs attention" => "Review required",
+        _ => "Unavailable",
+    };
 }
 
 internal static class ConnectionStateProjection

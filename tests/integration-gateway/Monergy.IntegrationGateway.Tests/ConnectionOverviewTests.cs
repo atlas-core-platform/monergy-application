@@ -23,6 +23,8 @@ public sealed class ConnectionOverviewTests
         Assert.Equal("C001", result.CustomerId);
         Assert.Equal(["google-drive", "onedrive"], result.Connections.Select(item => item.ProviderCode));
         Assert.Equal("Connected", result.Connections[0].State);
+        Assert.Equal("Current", result.Connections[0].PermissionState);
+        Assert.Equal("Review required", result.Connections[1].PermissionState);
         Assert.NotNull(result.Connections[0].LastConfirmedAt);
         Assert.Null(result.Connections[1].LastConfirmedAt);
     }
@@ -40,6 +42,7 @@ public sealed class ConnectionOverviewTests
 
         Assert.Equal("Connected", result.Connections[0].State);
         Assert.Equal("Unavailable", result.Connections[1].State);
+        Assert.Equal("Unavailable", result.Connections[1].PermissionState);
         Assert.DoesNotContain("SECRET_OWNER_FAILURE", System.Text.Json.JsonSerializer.Serialize(result), StringComparison.Ordinal);
     }
 
@@ -64,7 +67,21 @@ public sealed class ConnectionOverviewTests
         var result = await app.GetAsync(new DefaultHttpContext());
 
         Assert.Equal("Unavailable", Assert.Single(result.Connections).State);
+        Assert.Equal("Unavailable", Assert.Single(result.Connections).PermissionState);
         Assert.DoesNotContain("provider-secret-state", System.Text.Json.JsonSerializer.Serialize(result), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("Not configured", "Not requested")]
+    [InlineData("Ready to connect", "Not requested")]
+    [InlineData("Setup in progress", "Pending")]
+    [InlineData("Connected", "Current")]
+    [InlineData("Needs attention", "Review required")]
+    [InlineData("Unavailable", "Unavailable")]
+    public void PermissionReadinessIsCanonicalAndCannotGrantConsent(string state, string expected)
+    {
+        Assert.Equal(expected, ConnectionPermissionProjection.From(state));
+        Assert.Equal("Unavailable", ConnectionPermissionProjection.From("provider-private-permission"));
     }
 
     private sealed class Owners(Exception? failure = null) : IConnectionOverviewOwners
