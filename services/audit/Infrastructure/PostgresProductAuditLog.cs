@@ -31,7 +31,7 @@ public sealed partial class PostgresTenantAccessAudit:IProductAuditLog
  SELECT jsonb_build_object('tenantId',@Tenant,'evidenceId',e.audit_evidence_id,'requestId',NULL,'phase','DOMAIN',
  'actorId',i.envelope->>'initiatorActorId','actorType',CASE WHEN i.event_id IS NULL THEN 'UNRECORDED' ELSE 'USER' END,
  'customerId',NULL,'action','DOMAIN_EVENT','source',e.producer,'resourceType',e.subject_type,'resourceId',e.subject_id,'documentId',NULL,
- 'occurredAt',e.occurred_at,'recordedAt',e.recorded_at,'outcome','RECORDED','reason','Unrecorded','correlationId',e.correlation_id,
+ 'occurredAt',e.occurred_at,'recordedAt',e.recorded_at,'outcome','RECORDED','reason',e.event_name,'correlationId',e.correlation_id,
  'sourceContractId',e.source_contract_id,'ipAddress',NULL,'device',NULL),e.recorded_at,e.audit_evidence_id
  FROM audit.evidence e LEFT JOIN audit.access_event_inbox i USING(audit_evidence_id)
  )
