@@ -4,10 +4,11 @@ using Monergy.Contracts;
 using Monergy.Platform;
 namespace Monergy.Services.JobManagement.Application;
 
-public sealed record AdminJobScope(string TenantId,IReadOnlyList<string> ForeignCustomers,bool AllowRetry=true)
+public sealed record AdminJobScope(string TenantId,IReadOnlyList<string> ForeignCustomers,bool AllowRetry=true,bool AllowReportRetry=false)
 {
  public string Workload=>"local-uat-workspace:"+TenantId;
  public bool Owns(DurableJobRecord job)=>!ForeignCustomers.Contains(job.CustomerId,StringComparer.Ordinal)&&job.Security.Workload.WorkloadIdentityId==Workload&&job.Security.Access.CustomerId==job.CustomerId;
+ public bool AllowsRetry(DurableJobRecord job)=>job.JobName switch{"document-processing"=>AllowRetry,"report-generation"=>AllowReportRetry,_=>false};
 }
 public sealed record AdminJobQuery(string Search="",string State="all",string? CustomerId=null,string? After=null,string? DocumentVersionId=null);
 public sealed record AdminJobSummary(string TenantId,string JobId,string CustomerId,string Task,string State,bool CancellationPending,int Attempt,int RetryCount,int ReplayCount,DateTimeOffset RequestedAt,DateTimeOffset UpdatedAt,DateTimeOffset? NextAttemptAt,DateTimeOffset? TerminalAt,string? FailureCode,bool NeedsOwnerReview,bool CanRetry,bool CanCancel,string Revision,string? DocumentVersionId=null);
@@ -32,9 +33,9 @@ public static class JobAdministration
  public static readonly string[] States=["QUEUED","PROCESSING","COMPLETED","FAILED","RETRYING","CANCELLED"];
  public static string State(DurableJobRecord job)=>job.State switch
  {JobState.Scheduled=>job.ReplayCount>0||job.RetryCount>0?"RETRYING":"QUEUED",JobState.Running or JobState.CancellationRequested=>"PROCESSING",JobState.Completed=>"COMPLETED",JobState.Cancelled=>"CANCELLED",JobState.Failed when job.Retryable&&job.NextAttemptAt is not null&&!job.ReconciliationRequired=>"RETRYING",_=>"FAILED"};
- public static bool CanRetry(DurableJobRecord job)=>job.JobName=="document-processing"&&job.State==JobState.Failed&&job.Retryable&&!job.ReconciliationRequired&&job.LeaseToken is null;
+ public static bool CanRetry(DurableJobRecord job)=>(job.JobName is "document-processing" or "report-generation")&&job.State==JobState.Failed&&job.Retryable&&!job.ReconciliationRequired&&job.LeaseToken is null;
  public static bool CanCancel(DurableJobRecord job)=>!job.ReconciliationRequired&&((job.State is JobState.Scheduled or JobState.Running)||job.State==JobState.Failed&&job.Retryable&&job.LeaseToken is null);
- public static AdminJobSummary Summary(AdminJobScope scope,DurableJobRecord job)=>new(scope.TenantId,job.JobId,job.CustomerId,job.JobName=="document-processing"?"Document processing":"Background task",State(job),job.State==JobState.CancellationRequested,job.Attempt,job.RetryCount,job.ReplayCount,job.RequestedAt,job.UpdatedAt,job.NextAttemptAt,job.TerminalAt,Safe(job.FailureCode),job.ReconciliationRequired,scope.AllowRetry&&CanRetry(job),CanCancel(job),Revision(job),job.JobName=="document-processing"?job.PayloadReference:null);
+ public static AdminJobSummary Summary(AdminJobScope scope,DurableJobRecord job)=>new(scope.TenantId,job.JobId,job.CustomerId,job.JobName switch{"document-processing"=>"Document processing","report-generation"=>"Financial report generation",_=>"Background task"},State(job),job.State==JobState.CancellationRequested,job.Attempt,job.RetryCount,job.ReplayCount,job.RequestedAt,job.UpdatedAt,job.NextAttemptAt,job.TerminalAt,Safe(job.FailureCode),job.ReconciliationRequired,scope.AllowsRetry(job)&&CanRetry(job),CanCancel(job),Revision(job),job.JobName=="document-processing"?job.PayloadReference:null);
  public static DateTimeOffset Time(DateTimeOffset value)=>new(value.UtcTicks-value.UtcTicks%10,TimeSpan.Zero);
  public static string Revision(DurableJobRecord job)=>Convert.ToHexStringLower(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(job,ContractJson.Options)));
  public static string? Safe(string? value)=>value is null?null:TenantAccessClient.Identifier(value,160)?value:"job.metadata.unavailable";
