@@ -46,6 +46,15 @@ public static class PropertyRecordEndpoints
             var input = json.RootElement.Deserialize<RevisePropertyRecord>(Json) ?? throw new TenantBoundaryException("PROPERTY_RECORD_INVALID", 400);
             return await owner.ReviseAsync(tenant, customerId, actor, propertyRecordId, input, http.RequestAborted).ConfigureAwait(false);
         });
+        group.MapPost("/{propertyRecordId}/ownership", async (string customerId, string propertyRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, PropertyRecordsApplication owner) =>
+        {
+            var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);
+            http.Request.EnableBuffering(32768, 32768);
+            using var json = await JsonDocument.ParseAsync(http.Request.Body, cancellationToken: http.RequestAborted).ConfigureAwait(false);
+            RejectDuplicates(json.RootElement);
+            var input = json.RootElement.Deserialize<ReviewPropertyOwnership>(Json) ?? throw new TenantBoundaryException("PROPERTY_RECORD_INVALID", 400);
+            return await owner.ReviewOwnershipAsync(tenant, customerId, actor, propertyRecordId, input, http.RequestAborted).ConfigureAwait(false);
+        });
         group.MapPost("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, PropertyRecordsApplication owner) =>
         {
             var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);

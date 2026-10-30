@@ -681,6 +681,7 @@ export interface ProductPropertyDraft {
 export interface ProductPropertyRecord {
   propertyRecordId: string; operationId: string; customerId: string; property: ProductPropertyDraft; currency: string;
   sourceProvenanceId: string; documentVersionId: string; evidenceId: string; recordedBy: string; recordedAt: string; revision: number;
+  ownershipStatus: 'UNREVIEWED' | 'OWNED' | 'DISPOSED'; ownershipAsOfDate: string | null;
 }
 export interface ProductPropertyRecordList { items: ProductPropertyRecord[]; hasMore: boolean; dataDurability: string }
 export const getPropertyRecords = (api: AccessApi, signal?: AbortSignal, afterId?: string) => api.product<ProductPropertyRecordList>('v1/property-records' + (afterId ? '?afterId=' + encodeURIComponent(afterId) : ''), 'GET', undefined, signal);
@@ -690,6 +691,9 @@ export const createPropertyRecord = (api: AccessApi, input: { operationId: strin
 export interface ProductPropertyRecordHistory { items: ProductPropertyRecord[]; hasMore: boolean; nextBeforeRevision: number | null }
 export const revisePropertyRecord = (api: AccessApi, id: string, input: { operationId: string; expectedRevision: number; property: ProductPropertyDraft }) =>
   api.product<ProductPropertyRecord>('v1/property-records/' + encodeURIComponent(id) + '/corrections', 'POST', input);
+export interface ProductPropertyOwnershipReview { operationId: string; expectedRevision: number; status: 'OWNED' | 'DISPOSED'; asOfDate: string }
+export const reviewPropertyOwnership = (api: AccessApi, id: string, input: ProductPropertyOwnershipReview) =>
+  api.product<ProductPropertyRecord>('v1/property-records/' + encodeURIComponent(id) + '/ownership', 'POST', input);
 export const getPropertyRecordHistory = (api: AccessApi, id: string, beforeRevision?: number, signal?: AbortSignal) =>
   api.product<ProductPropertyRecordHistory>('v1/property-records/' + encodeURIComponent(id) + '/history' + (beforeRevision === undefined ? '' : '?beforeRevision=' + String(beforeRevision)), 'GET', undefined, signal);
 

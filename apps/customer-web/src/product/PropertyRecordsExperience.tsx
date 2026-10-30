@@ -2,16 +2,18 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Alert, Button, Card, Drawer, Input, Select, Space, Tag } from 'antd';
 import type { AccessApi} from '../access/accessApi';
 import { AccessApiError } from '../access/accessApi';
-import { createPropertyRecord, getPropertyRecords, revisePropertyRecord, getPropertyRecordHistory } from './productApi';
-import type { ProductFinancialFact, ProductPropertyDraft, ProductPropertyRecord, ProductPropertyRecordList, ProductPropertyRecordHistory } from './productApi';
+import { createPropertyRecord, getPropertyRecords, revisePropertyRecord, reviewPropertyOwnership, getPropertyRecordHistory } from './productApi';
+import type { ProductFinancialFact, ProductPropertyDraft, ProductPropertyRecord, ProductPropertyRecordList, ProductPropertyRecordHistory, ProductPropertyOwnershipReview } from './productApi';
 
 const numberFields = [ ['purchaseValue', 'Purchase value'], ['currentValue', 'Current value'] ] as const;
 const dateFields = [ ['valueAsOfDate', 'Value as of'] ] as const;
 type FormValues = Record<string, string>;
 interface Submission { operationId: string; property: ProductPropertyDraft; expectedRevision?: number }
 interface Editor { api: AccessApi; open: boolean; values: FormValues; operationId: string; submission: Submission | null; original: ProductPropertyRecord | null; conflict?: boolean }
+interface OwnershipEditor { api: AccessApi; record: ProductPropertyRecord; open: boolean; status?: 'OWNED' | 'DISPOSED'; asOfDate: string; operationId: string; submission: ProductPropertyOwnershipReview | null; conflict?: boolean }
 const money = (value: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency }).format(value);
 const terms = (record: ProductPropertyRecord) => record.property.propertyType;
+const ownershipLabel = (record: ProductPropertyRecord) => record.ownershipStatus === 'OWNED' ? 'Owned — customer reported' : record.ownershipStatus === 'DISPOSED' ? 'Disposed — customer reported' : 'Ownership not reviewed';
 
 export default function PropertyRecordsExperience({ api, facts, canRead, canCreate, onRecordsChanged }: {
   api: AccessApi; facts: ProductFinancialFact[]; canRead: boolean; canCreate: boolean; onRecordsChanged?: () => void;
@@ -26,7 +28,9 @@ export default function PropertyRecordsExperience({ api, facts, canRead, canCrea
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [saved, setSaved] = useState<ProductPropertyRecord | null>(null);
+  const [saved, setSaved] = useState<{ api: AccessApi; record: ProductPropertyRecord; ownershipReview: boolean } | null>(null);
+  const [ownershipEditor, setOwnershipEditor] = useState<OwnershipEditor | null>(null);
+  const [ownershipError, setOwnershipError] = useState('');
   const [history, setHistory] = useState<{ api: AccessApi; record: ProductPropertyRecord } | null>(null);
   const [selected, setSelected] = useState<{ api: AccessApi; record: ProductPropertyRecord } | null>(null);
   const load = useCallback(async (signal?: AbortSignal, afterId?: string) => {
@@ -53,6 +57,7 @@ export default function PropertyRecordsExperience({ api, facts, canRead, canCrea
     return () => { window.clearTimeout(start); controller.abort(); activeLoad.current?.abort(); };
   }, [load]);
   const current = editor?.api === api ? editor : null;
+  const currentOwnership = ownershipEditor?.api === api ? ownershipEditor : null;
   const list = loaded?.api === api && canRead ? loaded.list : null;
   const source = facts.find((fact) => fact.financialFactId === current?.values.sourceFinancialFactId && fact.revision === Number(current.values.sourceRevision) && fact.factType === 'ASSET' && fact.assetType === 'PROPERTY');
   const valid = current && (current.original ?? source) && !current.conflict && current.values.name?.trim() && current.values.location?.trim() && current.values.propertyType?.trim() &&
@@ -86,9 +91,11 @@ export default function PropertyRecordsExperience({ api, facts, canRead, canCrea
         ? await revisePropertyRecord(api,current.original.propertyRecordId,{...submission,expectedRevision:submission.expectedRevision})
         : await createPropertyRecord(api, submission);
       if (record.operationId !== submission.operationId || record.property.sourceFinancialFactId !== submission.property.sourceFinancialFactId ||
-          record.property.sourceRevision !== submission.property.sourceRevision || !record.propertyRecordId || current.original && (record.propertyRecordId !== current.original.propertyRecordId || record.revision !== (submission.expectedRevision ?? 0)+1)) throw new Error('Invalid confirmation');
+          record.property.sourceRevision !== submission.property.sourceRevision || !record.propertyRecordId || current.original &&
+          (record.propertyRecordId !== current.original.propertyRecordId || record.revision !== (submission.expectedRevision ?? 0)+1 ||
+           record.ownershipStatus !== current.original.ownershipStatus || record.ownershipAsOfDate !== current.original.ownershipAsOfDate)) throw new Error('Invalid confirmation');
       if (scope.current.api !== api || !scope.current.canRead || !scope.current.canCreate) return;
-      setSaved(record); setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, open: false, submission: null } : active); await load();
+      setSaved({ api, record, ownershipReview: false }); setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, open: false, submission: null } : active); await load();
     } catch (error) {
       if (scope.current.api !== api || !scope.current.canRead || !scope.current.canCreate) return;
       const conflict = error instanceof AccessApiError && error.code === 'PROPERTY_REVISION_CONFLICT';
@@ -98,26 +105,64 @@ export default function PropertyRecordsExperience({ api, facts, canRead, canCrea
       if (conflict || error instanceof AccessApiError && error.status === 400) setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, submission: null, conflict } : active);
     } finally { setSaving(false); }
   };
+  const openOwnership = (record: ProductPropertyRecord) => {
+    if (saving || current?.submission) return;
+    setSaved(null); setOwnershipError('');
+    if (current) setEditor({ ...current, open: false });
+    if (currentOwnership?.submission) setOwnershipEditor({ ...currentOwnership, open: true });
+    else setOwnershipEditor({ api, record, open: true, asOfDate: '', operationId: crypto.randomUUID().replaceAll('-', ''), submission: null });
+  };
+  const saveOwnership = async () => {
+    if (!currentOwnership || !canCreate || saving || current?.submission || currentOwnership.conflict ||
+        (!currentOwnership.submission && (!currentOwnership.status || !currentOwnership.asOfDate))) return;
+    let submission = currentOwnership.submission;
+    if (!submission) {
+      if (!currentOwnership.status) return;
+      submission = { operationId: currentOwnership.operationId, expectedRevision: currentOwnership.record.revision,
+        status: currentOwnership.status, asOfDate: currentOwnership.asOfDate };
+    }
+    setOwnershipEditor({ ...currentOwnership, submission }); setSaving(true); setOwnershipError('');
+    try {
+      const record = await reviewPropertyOwnership(api, currentOwnership.record.propertyRecordId, submission);
+      if (record.propertyRecordId !== currentOwnership.record.propertyRecordId || record.operationId !== submission.operationId ||
+          record.revision !== submission.expectedRevision + 1 || record.ownershipStatus !== submission.status || record.ownershipAsOfDate !== submission.asOfDate ||
+          record.property.sourceFinancialFactId !== currentOwnership.record.property.sourceFinancialFactId || record.property.sourceRevision !== currentOwnership.record.property.sourceRevision)
+        throw new Error('Invalid confirmation');
+      setSaved({ api, record, ownershipReview: true });
+      setOwnershipEditor((active) => active?.api === api && active.operationId === currentOwnership.operationId ? { ...currentOwnership, open: false, submission: null } : active);
+      await load();
+    } catch (error) {
+      const conflict = error instanceof AccessApiError && error.code === 'PROPERTY_REVISION_CONFLICT';
+      setOwnershipError(conflict ? 'A newer version has been saved. Close this form, refresh property records and review that version before changing ownership.' :
+        error instanceof AccessApiError && error.status === 400 ? 'Check the ownership and date. The date must follow the property value date and latest ownership review, and cannot be in the future.' :
+        'The ownership save has not been confirmed. Retry confirmation using the same request.');
+      if (conflict || error instanceof AccessApiError && error.status === 400)
+        setOwnershipEditor((active) => active?.api === api && active.operationId === currentOwnership.operationId ? { ...currentOwnership, submission: null, conflict } : active);
+    } finally { setSaving(false); }
+  };
   const visible = selected?.api === api && canRead ? selected.record : null;
   if (!canRead) return <Alert type="info" title="Document access is required to view property records and their sources." />;
   return <section aria-label="Property records" style={{ marginBlock: 24 }}>
     <Space wrap style={{ width: '100%', justifyContent: 'space-between' }}><h2>Property records</h2>
       <Button disabled={loading || saving} onClick={() => { void load(); }}>Refresh property records</Button>
-      {canCreate && <Button onClick={open} disabled={saving || (!current?.submission && facts.every((fact) => !(fact.factType === 'ASSET' && fact.assetType === 'PROPERTY')))}>
+      {canCreate && <Button onClick={open} disabled={Boolean(currentOwnership?.submission) || saving || (!current?.submission && facts.every((fact) => !(fact.factType === 'ASSET' && fact.assetType === 'PROPERTY')))}>
         {current?.submission ? 'Continue save confirmation' : 'Add property record'}</Button>}
     </Space>
-    <p>Record the property details and values you have reviewed. Source figures stay separate. Ownership and valuations are customer reported; these records do not calculate total assets or net worth.</p>
-    {saved && editor?.api === api && <Alert type="success" title={'Property record saved: ' + saved.property.name} />}
+    {canCreate && currentOwnership?.submission && <Button onClick={() => { setOwnershipEditor({ ...currentOwnership, open: true }); }}>Continue property ownership confirmation</Button>}
+    <p>Record the property details, values and ownership state you have reviewed. Source figures stay separate. Ownership and valuations are customer reported; these records do not verify title, calculate sale proceeds or provide advice.</p>
+    {saved?.api === api && <Alert type="success" title={(saved.ownershipReview ? 'Property ownership saved: ' : 'Property record saved: ') + saved.record.property.name} />}
     {failure?.api === api && <Alert type="error" title={failure.text} action={<Button onClick={() => { void load(); }}>Retry property records</Button>} />}
     {loading && <p role="status">Loading property records…</p>}
     {list?.items.length === 0 && <p>No property records added yet. Review an property source figure in Documents, then add the holding and values here.</p>}
     {list?.hasMore && <Button disabled={loading || saving} onClick={() => { void load(undefined, list.items.at(-1)?.propertyRecordId); }}>Earlier property records</Button>}
     {list && <p>Showing {list.items.length} property records on this page. Refresh returns to the newest records.</p>}
     {list?.items.map((record) => <Card key={record.propertyRecordId} size="small" style={{ marginBlock: 12 }}>
-      <Space wrap><strong>{record.property.name}</strong><Tag>Customer reviewed</Tag><span>{record.property.location} · {terms(record)}</span></Space>
+      <Space wrap><strong>{record.property.name}</strong><Tag>Customer reviewed</Tag><Tag>{ownershipLabel(record)}</Tag><span>{record.property.location} · {terms(record)}</span></Space>
+      {record.ownershipAsOfDate && <p>Ownership status as of {record.ownershipAsOfDate}</p>}
       <p>Current value: {money(record.property.currentValue, record.currency)} · as of {record.property.valueAsOfDate}</p>
       <Button onClick={() => { setSelected({ api, record }); }}>View property record: {record.property.name}</Button>
-      {canCreate && <Button disabled={saving || Boolean(current?.submission)} onClick={() => {edit(record);}}>Edit property record: {record.property.name}</Button>}
+      {canCreate && <Button disabled={saving || Boolean(current?.submission) || Boolean(currentOwnership?.submission)} onClick={() => {edit(record);}}>Edit property record: {record.property.name}</Button>}
+      {canCreate && <Button disabled={saving || Boolean(current?.submission) || Boolean(currentOwnership?.submission)} onClick={() => { openOwnership(record); }}>Review property ownership: {record.property.name}</Button>}
       <Button onClick={() => {setHistory({api,record});}}>View property history: {record.property.name}</Button>
     </Card>)}
     <Drawer title={current?.original ? "Edit property record" : "Add property record"} open={Boolean(current?.open && canCreate)} onClose={() => { if (current) setEditor({ ...current, open: false }); }}
@@ -146,17 +191,34 @@ export default function PropertyRecordsExperience({ api, facts, canRead, canCrea
           <Input id={'property-' + key} type="date" value={current?.values[key] ?? ''} onChange={(event) => { change(key, event.target.value); }} /></div>)}
       </fieldset>
       <p>Saving records your review and the exact source revision. It does not verify ownership or legal title, ownership or current market value.</p>
-      <Button type="primary" loading={saving} disabled={!canCreate || (!current?.submission && !valid)} onClick={() => { void save(); }}>
+      <Button type="primary" loading={saving} disabled={!canCreate || Boolean(currentOwnership?.submission) || (!current?.submission && !valid)} onClick={() => { void save(); }}>
         {current?.submission ? 'Retry save confirmation' : current?.original ? 'Save reviewed corrections' : 'Save reviewed property record'}</Button>
+    </Drawer>
+    <Drawer title="Review property ownership" open={Boolean(currentOwnership?.open && canCreate)} onClose={() => { if (currentOwnership) setOwnershipEditor({ ...currentOwnership, open: false }); }}
+      size={480} closable={!saving} mask={{ closable: !saving }} destroyOnHidden>
+      {currentOwnership && <><h2>{currentOwnership.record.property.name}</h2><p>{ownershipLabel(currentOwnership.record)} · Record version {currentOwnership.record.revision}</p>
+        <p>Report the ownership state you reviewed and its effective date. This is the customer's statement; it does not verify legal title, registration, liens, sale proceeds, tax or professional value.</p>
+        <p>Property value: {money(currentOwnership.record.property.currentValue, currentOwnership.record.currency)} as of {currentOwnership.record.property.valueAsOfDate}</p>
+        {ownershipError && <Alert type="error" title={ownershipError} />}
+        <label htmlFor="property-ownership-status">Ownership status</label><Select id="property-ownership-status" aria-label="Ownership status" style={{ width: '100%', marginBlock: 12 }}
+          disabled={saving || Boolean(currentOwnership.submission) || Boolean(currentOwnership.conflict)} value={currentOwnership.status}
+          options={[{ value: 'OWNED', label: currentOwnership.record.ownershipStatus === 'DISPOSED' ? 'Owned — restore record' : 'Owned' }, { value: 'DISPOSED', label: 'Disposed' }]}
+          onChange={(status: 'OWNED' | 'DISPOSED') => { setOwnershipEditor({ ...currentOwnership, status }); }} />
+        <label htmlFor="property-ownership-date">Ownership as of</label><Input id="property-ownership-date" type="date" style={{ marginBlock: 12 }} value={currentOwnership.asOfDate}
+          disabled={saving || Boolean(currentOwnership.submission) || Boolean(currentOwnership.conflict)} onChange={(event) => { setOwnershipEditor({ ...currentOwnership, asOfDate: event.target.value }); }} />
+        {currentOwnership.status === 'OWNED' && currentOwnership.record.ownershipStatus === 'DISPOSED' && <Alert type="info" title="This will restore the record as customer reported owned. The earlier disposed version stays in history." />}
+        <Button type="primary" loading={saving} disabled={!canCreate || Boolean(currentOwnership.conflict) || !currentOwnership.submission && (!currentOwnership.status || !currentOwnership.asOfDate)} onClick={() => { void saveOwnership(); }}>
+          {currentOwnership.submission ? 'Retry ownership confirmation' : 'Save reviewed ownership'}</Button></>}
     </Drawer>
     <Drawer title="Property record details" open={Boolean(visible)} onClose={() => { setSelected(null); }} size={560} destroyOnHidden>
       {visible && <><h2>{visible.property.name}</h2><Tag>Customer reviewed</Tag><dl>
+        <dt>Customer-reported ownership</dt><dd>{ownershipLabel(visible)}{visible.ownershipAsOfDate ? ' as of ' + visible.ownershipAsOfDate : ''}</dd>
         <dt>Location summary</dt><dd>{visible.property.location}</dd><dt>Property type</dt><dd>{terms(visible)}</dd>
         <dt>Currency</dt><dd>{visible.currency}</dd><dt>Purchase value</dt><dd>{money(visible.property.purchaseValue, visible.currency)}</dd>
         <dt>Current value</dt><dd>{money(visible.property.currentValue, visible.currency)} as of {visible.property.valueAsOfDate}</dd>
         <dt>Record version</dt><dd>{visible.revision}</dd><dt>Source revision</dt><dd>{visible.property.sourceRevision}</dd><dt>Recorded</dt><dd>{visible.recordedAt}</dd>
       </dl><a href={'/finances?fact=' + encodeURIComponent(visible.property.sourceFinancialFactId)}>View exact property source history</a>
-      <p>Values were entered and reviewed by the customer. Ownership and current valuation have not been independently verified.</p></>}
+      <p>Values and ownership status were entered and reviewed by the customer. Legal title, registration, liens, sale proceeds and current valuation have not been independently verified.</p></>}
     </Drawer>
     <Drawer title="Property record history" open={history?.api === api} onClose={() => {setHistory(null);}} size={560} destroyOnHidden>
       {history?.api === api && <PropertyHistory key={history.record.propertyRecordId} api={api} record={history.record} />}
@@ -189,17 +251,19 @@ function PropertyHistory({ api, record }: { api: AccessApi; record: ProductPrope
     return () => { window.clearTimeout(start); initial.abort();controller.current?.abort(); };
   }, [load]);
   return <section aria-label="Reviewed property change history"><h2>{record.property.name}</h2>
-    <p>Each saved version retains its reviewed values and original source. This history does not verify ownership, legal title or professional valuations.</p>
+    <p>Each saved version retains its reviewed values, customer-reported ownership and original source. This history does not verify legal title, registration, liens, sale proceeds or professional valuations.</p>
     {loading && <p role="status">Loading property history…</p>}
     {failure && <Alert type="error" title="Property history is unavailable." action={<Button onClick={() => { void load(); }}>Retry property history</Button>} />}
     {page?.items.map((item) => <Card key={item.revision} size="small" style={{ marginBlock: 12 }}>
       <strong>Version {item.revision}</strong><p>{item.property.name} · {item.property.location} · {money(item.property.currentValue,item.currency)} as of {item.property.valueAsOfDate}</p>
+      <p>{ownershipLabel(item)}{item.ownershipAsOfDate ? ' as of ' + item.ownershipAsOfDate : ''}</p>
       <p>Reviewed {item.recordedAt}</p><Button onClick={() => { setVersion(item); }}>View version {item.revision}</Button>
     </Card>)}
     {page?.hasMore && page.nextBeforeRevision !== null && <Button disabled={loading} onClick={() => { void load(page.nextBeforeRevision ?? undefined); }}>Earlier versions</Button>}
     {page && <Button disabled={loading} onClick={() => { void load(); }}>Latest versions</Button>}
     {version && <section aria-label={'Saved property version ' + String(version.revision)}><h3>Saved version {version.revision}</h3><dl>
       <dt>Property name</dt><dd>{version.property.name}</dd><dt>Location summary</dt><dd>{version.property.location}</dd><dt>Property type</dt><dd>{terms(version)}</dd>
+      <dt>Customer-reported ownership</dt><dd>{ownershipLabel(version)}{version.ownershipAsOfDate ? ' as of ' + version.ownershipAsOfDate : ''}</dd>
       <dt>Currency</dt><dd>{version.currency}</dd><dt>Purchase value</dt><dd>{money(version.property.purchaseValue,version.currency)}</dd>
       <dt>Current value</dt><dd>{money(version.property.currentValue,version.currency)} as of {version.property.valueAsOfDate}</dd>
       <dt>Source revision</dt><dd>{version.property.sourceRevision}</dd></dl>

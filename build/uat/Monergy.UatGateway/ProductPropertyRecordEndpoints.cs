@@ -84,15 +84,40 @@ public static class ProductPropertyRecordEndpoints
             var original = await client.ReadAsync(session, customer.CustomerId, propertyRecordId, http.RequestAborted, 1).ConfigureAwait(false);
             if (!Bound(original,customer.CustomerId) || original.Revision != 1 || original.PropertyRecordId != propertyRecordId)
                 throw new TenantBoundaryException("PROPERTY_RECORD_RESPONSE_INVALID",503);
+            var previous = input.ExpectedRevision == 1 ? original :
+                await client.ReadAsync(session, customer.CustomerId, propertyRecordId, http.RequestAborted, input.ExpectedRevision).ConfigureAwait(false);
+            if (!Bound(previous, customer.CustomerId) || previous.Revision != input.ExpectedRevision || previous.PropertyRecordId != propertyRecordId)
+                throw new TenantBoundaryException("PROPERTY_RECORD_RESPONSE_INVALID", 503);
             var receipt = await client.ReviseAsync(session, customer.CustomerId, propertyRecordId, input, http.RequestAborted).ConfigureAwait(false);
             if (!Bound(original,customer.CustomerId) || original.Revision != 1 || !Bound(receipt,customer.CustomerId) || original.PropertyRecordId != propertyRecordId || receipt.PropertyRecordId != propertyRecordId ||
                 receipt.OperationId != input.OperationId || receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision + 1 ||
                 receipt.Property != input.Property with { Name = input.Property.Name.Trim(), Location = input.Property.Location.Trim(), PropertyType = input.Property.PropertyType.Trim() } ||
                 receipt.Currency != original.Currency || receipt.SourceProvenanceId != original.SourceProvenanceId || receipt.DocumentVersionId != original.DocumentVersionId || receipt.EvidenceId != original.EvidenceId ||
-                receipt.Property.SourceFinancialFactId != original.Property.SourceFinancialFactId || receipt.Property.SourceRevision != original.Property.SourceRevision)
+                receipt.Property.SourceFinancialFactId != original.Property.SourceFinancialFactId || receipt.Property.SourceRevision != original.Property.SourceRevision ||
+                receipt.OwnershipStatus != previous.OwnershipStatus || receipt.OwnershipAsOfDate != previous.OwnershipAsOfDate)
                 throw new TenantBoundaryException("PROPERTY_RECORD_RESPONSE_INVALID",503);
             var saved = await client.ReadAsync(session, customer.CustomerId, propertyRecordId, http.RequestAborted, receipt.Revision).ConfigureAwait(false);
             if (saved != receipt) throw new TenantBoundaryException("PROPERTY_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
+            return saved;
+        });
+        group.MapPost("/{propertyRecordId}/ownership", async (string propertyRecordId, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductPropertyRecordClient client) =>
+        {
+            var (session, customer) = await ResolveAsync(http, owners, access, true).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(propertyRecordId, 80)) throw new TenantBoundaryException("PROPERTY_RECORD_INVALID", 400);
+            var input = await ReadInputAsync<ReviewPropertyOwnership>(http).ConfigureAwait(false);
+            if (input.ExpectedRevision is < 1 or int.MaxValue) throw new TenantBoundaryException("PROPERTY_RECORD_INVALID", 400);
+            var previous = await client.ReadAsync(session, customer.CustomerId, propertyRecordId, http.RequestAborted, input.ExpectedRevision).ConfigureAwait(false);
+            if (!Bound(previous, customer.CustomerId) || previous.PropertyRecordId != propertyRecordId)
+                throw new TenantBoundaryException("PROPERTY_RECORD_RESPONSE_INVALID", 503);
+            var receipt = await client.ReviewOwnershipAsync(session, customer.CustomerId, propertyRecordId, input, http.RequestAborted).ConfigureAwait(false);
+            if (!Bound(receipt, customer.CustomerId) || receipt.PropertyRecordId != propertyRecordId || receipt.OperationId != input.OperationId ||
+                receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision + 1 || receipt.OwnershipStatus != input.Status ||
+                receipt.OwnershipAsOfDate != input.AsOfDate || receipt.Property != previous.Property || receipt.Currency != previous.Currency ||
+                receipt.SourceProvenanceId != previous.SourceProvenanceId || receipt.DocumentVersionId != previous.DocumentVersionId || receipt.EvidenceId != previous.EvidenceId)
+                throw new TenantBoundaryException("PROPERTY_RECORD_RESPONSE_INVALID", 503);
+            var saved = await client.ReadAsync(session, customer.CustomerId, propertyRecordId, http.RequestAborted, receipt.Revision).ConfigureAwait(false);
+            if (saved != receipt) throw new TenantBoundaryException("PROPERTY_RECORD_RESPONSE_INVALID", 503);
             await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
             return saved;
         });
@@ -127,7 +152,9 @@ public static class ProductPropertyRecordEndpoints
         value.Property.ValueAsOfDate <= DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime.AddHours(14)) &&
         TenantAccessClient.Identifier(value.Property.SourceFinancialFactId,160) && value.Property.SourceRevision > 0 &&
         TenantAccessClient.Identifier(value.SourceProvenanceId,160) && TenantAccessClient.Identifier(value.DocumentVersionId,160) &&
-        TenantAccessClient.Identifier(value.EvidenceId,160) && TenantAccessClient.Identifier(value.RecordedBy,160) && value.RecordedAt != default;
+        TenantAccessClient.Identifier(value.EvidenceId,160) && TenantAccessClient.Identifier(value.RecordedBy,160) && value.RecordedAt != default &&
+        (value.OwnershipStatus == "UNREVIEWED" && value.OwnershipAsOfDate is null ||
+         value.OwnershipStatus is "OWNED" or "DISPOSED" && value.OwnershipAsOfDate is { } ownershipDate && ownershipDate >= value.Property.ValueAsOfDate);
     private static bool Text(string? value) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= 120 && !value.Any(char.IsControl);
     private static bool Money(decimal value) => value is >= 0 and <= 999999999999999m && decimal.Round(value,2)==value;
     private static async Task<(CustomerOwnerSession Session, CustomerOwnerWorkspace Customer)> ResolveAsync(
@@ -182,6 +209,8 @@ public sealed class ProductPropertyRecordClient : IDisposable
         SendAsync<ReviewedPropertyRecord>(session, customer, "", input, ct);
     public Task<ReviewedPropertyRecord> ReviseAsync(CustomerOwnerSession session, string customer, string id, RevisePropertyRecord input, CancellationToken ct) =>
         SendAsync<ReviewedPropertyRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
+    public Task<ReviewedPropertyRecord> ReviewOwnershipAsync(CustomerOwnerSession session, string customer, string id, ReviewPropertyOwnership input, CancellationToken ct) =>
+        SendAsync<ReviewedPropertyRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/ownership", input, ct);
     public Task<PropertyRecordHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
         SendAsync<PropertyRecordHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
     private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, object? input, CancellationToken ct)
