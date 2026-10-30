@@ -162,8 +162,12 @@ public static class ProductSearchEndpoints
                      item.Source.SourceObjectType != "DocumentVersion") ||
                 expectedType == SearchResultType.Financial &&
                     (item.AuthoritativeOwner != "Financial Profile Service" ||
-                     item.Source.SourceObjectType is not ("FinancialFact" or "TaxRecord") ||
-                     string.IsNullOrWhiteSpace(item.Source.ProvenanceReferenceId))))
+                     item.Source.SourceObjectType is not ("FinancialFact" or "TaxRecord" or "FinancialGoal") ||
+                     item.Source.SourceObjectType == "FinancialGoal" &&
+                         (!Guid.TryParseExact(item.Source.SourceReferenceId, "N", out _) ||
+                          item.Source.ProvenanceReferenceId is not null) ||
+                     item.Source.SourceObjectType != "FinancialGoal" &&
+                         string.IsNullOrWhiteSpace(item.Source.ProvenanceReferenceId))))
             throw new TenantBoundaryException("SEARCH_OWNER_RESPONSE_INVALID", 503);
 
         return data.Items;

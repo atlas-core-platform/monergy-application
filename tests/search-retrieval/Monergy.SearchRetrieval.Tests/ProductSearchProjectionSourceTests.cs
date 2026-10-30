@@ -62,7 +62,7 @@ public sealed class ProductSearchProjectionSourceTests
             "search-correlation",
             CancellationToken.None);
 
-        Assert.Equal(8, records.Length);
+        Assert.Equal(9, records.Length);
         Assert.Contains(records, item =>
             item.ResultType == SearchResultType.Financial &&
             item.Title == "Employment income" &&
@@ -84,6 +84,9 @@ public sealed class ProductSearchProjectionSourceTests
             item.Source.ProvenanceReferenceId == "provenance-investment");
         Assert.Contains(records, item => item.Source.SourceObjectId == "ff-insurance" && item.Source.ProvenanceReferenceId == "provenance-insurance" && item.SearchableText.Contains("not verified coverage", StringComparison.Ordinal));
         Assert.Contains(records, item => item.Source.SourceObjectId == "ff-tax" && item.Source.ProvenanceReferenceId == "provenance-tax" && item.SearchableText.Contains("not assessed liability", StringComparison.Ordinal));
+        Assert.Contains(records, item => item.Source.SourceObjectType == "FinancialGoal" &&
+            item.Source.SourceObjectId == "goal-001" && item.Source.SourceReferenceId == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" &&
+            item.Source.ProvenanceReferenceId is null && item.SearchableText.Contains("not advice", StringComparison.Ordinal));
         Assert.Contains(records, item =>
             item.Source.SourceObjectType == "TaxRecord" &&
             item.Source.SourceObjectId == "tax-record-001" &&
@@ -122,9 +125,9 @@ public sealed class ProductSearchProjectionSourceTests
             CancellationToken.None);
 
         Assert.Single(documentRecords);
-        Assert.Equal(8, records.Length);
+        Assert.Equal(9, records.Length);
         Assert.DoesNotContain(records, item => item.ResultType == SearchResultType.Document);
-        Assert.Equal(8, records.Count(item => item.ResultType == SearchResultType.Financial));
+        Assert.Equal(9, records.Count(item => item.ResultType == SearchResultType.Financial));
     }
 
     [Fact]
@@ -172,9 +175,9 @@ public sealed class ProductSearchProjectionSourceTests
         var handler = new OwnerHandler();
         var source = Source(handler, Accessor(operation));
         var records = await source.ReadCurrentCustomerAsync("reference-customer", "decision-search", Security(), operation, "correlation", CancellationToken.None);
-        Assert.Equal(9, records.Length);
+        Assert.Equal(10, records.Length);
         Assert.Single(records, x => x.ResultType == SearchResultType.Document);
-        Assert.Equal(8, records.Count(x => x.ResultType == SearchResultType.Financial));
+        Assert.Equal(9, records.Count(x => x.ResultType == SearchResultType.Financial));
         Assert.Contains(handler.Requests, x => x.Path == "/contracts/app-02/evidence-list/v1");
         Assert.Contains(handler.Requests, x => x.Path == "/contracts/cid-030/v1");
         Assert.Throws<InvalidOperationException>(() => source.ReadAll());
@@ -216,6 +219,57 @@ public sealed class ProductSearchProjectionSourceTests
     public async Task InvalidOrIncompleteTaxRecordProjectionFailsClosed(string mutation, string code)
     {
         var handler = new OwnerHandler { TaxRecordMutation = mutation };
+        var error = await Assert.ThrowsAsync<SearchSourceException>(() =>
+            Source(handler, Accessor(SearchContractNames.SearchFinancialData)).ReadCurrentCustomerAsync(
+                "reference-customer", "decision-search", Security(), SearchContractNames.SearchFinancialData,
+                "correlation", CancellationToken.None));
+        Assert.Equal(code, error.Error.Code);
+    }
+
+    [Fact]
+    public async Task CustomerDefinedFinancialGoalUsesExactCurrentOwnerVersion()
+    {
+        var handler = new OwnerHandler();
+        var records = await Source(handler, Accessor(SearchContractNames.SearchFinancialData)).ReadCurrentCustomerAsync(
+            "reference-customer", "decision-search", Security(), SearchContractNames.SearchFinancialData,
+            "correlation", CancellationToken.None);
+
+        var record = Assert.Single(records, item => item.Source.SourceObjectType == "FinancialGoal");
+        Assert.Equal("goal-001", record.Source.SourceObjectId);
+        Assert.Equal("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", record.Source.SourceReferenceId);
+        Assert.Null(record.Source.ProvenanceReferenceId);
+        Assert.Contains("target 500000.00 USD by 2030-06-30", record.SearchableText, StringComparison.Ordinal);
+        Assert.Contains("reported status Paused", record.SearchableText, StringComparison.Ordinal);
+        Assert.Contains("customer priority High", record.SearchableText, StringComparison.Ordinal);
+        Assert.Contains("not advice", record.SearchableText, StringComparison.Ordinal);
+        Assert.Contains(handler.Requests, request => request.Path == "/local/v1/customers/reference-customer/financial-goals");
+        Assert.Contains(handler.Requests, request => request.Path == "/local/v1/customers/reference-customer/financial-goals/goal-001");
+    }
+
+    [Fact]
+    public async Task CustomerDefinedGoalRemainsSearchableBeforeAnySourceFactProfileExists()
+    {
+        var handler = new OwnerHandler { ProfileMissing = true };
+        var records = await Source(handler, Accessor(SearchContractNames.SearchFinancialData)).ReadCurrentCustomerAsync(
+            "reference-customer", "decision-search", Security(), SearchContractNames.SearchFinancialData,
+            "correlation", CancellationToken.None);
+
+        var goal = Assert.Single(records);
+        Assert.Equal("FinancialGoal", goal.Source.SourceObjectType);
+        Assert.DoesNotContain(handler.Requests, request => request.Path == "/local/v1/customers/reference-customer/tax-records");
+    }
+
+    [Theory]
+    [InlineData("customer", "search.source.financial-goal-boundary-invalid")]
+    [InlineData("exact-customer", "search.source.financial-goal-boundary-invalid")]
+    [InlineData("exact-revision", "search.source.financial-goal-boundary-invalid")]
+    [InlineData("invalid-status", "search.source.financial-goal-boundary-invalid")]
+    [InlineData("null", "search.source.corpus-limit")]
+    [InlineData("duplicate", "search.source.corpus-limit")]
+    [InlineData("has-more", "search.source.corpus-limit")]
+    public async Task InvalidOrIncompleteFinancialGoalProjectionFailsClosed(string mutation, string code)
+    {
+        var handler = new OwnerHandler { FinancialGoalMutation = mutation };
         var error = await Assert.ThrowsAsync<SearchSourceException>(() =>
             Source(handler, Accessor(SearchContractNames.SearchFinancialData)).ReadCurrentCustomerAsync(
                 "reference-customer", "decision-search", Security(), SearchContractNames.SearchFinancialData,
@@ -303,7 +357,9 @@ public sealed class ProductSearchProjectionSourceTests
         public string AssetType { get; set; } = "ASSET";
         public bool CanonicalCategories { get; set; }
         public bool CrossCustomerProvenance { get; set; }
+        public bool ProfileMissing { get; set; }
         public string? TaxRecordMutation { get; set; }
+        public string? FinancialGoalMutation { get; set; }
         public List<(string Path, string Tenant, string Session, string Workload)> Requests { get; } = [];
 
         protected override async Task<HttpResponseMessage> SendAsync(
@@ -326,9 +382,36 @@ public sealed class ProductSearchProjectionSourceTests
                 "/contracts/cid-032/v1" => Fact(body),
                 "/contracts/cid-033/v1" => Provenance(body),
                 "/local/v1/customers/reference-customer/tax-records" => TaxRecords(),
+                "/local/v1/customers/reference-customer/financial-goals" => FinancialGoals(),
+                "/local/v1/customers/reference-customer/financial-goals/goal-001" => FinancialGoal(true),
                 _ => new HttpResponseMessage(HttpStatusCode.NotFound),
             };
         }
+
+        private CustomerFinancialGoal Goal(bool exact = false) => new(
+            "goal-001", "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            FinancialGoalMutation == (exact ? "exact-customer" : "customer") ? "other-customer" : "reference-customer",
+            new FinancialGoalDraft("Emergency fund", 500000m, "USD", new DateOnly(2030, 6, 30)),
+            "A100", DateTimeOffset.Parse("2026-10-16T11:00:00Z", CultureInfo.InvariantCulture),
+            "CUSTOMER_DEFINED", exact && FinancialGoalMutation == "exact-revision" ? 3 : 4,
+            FinancialGoalMutation == "invalid-status" ? "UNKNOWN" : "PAUSED", new DateOnly(2026, 10, 15),
+            "CUSTOMER_REPORTED", "HIGH", new DateOnly(2026, 10, 15), "CUSTOMER_REPORTED");
+
+        private HttpResponseMessage FinancialGoals()
+        {
+            var goal = Goal();
+            IReadOnlyList<CustomerFinancialGoal> items = FinancialGoalMutation == "duplicate" ? [goal, goal] :
+                FinancialGoalMutation == "null" ? [null!] : [goal];
+            return new(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new FinancialGoalList(items, FinancialGoalMutation == "has-more"), options: ContractJson.Options),
+            };
+        }
+
+        private HttpResponseMessage FinancialGoal(bool exact) => new(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(Goal(exact), options: ContractJson.Options),
+        };
 
         private HttpResponseMessage TaxRecords()
         {
@@ -379,6 +462,14 @@ public sealed class ProductSearchProjectionSourceTests
         {
             var request = JsonSerializer.Deserialize<ContractRequest<GetFinancialProfile>>(
                 body, ContractJson.Options)!;
+            if (ProfileMissing)
+                return new(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(
+                        ContractResult<FinancialProfileDetails>.Rejected(
+                            request, "financial-profile.not-found", ContractErrorCategory.NotFound, "Not found."),
+                        options: ContractJson.Options),
+                };
             var at = DateTimeOffset.Parse("2026-10-16T09:00:00Z", CultureInfo.InvariantCulture);
             IReadOnlyList<AuthoritativeFinancialFact> facts =
             [
