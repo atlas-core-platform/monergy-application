@@ -46,6 +46,15 @@ public static class VehicleRecordEndpoints
             var input = json.RootElement.Deserialize<ReviseVehicleRecord>(Json) ?? throw new TenantBoundaryException("VEHICLE_RECORD_INVALID", 400);
             return await owner.ReviseAsync(tenant, customerId, actor, vehicleRecordId, input, http.RequestAborted).ConfigureAwait(false);
         });
+        group.MapPost("/{vehicleRecordId}/ownership", async (string customerId, string vehicleRecordId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, VehicleRecordsApplication owner) =>
+        {
+            var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);
+            http.Request.EnableBuffering(32768, 32768);
+            using var json = await JsonDocument.ParseAsync(http.Request.Body, cancellationToken: http.RequestAborted).ConfigureAwait(false);
+            RejectDuplicates(json.RootElement);
+            var input = json.RootElement.Deserialize<ReviewVehicleOwnership>(Json) ?? throw new TenantBoundaryException("VEHICLE_RECORD_INVALID", 400);
+            return await owner.ReviewOwnershipAsync(tenant, customerId, actor, vehicleRecordId, input, http.RequestAborted).ConfigureAwait(false);
+        });
         group.MapPost("", async (string customerId, HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, VehicleRecordsApplication owner) =>
         {
             var (tenant, actor) = await AuthorizeAsync(http, customerId, access, bindings, true).ConfigureAwait(false);

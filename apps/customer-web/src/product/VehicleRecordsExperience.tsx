@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Alert, Button, Card, Drawer, Input, Select, Space, Tag } from 'antd';
 import type { AccessApi} from '../access/accessApi';
 import { AccessApiError } from '../access/accessApi';
-import { createVehicleRecord, getVehicleRecords, reviseVehicleRecord, getVehicleRecordHistory } from './productApi';
+import { createVehicleRecord, getVehicleRecords, reviseVehicleRecord, getVehicleRecordHistory, reviewVehicleOwnership } from './productApi';
 import type { ProductFinancialFact, ProductVehicleDraft, ProductVehicleRecord, ProductVehicleRecordList, ProductVehicleRecordHistory } from './productApi';
 
 const numberFields = [ ['purchaseValue', 'Purchase value'], ['currentValue', 'Current value'] ] as const;
@@ -10,8 +10,11 @@ const dateFields = [ ['valueAsOfDate', 'Value as of'] ] as const;
 type FormValues = Record<string, string>;
 interface Submission { operationId: string; vehicle: ProductVehicleDraft; expectedRevision?: number }
 interface Editor { api: AccessApi; open: boolean; values: FormValues; operationId: string; submission: Submission | null; original: ProductVehicleRecord | null; conflict?: boolean }
+interface OwnershipSubmission { operationId: string; expectedRevision: number; status: 'OWNED' | 'DISPOSED'; asOfDate: string }
+interface OwnershipEditor { api: AccessApi; open: boolean; record: ProductVehicleRecord; operationId: string; status: 'OWNED' | 'DISPOSED'; asOfDate: string; submission: OwnershipSubmission | null; conflict?: boolean }
 const money = (value: number, currency: string) => new Intl.NumberFormat('en', { style: 'currency', currency }).format(value);
 const terms = (record: ProductVehicleRecord) => record.vehicle.vehicleType;
+const ownershipLabel = (record: ProductVehicleRecord) => record.ownershipStatus === 'OWNED' ? 'Owned — customer reported' : record.ownershipStatus === 'DISPOSED' ? 'Disposed — customer reported' : 'Ownership not reviewed';
 
 export default function VehicleRecordsExperience({ api, facts, canRead, canCreate, onRecordsChanged }: {
   api: AccessApi; facts: ProductFinancialFact[]; canRead: boolean; canCreate: boolean; onRecordsChanged?: () => void;
@@ -26,7 +29,9 @@ export default function VehicleRecordsExperience({ api, facts, canRead, canCreat
   const [editor, setEditor] = useState<Editor | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
-  const [saved, setSaved] = useState<ProductVehicleRecord | null>(null);
+  const [saved, setSaved] = useState<{ api: AccessApi; record: ProductVehicleRecord; ownershipReview: boolean } | null>(null);
+  const [ownershipEditor, setOwnershipEditor] = useState<OwnershipEditor | null>(null);
+  const [ownershipError, setOwnershipError] = useState('');
   const [history, setHistory] = useState<{ api: AccessApi; record: ProductVehicleRecord } | null>(null);
   const [selected, setSelected] = useState<{ api: AccessApi; record: ProductVehicleRecord } | null>(null);
   const load = useCallback(async (signal?: AbortSignal, afterId?: string) => {
@@ -53,18 +58,19 @@ export default function VehicleRecordsExperience({ api, facts, canRead, canCreat
     return () => { window.clearTimeout(start); controller.abort(); activeLoad.current?.abort(); };
   }, [load]);
   const current = editor?.api === api ? editor : null;
+  const currentOwnership = ownershipEditor?.api === api ? ownershipEditor : null;
   const list = loaded?.api === api && canRead ? loaded.list : null;
   const source = facts.find((fact) => fact.financialFactId === current?.values.sourceFinancialFactId && fact.revision === Number(current.values.sourceRevision) && fact.factType === 'ASSET' && fact.assetType === 'VEHICLE');
   const valid = current && (current.original ?? source) && !current.conflict && current.values.name?.trim() && current.values.vehicleType?.trim() &&
     numberFields.every(([key]) => current.values[key] !== undefined && current.values[key] !== '' && Number.isFinite(Number(current.values[key]))) &&
     dateFields.every(([key]) => current.values[key]);
   const open = () => {
-    setSaveError(''); setSaved(null);
+    setSaveError(''); setSaved(null); setOwnershipError('');
     if (current?.submission) setEditor({ ...current, open: true });
     else setEditor({ api, open: true, values: {}, operationId: crypto.randomUUID().replaceAll('-', ''), submission: null, original: null });
   };
   const edit = (record: ProductVehicleRecord) => {
-    if(current?.submission || saving) { if(current) setEditor({...current,open:true}); return; }
+    if(current?.submission || currentOwnership?.submission || saving) { if(current) setEditor({...current,open:true}); return; }
     setSelected(null);setSaved(null);setSaveError('');
     setEditor({api,open:true,original:record,values:Object.fromEntries(Object.entries(record.vehicle).map(([key,value])=>[key,value === null ? '' : String(value)])),
       operationId:crypto.randomUUID().replaceAll('-',''),submission:null});
@@ -87,9 +93,10 @@ export default function VehicleRecordsExperience({ api, facts, canRead, canCreat
         ? await reviseVehicleRecord(api,current.original.vehicleRecordId,{...submission,expectedRevision:submission.expectedRevision})
         : await createVehicleRecord(api, submission);
       if (record.operationId !== submission.operationId || record.vehicle.sourceFinancialFactId !== submission.vehicle.sourceFinancialFactId ||
-          record.vehicle.sourceRevision !== submission.vehicle.sourceRevision || !record.vehicleRecordId || current.original && (record.vehicleRecordId !== current.original.vehicleRecordId || record.revision !== (submission.expectedRevision ?? 0)+1)) throw new Error('Invalid confirmation');
+          record.vehicle.sourceRevision !== submission.vehicle.sourceRevision || !record.vehicleRecordId || current.original && (record.vehicleRecordId !== current.original.vehicleRecordId || record.revision !== (submission.expectedRevision ?? 0)+1 ||
+          record.ownershipStatus !== current.original.ownershipStatus || record.ownershipAsOfDate !== current.original.ownershipAsOfDate)) throw new Error('Invalid confirmation');
       if (scope.current.api !== api || !scope.current.canRead || !scope.current.canCreate) return;
-      setSaved(record); setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, open: false, submission: null } : active); await load();
+      setSaved({ api, record, ownershipReview: false }); setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, open: false, submission: null } : active); await load();
     } catch (error) {
       if (scope.current.api !== api || !scope.current.canRead || !scope.current.canCreate) return;
       const conflict = error instanceof AccessApiError && error.code === 'VEHICLE_REVISION_CONFLICT';
@@ -97,6 +104,38 @@ export default function VehicleRecordsExperience({ api, facts, canRead, canCreat
         ? 'Check the required amounts, date, registration reference and vehicle type. Review and edit the form before saving again.'
         : 'The save has not been confirmed. Retry confirmation to check the same request before creating another record.');
       if (conflict || error instanceof AccessApiError && error.status === 400) setEditor((active) => active?.api === api && active.operationId === current.operationId ? { ...current, submission: null, conflict } : active);
+    } finally { setSaving(false); }
+  };
+  const openOwnership = (record: ProductVehicleRecord) => {
+    if (current?.submission || currentOwnership?.submission || saving) { if (currentOwnership) setOwnershipEditor({ ...currentOwnership, open: true }); return; }
+    setSelected(null); setSaved(null); setOwnershipError('');
+    setOwnershipEditor({ api, open: true, record, operationId: crypto.randomUUID().replaceAll('-', ''),
+      status: record.ownershipStatus === 'DISPOSED' ? 'OWNED' : 'DISPOSED', asOfDate: record.ownershipAsOfDate ?? record.vehicle.valueAsOfDate, submission: null });
+  };
+  const saveOwnership = async () => {
+    if (!currentOwnership || !canRead || !canCreate || saving || currentOwnership.conflict) return;
+    const submission = currentOwnership.submission ?? { operationId: currentOwnership.operationId, expectedRevision: currentOwnership.record.revision,
+      status: currentOwnership.status, asOfDate: currentOwnership.asOfDate };
+    setOwnershipEditor({ ...currentOwnership, submission }); setSaving(true); setOwnershipError('');
+    try {
+      const record = await reviewVehicleOwnership(api, currentOwnership.record.vehicleRecordId, submission);
+      if (record.vehicleRecordId !== currentOwnership.record.vehicleRecordId || record.operationId !== submission.operationId ||
+          record.revision !== submission.expectedRevision + 1 || record.ownershipStatus !== submission.status || record.ownershipAsOfDate !== submission.asOfDate ||
+          JSON.stringify(record.vehicle) !== JSON.stringify(currentOwnership.record.vehicle) || record.currency !== currentOwnership.record.currency ||
+          record.sourceProvenanceId !== currentOwnership.record.sourceProvenanceId || record.documentVersionId !== currentOwnership.record.documentVersionId || record.evidenceId !== currentOwnership.record.evidenceId)
+        throw new Error('Invalid confirmation');
+      if (scope.current.api !== api || !scope.current.canRead || !scope.current.canCreate) return;
+      setSaved({ api, record, ownershipReview: true });
+      setOwnershipEditor((active) => active?.api === api && active.operationId === currentOwnership.operationId ? { ...currentOwnership, record, open: false, submission: null } : active);
+      await load();
+    } catch (error) {
+      if (scope.current.api !== api || !scope.current.canRead || !scope.current.canCreate) return;
+      const conflict = error instanceof AccessApiError && error.code === 'VEHICLE_REVISION_CONFLICT';
+      setOwnershipError(conflict ? 'A newer version has been saved. Close this form, refresh vehicle records and review that version before changing ownership.' :
+        error instanceof AccessApiError && error.status === 400 ? 'Check the ownership and date. The date must follow the vehicle value date and latest ownership review, and cannot be in the future.' :
+        'The ownership save has not been confirmed. Retry confirmation using the same request.');
+      if (conflict || error instanceof AccessApiError && error.status === 400)
+        setOwnershipEditor((active) => active?.api === api && active.operationId === currentOwnership.operationId ? { ...currentOwnership, submission: null, conflict } : active);
     } finally { setSaving(false); }
   };
   const visible = selected?.api === api && canRead ? selected.record : null;
@@ -107,18 +146,21 @@ export default function VehicleRecordsExperience({ api, facts, canRead, canCreat
       {canCreate && <Button onClick={open} disabled={saving || (!current?.submission && facts.every((fact) => !(fact.factType === 'ASSET' && fact.assetType === 'VEHICLE')))}>
         {current?.submission ? 'Continue save confirmation' : 'Add vehicle record'}</Button>}
     </Space>
-    <p>Record the vehicle details and values you have reviewed. Source figures stay separate. Registration references, ownership and valuations are customer reported; these records do not calculate total assets or net worth.</p>
-    {saved && editor?.api === api && <Alert type="success" title={'Vehicle record saved: ' + saved.vehicle.name} />}
+    {canCreate && currentOwnership?.submission && <Button onClick={() => { setOwnershipEditor({ ...currentOwnership, open: true }); }}>Continue vehicle ownership confirmation</Button>}
+    <p>Record the vehicle details, values and ownership state you have reviewed. Source figures stay separate. Ownership and valuations are customer reported; these records do not verify registration, calculate sale proceeds or provide advice.</p>
+    {saved?.api === api && <Alert type="success" title={(saved.ownershipReview ? 'Vehicle ownership saved: ' : 'Vehicle record saved: ') + saved.record.vehicle.name} />}
     {failure?.api === api && <Alert type="error" title={failure.text} action={<Button onClick={() => { void load(); }}>Retry vehicle records</Button>} />}
     {loading && <p role="status">Loading vehicle records…</p>}
     {list?.items.length === 0 && <p>No vehicle records added yet. Review a vehicle source figure in Documents, then add the holding and values here.</p>}
     {list?.hasMore && <Button disabled={loading || saving} onClick={() => { void load(undefined, list.items.at(-1)?.vehicleRecordId); }}>Earlier vehicle records</Button>}
     {list && <p>Showing {list.items.length} vehicle records on this page. Refresh returns to the newest records.</p>}
     {list?.items.map((record) => <Card key={record.vehicleRecordId} size="small" style={{ marginBlock: 12 }}>
-      <Space wrap><strong>{record.vehicle.name}</strong><Tag>Customer reviewed</Tag><span>{record.vehicle.registrationNumber ?? 'Registration not supplied'} · {terms(record)}</span></Space>
+      <Space wrap><strong>{record.vehicle.name}</strong><Tag>Customer reviewed</Tag><Tag>{ownershipLabel(record)}</Tag><span>{record.vehicle.registrationNumber ?? 'Registration not supplied'} · {terms(record)}</span></Space>
+      {record.ownershipAsOfDate && <p>Ownership status as of {record.ownershipAsOfDate}</p>}
       <p>Current value: {money(record.vehicle.currentValue, record.currency)} · as of {record.vehicle.valueAsOfDate}</p>
       <Button onClick={() => { setSelected({ api, record }); }}>View vehicle record: {record.vehicle.name}</Button>
-      {canCreate && <Button disabled={saving || Boolean(current?.submission)} onClick={() => {edit(record);}}>Edit vehicle record: {record.vehicle.name}</Button>}
+      {canCreate && <Button disabled={saving || Boolean(current?.submission) || Boolean(currentOwnership?.submission)} onClick={() => {edit(record);}}>Edit vehicle record: {record.vehicle.name}</Button>}
+      {canCreate && <Button disabled={saving || Boolean(current?.submission) || Boolean(currentOwnership?.submission)} onClick={() => { openOwnership(record); }}>Review vehicle ownership: {record.vehicle.name}</Button>}
       <Button onClick={() => {setHistory({api,record});}}>View vehicle history: {record.vehicle.name}</Button>
     </Card>)}
     <Drawer title={current?.original ? "Edit vehicle record" : "Add vehicle record"} open={Boolean(current?.open && canCreate)} onClose={() => { if (current) setEditor({ ...current, open: false }); }}
@@ -147,17 +189,34 @@ export default function VehicleRecordsExperience({ api, facts, canRead, canCreat
           <Input id={'vehicle-' + key} type="date" value={current?.values[key] ?? ''} onChange={(event) => { change(key, event.target.value); }} /></div>)}
       </fieldset>
       <p>Saving records your review and the exact source revision. It does not verify ownership or registration, ownership or current market value.</p>
-      <Button type="primary" loading={saving} disabled={!canCreate || (!current?.submission && !valid)} onClick={() => { void save(); }}>
+      <Button type="primary" loading={saving} disabled={!canCreate || Boolean(currentOwnership?.submission) || (!current?.submission && !valid)} onClick={() => { void save(); }}>
         {current?.submission ? 'Retry save confirmation' : current?.original ? 'Save reviewed corrections' : 'Save reviewed vehicle record'}</Button>
+    </Drawer>
+    <Drawer title="Review vehicle ownership" open={Boolean(currentOwnership?.open && canCreate)} onClose={() => { if (currentOwnership) setOwnershipEditor({ ...currentOwnership, open: false }); }}
+      size={480} closable={!saving} mask={{ closable: !saving }} destroyOnHidden>
+      {currentOwnership && <><h2>{currentOwnership.record.vehicle.name}</h2><p>{ownershipLabel(currentOwnership.record)} · Record version {currentOwnership.record.revision}</p>
+        <p>Report the ownership state you reviewed and its effective date. This is the customer's statement; it does not verify registration, legal ownership, finance, liens, sale proceeds, tax or professional value.</p>
+        <p>Vehicle value: {money(currentOwnership.record.vehicle.currentValue, currentOwnership.record.currency)} as of {currentOwnership.record.vehicle.valueAsOfDate}</p>
+        {ownershipError && <Alert type="error" title={ownershipError} />}
+        <label htmlFor="vehicle-ownership-status">Ownership status</label><Select id="vehicle-ownership-status" aria-label="Ownership status" style={{ width: '100%', marginBlock: 12 }}
+          disabled={saving || Boolean(currentOwnership.submission) || Boolean(currentOwnership.conflict)} value={currentOwnership.status}
+          options={[{ value: 'OWNED', label: currentOwnership.record.ownershipStatus === 'DISPOSED' ? 'Owned — restore record' : 'Owned' }, { value: 'DISPOSED', label: 'Disposed' }]}
+          onChange={(status: 'OWNED' | 'DISPOSED') => { setOwnershipEditor({ ...currentOwnership, status }); }} />
+        <label htmlFor="vehicle-ownership-date">Ownership as of</label><Input id="vehicle-ownership-date" type="date" style={{ marginBlock: 12 }} value={currentOwnership.asOfDate}
+          disabled={saving || Boolean(currentOwnership.submission) || Boolean(currentOwnership.conflict)} onChange={(event) => { setOwnershipEditor({ ...currentOwnership, asOfDate: event.target.value }); }} />
+        {currentOwnership.status === 'OWNED' && currentOwnership.record.ownershipStatus === 'DISPOSED' && <Alert type="info" title="This will restore the record as customer reported owned. The earlier disposed version stays in history." />}
+        <Button type="primary" loading={saving} disabled={!canCreate || Boolean(currentOwnership.conflict) || !currentOwnership.submission && !currentOwnership.asOfDate} onClick={() => { void saveOwnership(); }}>
+          {currentOwnership.submission ? 'Retry ownership confirmation' : 'Save reviewed ownership'}</Button></>}
     </Drawer>
     <Drawer title="Vehicle record details" open={Boolean(visible)} onClose={() => { setSelected(null); }} size={560} destroyOnHidden>
       {visible && <><h2>{visible.vehicle.name}</h2><Tag>Customer reviewed</Tag><dl>
+        <dt>Customer-reported ownership</dt><dd>{ownershipLabel(visible)}{visible.ownershipAsOfDate ? ' as of ' + visible.ownershipAsOfDate : ''}</dd>
         <dt>Registration reference (optional)</dt><dd>{visible.vehicle.registrationNumber ?? 'Not supplied'}</dd><dt>Vehicle type</dt><dd>{terms(visible)}</dd>
         <dt>Currency</dt><dd>{visible.currency}</dd><dt>Purchase value</dt><dd>{money(visible.vehicle.purchaseValue, visible.currency)}</dd>
         <dt>Current value</dt><dd>{money(visible.vehicle.currentValue, visible.currency)} as of {visible.vehicle.valueAsOfDate}</dd>
         <dt>Record version</dt><dd>{visible.revision}</dd><dt>Source revision</dt><dd>{visible.vehicle.sourceRevision}</dd><dt>Recorded</dt><dd>{visible.recordedAt}</dd>
       </dl><a href={'/finances?fact=' + encodeURIComponent(visible.vehicle.sourceFinancialFactId)}>View exact vehicle source history</a>
-      <p>Values were entered and reviewed by the customer. Ownership and current valuation have not been independently verified.</p></>}
+      <p>Values and ownership status were entered and reviewed by the customer. Registration, legal ownership, finance, liens, sale proceeds and current valuation have not been independently verified.</p></>}
     </Drawer>
     <Drawer title="Vehicle record history" open={history?.api === api} onClose={() => {setHistory(null);}} size={560} destroyOnHidden>
       {history?.api === api && <VehicleHistory key={history.record.vehicleRecordId} api={api} record={history.record} />}
@@ -190,17 +249,19 @@ function VehicleHistory({ api, record }: { api: AccessApi; record: ProductVehicl
     return () => { window.clearTimeout(start); initial.abort();controller.current?.abort(); };
   }, [load]);
   return <section aria-label="Reviewed vehicle change history"><h2>{record.vehicle.name}</h2>
-    <p>Each saved version retains its reviewed values and original source. This history does not verify registration, ownership or professional valuations.</p>
+    <p>Each saved version retains its reviewed values, customer-reported ownership and original source. This history does not verify registration, legal ownership, finance, liens, sale proceeds or professional valuations.</p>
     {loading && <p role="status">Loading vehicle history…</p>}
     {failure && <Alert type="error" title="Vehicle history is unavailable." action={<Button onClick={() => { void load(); }}>Retry vehicle history</Button>} />}
     {page?.items.map((item) => <Card key={item.revision} size="small" style={{ marginBlock: 12 }}>
       <strong>Version {item.revision}</strong><p>{item.vehicle.name} · {item.vehicle.registrationNumber ?? 'Not supplied'} · {money(item.vehicle.currentValue,item.currency)} as of {item.vehicle.valueAsOfDate}</p>
+      <p>{ownershipLabel(item)}{item.ownershipAsOfDate ? ' as of ' + item.ownershipAsOfDate : ''}</p>
       <p>Reviewed {item.recordedAt}</p><Button onClick={() => { setVersion(item); }}>View version {item.revision}</Button>
     </Card>)}
     {page?.hasMore && page.nextBeforeRevision !== null && <Button disabled={loading} onClick={() => { void load(page.nextBeforeRevision ?? undefined); }}>Earlier versions</Button>}
     {page && <Button disabled={loading} onClick={() => { void load(); }}>Latest versions</Button>}
     {version && <section aria-label={'Saved vehicle version ' + String(version.revision)}><h3>Saved version {version.revision}</h3><dl>
       <dt>Vehicle name</dt><dd>{version.vehicle.name}</dd><dt>Registration reference (optional)</dt><dd>{version.vehicle.registrationNumber ?? 'Not supplied'}</dd><dt>Vehicle type</dt><dd>{terms(version)}</dd>
+      <dt>Customer-reported ownership</dt><dd>{ownershipLabel(version)}{version.ownershipAsOfDate ? ' as of ' + version.ownershipAsOfDate : ''}</dd>
       <dt>Currency</dt><dd>{version.currency}</dd><dt>Purchase value</dt><dd>{money(version.vehicle.purchaseValue,version.currency)}</dd>
       <dt>Current value</dt><dd>{money(version.vehicle.currentValue,version.currency)} as of {version.vehicle.valueAsOfDate}</dd>
       <dt>Source revision</dt><dd>{version.vehicle.sourceRevision}</dd></dl>

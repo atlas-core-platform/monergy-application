@@ -84,15 +84,40 @@ public static class ProductVehicleRecordEndpoints
             var original = await client.ReadAsync(session, customer.CustomerId, vehicleRecordId, http.RequestAborted, 1).ConfigureAwait(false);
             if (!Bound(original,customer.CustomerId) || original.Revision != 1 || original.VehicleRecordId != vehicleRecordId)
                 throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID",503);
+            var previous = input.ExpectedRevision == 1 ? original :
+                await client.ReadAsync(session, customer.CustomerId, vehicleRecordId, http.RequestAborted, input.ExpectedRevision).ConfigureAwait(false);
+            if (!Bound(previous, customer.CustomerId) || previous.Revision != input.ExpectedRevision || previous.VehicleRecordId != vehicleRecordId)
+                throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID", 503);
             var receipt = await client.ReviseAsync(session, customer.CustomerId, vehicleRecordId, input, http.RequestAborted).ConfigureAwait(false);
             if (!Bound(original,customer.CustomerId) || original.Revision != 1 || !Bound(receipt,customer.CustomerId) || original.VehicleRecordId != vehicleRecordId || receipt.VehicleRecordId != vehicleRecordId ||
                 receipt.OperationId != input.OperationId || receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision + 1 ||
                 receipt.Vehicle != input.Vehicle with { Name = input.Vehicle.Name.Trim(), RegistrationNumber = string.IsNullOrWhiteSpace(input.Vehicle.RegistrationNumber) ? null : input.Vehicle.RegistrationNumber.Trim(), VehicleType = input.Vehicle.VehicleType.Trim() } ||
                 receipt.Currency != original.Currency || receipt.SourceProvenanceId != original.SourceProvenanceId || receipt.DocumentVersionId != original.DocumentVersionId || receipt.EvidenceId != original.EvidenceId ||
-                receipt.Vehicle.SourceFinancialFactId != original.Vehicle.SourceFinancialFactId || receipt.Vehicle.SourceRevision != original.Vehicle.SourceRevision)
+                receipt.Vehicle.SourceFinancialFactId != original.Vehicle.SourceFinancialFactId || receipt.Vehicle.SourceRevision != original.Vehicle.SourceRevision ||
+                receipt.OwnershipStatus != previous.OwnershipStatus || receipt.OwnershipAsOfDate != previous.OwnershipAsOfDate)
                 throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID",503);
             var saved = await client.ReadAsync(session, customer.CustomerId, vehicleRecordId, http.RequestAborted, receipt.Revision).ConfigureAwait(false);
             if (saved != receipt) throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID",503);
+            await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
+            return saved;
+        });
+        group.MapPost("/{vehicleRecordId}/ownership", async (string vehicleRecordId, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access, ProductVehicleRecordClient client) =>
+        {
+            var (session, customer) = await ResolveAsync(http, owners, access, true).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(vehicleRecordId, 80)) throw new TenantBoundaryException("VEHICLE_RECORD_INVALID", 400);
+            var input = await ReadInputAsync<ReviewVehicleOwnership>(http).ConfigureAwait(false);
+            if (input.ExpectedRevision is < 1 or int.MaxValue) throw new TenantBoundaryException("VEHICLE_RECORD_INVALID", 400);
+            var previous = await client.ReadAsync(session, customer.CustomerId, vehicleRecordId, http.RequestAborted, input.ExpectedRevision).ConfigureAwait(false);
+            if (!Bound(previous, customer.CustomerId) || previous.VehicleRecordId != vehicleRecordId)
+                throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID", 503);
+            var receipt = await client.ReviewOwnershipAsync(session, customer.CustomerId, vehicleRecordId, input, http.RequestAborted).ConfigureAwait(false);
+            if (!Bound(receipt, customer.CustomerId) || receipt.VehicleRecordId != vehicleRecordId || receipt.OperationId != input.OperationId ||
+                receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision + 1 || receipt.OwnershipStatus != input.Status ||
+                receipt.OwnershipAsOfDate != input.AsOfDate || receipt.Vehicle != previous.Vehicle || receipt.Currency != previous.Currency ||
+                receipt.SourceProvenanceId != previous.SourceProvenanceId || receipt.DocumentVersionId != previous.DocumentVersionId || receipt.EvidenceId != previous.EvidenceId)
+                throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID", 503);
+            var saved = await client.ReadAsync(session, customer.CustomerId, vehicleRecordId, http.RequestAborted, receipt.Revision).ConfigureAwait(false);
+            if (saved != receipt) throw new TenantBoundaryException("VEHICLE_RECORD_RESPONSE_INVALID", 503);
             await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
             return saved;
         });
@@ -127,7 +152,9 @@ public static class ProductVehicleRecordEndpoints
         value.Vehicle.ValueAsOfDate <= DateOnly.FromDateTime(DateTimeOffset.UtcNow.UtcDateTime.AddHours(14)) &&
         TenantAccessClient.Identifier(value.Vehicle.SourceFinancialFactId,160) && value.Vehicle.SourceRevision > 0 &&
         TenantAccessClient.Identifier(value.SourceProvenanceId,160) && TenantAccessClient.Identifier(value.DocumentVersionId,160) &&
-        TenantAccessClient.Identifier(value.EvidenceId,160) && TenantAccessClient.Identifier(value.RecordedBy,160) && value.RecordedAt != default;
+        TenantAccessClient.Identifier(value.EvidenceId,160) && TenantAccessClient.Identifier(value.RecordedBy,160) && value.RecordedAt != default &&
+        (value.OwnershipStatus == "UNREVIEWED" && value.OwnershipAsOfDate is null ||
+         value.OwnershipStatus is "OWNED" or "DISPOSED" && value.OwnershipAsOfDate is { } ownershipDate && ownershipDate >= value.Vehicle.ValueAsOfDate);
     private static bool Text(string? value) => !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= 120 && !value.Any(char.IsControl);
     private static bool OptionalRegistration(string? value) => value is null || value.Trim().Length <= 40 && !value.Any(char.IsControl);
     private static bool Money(decimal value) => value is >= 0 and <= 999999999999999m && decimal.Round(value,2)==value;
@@ -183,6 +210,8 @@ public sealed class ProductVehicleRecordClient : IDisposable
         SendAsync<ReviewedVehicleRecord>(session, customer, "", input, ct);
     public Task<ReviewedVehicleRecord> ReviseAsync(CustomerOwnerSession session, string customer, string id, ReviseVehicleRecord input, CancellationToken ct) =>
         SendAsync<ReviewedVehicleRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
+    public Task<ReviewedVehicleRecord> ReviewOwnershipAsync(CustomerOwnerSession session, string customer, string id, ReviewVehicleOwnership input, CancellationToken ct) =>
+        SendAsync<ReviewedVehicleRecord>(session, customer, "/" + Uri.EscapeDataString(id) + "/ownership", input, ct);
     public Task<VehicleRecordHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
         SendAsync<VehicleRecordHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
     private async Task<T> SendAsync<T>(CustomerOwnerSession session, string customer, string suffix, object? input, CancellationToken ct)
