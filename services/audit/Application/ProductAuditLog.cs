@@ -5,18 +5,22 @@ public sealed record AuditLogQuery(string Search="",string Action="all",string O
 public sealed record AuditLogEntry(string TenantId,string EvidenceId,string? RequestId,string Phase,string? ActorId,string ActorType,string? CustomerId,string Action,string Source,string ResourceType,string? ResourceId,string? DocumentId,DateTimeOffset OccurredAt,DateTimeOffset RecordedAt,string Outcome,string Reason,string? CorrelationId,string? SourceContractId,string? IpAddress=null,string? Device=null);
 public sealed record AuditLogPage(string TenantId,IReadOnlyList<AuditLogEntry> Items,string? NextCursor,long Matching,string Coverage);
 public sealed record SignInSecuritySummary(string TenantId,DateTimeOffset ObservedAt,DateTimeOffset WindowStartedAt,int WindowMinutes,long FailedAttempts,long ReviewThreshold,string State);
+public sealed record OperationalOutcomeSummary(string TenantId,DateTimeOffset ObservedAt,DateTimeOffset WindowStartedAt,int WindowMinutes,long UnconfirmedOutcomes,long ReviewThreshold,string State);
 public interface IProductAuditLog
 {
  Task<ProductAuditRecord> AppendActivityAsync(ProductAuditRecord r,CancellationToken ct);
  Task<AuditLogPage> SearchAsync(string tenant,AuditLogQuery q,CancellationToken ct);
  Task<AuditLogEntry?> ReadActivityAsync(string tenant,string id,CancellationToken ct);
  Task<SignInSecuritySummary> ReviewSignInSecurityAsync(string tenant,DateTimeOffset observedAt,CancellationToken ct);
+ Task<OperationalOutcomeSummary> ReviewOperationalOutcomesAsync(string tenant,DateTimeOffset observedAt,CancellationToken ct);
 }
 public static class ProductAuditLog
 {
  public const string Coverage="Recorded product requests, responses and domain events. A request without a matching result is unresolved. Older records may have Unrecorded identity fields. IP/device collection is disabled.";
  public const int SignInWindowMinutes=15;
  public const long SignInReviewThreshold=5;
+ public const int OperationalWindowMinutes=15;
+ public const long OperationalReviewThreshold=1;
  public static void Query(AuditLogQuery q)
  {
   if(q.Search!=q.Search.Trim()||q.Search.Length>128||q.Search.Any(char.IsControl)||q.Action!="all"&&!ProductAuditProtocol.Actions.Contains(q.Action)&&q.Action!="DOMAIN_EVENT"||
@@ -35,6 +39,13 @@ public static class ProductAuditLog
  }
  public static void Bound(SignInSecuritySummary s,string tenant)
  {if(s.TenantId!=tenant||s.ObservedAt<DateTimeOffset.UnixEpoch||s.WindowStartedAt!=s.ObservedAt.AddMinutes(-SignInWindowMinutes)||s.WindowMinutes!=SignInWindowMinutes||s.FailedAttempts<0||s.ReviewThreshold!=SignInReviewThreshold||s.State!=(s.FailedAttempts>=SignInReviewThreshold?"REVIEW_NEEDED":"NO_CURRENT_SIGNAL"))throw new TenantBoundaryException("AUDIT_RESULT_INVALID",503);}
+ public static OperationalOutcomeSummary OperationalSummary(string tenant,DateTimeOffset observedAt,long unconfirmed)
+ {
+  if(!TenantAccessClient.Identifier(tenant,64)||observedAt<DateTimeOffset.UnixEpoch||unconfirmed<0)throw new TenantBoundaryException("AUDIT_RESULT_INVALID",503);
+  return new(tenant,observedAt,observedAt.AddMinutes(-OperationalWindowMinutes),OperationalWindowMinutes,unconfirmed,OperationalReviewThreshold,unconfirmed>=OperationalReviewThreshold?"REVIEW_NEEDED":"NO_CURRENT_SIGNAL");
+ }
+ public static void Bound(OperationalOutcomeSummary s,string tenant)
+ {if(s.TenantId!=tenant||s.ObservedAt<DateTimeOffset.UnixEpoch||s.WindowStartedAt!=s.ObservedAt.AddMinutes(-OperationalWindowMinutes)||s.WindowMinutes!=OperationalWindowMinutes||s.UnconfirmedOutcomes<0||s.ReviewThreshold!=OperationalReviewThreshold||s.State!=(s.UnconfirmedOutcomes>=OperationalReviewThreshold?"REVIEW_NEEDED":"NO_CURRENT_SIGNAL"))throw new TenantBoundaryException("AUDIT_RESULT_INVALID",503);}
  public static void Bound(AuditLogEntry r,string tenant)
  {
   var domain=r.Phase=="DOMAIN";

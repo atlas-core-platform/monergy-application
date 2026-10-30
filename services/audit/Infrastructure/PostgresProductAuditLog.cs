@@ -69,4 +69,16 @@ public sealed partial class PostgresTenantAccessAudit:IProductAuditLog
    """,new{Tenant=tenant,Start=start,ObservedAt=observedAt},cancellationToken:ct));
   return ProductAuditLog.SignInSummary(tenant,observedAt,failures);
  }
+ public async Task<OperationalOutcomeSummary> ReviewOperationalOutcomesAsync(string tenant,DateTimeOffset observedAt,CancellationToken ct)
+ {
+  await using var db=await OpenAsync(tenant,ct);await Guard(db,ct);var start=observedAt.AddMinutes(-ProductAuditLog.OperationalWindowMinutes);
+  var unconfirmed=await db.ExecuteScalarAsync<long>(new CommandDefinition(OperationalOutcomeStatement(),new{Tenant=tenant,Start=start,ObservedAt=observedAt},cancellationToken:ct));
+  return ProductAuditLog.OperationalSummary(tenant,observedAt,unconfirmed);
+ }
+ private static string OperationalOutcomeStatement()=>"""
+   SELECT count(*) FROM audit.product_activity
+   WHERE record->>'tenantId'=@Tenant AND record->>'phase'='RESULT' AND record->>'outcome'='UNKNOWN'
+   AND CAST(record->>'occurredAt' AS timestamptz)>=@Start
+   AND CAST(record->>'occurredAt' AS timestamptz)<=@ObservedAt;
+   """;
 }

@@ -15,6 +15,9 @@ public static class ProductAuditEndpoints
   group.MapGet("/sign-in-attention",async(HttpContext http,TenantAccessClient access,IProductAuditLog repo)=>{
    var admin=await access.RequireAdministratorAsync(http);if(http.Request.Query.Count!=0)throw Bad();var summary=await repo.ReviewSignInSecurityAsync(admin.TenantId,DateTimeOffset.UtcNow,http.RequestAborted);ProductAuditLog.Bound(summary,admin.TenantId);await Confirm(http,access,admin);return summary;
   });
+  group.MapGet("/operational-attention",async(HttpContext http,TenantAccessClient access,IProductAuditLog repo)=>{
+   var admin=await access.RequireAdministratorAsync(http);if(http.Request.Query.Count!=0)throw Bad();var summary=await repo.ReviewOperationalOutcomesAsync(admin.TenantId,DateTimeOffset.UtcNow,http.RequestAborted);ProductAuditLog.Bound(summary,admin.TenantId);await Confirm(http,access,admin);return summary;
+  });
   group.MapGet("/export",async(HttpContext http,TenantAccessClient access,IProductAuditLog repo)=>{
    var page=await Page(http,access,repo);http.Response.Headers.ContentDisposition="attachment; filename=monergy-audit-page.json";
    return Results.Json(new{schemaVersion="1.0",exportedAt=DateTimeOffset.UtcNow,scope="Current filtered page only; use nextCursor to continue. No unrecorded fields are inferred.",page});
