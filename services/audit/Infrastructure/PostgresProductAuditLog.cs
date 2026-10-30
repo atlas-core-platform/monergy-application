@@ -58,4 +58,15 @@ public sealed partial class PostgresTenantAccessAudit:IProductAuditLog
  }
  public async Task<AuditLogEntry?> ReadActivityAsync(string tenant,string id,CancellationToken ct)
  {await using var db=await OpenAsync(tenant,ct);await Guard(db,ct);var json=await db.QuerySingleOrDefaultAsync<string>(new CommandDefinition(Ledger+"\nSELECT entry::text FROM ledger WHERE id=@Id;",new{Tenant=tenant,Id=id},cancellationToken:ct));return json is null?null:JsonSerializer.Deserialize<AuditLogEntry>(json,ActivityJson);}
+ public async Task<SignInSecuritySummary> ReviewSignInSecurityAsync(string tenant,DateTimeOffset observedAt,CancellationToken ct)
+ {
+  await using var db=await OpenAsync(tenant,ct);await Guard(db,ct);var start=observedAt.AddMinutes(-ProductAuditLog.SignInWindowMinutes);
+  var failures=await db.ExecuteScalarAsync<long>(new CommandDefinition("""
+   SELECT count(*) FROM audit.product_activity
+   WHERE record->>'tenantId'=@Tenant AND record->>'action'='LOGIN' AND record->>'phase'='RESULT'
+   AND record->>'outcome'='HTTP_FAILED' AND CAST(record->>'occurredAt' AS timestamptz)>=@Start
+   AND CAST(record->>'occurredAt' AS timestamptz)<=@ObservedAt;
+   """,new{Tenant=tenant,Start=start,ObservedAt=observedAt},cancellationToken:ct));
+  return ProductAuditLog.SignInSummary(tenant,observedAt,failures);
+ }
 }
