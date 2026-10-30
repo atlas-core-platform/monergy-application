@@ -101,15 +101,41 @@ public static class ProductFinancialGoalEndpoints
             var original = await client.ReadAsync(session, customer.CustomerId, financialGoalId, http.RequestAborted, 1).ConfigureAwait(false);
             if (!Bound(original,customer.CustomerId) || original.Revision != 1 || original.FinancialGoalId != financialGoalId)
                 throw new TenantBoundaryException("FINANCIAL_GOAL_RESPONSE_INVALID",503);
+            var previous = input.ExpectedRevision == 1 ? original :
+                await client.ReadAsync(session, customer.CustomerId, financialGoalId, http.RequestAborted, input.ExpectedRevision).ConfigureAwait(false);
+            if (!Bound(previous,customer.CustomerId) || previous.Revision != input.ExpectedRevision || previous.FinancialGoalId != financialGoalId)
+                throw new TenantBoundaryException("FINANCIAL_GOAL_RESPONSE_INVALID",503);
             var receipt = await client.ReviseAsync(session, customer.CustomerId, financialGoalId, input, http.RequestAborted).ConfigureAwait(false);
             if (!Bound(original,customer.CustomerId) || original.Revision != 1 || !Bound(receipt,customer.CustomerId) || original.FinancialGoalId != financialGoalId || receipt.FinancialGoalId != financialGoalId ||
                 receipt.OperationId != input.OperationId || receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision + 1 ||
                 receipt.Goal != input.Goal with { Name = input.Goal.Name.Trim() } ||
-                receipt.DeclarationStatus != original.DeclarationStatus)
+                receipt.DeclarationStatus != original.DeclarationStatus || receipt.LifecycleStatus != previous.LifecycleStatus ||
+                receipt.LifecycleAsOfDate != previous.LifecycleAsOfDate || receipt.LifecycleBasis != previous.LifecycleBasis)
                 throw new TenantBoundaryException("FINANCIAL_GOAL_RESPONSE_INVALID",503);
             var saved = await client.ReadAsync(session, customer.CustomerId, financialGoalId, http.RequestAborted, receipt.Revision).ConfigureAwait(false);
             if (saved != receipt) throw new TenantBoundaryException("FINANCIAL_GOAL_RESPONSE_INVALID",503);
             await ConfirmAsync(http, owners, access, session, customer, true).ConfigureAwait(false);
+            return saved;
+        });
+        group.MapPost("/{financialGoalId}/lifecycle", async (string financialGoalId, HttpContext http, CustomerOwnerClient owners, TenantAccessClient access) =>
+        {
+            var (session, customer) = await ResolveAsync(http, owners, access, true).ConfigureAwait(false);
+            var client = http.RequestServices.GetRequiredService<ProductFinancialGoalClient>();
+            if (!TenantAccessClient.Identifier(financialGoalId,80)) throw new TenantBoundaryException("FINANCIAL_GOAL_INVALID",400);
+            var input = await ReadInputAsync<ReportFinancialGoalLifecycle>(http).ConfigureAwait(false);
+            if (input.ExpectedRevision is < 1 or int.MaxValue) throw new TenantBoundaryException("FINANCIAL_GOAL_INVALID",400);
+            var previous = await client.ReadAsync(session,customer.CustomerId,financialGoalId,http.RequestAborted,input.ExpectedRevision).ConfigureAwait(false);
+            if (!Bound(previous,customer.CustomerId) || previous.FinancialGoalId != financialGoalId)
+                throw new TenantBoundaryException("FINANCIAL_GOAL_RESPONSE_INVALID",503);
+            var receipt = await client.ReportLifecycleAsync(session,customer.CustomerId,financialGoalId,input,http.RequestAborted).ConfigureAwait(false);
+            if (!Bound(receipt,customer.CustomerId) || receipt.FinancialGoalId != financialGoalId || receipt.OperationId != input.OperationId ||
+                receipt.RecordedBy != session.ActorId || receipt.Revision != input.ExpectedRevision+1 || receipt.LifecycleStatus != input.Status ||
+                receipt.LifecycleAsOfDate != input.AsOfDate || receipt.LifecycleBasis != "CUSTOMER_REPORTED" || receipt.Goal != previous.Goal ||
+                receipt.DeclarationStatus != previous.DeclarationStatus)
+                throw new TenantBoundaryException("FINANCIAL_GOAL_RESPONSE_INVALID",503);
+            var saved = await client.ReadAsync(session,customer.CustomerId,financialGoalId,http.RequestAborted,receipt.Revision).ConfigureAwait(false);
+            if (saved != receipt) throw new TenantBoundaryException("FINANCIAL_GOAL_RESPONSE_INVALID",503);
+            await ConfirmAsync(http,owners,access,session,customer,true).ConfigureAwait(false);
             return saved;
         });
     }
@@ -140,7 +166,10 @@ public static class ProductFinancialGoalEndpoints
         !value.OperationId.Any(char.IsAsciiLetterUpper) && !string.IsNullOrWhiteSpace(value.Goal.Name) && value.Goal.Name.Trim().Length <= 120 && !value.Goal.Name.Any(char.IsControl) &&
         value.Goal.TargetAmount is > 0 and <= 999999999999.99m && decimal.Round(value.Goal.TargetAmount,2)==value.Goal.TargetAmount &&
         value.Goal.Currency is { Length:3 } && value.Goal.Currency.All(char.IsAsciiLetterUpper) && value.Goal.TargetDate.Year is >= 1900 and <= 2199 &&
-        value.DeclarationStatus == "CUSTOMER_DEFINED" && TenantAccessClient.Identifier(value.RecordedBy,160) && value.RecordedAt != default;
+        value.DeclarationStatus == "CUSTOMER_DEFINED" && value.LifecycleBasis == "CUSTOMER_REPORTED" &&
+        (value.LifecycleStatus == "IN_PROGRESS" && (value.LifecycleAsOfDate is null || value.LifecycleAsOfDate.Value.Year >= 1900) ||
+         value.LifecycleStatus is "PAUSED" or "REPORTED_ACHIEVED" or "STOPPED" && value.LifecycleAsOfDate is { Year: >= 1900 }) &&
+        TenantAccessClient.Identifier(value.RecordedBy,160) && value.RecordedAt != default;
     private static bool Bound(FinancialGoalProgress? value, string customer, string financialGoalId)
     {
         if (value is not { Goal: not null, Sources: not null } || value.CustomerId != customer || value.FinancialGoalId != financialGoalId ||
@@ -211,6 +240,8 @@ public sealed class ProductFinancialGoalClient : IDisposable
         SendAsync<CustomerFinancialGoal>(session, customer, "", input, ct);
     public Task<CustomerFinancialGoal> ReviseAsync(CustomerOwnerSession session, string customer, string id, ReviseFinancialGoal input, CancellationToken ct) =>
         SendAsync<CustomerFinancialGoal>(session, customer, "/" + Uri.EscapeDataString(id) + "/corrections", input, ct);
+    public Task<CustomerFinancialGoal> ReportLifecycleAsync(CustomerOwnerSession session,string customer,string id,ReportFinancialGoalLifecycle input,CancellationToken ct) =>
+        SendAsync<CustomerFinancialGoal>(session,customer,"/"+Uri.EscapeDataString(id)+"/lifecycle",input,ct);
     public Task<FinancialGoalHistory> HistoryAsync(CustomerOwnerSession session, string customer, string id, int? beforeRevision, CancellationToken ct) =>
         SendAsync<FinancialGoalHistory>(session, customer, "/" + Uri.EscapeDataString(id) + "/history" + (beforeRevision is null ? "" : "?beforeRevision=" + beforeRevision.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)), null, ct);
     public Task<FinancialGoalProgress> ProgressAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct) =>

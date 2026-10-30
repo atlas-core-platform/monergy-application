@@ -22,6 +22,7 @@ public sealed class CustomerFinancialGoalTests
     private static CreateFinancialGoal Input()=>new(new string('a',32),new("Education fund",100000m,"INR",new(2030,6,30)));
     private static FinancialGoalsApplication Owner(InMemoryFinancialGoals? repository=null)=>new(repository??new(),TimeProvider.System);
     private static ReviseFinancialGoal Change(CustomerFinancialGoal goal)=>new(Guid.NewGuid().ToString("N"),goal.Revision,goal.Goal with {TargetAmount=125000m,TargetDate=new(2031,1,1)});
+    private static ReportFinancialGoalLifecycle Lifecycle(CustomerFinancialGoal goal,string status="PAUSED")=>new(Guid.NewGuid().ToString("N"),goal.Revision,status,DateOnly.FromDateTime(DateTime.UtcNow));
     [Theory,InlineData("operation"),InlineData("uppercase"),InlineData("name"),InlineData("long"),InlineData("control"),InlineData("zero"),InlineData("negative"),InlineData("precision"),InlineData("large"),InlineData("currency"),InlineData("lower-currency"),InlineData("date-early"),InlineData("date-late")]
     public async Task InvalidExplicitTermsNeverWrite(string field)
     {
@@ -60,6 +61,38 @@ public sealed class CustomerFinancialGoalTests
         Assert.Equal(409,(await Assert.ThrowsAsync<TenantBoundaryException>(()=>app.CreateAsync("T001",Customer,"actor-001",Input() with {OperationId=second.OperationId},default))).Status);
     }
     [Fact]
+    public async Task CustomerReportedLifecycleIsVersionedIdempotentAndPreservedByGoalCorrections()
+    {
+        var app=Owner();var first=await app.CreateAsync("T001",Customer,"actor-001",Input(),default);
+        Assert.Equal("IN_PROGRESS",first.LifecycleStatus);Assert.Equal("CUSTOMER_REPORTED",first.LifecycleBasis);Assert.NotNull(first.LifecycleAsOfDate);
+        var pause=Lifecycle(first);var paused=await app.ReportLifecycleAsync("T001",Customer,"actor-001",first.FinancialGoalId,pause,default);
+        Assert.Equal("PAUSED",paused.LifecycleStatus);Assert.Equal(pause.AsOfDate,paused.LifecycleAsOfDate);Assert.Equal(2,paused.Revision);
+        Assert.Equal(paused,await app.ReportLifecycleAsync("T001",Customer,"actor-001",first.FinancialGoalId,pause,default));
+        var achieved=await app.ReportLifecycleAsync("T001",Customer,"actor-001",first.FinancialGoalId,Lifecycle(paused,"REPORTED_ACHIEVED"),default);
+        Assert.Equal("REPORTED_ACHIEVED",achieved.LifecycleStatus);
+        var corrected=await app.ReviseAsync("T001",Customer,"actor-001",first.FinancialGoalId,Change(achieved),default);
+        Assert.Equal("REPORTED_ACHIEVED",corrected.LifecycleStatus);Assert.Equal(achieved.LifecycleAsOfDate,corrected.LifecycleAsOfDate);
+        var reopened=await app.ReportLifecycleAsync("T001",Customer,"actor-001",first.FinancialGoalId,Lifecycle(corrected,"IN_PROGRESS"),default);
+        Assert.Equal(["IN_PROGRESS","REPORTED_ACHIEVED","REPORTED_ACHIEVED","PAUSED","IN_PROGRESS"],(await app.HistoryAsync("T001",Customer,first.FinancialGoalId,null,default)).Items.Select(x=>x.LifecycleStatus));
+        Assert.Equal(409,(await Assert.ThrowsAsync<TenantBoundaryException>(()=>app.ReportLifecycleAsync("T001",Customer,"actor-001",first.FinancialGoalId,Lifecycle(first,"STOPPED"),default))).Status);
+        Assert.Equal(400,(await Assert.ThrowsAsync<TenantBoundaryException>(()=>app.ReportLifecycleAsync("T001",Customer,"actor-001",first.FinancialGoalId,Lifecycle(reopened,"IN_PROGRESS"),default))).Status);
+    }
+    [Theory,InlineData("status"),InlineData("operation"),InlineData("date"),InlineData("same"),InlineData("stale-date")]
+    public async Task InvalidLifecycleReportsNeverMutateCurrentGoal(string kind)
+    {
+        var app=Owner();var first=await app.CreateAsync("T001",Customer,"actor-001",Input(),default);var input=Lifecycle(first);
+        input=kind switch {"status"=>input with{Status="ACHIEVED"},"operation"=>input with{OperationId="bad"},"date"=>input with{AsOfDate=new(2200,1,1)},"same"=>input with{Status="IN_PROGRESS"},_=>input with{AsOfDate=new(1900,1,1)}};
+        Assert.Equal(400,(await Assert.ThrowsAsync<TenantBoundaryException>(()=>app.ReportLifecycleAsync("T001",Customer,"actor-001",first.FinancialGoalId,input,default))).Status);
+        Assert.Equal(first,await app.ReadAsync("T001",Customer,first.FinancialGoalId,default));
+    }
+    [Fact]
+    public void HistoricalGoalPayloadsRestoreAsCustomerReportedInProgressWithoutInventingAnEffectiveDate()
+    {
+        var value=new CustomerFinancialGoal("goal-legacy",new string('a',32),Customer,Input().Goal,"actor-001",DateTimeOffset.UtcNow,"CUSTOMER_DEFINED");
+        var json=JsonNode.Parse(JsonSerializer.Serialize(value,ContractJson.Options))!.AsObject();json.Remove("lifecycleStatus");json.Remove("lifecycleAsOfDate");json.Remove("lifecycleBasis");
+        var restored=json.Deserialize<CustomerFinancialGoal>(ContractJson.Options);Assert.NotNull(restored);Assert.Equal("IN_PROGRESS",restored.LifecycleStatus);Assert.Null(restored.LifecycleAsOfDate);Assert.Equal("CUSTOMER_REPORTED",restored.LifecycleBasis);
+    }
+    [Fact]
     public async Task TenantCustomerActorAndListBoundsRemainExplicit()
     {
         var app=Owner();var first=await app.CreateAsync("T001",Customer,"actor-001",Input(),default);
@@ -81,13 +114,24 @@ public sealed class CustomerFinancialGoalTests
     public async Task RealOwnerAndProductRoutesSaveReadChangeReplayAndInspectVersionsWithoutDocumentAccess()
     {
         await using var h=await Harness.Create();using var client=h.Client();h.Authority.Failure="evidence";
-        var response=await client.PostAsJsonAsync("/product-api/v1/financial-goals",Input(),ContractJson.Options);Assert.Equal(HttpStatusCode.OK,response.StatusCode);Assert.Equal("no-store",response.Headers.CacheControl?.ToString());
+        var response=await client.PostAsJsonAsync("/product-api/v1/financial-goals",Input(),ContractJson.Options);Assert.True(response.StatusCode==HttpStatusCode.OK,await response.Content.ReadAsStringAsync());Assert.Equal("no-store",response.Headers.CacheControl?.ToString());
         var first=(await response.Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options))!;var path="/product-api/v1/financial-goals/"+first.FinancialGoalId;var change=Change(first);
         var second=await (await client.PostAsJsonAsync(path+"/corrections",change,ContractJson.Options)).Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options);Assert.NotNull(second);Assert.Equal(2,second.Revision);
         Assert.Equal(first,await client.GetFromJsonAsync<CustomerFinancialGoal>(path+"?revision=1",ContractJson.Options));
         Assert.Equal(second,await (await client.PostAsJsonAsync(path+"/corrections",change,ContractJson.Options)).Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options));
         Assert.Equal([second,first],(await client.GetFromJsonAsync<FinancialGoalHistory>(path+"/history",ContractJson.Options))!.Items);
         Assert.Equal(first,await (await client.PostAsJsonAsync("/product-api/v1/financial-goals",Input(),ContractJson.Options)).Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options));
+    }
+    [Fact]
+    public async Task ProductLifecycleRouteBindsCurrentCustomerActorTermsAndHistory()
+    {
+        await using var h=await Harness.Create();using var client=h.Client();var first=(await (await client.PostAsJsonAsync("/product-api/v1/financial-goals",Input(),ContractJson.Options)).Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options))!;
+        var input=Lifecycle(first);var path="/product-api/v1/financial-goals/"+first.FinancialGoalId;
+        var paused=(await (await client.PostAsJsonAsync(path+"/lifecycle",input,ContractJson.Options)).Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options))!;
+        Assert.Equal("PAUSED",paused.LifecycleStatus);Assert.Equal(input.AsOfDate,paused.LifecycleAsOfDate);Assert.Equal("CUSTOMER_REPORTED",paused.LifecycleBasis);Assert.Equal(first.Goal,paused.Goal);
+        Assert.Equal(paused,await (await client.PostAsJsonAsync(path+"/lifecycle",input,ContractJson.Options)).Content.ReadFromJsonAsync<CustomerFinancialGoal>(ContractJson.Options));
+        Assert.Equal([paused,first],(await client.GetFromJsonAsync<FinancialGoalHistory>(path+"/history",ContractJson.Options))!.Items);
+        h.Authority.Failure="update";Assert.Equal(HttpStatusCode.Forbidden,(await client.PostAsJsonAsync(path+"/lifecycle",Lifecycle(paused,"STOPPED"),ContractJson.Options)).StatusCode);
     }
     [Theory,InlineData("deny",403),InlineData("advisor",403),InlineData("unavailable",503),InlineData("update",403),InlineData("read",403),InlineData("missing",401),InlineData("tenant",401)]
     public async Task CurrentSelfAuthorityIsRequiredBeforeWrite(string failure,int status)
