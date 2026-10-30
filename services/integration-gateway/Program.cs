@@ -3,12 +3,14 @@ using Monergy.Platform;
 using Monergy.Services.IntegrationGateway.AiModel;
 using Monergy.Services.IntegrationGateway;
 using Monergy.Services.IntegrationGateway.GoogleDrive;
+using Monergy.Services.IntegrationGateway.Connections;
 
 const string serviceName = "Integration Gateway Service";
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddMonergyPlatform(serviceName);
 builder.Services.AddHealthChecks();
+builder.AddConnectionOverview();
 builder.AddGoogleDrive();
 builder.AddQaModel();
 Monergy.Services.IntegrationGateway.OneDrive.DriveConnectionEndpoints.AddOneDrive(builder);
@@ -19,6 +21,7 @@ if (referenceAdapters)
 }
 
 var app = builder.Build();
+app.MapConnectionOverview();
 app.MapGoogleDrive();
 app.MapQaModel();
 Monergy.Services.IntegrationGateway.OneDrive.DriveConnectionEndpoints.MapOneDrive(app);

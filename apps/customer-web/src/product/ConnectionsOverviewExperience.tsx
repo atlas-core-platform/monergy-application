@@ -1,0 +1,81 @@
+import { Alert, Button, Card, Space, Tag } from 'antd';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { AccessApi } from '../access/accessApi';
+import { useWorkspaceSession } from '../access/workspaceSession';
+import './product.css';
+
+type ConnectionState = 'Not configured' | 'Ready to connect' | 'Setup in progress' | 'Connected' | 'Needs attention' | 'Unavailable';
+interface ConnectionSummary { providerCode: string; provider: string; state: ConnectionState; managePath: string; lastConfirmedAt: string | null }
+interface Overview { tenantId: string; customerId: string; generatedAt: string; connections: ConnectionSummary[] }
+interface State { api: AccessApi; scope: string; overview: Overview | null; busy: boolean; error: string }
+
+const expected = new Map([
+  ['google-drive', { provider: 'Google Drive', path: '/connections/google-drive' }],
+  ['onedrive', { provider: 'OneDrive', path: '/connections/onedrive' }],
+]);
+const states = new Set<ConnectionState>(['Not configured', 'Ready to connect', 'Setup in progress', 'Connected', 'Needs attention', 'Unavailable']);
+function validOverview(value: Overview | null | undefined, tenant: string, customer: string) {
+  if (value?.tenantId !== tenant || value.customerId !== customer || !Number.isFinite(Date.parse(value.generatedAt)) ||
+      !Array.isArray(value.connections) || value.connections.length !== expected.size) return false;
+  const seen = new Set<string>();
+  for (const item of value.connections) {
+    const definition = expected.get(item.providerCode);
+    if (!definition || seen.has(item.providerCode) || definition.provider !== item.provider || definition.path !== item.managePath ||
+        !states.has(item.state) || item.lastConfirmedAt !== null && !Number.isFinite(Date.parse(item.lastConfirmedAt)) ||
+        item.state !== 'Connected' && item.lastConfirmedAt !== null) return false;
+    seen.add(item.providerCode);
+  }
+  return seen.size === expected.size;
+}
+const color = (state: ConnectionState) => state === 'Connected' ? 'success' : state === 'Needs attention' || state === 'Unavailable' ? 'warning' : 'default';
+
+export default function ConnectionsOverviewExperience() {
+  const { api, session, authorization } = useWorkspaceSession();
+  const customer = authorization?.area === 'product' ? authorization.context : null;
+  const allowed = customer?.capabilities.includes('integration-gateway.connection.manage');
+  const scope = JSON.stringify([session?.tenantId, session?.actorId, session?.authenticationContextId, session?.subjectVersion, customer?.customerId]);
+  const [state, setState] = useState<State | null>(null);
+  const active = useRef<AbortController | null>(null);
+  const context = useRef({ api, scope });
+  useLayoutEffect(() => { context.current = { api, scope }; }, [api, scope]);
+  const current = state?.api === api && state.scope === scope ? state : null;
+  const load = () => {
+    if (!api || !session || !customer || !allowed) return;
+    active.current?.abort(); const controller = new AbortController(); active.current = controller;
+    setState({ api, scope, overview: null, busy: true, error: '' });
+    void api.connectionsOverview<Overview>(controller.signal).then(value => {
+      if (controller.signal.aborted || context.current.api !== api || context.current.scope !== scope) return;
+      if (!validOverview(value, session.tenantId, customer.customerId)) throw new Error('INVALID_CONNECTION_OVERVIEW');
+      setState({ api, scope, overview: value, busy: false, error: '' });
+    }).catch(() => {
+      if (!controller.signal.aborted && context.current.api === api && context.current.scope === scope)
+        setState({ api, scope, overview: null, busy: false, error: 'Connection status is unavailable. Refresh to try again.' });
+    });
+  };
+  useEffect(() => {
+    const timer = window.setTimeout(load, 0);
+    return () => { window.clearTimeout(timer); active.current?.abort(); };
+  // load is intentionally rebound to the exact verified session scope.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, allowed, scope]);
+
+  if (!customer || !api) return <main className="product-page"><h1>Connections</h1><p>Open your customer workspace to review connections.</p></main>;
+  if (!allowed) return <main className="product-page"><h1>Connections</h1><p>Your current access does not allow managing connections. Ask your organization administrator for connection access.</p></main>;
+  return <main className="product-page" aria-busy={current?.busy ?? true}>
+    <h1>Connections</h1>
+    <p>Review data sources configured for your organization. Opening a provider does not grant permission or import files.</p>
+    {current?.error && <Alert type="warning" showIcon title={current.error} />}
+    <Button disabled={current?.busy ?? true} onClick={load}>Refresh connections</Button>
+    {current?.overview && <Space orientation="vertical" size="middle" style={{ width: '100%', marginTop: 16 }}>
+      {current.overview.connections.map(item => <Card key={item.providerCode} title={item.provider} extra={<Tag color={color(item.state)}>{item.state}</Tag>}>
+        {item.state === 'Not configured' && <p>Your organization has not configured this provider. Its settings can be supplied during onboarding.</p>}
+        {item.state === 'Ready to connect' && <p>The provider is configured and ready for you to review its permission before connecting.</p>}
+        {item.state === 'Setup in progress' && <p>Connection setup has started. Open the provider to continue or review the selected folder.</p>}
+        {item.state === 'Connected' && <p>{item.lastConfirmedAt ? `Last confirmed ${new Date(item.lastConfirmedAt).toLocaleString()}.` : 'The provider reports a current connection.'}</p>}
+        {item.state === 'Needs attention' && <p>Open the provider to review current permission, configuration and folder access.</p>}
+        {item.state === 'Unavailable' && <p>Current provider status could not be confirmed. No connection result has been inferred.</p>}
+        <Button href={item.managePath}>Manage {item.provider}</Button>
+      </Card>)}
+    </Space>}
+  </main>;
+}
