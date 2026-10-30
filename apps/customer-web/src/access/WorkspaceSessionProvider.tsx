@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { AccessApi, AccessApiError, establishSession } from './accessApi';
+import { AccessApi, AccessApiError, establishSession, sessionClientHeaders } from './accessApi';
 import type { TenantSession } from './accessApi';
 import { registrationRequest } from './registrationApi';
 import { confirmCustomerEmailCode } from './customerEmailApi';
@@ -255,7 +255,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
   const connectPersonaPassword = useCallback((tenant: string, email: string, password: string) =>
     connectUsing(tenant, async signal => {
       const response = await fetch('/identity-api/local/v1/persona-credentials/sign-in', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', ...sessionClientHeaders() },
         body: JSON.stringify({ tenantId: tenant, email, password }), cache: 'no-store',
         redirect: 'error', signal,
       });

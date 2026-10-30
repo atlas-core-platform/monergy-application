@@ -82,7 +82,7 @@ public static class PersonaCredentialEndpoints
         routes.MapPost("/activation/confirm", (PersonaActivationConfirm r, PersonaCredentialAccess owner, HttpContext h) =>
             owner.ActivateAsync(r, h.RequestAborted));
         routes.MapPost("/sign-in", (PasswordSignIn r, PersonaCredentialAccess owner, HttpContext h) =>
-            owner.SignInAsync(r, h.RequestAborted));
+            owner.SignInAsync(r, TenantSessionEndpoints.Client(h), h.RequestAborted));
         routes.MapPost("/recovery/request", (PersonaActivationRequest r, PersonaCredentialAccess owner, HttpContext h) =>
             owner.RequestAsync(r, true, h.RequestAborted));
         routes.MapPost("/recovery/confirm", (PersonaRecoveryConfirm r, PersonaCredentialAccess owner, HttpContext h) =>

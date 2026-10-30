@@ -5,7 +5,7 @@ using Monergy.Contracts;
 namespace Monergy.Services.CustomerIdentity.Application;
 
 public sealed record SelfSessionEntry(string ActorId, string SessionReference, DateTimeOffset EstablishedAt,
-    DateTimeOffset ExpiresAt, string Status, bool IsCurrent);
+    DateTimeOffset ExpiresAt, string Status, bool IsCurrent, string DeviceClass = "Unknown", string ClientFamily = "Unknown");
 public sealed record SelfSessionPage(string TenantId, string ActorId, IReadOnlyList<SelfSessionEntry> Items, string? NextCursor);
 public sealed record SelfSessionRevocation(string OperationId, string SessionReference);
 public sealed record SelfSessionReceipt(string OperationId, string SessionReference, bool Revoked);
@@ -35,6 +35,8 @@ public sealed class SelfSessionsApplication(ISelfSessionRepository repository, T
             page.Items.Select(x => x.SessionReference).Distinct(StringComparer.Ordinal).Count() != page.Items.Count ||
             page.Items.Any(x => x.ActorId != current.ActorId || !SelfSessionReferences.Valid(x.SessionReference) || x.ExpiresAt <= x.EstablishedAt ||
                 x.Status is not ("Active" or "Ended" or "Expired" or "AccessChanged") ||
+                x.DeviceClass is not ("Desktop" or "Tablet" or "Mobile" or "Unknown") ||
+                x.ClientFamily is not ("Chrome" or "Edge" or "Firefox" or "Safari" or "Other" or "Unknown") ||
                 x.IsCurrent != (x.SessionReference == currentReference) || x.IsCurrent && x.Status != "Active"))
             throw new TenantAccessException("SESSION_LIST_INVALID", 503);
         await ConfirmAsync(lookup, current, ct).ConfigureAwait(false);

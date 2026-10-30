@@ -38,6 +38,22 @@ if (-not $embeddedAccessRequestSource.Contains('INSERT INTO am.access_request_pe
 }
 Write-Output "LOCAL-UAT AM runtime provenance privilege contract passed: SELECT/INSERT allowed; UPDATE/DELETE/TRUNCATE denied; $($flowWriteTables.Count) flow tables covered by the transactional probe."
 
+$expectedSessionGrant = 'GRANT INSERT(session_hash,actor_id,subject_version,device_class,client_family),UPDATE(revoked) ON customer_identity.trusted_sessions TO {runtime};'
+if (-not $bootstrapSource.Contains($expectedSessionGrant)) {
+    throw 'LOCAL-UAT does not grant the Customer & Identity runtime the bounded session client-evidence INSERT columns.'
+}
+if ($bootstrapSource -match 'GRANT\s+[^;]*UPDATE\([^)]*(?:device_class|client_family)') {
+    throw 'LOCAL-UAT grants a prohibited update privilege on immutable session client evidence.'
+}
+$sessionSource = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/customer-identity/Infrastructure/PostgresTenantSessions.cs') -Raw
+foreach ($column in @('device_class', 'client_family')) {
+    if (-not $sessionSource.Contains("has_column_privilege(current_user,'customer_identity.trusted_sessions','$column','INSERT')") -or
+        -not $sessionSource.Contains("NOT has_column_privilege(current_user,'customer_identity.trusted_sessions','$column','UPDATE')")) {
+        throw "Customer & Identity readiness does not enforce the exact INSERT-only $column privilege."
+    }
+}
+Write-Output 'LOCAL-UAT trusted-session client evidence contract passed: bounded columns are insertable and immutable.'
+
 if ($RuntimePrivilegeOnly) { exit 0 }
 
 $migrationRoot = Join-Path $RepositoryRoot 'build/uat/dependencies/source/tools/Monergy.AccessManagement.Migrations/migrations'

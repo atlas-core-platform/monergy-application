@@ -63,6 +63,9 @@ public sealed class PersonaCredentialAccess(
     }
 
     public async Task<TenantSessionContext> SignInAsync(PasswordSignIn request, CancellationToken ct)
+        => await SignInAsync(request, SessionClientDescriptor.Unknown, ct).ConfigureAwait(false);
+
+    public async Task<TenantSessionContext> SignInAsync(PasswordSignIn request, SessionClientDescriptor client, CancellationToken ct)
     {
         TenantAccessProtocol.Identifier(request.TenantId, 64);
         var email = CustomerEmailAccess.NormalizeEmail(request.Email);
@@ -72,7 +75,7 @@ public sealed class PersonaCredentialAccess(
             throw new TenantAccessException("AUTHENTICATION_REQUIRED", 401);
         // This owner reads the current AM active membership and subject version
         // before AND after issuing the C&I session. Never trust a posted role.
-        var session = await sessions.EstablishVerifiedAsync(identity.TenantId, identity.ActorId, ct).ConfigureAwait(false);
+        var session = await sessions.EstablishVerifiedAsync(identity.TenantId, identity.ActorId, client, ct).ConfigureAwait(false);
         try
         {
             if (!await repository.IsCurrentAsync(identity, ct).ConfigureAwait(false))

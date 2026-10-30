@@ -1,4 +1,4 @@
-import { AccessApiError } from './accessApi';
+import { AccessApiError, sessionClientHeaders } from './accessApi';
 import type { TenantSession } from './accessApi';
 
 export interface CustomerEmailChallenge {
@@ -14,7 +14,7 @@ async function request<T>(path: string, body: unknown, signal: AbortSignal): Pro
       method: 'POST',
       cache: 'no-store',
       redirect: 'error',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(path === 'confirm' ? sessionClientHeaders() : {}) },
       body: JSON.stringify(body),
       signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]),
     });

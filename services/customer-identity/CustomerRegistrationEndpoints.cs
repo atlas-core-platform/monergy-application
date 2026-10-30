@@ -35,7 +35,7 @@ public static class CustomerRegistrationEndpoints
         group.MapGet("/agreements",(string tenantId,CustomerRegistration owner)=>owner.Publication(tenantId));
         group.MapPost("/request",(RegistrationRequest r,CustomerRegistration owner,HttpContext h)=>owner.RequestAsync(r,false,h.RequestAborted));
         group.MapPost("/confirm",(RegistrationConfirmation r,CustomerRegistration owner,HttpContext h)=>owner.ConfirmAsync(r,h.RequestAborted));
-        group.MapPost("/sign-in",(PasswordSignIn r,CustomerRegistration owner,HttpContext h)=>owner.SignInAsync(r,h.RequestAborted));
+        group.MapPost("/sign-in",(PasswordSignIn r,CustomerRegistration owner,HttpContext h)=>owner.SignInAsync(r,TenantSessionEndpoints.Client(h),h.RequestAborted));
         group.MapPost("/recovery/request",(RegistrationRequest r,CustomerRegistration owner,HttpContext h)=>owner.RequestAsync(r,true,h.RequestAborted));
         group.MapPost("/recovery/confirm",async(PasswordRecoveryConfirmation r,CustomerRegistration owner,HttpContext h)=>{await owner.RecoverAsync(r,h.RequestAborted);return Results.Ok(new{recovered=true});});
     }

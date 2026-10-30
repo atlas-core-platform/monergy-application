@@ -56,6 +56,7 @@ public static class CustomerEmailAccessEndpoints
             catch (System.Data.Common.DbException) { return Results.Json(new { error = "EMAIL_ACCESS_UNAVAILABLE" }, statusCode: 503); }
         });
         group.MapPost("/request", (CustomerEmailRequest request, CustomerEmailAccess owner, HttpContext http) => owner.RequestAsync(request, http.RequestAborted));
-        group.MapPost("/confirm", (CustomerEmailConfirmation request, CustomerEmailAccess owner, HttpContext http) => owner.ConfirmAsync(request, http.RequestAborted));
+        group.MapPost("/confirm", (CustomerEmailConfirmation request, CustomerEmailAccess owner, HttpContext http) =>
+            owner.ConfirmAsync(request, TenantSessionEndpoints.Client(http), http.RequestAborted));
     }
 }

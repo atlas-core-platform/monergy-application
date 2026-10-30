@@ -154,7 +154,8 @@ public static class TenantSessionEndpoints
         app.MapGet("/internal/health/ready", async (ITenantSessionRepository repository, CancellationToken ct) =>
             await repository.ReadyAsync(ct).ConfigureAwait(false) ? Results.Ok() : (IResult)Results.StatusCode(503));
         app.MapPost("/local/v1/tenant-sessions", (TenantSessionEstablishment request, HttpContext http, TenantSessionAuthority authority) =>
-            InvokeAsync(() => authority.EstablishAsync(request.TenantId, http.Request.Headers["X-Monergy-Reference-Authentication"].ToString(), http.RequestAborted)));
+            InvokeAsync(() => authority.EstablishAsync(request.TenantId,
+                http.Request.Headers["X-Monergy-Reference-Authentication"].ToString(), Client(http), http.RequestAborted)));
         app.MapPost("/local/v1/tenant-sessions/revoke", (TenantSessionLookup request, HttpContext http, TenantSessionAuthority authority) =>
             InvokeAsync(() => authority.EndAsync(request, http.RequestAborted)));
         app.MapGet("/local/v1/administration/resource-directory/customers", async (
@@ -199,4 +200,8 @@ public static class TenantSessionEndpoints
         catch (TenantAccessException exception) { return Results.Json(new { error = exception.Code }, statusCode: exception.StatusCode); }
         catch (System.Data.Common.DbException) { return Results.StatusCode(503); }
     }
+
+    internal static SessionClientDescriptor Client(HttpContext http) => SessionClientDescriptor.FromHeaders(
+        http.Request.Headers["X-Monergy-Device-Class"].ToString(),
+        http.Request.Headers["X-Monergy-Client-Family"].ToString());
 }

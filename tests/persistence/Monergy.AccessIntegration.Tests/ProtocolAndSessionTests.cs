@@ -33,6 +33,17 @@ public sealed class ProtocolAndSessionTests
     }
 
     [Fact]
+    public async Task EstablishmentPersistsOnlyCanonicalClientClassification()
+    {
+        var repository = new Sessions();
+        var membership = new Membership();
+        var client = SessionClientDescriptor.FromHeaders("Mobile", "Safari");
+        await Authority(repository, membership).EstablishAsync("T001", new string('a', 64), client, default);
+        Assert.Equal(client, repository.Client);
+        Assert.Equal(SessionClientDescriptor.Unknown, SessionClientDescriptor.FromHeaders("phone-one", "custom-browser"));
+    }
+
+    [Fact]
     public async Task DisabledMembershipCannotCreateASession()
     {
         var repository = new Sessions();
@@ -127,10 +138,17 @@ public sealed class ProtocolAndSessionTests
     {
         public TenantSessionContext? Current { get; private set; }
         public bool Revoked { get; private set; }
+        public SessionClientDescriptor Client { get; private set; } = SessionClientDescriptor.Unknown;
         public Task<TenantSessionContext> CreateAsync(string tenantId, string actorId, string sessionId, long subjectVersion, CancellationToken cancellationToken)
         {
             Current = new(tenantId, actorId, sessionId, subjectVersion, DateTimeOffset.UtcNow.AddMinutes(30));
             return Task.FromResult(Current);
+        }
+        public Task<TenantSessionContext> CreateAsync(string tenantId, string actorId, string sessionId, long subjectVersion,
+            SessionClientDescriptor client, CancellationToken cancellationToken)
+        {
+            Client = client;
+            return CreateAsync(tenantId, actorId, sessionId, subjectVersion, cancellationToken);
         }
         public Task<TenantSessionContext?> ReadCurrentAsync(string tenantId, string sessionId, CancellationToken cancellationToken) =>
             Task.FromResult(!Revoked && Current?.TenantId == tenantId && Current.AuthenticationContextId == sessionId ? Current : null);

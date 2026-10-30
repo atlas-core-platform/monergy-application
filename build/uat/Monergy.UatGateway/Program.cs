@@ -274,7 +274,8 @@ static string? Route(string path, string method)
 static async Task ProxyAsync(HttpContext http, HttpClient client, Uri target)
 {
     using var request = new HttpRequestMessage(new HttpMethod(http.Request.Method), target);
-    foreach (var name in new[] { "X-Monergy-Tenant", "X-Monergy-Session", "X-Monergy-Reference-Authentication" })
+    foreach (var name in new[] { "X-Monergy-Tenant", "X-Monergy-Session", "X-Monergy-Reference-Authentication",
+        "X-Monergy-Device-Class", "X-Monergy-Client-Family" })
     {
         var value = http.Request.Headers[name];
         if (value.Count > 1 || value.ToString().Length > 256) throw new TenantBoundaryException("INVALID_HEADER", 400);

@@ -12,10 +12,24 @@ public interface ITenantMembershipClient
 public interface ITenantSessionRepository
 {
     Task<TenantSessionContext> CreateAsync(string tenantId, string actorId, string sessionId, long subjectVersion, CancellationToken cancellationToken);
+    Task<TenantSessionContext> CreateAsync(string tenantId, string actorId, string sessionId, long subjectVersion,
+        SessionClientDescriptor client, CancellationToken cancellationToken) =>
+        CreateAsync(tenantId, actorId, sessionId, subjectVersion, cancellationToken);
     Task<TenantSessionContext?> ReadCurrentAsync(string tenantId, string sessionId, CancellationToken cancellationToken);
     Task RevokeAsync(string tenantId, string sessionId, CancellationToken cancellationToken);
     Task<AccessManagementReceipt> ConsumeAsync(string trustedTenant, string destination, AccessManagementEvent message, CancellationToken cancellationToken);
     Task<bool> ReadyAsync(CancellationToken cancellationToken);
+}
+
+public sealed record SessionClientDescriptor(string DeviceClass, string ClientFamily)
+{
+    public static SessionClientDescriptor Unknown { get; } = new("Unknown", "Unknown");
+    public static SessionClientDescriptor FromHeaders(string? deviceClass, string? clientFamily)
+    {
+        var device = deviceClass is "Desktop" or "Tablet" or "Mobile" ? deviceClass : "Unknown";
+        var client = clientFamily is "Chrome" or "Edge" or "Firefox" or "Safari" or "Other" ? clientFamily : "Unknown";
+        return new(device, client);
+    }
 }
 
 public sealed class ReferenceTenantAuthenticator
@@ -52,19 +66,28 @@ public sealed class ReferenceTenantAuthenticator
 public sealed class TenantSessionAuthority(ITenantSessionRepository repository, ITenantMembershipClient membership, ReferenceTenantAuthenticator authenticator)
 {
     public async Task<TenantSessionContext> EstablishAsync(string tenantId, string authenticationReference, CancellationToken cancellationToken)
+        => await EstablishAsync(tenantId, authenticationReference, SessionClientDescriptor.Unknown, cancellationToken).ConfigureAwait(false);
+
+    public async Task<TenantSessionContext> EstablishAsync(string tenantId, string authenticationReference,
+        SessionClientDescriptor client, CancellationToken cancellationToken)
     {
         var actorId = authenticator.Authenticate(tenantId, authenticationReference);
-        return await EstablishVerifiedAsync(tenantId, actorId, cancellationToken).ConfigureAwait(false);
+        return await EstablishVerifiedAsync(tenantId, actorId, client, cancellationToken).ConfigureAwait(false);
     }
 
     internal async Task<TenantSessionContext> EstablishVerifiedAsync(string tenantId, string actorId, CancellationToken cancellationToken)
+        => await EstablishVerifiedAsync(tenantId, actorId, SessionClientDescriptor.Unknown, cancellationToken).ConfigureAwait(false);
+
+    internal async Task<TenantSessionContext> EstablishVerifiedAsync(string tenantId, string actorId,
+        SessionClientDescriptor client, CancellationToken cancellationToken)
     {
         TenantAccessProtocol.Identifier(tenantId, 64);
         TenantAccessProtocol.Identifier(actorId);
+        client = SessionClientDescriptor.FromHeaders(client.DeviceClass, client.ClientFamily);
         var state = await membership.ReadAsync(tenantId, actorId, cancellationToken).ConfigureAwait(false);
         if (!state.Active) throw new TenantAccessException("MEMBERSHIP_INACTIVE", 401);
         var sessionId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(32));
-        var session = await repository.CreateAsync(tenantId, actorId, sessionId, state.SubjectVersion, cancellationToken).ConfigureAwait(false);
+        var session = await repository.CreateAsync(tenantId, actorId, sessionId, state.SubjectVersion, client, cancellationToken).ConfigureAwait(false);
         // Membership is re-read after the owner commit. Cross-service transactions
         // are not implied; every later validation and protected decision is fresh.
         try

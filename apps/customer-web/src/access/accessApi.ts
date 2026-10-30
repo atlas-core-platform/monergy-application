@@ -142,6 +142,14 @@ async function read<T>(url: string, options: RequestInit): Promise<T> {
   }
 }
 
+export function sessionClientHeaders(userAgent: string = navigator.userAgent): Record<string, string> {
+  const agent = userAgent.toLowerCase();
+  const device = /ipad|tablet|kindle|silk/.test(agent) ? 'Tablet' : /mobi|iphone|android/.test(agent) ? 'Mobile' : 'Desktop';
+  const client = agent.includes('edg/') ? 'Edge' : agent.includes('firefox/') ? 'Firefox' :
+    agent.includes('chrome/') || agent.includes('crios/') ? 'Chrome' : agent.includes('safari/') ? 'Safari' : 'Other';
+  return { 'X-Monergy-Device-Class': device, 'X-Monergy-Client-Family': client };
+}
+
 export async function establishSession(
   tenantId: string,
   key: string,
@@ -150,7 +158,7 @@ export async function establishSession(
   return read<TenantSession>('/identity-api/local/v1/tenant-sessions', {
     method: 'POST',
     signal,
-    headers: { 'Content-Type': 'application/json', 'X-Monergy-Reference-Authentication': key.trim() },
+    headers: { 'Content-Type': 'application/json', 'X-Monergy-Reference-Authentication': key.trim(), ...sessionClientHeaders() },
     body: JSON.stringify({ tenantId }),
   });
 }

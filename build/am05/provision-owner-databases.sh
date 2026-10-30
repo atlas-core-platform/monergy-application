@@ -17,7 +17,7 @@ INSERT INTO customer_identity.tenant_identity VALUES (true,:'tenant',1);
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 SELECT format('GRANT USAGE ON SCHEMA customer_identity TO %I', :'runtime') \gexec
 SELECT format('GRANT SELECT ON ALL TABLES IN SCHEMA customer_identity TO %I', :'runtime') \gexec
-SELECT format('GRANT INSERT(session_hash,actor_id,subject_version),UPDATE(revoked) ON customer_identity.trusted_sessions TO %I', :'runtime') \gexec
+SELECT format('GRANT INSERT(session_hash,actor_id,subject_version,device_class,client_family),UPDATE(revoked) ON customer_identity.trusted_sessions TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT,UPDATE(version) ON customer_identity.access_subject_versions TO %I', :'runtime') \gexec
 SELECT format('GRANT UPDATE(version) ON customer_identity.access_policy_version TO %I', :'runtime') \gexec
 SELECT format('GRANT INSERT ON customer_identity.access_event_inbox TO %I', :'runtime') \gexec

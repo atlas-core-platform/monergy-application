@@ -97,6 +97,9 @@ public sealed class CustomerEmailAccess(
     }
 
     public async Task<TenantSessionContext> ConfirmAsync(CustomerEmailConfirmation request, CancellationToken ct)
+        => await ConfirmAsync(request, SessionClientDescriptor.Unknown, ct).ConfigureAwait(false);
+
+    public async Task<TenantSessionContext> ConfirmAsync(CustomerEmailConfirmation request, SessionClientDescriptor client, CancellationToken ct)
     {
         TenantAccessProtocol.Identifier(request.TenantId, 64);
         if (request.ChallengeId is null || request.ChallengeId.Length != 64 || request.ChallengeId.Any(c => !char.IsAsciiHexDigitLower(c)) ||
@@ -112,7 +115,7 @@ public sealed class CustomerEmailAccess(
             if (!await repository.IsCurrentAsync(request.TenantId, customer, ct).ConfigureAwait(false))
                 throw new TenantAccessException("EMAIL_CODE_INVALID", 401);
             // Internal identity-owner method; there is no actor-selecting HTTP endpoint.
-            session = await sessions.EstablishVerifiedAsync(request.TenantId, customer.ActorId, ct).ConfigureAwait(false);
+            session = await sessions.EstablishVerifiedAsync(request.TenantId, customer.ActorId, client, ct).ConfigureAwait(false);
             if (!await repository.IsCurrentAsync(request.TenantId, customer, ct).ConfigureAwait(false))
                 throw new TenantAccessException("EMAIL_CODE_INVALID", 401);
             await repository.RecordSessionAsync(request.TenantId, hash, customer, true, clock.GetUtcNow(), ct).ConfigureAwait(false);
