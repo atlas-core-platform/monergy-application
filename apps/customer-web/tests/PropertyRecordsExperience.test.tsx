@@ -12,7 +12,8 @@ const source: ProductFinancialFact = { financialFactId: 'ff-property', factType:
 const property: ProductPropertyDraft = { name:'Family home', location:'Example location', propertyType:'Apartment',
   purchaseValue:500000, currentValue:400000, valueAsOfDate:'2026-10-01', sourceFinancialFactId:'ff-property', sourceRevision:2 };
 const record: ProductPropertyRecord = { propertyRecordId:'property-saved',operationId:'a'.repeat(32),customerId:'reference-customer',property,
-  currency:'USD',sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-property',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',revision:1 };
+  currency:'USD',sourceProvenanceId:'provenance-2',documentVersionId:'document-v2',evidenceId:'evidence-property',recordedBy:'A100',recordedAt:'2026-10-19T00:00:00Z',revision:1,
+  ownershipStatus:'UNREVIEWED',ownershipAsOfDate:null };
 function mount(api: AccessApi, canCreate = true, canRead = true, facts: ProductFinancialFact[] = [source]) {
   return render(<FoundationProvider appearance="midnight"><PropertyRecordsExperience api={api} canCreate={canCreate} canRead={canRead} facts={facts} /></FoundationProvider>);
 }

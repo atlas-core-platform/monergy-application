@@ -137,6 +137,8 @@ public sealed class PostgresPropertyRecords : IPropertyRecordRepository, IAsyncD
             )
             SELECT payload FROM latest WHERE (CAST(payload AS jsonb)->>'currency')=@Currency
               AND (CAST(payload AS jsonb)#>>'{property,valueAsOfDate}')=@AsOfDate
+              AND (COALESCE(CAST(payload AS jsonb)->>'ownershipStatus','UNREVIEWED')<>'DISPOSED'
+                   OR (CAST(payload AS jsonb)->>'ownershipAsOfDate')>@AsOfDate)
             ORDER BY recorded_at DESC,property_record_id LIMIT 201;
             """,new {Tenant=tenant,Customer=customer,Currency=currency,AsOfDate=asOfDate.ToString("yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture)},cancellationToken:ct)).ConfigureAwait(false)).ToArray();
         return new(rows.Take(200).Select(Decode).ToArray(),rows.Length>200);

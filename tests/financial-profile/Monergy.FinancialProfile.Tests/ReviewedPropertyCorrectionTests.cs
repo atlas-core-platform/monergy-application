@@ -19,7 +19,7 @@ public sealed partial class ReviewedPropertyRecordTests
     {
         var (financial,source)=await Seed();var app=new PropertyRecordsApplication(financial,new InMemoryPropertyRecords(),TimeProvider.System);
         var first=await app.CreateAsync("T001",Customer,"actor-001",Input(source.FinancialFactId),default);
-        var legacy=JsonSerializer.Serialize(first,ContractJson.Options).Replace(",\"revision\":1}","}",StringComparison.Ordinal);
+        var legacy=JsonSerializer.Serialize(first,ContractJson.Options).Replace("\"revision\":1,","",StringComparison.Ordinal);
         Assert.DoesNotContain("\"revision\"",legacy,StringComparison.Ordinal);
         Assert.Equal(first,JsonSerializer.Deserialize<ReviewedPropertyRecord>(legacy,ContractJson.Options));
     }
