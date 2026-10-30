@@ -60,7 +60,18 @@ public sealed record ReportSourceReference(
     IReadOnlyList<string>? SourceCalculationIds = null,
     string? FinancialFactReferenceId = null,
     int? FinancialFactRevision = null,
-    string? DocumentVersionReferenceId = null);
+    string? DocumentVersionReferenceId = null,
+    FinancialGoalReportSnapshot? FinancialGoal = null);
+
+public sealed record FinancialGoalReportSnapshot(
+    int Revision,
+    string OperationId,
+    DateOnly TargetDate,
+    string LifecycleStatus,
+    DateOnly? LifecycleAsOfDate,
+    string PriorityLevel,
+    DateOnly? PriorityAsOfDate,
+    DateTimeOffset RecordedAt);
 
 public sealed record ReportLineItem(
     string Label,

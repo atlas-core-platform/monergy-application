@@ -13,6 +13,16 @@ export interface ReportSourceReference {
   financialFactReferenceId?: string | null;
   financialFactRevision?: number | null;
   documentVersionReferenceId?: string | null;
+  financialGoal?: {
+    revision: number;
+    operationId: string;
+    targetDate: string;
+    lifecycleStatus: 'IN_PROGRESS' | 'PAUSED' | 'REPORTED_ACHIEVED' | 'STOPPED';
+    lifecycleAsOfDate: string | null;
+    priorityLevel: 'NOT_SET' | 'LOW' | 'MEDIUM' | 'HIGH';
+    priorityAsOfDate: string | null;
+    recordedAt: string;
+  } | null;
 }
 
 export interface FinancialReviewReceiptSelection {

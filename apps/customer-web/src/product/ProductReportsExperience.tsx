@@ -33,6 +33,12 @@ const formatDateTime = (value: string) =>
     timeStyle: 'short',
   }).format(new Date(value));
 
+const goalStatus = (value: string) => value === 'IN_PROGRESS' ? 'In progress' :
+  value === 'PAUSED' ? 'Paused' : value === 'REPORTED_ACHIEVED' ? 'Reported achieved' : 'Stopped';
+
+const goalPriority = (value: string) => value === 'NOT_SET' ? 'Not set' :
+  value.charAt(0) + value.slice(1).toLowerCase();
+
 const formatValue = (value: number, unit: string) =>
   /^[A-Z]{3}$/.test(unit)
     ? new Intl.NumberFormat(undefined, { style: 'currency', currency: unit }).format(value)
@@ -277,6 +283,7 @@ export default function ProductReportsExperience() {
             Every item stays connected to its authoritative source. It is not a formal report
             pack, financial-health score, recommendation, or advice. Included Loan source amounts do not establish verified outstanding balances, EMI, or eligibility. Asset source figures are document-reported values, not independently verified valuations or net-worth totals. Investment source figures are document-stated amounts, not live securities holdings, current NAV, market prices or portfolio returns. Insurance source figures are not verified policy benefits, claims, premiums or cash values. Tax source figures are document-stated amounts, not assessed tax owed, accepted filings or refunds.
             Customer-reviewed tax records retain the reviewed amount meaning and period, but do not establish assessed tax liability, an accepted filing, payment confirmation, refund entitlement or tax advice.
+            Customer-defined financial goals retain the exact current owner revision and operation receipt, but do not establish a required contribution, savings allocation, recommendation, eligibility or independently verified achievement.
           </p>
         </div>
         <Tag className="product-environment">
@@ -378,7 +385,8 @@ export default function ProductReportsExperience() {
                 <article className="product-report-item" key={item.source.sourceId}>
                   <div>
                     <Tag>{item.source.sourceType === 'FinancialFact' ? 'FINANCIAL INFORMATION' :
-                      item.source.sourceType === 'TaxRecord' ? 'REVIEWED TAX RECORD' : item.source.sourceType}</Tag>
+                      item.source.sourceType === 'TaxRecord' ? 'REVIEWED TAX RECORD' :
+                      item.source.sourceType === 'FinancialGoal' ? 'CUSTOMER-DEFINED GOAL' : item.source.sourceType}</Tag>
                     <h3>{item.label}</h3>
                     <strong>{formatValue(item.value, item.unit)}</strong>
                   </div>
@@ -397,6 +405,13 @@ export default function ProductReportsExperience() {
                       >
                         View tax record &amp; history
                       </Button>
+                    ) : item.source.sourceType === 'FinancialGoal' ? (
+                      <Button
+                        type="link"
+                        href={'/finances?type=GOAL&goal=' + encodeURIComponent(item.source.sourceId)}
+                      >
+                        View goal &amp; history
+                      </Button>
                     ) : (
                       <Button type="link" href="/finances">
                         View reviewed calculations
@@ -411,7 +426,8 @@ export default function ProductReportsExperience() {
                         label: 'Technical details',
                         children: (
                           <Descriptions column={1} size="small">
-                            <Descriptions.Item label={item.source.sourceType === 'TaxRecord' ? 'Tax record' : 'Financial fact'}>
+                            <Descriptions.Item label={item.source.sourceType === 'TaxRecord' ? 'Tax record' :
+                              item.source.sourceType === 'FinancialGoal' ? 'Financial goal' : 'Financial fact'}>
                               {item.source.sourceId}
                             </Descriptions.Item>
                             {item.source.sourceType === 'TaxRecord' && <>
@@ -420,6 +436,30 @@ export default function ProductReportsExperience() {
                               </Descriptions.Item>
                               <Descriptions.Item label="Document version">
                                 {item.source.documentVersionReferenceId}
+                              </Descriptions.Item>
+                            </>}
+                            {item.source.sourceType === 'FinancialGoal' && item.source.financialGoal && <>
+                              <Descriptions.Item label="Owner revision">
+                                {item.source.financialGoal.revision}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Operation receipt">
+                                {item.source.financialGoal.operationId}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Target date">
+                                {item.source.financialGoal.targetDate}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Customer-reported status">
+                                {goalStatus(item.source.financialGoal.lifecycleStatus)}
+                                {item.source.financialGoal.lifecycleAsOfDate
+                                  ? ` · ${item.source.financialGoal.lifecycleAsOfDate}` : ''}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Customer priority">
+                                {goalPriority(item.source.financialGoal.priorityLevel)}
+                                {item.source.financialGoal.priorityAsOfDate
+                                  ? ` · ${item.source.financialGoal.priorityAsOfDate}` : ''}
+                              </Descriptions.Item>
+                              <Descriptions.Item label="Recorded">
+                                {formatDateTime(item.source.financialGoal.recordedAt)}
                               </Descriptions.Item>
                             </>}
                             <Descriptions.Item label="Financial provenance">
@@ -452,7 +492,9 @@ export default function ProductReportsExperience() {
                 Values are copied from your current authoritative Financial Profile and, when you
                 select the Phase 2 review, from four exact Financial Rules receipts. Reporting does
                 not recalculate, score, forecast, or invoke AI. Customer-reviewed tax records retain
-                their exact historical Financial Fact revision and evidence provenance. The exported file contains the same
+                their exact historical Financial Fact revision and evidence provenance. Customer-defined
+                financial goals retain their exact current Financial Profile revision and immutable operation receipt.
+                The exported file contains the same
                 governed content and exact receipt provenance shown here.
               </p>
             </div>

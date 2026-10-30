@@ -59,28 +59,29 @@ public sealed class ProductFinancialProfileReportSourceReader(
         var profileResult = await SendAsync<GetFinancialProfile, FinancialProfileDetails>(
             proof, "contracts/cid-030/v1", profileRequest, cancellationToken).ConfigureAwait(false);
 
-        if (profileResult.Outcome == ContractOutcome.Rejected &&
-            profileResult.Error?.Category == ContractErrorCategory.NotFound)
-            return null;
-        if (profileResult.Outcome != ContractOutcome.Success || profileResult.Data is null)
+        FinancialProfileDetails? profile = null;
+        if (profileResult.Outcome == ContractOutcome.Success && profileResult.Data is not null)
+            profile = profileResult.Data;
+        else if (profileResult.Outcome != ContractOutcome.Rejected ||
+                 profileResult.Error?.Category != ContractErrorCategory.NotFound)
             throw OwnerFailure(profileResult.Error, context.CorrelationId);
 
-        var profile = profileResult.Data;
-        if (profile.CustomerId != context.CustomerId || profile.FinancialProfileId != profileId ||
+        if (profile is not null &&
+            (profile.CustomerId != context.CustomerId || profile.FinancialProfileId != profileId ||
             profile.Facts.Any(fact =>
                 fact.CustomerId != context.CustomerId ||
                 fact.FinancialProfileId != profileId ||
                 string.IsNullOrWhiteSpace(fact.FinancialFactId) ||
                 string.IsNullOrWhiteSpace(fact.FinancialProvenanceId)) ||
             profile.Facts.Select(fact => fact.FinancialFactId).Distinct(StringComparer.Ordinal).Count() !=
-                profile.Facts.Count)
+                profile.Facts.Count))
         {
             throw Failure("report.source.profile-boundary-invalid", ContractErrorCategory.AccessDenied,
                 "The financial profile response is outside the current customer boundary.",
                 context.CorrelationId);
         }
 
-        var supported = profile.Facts
+        var supported = (profile?.Facts ?? [])
             .Select(fact => fact with { FactType = FinancialSourceFactBoundary.ForCustomer(fact.FactType) })
             .Where(fact => SupportedFactTypes.Contains(fact.FactType))
             .OrderBy(fact => fact.FactType, StringComparer.Ordinal)
@@ -125,9 +126,20 @@ public sealed class ProductFinancialProfileReportSourceReader(
                     null)));
         }
 
-        foreach (var item in await ReadTaxRecordsAsync(
-            proof, context, sourceSecurity, profileId, cancellationToken).ConfigureAwait(false))
-            items.Add(item);
+        if (profile is not null)
+        {
+            foreach (var item in await ReadTaxRecordsAsync(
+                proof, context, sourceSecurity, profileId, cancellationToken).ConfigureAwait(false))
+                items.Add(item);
+        }
+
+        var goals = await ReadFinancialGoalsAsync(
+            proof, context, cancellationToken).ConfigureAwait(false);
+        foreach (var item in goals.Items) items.Add(item);
+
+        // Preserve the former no-profile behavior unless the Financial Profile owner supplies
+        // a complete, current Customer-defined goal corpus for the new bounded report source.
+        if (profile is null && goals.LatestRecordedAt is null) return null;
 
         if (context.FinancialReview is { } review)
         {
@@ -137,12 +149,79 @@ public sealed class ProductFinancialProfileReportSourceReader(
         }
 
         if (items.Count == 0) return null;
+        if (items.Count > 100)
+            throw Failure("report.source.corpus-limit", ContractErrorCategory.DependencyFailure,
+                "The complete supported report source exceeds the current report limit.",
+                context.CorrelationId, true);
+
+        var asOf = profile?.UpdatedAt ?? goals.LatestRecordedAt!.Value;
+        if (goals.LatestRecordedAt > asOf) asOf = goals.LatestRecordedAt.Value;
 
         return new ReportSourceSnapshot(
             context.CustomerId,
-            profile.UpdatedAt,
+            asOf,
             items.ToImmutable(),
             null);
+    }
+
+    private async Task<(IReadOnlyList<ReportLineItem> Items, DateTimeOffset? LatestRecordedAt)>
+        ReadFinancialGoalsAsync(
+            TenantBoundaryProof proof,
+            ReportSourceReadContext context,
+            CancellationToken cancellationToken)
+    {
+        var root = "local/v1/customers/" + Uri.EscapeDataString(context.CustomerId) +
+            "/financial-goals";
+        var list = await GetOwnerAsync<FinancialGoalList>(proof, root,
+            context.CorrelationId, cancellationToken).ConfigureAwait(false);
+        if (list.Items is null || list.Items.Count > 200 || list.HasMore ||
+            list.Items.Any(item => item is null) ||
+            list.Items.Select(item => item?.FinancialGoalId).Distinct(StringComparer.Ordinal).Count() !=
+                list.Items.Count)
+        {
+            throw Failure("report.source.financial-goal-corpus-incomplete",
+                ContractErrorCategory.DependencyFailure,
+                "The Customer-defined financial-goal source is not a complete supported corpus.",
+                context.CorrelationId, true);
+        }
+
+        var items = new List<ReportLineItem>(list.Items.Count);
+        DateTimeOffset? latest = null;
+        foreach (var listed in list.Items.OrderBy(item => item.Goal.Name, StringComparer.OrdinalIgnoreCase)
+                     .ThenBy(item => item.FinancialGoalId, StringComparer.Ordinal))
+        {
+            if (!ValidFinancialGoal(listed, context.CustomerId))
+                throw FinancialGoalBoundary(context.CorrelationId);
+            var exact = await GetOwnerAsync<CustomerFinancialGoal>(proof,
+                root + "/" + Uri.EscapeDataString(listed.FinancialGoalId) +
+                "?revision=" + listed.Revision.ToString(CultureInfo.InvariantCulture),
+                context.CorrelationId, cancellationToken).ConfigureAwait(false);
+            if (!ValidFinancialGoal(exact, context.CustomerId) || exact != listed)
+                throw FinancialGoalBoundary(context.CorrelationId);
+
+            items.Add(new ReportLineItem(
+                exact.Goal.Name + " — customer-defined target",
+                exact.Goal.TargetAmount,
+                exact.Goal.Currency,
+                new ReportSourceReference(
+                    SourceType: "FinancialGoal",
+                    SourceId: exact.FinancialGoalId,
+                    AuthoritativeOwner: ReportingAuthority.FinancialProfileService,
+                    EvidenceReferenceId: null,
+                    FinancialProvenanceReferenceId: null,
+                    CalculationLineageReferenceId: null,
+                    FinancialGoal: new FinancialGoalReportSnapshot(
+                        exact.Revision,
+                        exact.OperationId,
+                        exact.Goal.TargetDate,
+                        exact.LifecycleStatus,
+                        exact.LifecycleAsOfDate,
+                        exact.PriorityLevel,
+                        exact.PriorityAsOfDate,
+                        exact.RecordedAt))));
+            if (latest is null || exact.RecordedAt > latest) latest = exact.RecordedAt;
+        }
+        return (items, latest);
     }
 
     private async Task<IReadOnlyList<ReportLineItem>> ReadTaxRecordsAsync(
@@ -286,6 +365,28 @@ public sealed class ProductFinancialProfileReportSourceReader(
         TenantAccessClient.Identifier(record.EvidenceId, 160) &&
         TenantAccessClient.Identifier(record.RecordedBy, 160) && record.RecordedAt != default;
 
+    private static bool ValidFinancialGoal(CustomerFinancialGoal? record, string customerId) =>
+        record is { Goal: not null } && record.CustomerId == customerId &&
+        TenantAccessClient.Identifier(record.FinancialGoalId, 80) &&
+        Guid.TryParseExact(record.OperationId, "N", out _) &&
+        !record.OperationId.Any(char.IsAsciiLetterUpper) && record.Revision > 0 &&
+        record.DeclarationStatus == "CUSTOMER_DEFINED" &&
+        Text(record.Goal.Name) && record.Goal.Name == record.Goal.Name.Trim() &&
+        record.Goal.TargetAmount is > 0 and <= 999999999999.99m &&
+        decimal.Round(record.Goal.TargetAmount, 2) == record.Goal.TargetAmount &&
+        record.Goal.Currency is { Length: 3 } && record.Goal.Currency.All(char.IsAsciiLetterUpper) &&
+        record.Goal.TargetDate.Year is >= 1900 and <= 2199 &&
+        record.LifecycleBasis == "CUSTOMER_REPORTED" &&
+        (record.LifecycleStatus == "IN_PROGRESS" &&
+             (record.LifecycleAsOfDate is null || record.LifecycleAsOfDate.Value.Year >= 1900) ||
+         record.LifecycleStatus is "PAUSED" or "REPORTED_ACHIEVED" or "STOPPED" &&
+             record.LifecycleAsOfDate is { Year: >= 1900 }) &&
+        record.PriorityBasis == "CUSTOMER_REPORTED" &&
+        record.PriorityLevel is "NOT_SET" or "LOW" or "MEDIUM" or "HIGH" &&
+        (record.PriorityLevel == "NOT_SET" && record.PriorityAsOfDate is null ||
+         record.PriorityAsOfDate is { Year: >= 1900 }) &&
+        TenantAccessClient.Identifier(record.RecordedBy, 160) && record.RecordedAt != default;
+
     private static bool Text(string? value, int maximum = 120) =>
         !string.IsNullOrWhiteSpace(value) && value.Trim().Length <= maximum &&
         !value.Any(char.IsControl);
@@ -301,6 +402,10 @@ public sealed class ProductFinancialProfileReportSourceReader(
     private static ReportSourceException TaxRecordBoundary(string correlationId) =>
         Failure("report.source.tax-record-boundary-invalid", ContractErrorCategory.AccessDenied,
             "A reviewed tax record is outside the current customer boundary.", correlationId);
+
+    private static ReportSourceException FinancialGoalBoundary(string correlationId) =>
+        Failure("report.source.financial-goal-boundary-invalid", ContractErrorCategory.AccessDenied,
+            "A Customer-defined financial goal is outside the current customer boundary.", correlationId);
 
     private async Task<IReadOnlyList<ReportLineItem>> ReadFinancialReviewAsync(
         TenantBoundaryProof proof,

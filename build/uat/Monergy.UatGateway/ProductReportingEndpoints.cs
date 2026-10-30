@@ -237,12 +237,13 @@ public static class ProductReportingEndpoints
         var calculations = report.Items.Where(item => item.Source.SourceType == "FinancialCalculation").ToArray();
         var facts = report.Items.Where(item => item.Source.SourceType == "FinancialFact").ToArray();
         var taxRecords = report.Items.Where(item => item.Source.SourceType == "TaxRecord").ToArray();
+        var financialGoals = report.Items.Where(item => item.Source.SourceType == "FinancialGoal").ToArray();
         if (report.CustomerId != customerId ||
             report.State != "GENERATED" ||
             !TenantAccessClient.Identifier(report.ReportId, 160) ||
             !report.ReportId.StartsWith("report-", StringComparison.Ordinal) ||
             report.Items.Length is < 1 or > 100 ||
-            report.Items.Length != facts.Length + calculations.Length + taxRecords.Length ||
+            report.Items.Length != facts.Length + calculations.Length + taxRecords.Length + financialGoals.Length ||
             facts.Any(item =>
                 item.Source.SourceType != "FinancialFact" ||
                 item.Source.AuthoritativeOwner != "Financial Profile Service" ||
@@ -255,8 +256,10 @@ public static class ProductReportingEndpoints
                 item.Source.SourceCalculationIds is not null ||
                 item.Source.FinancialFactReferenceId is not null ||
                 item.Source.FinancialFactRevision is not null ||
-                item.Source.DocumentVersionReferenceId is not null) ||
+                item.Source.DocumentVersionReferenceId is not null ||
+                item.Source.FinancialGoal is not null) ||
             taxRecords.Any(item => !ValidTaxRecord(item)) ||
+            financialGoals.Any(item => !ValidFinancialGoal(item)) ||
             calculations.Any(item => !ValidCalculation(item)) ||
             calculations.Length > 0 &&
                 (!calculations.Select(item => item.Source.RuleId).Distinct(StringComparer.Ordinal).Order()
@@ -287,6 +290,35 @@ public static class ProductReportingEndpoints
             TenantAccessClient.Identifier(source.FinancialFactReferenceId, 160) &&
             source.FinancialFactRevision is > 0 &&
             TenantAccessClient.Identifier(source.DocumentVersionReferenceId, 160) &&
+            source.FinancialGoal is null &&
+            item.Unit.Length == 3 && item.Unit.All(char.IsAsciiLetterUpper);
+    }
+
+    private static bool ValidFinancialGoal(ReportLineItem item)
+    {
+        var source = item.Source;
+        var goal = source.FinancialGoal;
+        return source.AuthoritativeOwner == "Financial Profile Service" &&
+            TenantAccessClient.Identifier(source.SourceId, 80) &&
+            source.EvidenceReferenceId is null && source.FinancialProvenanceReferenceId is null &&
+            source.CalculationLineageReferenceId is null && source.RuleId is null &&
+            source.RuleVersion is null && source.DefinitionHash is null && source.NumericSemantics is null &&
+            source.SourceCalculationIds is null && source.FinancialFactReferenceId is null &&
+            source.FinancialFactRevision is null && source.DocumentVersionReferenceId is null &&
+            goal is not null && goal.Revision > 0 &&
+            Guid.TryParseExact(goal.OperationId, "N", out _) &&
+            !goal.OperationId.Any(char.IsAsciiLetterUpper) &&
+            goal.TargetDate.Year is >= 1900 and <= 2199 &&
+            goal.LifecycleStatus is "IN_PROGRESS" or "PAUSED" or "REPORTED_ACHIEVED" or "STOPPED" &&
+            (goal.LifecycleStatus == "IN_PROGRESS" &&
+                 (goal.LifecycleAsOfDate is null || goal.LifecycleAsOfDate.Value.Year >= 1900) ||
+             goal.LifecycleStatus is "PAUSED" or "REPORTED_ACHIEVED" or "STOPPED" &&
+                 goal.LifecycleAsOfDate is { Year: >= 1900 }) &&
+            goal.PriorityLevel is "NOT_SET" or "LOW" or "MEDIUM" or "HIGH" &&
+            (goal.PriorityLevel == "NOT_SET" && goal.PriorityAsOfDate is null ||
+             goal.PriorityAsOfDate is { Year: >= 1900 }) &&
+            goal.RecordedAt != default && item.Value is > 0 and <= 999999999999.99m &&
+            decimal.Round(item.Value, 2) == item.Value &&
             item.Unit.Length == 3 && item.Unit.All(char.IsAsciiLetterUpper);
     }
 
@@ -340,7 +372,7 @@ public static class ProductReportingEndpoints
             source.CalculationLineageReferenceId != source.SourceId ||
             source.EvidenceReferenceId is not null || source.FinancialProvenanceReferenceId is not null ||
             source.FinancialFactReferenceId is not null || source.FinancialFactRevision is not null ||
-            source.DocumentVersionReferenceId is not null ||
+            source.DocumentVersionReferenceId is not null || source.FinancialGoal is not null ||
             source.SourceCalculationIds is null || source.SourceCalculationIds.Count == 0 ||
             source.SourceCalculationIds.Any(value => !TenantAccessClient.Identifier(value, 160)))
             return false;

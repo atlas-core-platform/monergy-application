@@ -5,6 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { AccessApi } from '../src/access/accessApi';
 import { Context } from '../src/access/workspaceSession';
 import ProductReportsExperience from '../src/product/ProductReportsExperience';
+import type { TrustedFinancialReport } from '../src/reports/types';
 
 const session = {
   tenantId: 'T001',
@@ -14,7 +15,7 @@ const session = {
   expiresAt: '2027-01-01T00:00:00Z',
 };
 
-const report = {
+const report: TrustedFinancialReport = {
   reportId: 'report-customer-basic-001',
   customerId: 'reference-customer',
   state: 'GENERATED' as const,
@@ -172,6 +173,65 @@ it('includes a customer-reviewed tax record with exact source history and export
   await user.click(screen.getByRole('button', { name: 'Technical details' }));
   expect(screen.getByText('ff-tax · revision 1')).toBeVisible();
   expect(screen.getByText('document-version-tax')).toBeVisible();
+  await user.click(screen.getByRole('button', { name: 'Export basic summary' }));
+  const blob = createObjectURL.mock.calls[0]?.[0];
+  expect(blob).toBeInstanceOf(Blob);
+  if (!blob) throw new Error('Reporting export did not create a file');
+  const text = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') resolve(reader.result);
+      else reject(new Error('Export did not contain text'));
+    };
+    reader.onerror = () => { reject(new Error('Export could not be read')); };
+    reader.readAsText(blob);
+  });
+  expect(text).toBe(content);
+});
+
+it('includes an exact-current Customer-defined goal snapshot without advice or achievement claims', async () => {
+  const goalItem = {
+    label: 'Emergency fund — customer-defined target', value: 25000, unit: 'USD',
+    source: {
+      sourceType: 'FinancialGoal', sourceId: 'financial-goal-001',
+      authoritativeOwner: 'Financial Profile Service', evidenceReferenceId: null,
+      financialProvenanceReferenceId: null, calculationLineageReferenceId: null,
+      financialGoal: {
+        revision: 3, operationId: 'd'.repeat(32), targetDate: '2027-12-31',
+        lifecycleStatus: 'PAUSED' as const, lifecycleAsOfDate: '2026-10-20',
+        priorityLevel: 'HIGH' as const, priorityAsOfDate: '2026-10-21',
+        recordedAt: '2026-10-29T10:00:00Z',
+      },
+    },
+  };
+  const content = JSON.stringify({ reportId: 'report-goal', items: [goalItem] });
+  const api = new AccessApi(session);
+  mockReportLifecycle(api, {
+    ...report, reportId: 'report-goal', items: [goalItem],
+    sourceFinancialReferences: ['financial-goal-001'], evidenceReferences: [],
+    financialProvenanceReferences: [],
+    export: { ...report.export, content },
+  });
+  const createObjectURL = vi.fn<(blob: Blob) => string>().mockReturnValue('blob:goal-report');
+  Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL });
+  Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+  mount(api);
+  const user = userEvent.setup();
+
+  await user.click(screen.getByRole('button', { name: 'Generate basic summary' }));
+  expect(await screen.findByText('Emergency fund — customer-defined target')).toBeVisible();
+  expect(screen.getByText('$25,000.00')).toBeVisible();
+  expect(screen.getByText('CUSTOMER-DEFINED GOAL')).toBeVisible();
+  expect(screen.getByText(/do not establish a required contribution, savings allocation, recommendation, eligibility or independently verified achievement/i)).toBeVisible();
+  expect(screen.getByRole('link', { name: 'View goal & history' }))
+    .toHaveAttribute('href', '/finances?type=GOAL&goal=financial-goal-001');
+  await user.click(screen.getByRole('button', { name: 'Technical details' }));
+  expect(screen.getByText('3')).toBeVisible();
+  expect(screen.getByText('d'.repeat(32))).toBeVisible();
+  expect(screen.getByText('Paused · 2026-10-20')).toBeVisible();
+  expect(screen.getByText('High · 2026-10-21')).toBeVisible();
+  expect(screen.getAllByText('Not applicable')).toHaveLength(2);
   await user.click(screen.getByRole('button', { name: 'Export basic summary' }));
   const blob = createObjectURL.mock.calls[0]?.[0];
   expect(blob).toBeInstanceOf(Blob);
