@@ -21,6 +21,7 @@ const FinancialQaExperience = lazy(() => import('./product/FinancialQaExperience
 const ProductSearchExperience = lazy(() => import('./product/ProductSearchExperience'));
 const OneDriveExperience = lazy(() => import('./product/OneDriveExperience'));
 const GoogleDriveExperience = lazy(() => import('./product/GoogleDriveExperience'));
+const ConnectionsOverviewExperience = lazy(() => import('./product/ConnectionsOverviewExperience'));
 const ConsentExperience = lazy(() => import('./product/ConsentExperience'));
 const CustomerWorkspaceSetupExperience = lazy(() => import('./product/CustomerWorkspaceSetupExperience'));
 const CustomerAccountAgreementsExperience = lazy(() => import('./product/CustomerAccountAgreementsExperience'));
@@ -199,8 +200,9 @@ function RouteContent() {
     );
   }
 
+  if (window.location.pathname === '/connections/google-drive') return <RequestAccessGate target="customer.data-connections" requiredCapabilities={['integration-gateway.connection.manage']}><Suspense fallback={<main aria-busy="true">Loading connections…</main>}><GoogleDriveExperience /></Suspense></RequestAccessGate>;
   if (window.location.pathname === '/connections/onedrive') return <RequestAccessGate target="customer.data-connections" requiredCapabilities={['integration-gateway.connection.manage']}><Suspense fallback={<main aria-busy="true">Loading connections…</main>}><OneDriveExperience /></Suspense></RequestAccessGate>;
-  if (window.location.pathname === '/connections') return <RequestAccessGate target="customer.data-connections" requiredCapabilities={['integration-gateway.connection.manage']}><Suspense fallback={<main aria-busy="true">Loading connections…</main>}><GoogleDriveExperience /></Suspense></RequestAccessGate>;
+  if (window.location.pathname === '/connections') return <RequestAccessGate target="customer.data-connections" requiredCapabilities={['integration-gateway.connection.manage']}><Suspense fallback={<main aria-busy="true">Loading connections…</main>}><ConnectionsOverviewExperience /></Suspense></RequestAccessGate>;
 
   if (window.location.pathname === '/consent') {
     return (
@@ -341,7 +343,7 @@ function WorkspaceApplication() {
             '/reports',
             '/search',
             '/financial-qa',
-            '/consent', '/connections',
+            '/consent', '/connections', '/connections/google-drive', '/connections/onedrive',
             '/profile',
             '/settings/agreements',
             '/vs02',
@@ -379,7 +381,7 @@ function WorkspaceApplication() {
       ? `${current?.label ?? 'Overview'} · Organization Settings · Monergy`
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
-  const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/monthly-cashflow', '/financial-qa', '/search', '/reports', '/consent', '/connections', '/profile', '/kyc', '/kyc/reviews', '/settings/sessions', '/settings/agreements'].includes(path);
+  const productProtected = ['/', '/actions', '/evidence', '/finances', '/net-worth', '/monthly-cashflow', '/financial-qa', '/search', '/reports', '/consent', '/connections', '/connections/google-drive', '/connections/onedrive', '/profile', '/kyc', '/kyc/reviews', '/settings/sessions', '/settings/agreements'].includes(path);
   const gated = inAdvisor || inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';

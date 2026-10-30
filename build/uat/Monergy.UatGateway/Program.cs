@@ -244,6 +244,8 @@ static string? Route(string path, string method)
     const string qa = "/product-api/v1/financial-qa/";
     if (method == "GET" && (path == qa + "configuration" || path == qa + "history") || method == "POST" && path == qa + "questions")
         return "http://127.0.0.1:5119/local/v1/financial-qa/" + path[qa.Length..];
+    if (path == "/connections-api/local/v1/connections" && method == "GET")
+        return "http://127.0.0.1:5117/local/v1/connections";
     const string drive = "/connections-api/local/v1/google-drive";
     if (method == "GET" && (path == drive || path == drive + "/folders" || path == drive + "/files" || path == drive + "/callback") ||
         method == "POST" && (path == drive + "/authorize" || path == drive + "/folder" || path == drive + "/import" || path == drive + "/disconnect"))

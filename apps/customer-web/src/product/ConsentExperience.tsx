@@ -159,7 +159,7 @@ export default function ConsentExperience() {
         </div>
         <Tag>TEST ENVIRONMENT · TEMPORARY DATA</Tag>
       </div>
-      <p><a href="/connections">Manage Google Drive permission and connection</a></p>
+      <p><a href="/connections/google-drive">Manage Google Drive permission and connection</a></p>
       <Alert
         showIcon
         type="info"

@@ -363,6 +363,12 @@ export class AccessApi {
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   }
+  connectionsOverview<T>(signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/connections-api/local/v1/connections', {
+      method: 'GET', signal,
+      headers: { 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
+    });
+  }
   customerConsent<T>(customerId: string, signal?: AbortSignal): Promise<T> {
     if (!/^[A-Za-z0-9_-]{1,128}$/.test(customerId))
       return Promise.reject(new AccessApiError(400, 'INVALID_CUSTOMER_ID'));

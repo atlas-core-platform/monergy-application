@@ -14,7 +14,7 @@ public static class SpaRouteAllowlist
         "/advisor", "/welcome",
         "/kyc", "/kyc/reviews", "/monthly-cashflow", "/net-worth",
         "/financial-qa", "/search", "/reports", "/finances", "/consent",
-        "/connections", "/connections/onedrive", "/profile",
+        "/connections", "/connections/google-drive", "/connections/onedrive", "/profile",
         "/settings/sessions", "/settings/agreements", "/vs02", "/foundation"
     };
 
