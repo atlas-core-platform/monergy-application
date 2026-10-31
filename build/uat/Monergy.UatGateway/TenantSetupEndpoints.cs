@@ -16,8 +16,8 @@ public sealed record AccessPackStatus(
 
 public static class TenantSetupEndpoints
 {
-    private const string RequiredPackVersion = "2.5";
-    private const string RequiredPackIdentity = "monergy-default-access-pack/2.5";
+    private const string RequiredPackVersion = "2.6";
+    private const string RequiredPackIdentity = "monergy-default-access-pack/2.6";
 
     public static void AddTenantSetup(this WebApplicationBuilder builder)
     {

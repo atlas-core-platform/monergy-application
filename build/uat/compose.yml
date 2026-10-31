@@ -207,6 +207,16 @@ services:
         target: /app/ai-intelligence/appsettings.Development.json
     depends_on:
       workspace: { condition: service_started }
+  application-case:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/application-case
+    command: [Monergy.Services.ApplicationCase.dll, --urls, 'http://127.0.0.1:5120']
+    secrets:
+      - source: application-case-config
+        target: /app/application-case/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
   delivery-t001:
     <<: *runtime
     network_mode: service:workspace
@@ -276,6 +286,8 @@ secrets:
     file: '${UAT_CONFIG_ROOT}/job-management.json'
   ai-intelligence-config:
     file: '${UAT_CONFIG_ROOT}/ai-intelligence.json'
+  application-case-config:
+    file: '${UAT_CONFIG_ROOT}/application-case.json'
   delivery-T001:
     file: '${UAT_CONFIG_ROOT}/delivery-T001.json'
   delivery-T002:

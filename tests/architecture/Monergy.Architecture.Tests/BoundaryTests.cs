@@ -8,6 +8,7 @@ public sealed class BoundaryTests
 {
     private static readonly string[] ServiceIds =
     [
+        "application-case",
         "customer-identity",
         "consent",
         "integration-gateway",
@@ -25,6 +26,7 @@ public sealed class BoundaryTests
     private static readonly Dictionary<string, string> ExpectedSdk =
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            ["application-case"] = "Microsoft.NET.Sdk.Web",
             ["customer-identity"] = "Microsoft.NET.Sdk.Web",
             ["consent"] = "Microsoft.NET.Sdk.Web",
             ["integration-gateway"] = "Microsoft.NET.Sdk.Web",
@@ -40,11 +42,11 @@ public sealed class BoundaryTests
         };
 
     [Fact]
-    public void ExactlyTwelveCanonicalServiceProjectsExist()
+    public void ExactlyThirteenCurrentServiceProjectsExist()
     {
         var projects = Directory.GetFiles(ServicesRoot, "*.csproj", SearchOption.AllDirectories);
 
-        Assert.Equal(12, projects.Length);
+        Assert.Equal(13, projects.Length);
         Assert.Equal(ServiceIds.Order(), projects.Select(ProjectServiceId).Order());
     }
 
@@ -130,6 +132,7 @@ public sealed class BoundaryTests
         var persistenceCohort = new HashSet<string>(StringComparer.Ordinal)
         {
             "audit",
+            "document-intelligence",
             "evidence",
             "financial-profile",
             "financial-rules",
@@ -181,6 +184,7 @@ public sealed class BoundaryTests
         var persistenceCohort = new HashSet<string>(StringComparer.Ordinal)
         {
             "audit",
+            "document-intelligence",
             "evidence",
             "financial-profile",
             "financial-rules",
@@ -242,7 +246,9 @@ public sealed class BoundaryTests
             .ToArray();
         Assert.All(persistenceSource, relative => Assert.True(
             persistenceCohort.Any(serviceId => relative.StartsWith($"services/{serviceId}/Infrastructure/", StringComparison.Ordinal))
+            || relative.StartsWith("services/document-intelligence/", StringComparison.Ordinal)
             || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
+            || relative.StartsWith("tests/vs02/", StringComparison.Ordinal)
             || relative.StartsWith("tests/job-management/", StringComparison.Ordinal)
             || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal),
             $"Physical persistence source escaped its D09 boundary: {relative}"));

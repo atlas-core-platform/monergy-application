@@ -144,14 +144,14 @@ Add-Check 'Exact npm dependency pins' ((Test-ExactDependencyPins $rootPackage) -
 Add-Check 'Committed pnpm lock' (Test-Path -LiteralPath (Join-Path $RepositoryRoot 'pnpm-lock.yaml')) 'pnpm-lock.yaml exists'
 
 $expectedServices = [ordered]@{
-    'customer-identity' = 'Microsoft.NET.Sdk.Web'; 'consent' = 'Microsoft.NET.Sdk.Web'; 'integration-gateway' = 'Microsoft.NET.Sdk.Web'
+    'application-case' = 'Microsoft.NET.Sdk.Web'; 'customer-identity' = 'Microsoft.NET.Sdk.Web'; 'consent' = 'Microsoft.NET.Sdk.Web'; 'integration-gateway' = 'Microsoft.NET.Sdk.Web'
     'evidence' = 'Microsoft.NET.Sdk.Web'; 'document-intelligence' = 'Microsoft.NET.Sdk.Worker'; 'financial-profile' = 'Microsoft.NET.Sdk.Web'
     'financial-rules' = 'Microsoft.NET.Sdk.Web'; 'search-retrieval' = 'Microsoft.NET.Sdk.Web'; 'ai-intelligence' = 'Microsoft.NET.Sdk.Web'
     'reporting' = 'Microsoft.NET.Sdk.Web'; 'job-management' = 'Microsoft.NET.Sdk.Worker'; 'audit' = 'Microsoft.NET.Sdk.Worker'
 }
 $catalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
-Add-Check 'Twelve canonical services' (Test-ExactSet @($catalog.services.id) @($expectedServices.Keys)) '12/12 R3 service identities'
-Add-Check 'Independent artifact identities' (@($catalog.services.artifact | Select-Object -Unique).Count -eq 12) '12 unique service artifact names'
+Add-Check 'Thirteen current services' (Test-ExactSet @($catalog.services.id) @($expectedServices.Keys)) '12 R3 identities plus P3-01 Application & Case'
+Add-Check 'Independent artifact identities' (@($catalog.services.artifact | Select-Object -Unique).Count -eq 13) '13 unique service artifact names'
 $d03ServiceFeatures = [ordered]@{
     'evidence' = @('M2-WS03-E01-F02')
     'document-intelligence' = @('M2-WS03-E02-F01', 'M2-WS03-E02-F02')
@@ -175,7 +175,11 @@ $d10Features = @('M2-WS09-E01-F01', 'M2-WS09-E01-F02', 'M2-WS09-E01-F03', 'M2-WS
 $scaffoldServices = @('customer-identity', 'consent', 'ai-intelligence')
 $governedContractServices = $d03Services + @('financial-rules', 'integration-gateway', 'search-retrieval', 'reporting')
 $catalogStateValid = @($catalog.services | Where-Object {
-    if ($D10ForwardRegression -and $_.id -ceq 'job-management') {
+    if ($_.id -ceq 'application-case') {
+        $_.status -cne 'P3_IMPLEMENTATION_CANDIDATE_LOCAL_CI' -or
+        $_.featureImplementation -cne 'POST_BASELINE_IMPLEMENTATION_CANDIDATE' -or
+        @($_.featureIds).Count -ne 0
+    } elseif ($D10ForwardRegression -and $_.id -ceq 'job-management') {
         $_.status -cne 'D10_IMPLEMENTATION_CANDIDATE_LOCAL_CI' -or
         $_.featureImplementation -cne 'IMPLEMENTATION_CANDIDATE_LOCAL_CI' -or
         -not (Test-ExactSet @($_.featureIds) $d10Features)
@@ -283,6 +287,12 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
                 $program.Contains('if (customerConsent) app.MapCustomerConsent();') -and
                 (Test-Path -LiteralPath (Join-Path $serviceRoot 'CustomerConsentEndpoints.cs'))
         }
+        if ($entry.Key -ceq 'application-case') {
+            $healthOnlyValid = $healthOnlyValid -and
+                $program.Contains('AddApplicationCaseReferenceAdapters') -and
+                $program.Contains('app.MapApplicationCases()') -and
+                (Test-Path -LiteralPath (Join-Path $serviceRoot 'ApplicationCaseEndpoints.cs'))
+        }
         if ($entry.Key -ceq 'integration-gateway') {
             $healthOnlyValid = $healthOnlyValid -and
                 $program.Contains('MapIntegrationGatewayContracts') -and
@@ -340,7 +350,7 @@ foreach ($entry in $expectedServices.GetEnumerator()) {
     }
 }
 Add-Check 'Worker primary lifecycle and bounded secondary adapters' $workerPrimaryValid 'All primary workers use Generic Host; Job Management and Document Intelligence expose bounded secondary HTTP adapters using outer business instances'
-Add-Check 'Evidence-based responsibility split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 9 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 3) 'Catalog retains nine HTTP and three primary worker responsibilities; governed control-plane adapters do not transfer ownership'
+Add-Check 'Evidence-based responsibility split' ($hostSplitValid -and @($catalog.services | Where-Object primaryHost -ceq 'HTTP').Count -eq 10 -and @($catalog.services | Where-Object primaryHost -ceq 'WORKER').Count -eq 3) 'Current catalog has ten HTTP and three primary worker responsibilities; P3-01 adds one bounded HTTP owner'
 Add-Check 'No service-to-service project references' $serviceReferenceValid 'Every service references Platform exactly once, Contracts zero or one time, and no other project; service/test/app and duplicate references are forbidden'
 Add-Check $(if ($D10ForwardRegression) { 'D10-bounded service-owned migrations' } elseif ($D09ForwardRegression) { 'D09-bounded service-owned migrations' } else { 'Empty service-owned migrations' }) $migrationOwnershipValid $(if ($D10ForwardRegression) { 'Historical D09 and Job Management cohort; separately hash-verified LOCAL owner migrations excluded from historical counts' } elseif ($D09ForwardRegression) { 'Historical five-service cohort plus separately hash-verified LOCAL owner overlays' } else { 'Historical baseline remains empty after separately hash-verified LOCAL owner overlays' })
 Add-Check 'Controlled host scope' $healthOnlyValid 'Governed contract hosts and startup behavior retained; Consent routes require the explicit Development LOCAL owner composition'

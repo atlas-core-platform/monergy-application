@@ -4,7 +4,7 @@ import { useLayoutEffect, useState } from 'react';
 interface Invitation {
   tenantId: string;
   ticket: string;
-  returnPath: '/' | '/access' | '/advisor';
+  returnPath: '/' | '/access' | '/advisor' | '/dsa';
 }
 interface Values { password: string; confirmation: string }
 
@@ -15,7 +15,7 @@ function readInvitation(): Invitation | null {
   const returnPath = values.get('return') ?? '';
   if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(tenantId) ||
       !/^[0-9a-f]{64}$/.test(ticket) ||
-      !['/', '/access', '/advisor'].includes(returnPath)) return null;
+      !['/', '/access', '/advisor', '/dsa'].includes(returnPath)) return null;
   return { tenantId, ticket, returnPath: returnPath as Invitation['returnPath'] };
 }
 

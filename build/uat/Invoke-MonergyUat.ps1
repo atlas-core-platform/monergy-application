@@ -4,7 +4,7 @@ param(
     [ValidatePattern('^[a-z][a-z0-9-]{0,30}$')][string]$Profile = 'default',
     [ValidateRange(1024,65535)][int]$Port = 4173,
     [ValidateSet('T001','T002')][string]$Tenant = 'T001',
-    [ValidateSet('A900','A100','A200','A300')][string]$Actor = 'A900',
+    [ValidateSet('A900','A100','A200','A300','A400')][string]$Actor = 'A900',
     [switch]$ConfirmReset,
     [switch]$EnableOnboarding,
     [switch]$EnableEmailAccess,
@@ -121,7 +121,7 @@ if (-not (Test-Path $profileFile)) {
         foreach ($service in $ownerServices) {
             $databases += @{ service=$service; tenant=$tenantId; name=('uat_'+$service.Replace('-','_')+'_'+$tenantId.ToLowerInvariant()); ownerPassword=(Secret); runtimePassword=(Secret); deliveryPassword=$(if ($service -eq 'am') { Secret } else { $null }) }
         }
-        $localActors = @('A900','A100','A300')
+        $localActors = @('A900','A100','A300','A400')
         if ($EnableOnboarding) { $localActors += 'A200' }
         foreach ($actorId in $localActors) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
     }
@@ -147,6 +147,18 @@ foreach ($name in @('membership','context','provisioning','identityEvent','audit
 }
 $Port = [int]$state.port
 $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
+# P3-01 adds a new reference persona without rotating or replacing any retained
+# profile credential. Existing named profiles receive only the missing A400 key.
+if ($Action -in @('Prepare','Start')) {
+    $identitiesChanged = $false
+    foreach ($tenantId in @('T001','T002')) {
+        if (-not @($state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A400' }).Count) {
+            $state.identities += [pscustomobject]@{ tenantId=$tenantId; actorId='A400'; token=(Secret) }
+            $identitiesChanged = $true
+        }
+    }
+    if ($identitiesChanged) { Save-Json 'profile.json' $state; Protect-Files }
+}
 if ($EnableCustomerPan -and -not $onboarding) { throw 'Customer PAN requires an onboarding profile.' }
 if ($EnableEmailAccess -and -not $onboarding) { throw 'Customer email access requires an onboarding profile with verified customer ownership.' }
 $emailConfiguration = $null
@@ -351,6 +363,7 @@ if ($Action -eq 'Credentials') {
         'A100' { 'Primary Customer' }
         'A200' { 'Additional Customer' }
         'A300' { 'Financial Advisor / configured reviewer' }
+        'A400' { 'DSA / Case Manager' }
     }
     Write-Host "Local UAT only | Tenant $Tenant | Actor $Actor | Persona $persona"
     Write-Output $identity.token
@@ -367,7 +380,7 @@ if ($Action -eq 'Reset') {
 if ($Action -in @('Prepare','Start')) {
     # Retain operator keys; never generate replacements.
     Save-Text 'postgres-password' $state.postgresPassword
-    $ports = [ordered]@{ 'customer-identity'=5101; audit=5102; consent=5110; evidence=5111; 'document-intelligence'=5112; 'financial-profile'=5113; 'financial-rules'=5114; 'search-retrieval'=5115; reporting=5116; 'integration-gateway'=5117; 'job-management'=5118; 'ai-intelligence'=5119 }
+    $ports = [ordered]@{ 'customer-identity'=5101; audit=5102; consent=5110; evidence=5111; 'document-intelligence'=5112; 'financial-profile'=5113; 'financial-rules'=5114; 'search-retrieval'=5115; reporting=5116; 'integration-gateway'=5117; 'job-management'=5118; 'ai-intelligence'=5119; 'application-case'=5120 }
     $am = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; AccessManagement=@{ Adapter='postgres-reference'; TrustedContext='customer-identity-reference'; CustomerIdentityUrl='http://127.0.0.1:5101/'; CustomerIdentityToken=$state.tokens.context; IdentityProvisioningToken=$state.tokens.provisioning; MembershipToken=$state.tokens.membership; TenantDatabases=@{} } } }
     foreach ($db in $state.databases | Where-Object service -eq 'am') { $am.Monergy.AccessManagement.TenantDatabases[$db.tenant] = Connection $db 'runtime' }
     if ($onboarding) {
@@ -526,6 +539,12 @@ if ($Action -in @('Prepare','Start')) {
                 InternalToken=$state.tokens.aiModelInternal; StoreDirectory='/var/lib/monergy-drive/financial-qa';
                 EncryptionKey=(Convert-HexToBase64 ([string]$state.tokens.financialQaProtection)) }
         }
+        if ($service -eq 'application-case') {
+            $config.Monergy.ReferenceAdapters='true'
+            $config.Monergy.AccessIntegration=@{ Enabled='true'; CustomerRelationships='true';
+                AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
+                CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
+        }
         Save-Json "$service.json" $config
     }
     foreach ($tenantId in @('T001','T002')) {
@@ -581,14 +600,14 @@ if (-not $ready) { Compose @('ps','--all'); throw 'UAT readiness timed out. Insp
 # Fixture membership is created through AM once per bootstrap revision; subsequent
 # starts preserve operator changes. The revisioned marker repairs retained profiles
 # whose older marker exists while one or more advertised local identities are absent.
-$memberBootstrapMarker = Join-Path $folder 'reference-members-v2-initialized'
+$memberBootstrapMarker = Join-Path $folder 'reference-members-v3-initialized'
 if ($Action -eq 'Start' -and -not (Test-Path $memberBootstrapMarker)) {
     foreach ($tenantId in @('T001','T002')) {
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
-            $memberActors = @('A100','A300')
+            $memberActors = @('A100','A300','A400')
             if ($onboarding) { $memberActors += 'A200' }
             foreach ($actorId in $memberActors) {
                 $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
@@ -606,26 +625,27 @@ if ($Action -eq 'Start' -and -not (Test-Path $memberBootstrapMarker)) {
             Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
-    Save-Text 'reference-members-v2-initialized' $state.instanceId
+    Save-Text 'reference-members-v3-initialized' $state.instanceId
     Protect-Files
 }
-if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'app03-processing-policy-initialized'))) {
+if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-case-policy-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4','2.5')) {
+            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4','2.5','2.6')) {
                 throw 'The Access Management owner has not confirmed a supported Default Access Pack.'
             }
 
             $roles = Invoke-RestMethod "$url/access-api/v1/administration/roles?limit=100" -Headers $headers -TimeoutSec 15
             $customerRole = $roles.items | Where-Object code -eq 'customer'
             $advisorRole = $roles.items | Where-Object code -eq 'financial-advisor'
-            if ($null -eq $customerRole -or $null -eq $advisorRole) { throw 'The owner-confirmed Default Access Pack role set is incomplete.' }
+            $dsaRole = $roles.items | Where-Object code -eq 'dsa-case-manager'
+            if ($null -eq $customerRole -or $null -eq $advisorRole -or $null -eq $dsaRole) { throw 'The owner-confirmed Default Access Pack role set is incomplete.' }
 
-            foreach ($binding in @(@{ actor='A100'; role=$customerRole.id },@{ actor='A200'; role=$customerRole.id },@{ actor='A300'; role=$advisorRole.id })) {
+            foreach ($binding in @(@{ actor='A100'; role=$customerRole.id },@{ actor='A200'; role=$customerRole.id },@{ actor='A300'; role=$advisorRole.id },@{ actor='A400'; role=$dsaRole.id })) {
                 $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
                 $member = $members.items | Where-Object actorId -eq $binding.actor
                 if ($null -ne $member -and $null -eq $member.businessRoleId) {
@@ -636,7 +656,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
             Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
-    Save-Text 'app03-processing-policy-initialized' $state.instanceId
+    Save-Text 'p3-case-policy-initialized' $state.instanceId
     Protect-Files
 }
 Write-Host "Local customer workspace is ready: $url/"
@@ -645,6 +665,7 @@ Write-Host 'Administration, identities, sessions and access audit persist across
 Write-Host 'Business reference data is illustrative and may reset. Production readiness remains blocked.'
 Write-Host "Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A900"
 if ($onboarding) { Write-Host "Show the customer key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A100" }
+if ($onboarding) { Write-Host "Show the DSA / Case Manager key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A400" }
 if ($Action -eq 'Welcome') {
     foreach ($name in @('personaTesterAccess','personaTesterChallenge')) {
         if ($null -eq $state.tokens.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$state.tokens.$name)) {
@@ -652,7 +673,7 @@ if ($Action -eq 'Welcome') {
         }
     }
     $email = $Actor.ToLowerInvariant() + '@example.test'
-    $returnPath = switch ($Actor) { 'A900' { '/access' } 'A300' { '/advisor' } default { '/' } }
+    $returnPath = switch ($Actor) { 'A900' { '/access' } 'A300' { '/advisor' } 'A400' { '/dsa' } default { '/' } }
     $request = @{ tenantId=$Tenant; email=$email; returnPath=$returnPath; requestId=[guid]::NewGuid().ToString('N') } | ConvertTo-Json -Compress
     $headers = @{ 'X-Monergy-Tester-Activation'=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess)) }
     $welcome = Invoke-RestMethod "$url/identity-api/local/v1/persona-credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15

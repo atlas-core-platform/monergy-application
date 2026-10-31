@@ -7,6 +7,8 @@ public sealed class SpaRouteAllowlistTests
 {
     [Theory]
     [InlineData("/advisor")]
+    [InlineData("/dsa")]
+    [InlineData("/cases")]
     [InlineData("/welcome")]
     [InlineData("/")]
     [InlineData("/access")]

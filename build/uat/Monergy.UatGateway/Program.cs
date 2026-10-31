@@ -161,6 +161,23 @@ static string? Route(string path, string method)
     if ((path is "/identity-api/local/v1/tenant-sessions" or "/identity-api/local/v1/tenant-sessions/revoke") && method == "POST" ||
         path == "/identity-api/local/v1/administration/sessions" && method == "GET")
         return "http://127.0.0.1:5101" + path[13..];
+    const string cases = "/case-api/local/v1/cases";
+    if (path is "/case-api/local/v1/cases/context" or "/case-api/local/v1/cases/work" && method == "GET" ||
+        path == cases + "/me" && method is "GET" or "POST")
+        return "http://127.0.0.1:5120" + path[9..];
+    if (path.StartsWith(cases + "/me/", StringComparison.Ordinal) && method == "GET")
+    {
+        var parts = path[(cases.Length + 4)..].Split('/');
+        if (parts.Length == 2 && TenantAccessClient.Identifier(parts[0], 64) && parts[1] == "history")
+            return "http://127.0.0.1:5120" + path[9..];
+    }
+    if (path.StartsWith(cases + "/", StringComparison.Ordinal) && path.EndsWith("/accept", StringComparison.Ordinal) && method == "POST")
+    {
+        var caseId = path[(cases.Length + 1)..^7];
+        if (caseId.EndsWith('/')) caseId = caseId[..^1];
+        if (TenantAccessClient.Identifier(caseId, 64))
+            return "http://127.0.0.1:5120" + path[9..];
+    }
     const string documents="/evidence-api/local/v1/administration/documents";
     if(method=="GET"&&(path==documents||path.StartsWith(documents+"/",StringComparison.Ordinal)&&TenantAccessClient.Identifier(path[(documents.Length+1)..],160)))return "http://127.0.0.1:5111"+path[13..];
     if(method=="GET"&&path=="/classification-api/local/v1/administration/document-classifications")return "http://127.0.0.1:5112"+path[19..];

@@ -2,6 +2,15 @@
   "schemaVersion": "1.0.0",
   "services": [
     {
+      "id": "application-case",
+      "name": "Application & Case Service",
+      "artifact": "monergy-application-case",
+      "primaryHost": "HTTP",
+      "status": "P3_IMPLEMENTATION_CANDIDATE_LOCAL_CI",
+      "featureImplementation": "POST_BASELINE_IMPLEMENTATION_CANDIDATE",
+      "featureIds": []
+    },
+    {
       "id": "customer-identity",
       "name": "Customer & Identity Service",
       "artifact": "monergy-customer-identity",

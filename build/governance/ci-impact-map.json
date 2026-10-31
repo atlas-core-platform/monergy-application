@@ -13,6 +13,15 @@
   ],
   "services": [
     {
+      "id": "application-case",
+      "sourcePatterns": ["services/application-case/**"],
+      "testPatterns": ["tests/application-case/**"],
+      "testProjects": [
+        "tests/application-case/Monergy.ApplicationCase.Tests/Monergy.ApplicationCase.Tests.csproj"
+      ],
+      "verifiers": []
+    },
+    {
       "id": "customer-identity",
       "sourcePatterns": ["services/customer-identity/**"],
       "testPatterns": ["tests/customer-identity/**"],
@@ -508,6 +517,7 @@
   ],
   "fullRegression": {
     "testProjects": [
+      "tests/application-case/Monergy.ApplicationCase.Tests/Monergy.ApplicationCase.Tests.csproj",
       "tests/customer-identity/Monergy.CustomerIdentity.Tests/Monergy.CustomerIdentity.Tests.csproj",
       "tests/document-reprocessing/Monergy.DocumentReprocessing.Tests/Monergy.DocumentReprocessing.Tests.csproj",
       "tests/financial-profile/Monergy.FinancialProfile.Tests/Monergy.FinancialProfile.Tests.csproj",

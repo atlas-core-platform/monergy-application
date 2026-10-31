@@ -18,6 +18,7 @@ internal static class Topology
         new("integration-gateway", "Integration Gateway", "http://127.0.0.1:5117", "/health/ready", "Guarded provider simulation"),
         new("job-management", "Job Management", "http://127.0.0.1:5118", "/health/ready", "Durable scheduling with workload-only processing control"),
         new("ai-intelligence", "AI Intelligence", "http://127.0.0.1:5119", "/health/ready", "Service scaffold; no live AI journey"),
+        new("application-case", "Application & Case", "http://127.0.0.1:5120", "/health/ready", "Bounded Customer assistance case and DSA acceptance"),
     ];
     public static Task<ServiceState[]> ReadAsync(HttpClient client, CancellationToken ct, bool onboarding = false) => Task.WhenAll(Services.Select(async service =>
     {

@@ -192,7 +192,8 @@ export class AccessApi {
         (failure.status === 401 ||
           failure.status === 403 &&
           ['TENANT_ADMIN_REQUIRED', 'ADVISOR_ROLE_REQUIRED',
-           'PRODUCT_CUSTOMER_REQUIRED', 'KYC_REVIEW_DENIED', 'AUTHORITY_ENDED'].includes(failure.code))
+           'PRODUCT_CUSTOMER_REQUIRED', 'CUSTOMER_CASE_ACCESS_REQUIRED',
+           'DSA_CASE_ACCESS_REQUIRED', 'KYC_REVIEW_DENIED', 'AUTHORITY_ENDED'].includes(failure.code))
       )
         this.lifecycle?.onFailure(failure);
       throw failure;
@@ -254,6 +255,18 @@ export class AccessApi {
       )
         this.forgetOperation();
       return value;
+    });
+  }
+  case<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/case-api/local/v1/cases/' + path, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Monergy-Tenant': this.session.tenantId,
+        'X-Monergy-Session': this.session.authenticationContextId,
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     });
   }
   owner<T>(owner: 'identity' | 'audit' | 'uat', path: string, signal?: AbortSignal): Promise<T> {

@@ -212,10 +212,10 @@ if ($SelfTest) {
 
 $checks = [ordered]@{}
 $checks['Bounded D15 scope preserves governance and non-claims'] = Test-Scope $scope
-$checks['Impact map has twelve exact service boundaries and fail-safe policy'] =
+$checks['Impact map has thirteen current service boundaries and fail-safe policy'] =
     $map.unmappedProductionPolicy -ceq 'FULL_REGRESSION' -and
-    (Test-ExactSet @($map.services.id) @('customer-identity','consent','integration-gateway','evidence','document-intelligence','financial-profile','financial-rules','search-retrieval','ai-intelligence','reporting','job-management','audit'))
-$checks['Full regression preserves D01 through D16 and all twelve OCI services'] =
+    (Test-ExactSet @($map.services.id) @('application-case','customer-identity','consent','integration-gateway','evidence','document-intelligence','financial-profile','financial-rules','search-retrieval','ai-intelligence','reporting','job-management','audit'))
+$checks['Full regression preserves D01 through D16 and all thirteen current OCI services'] =
     (Test-ExactSet @($map.fullRegression.verifiers) @(1..16 | ForEach-Object { 'D{0:D2}' -f $_ })) -and
     @($map.fullRegression.testProjects).Count -ge 10
 $checks['Workflow exposes only impacted or governed manual full-regression modes'] =

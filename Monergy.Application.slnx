@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/Services/">
+    <Project Path="services/application-case/Monergy.Services.ApplicationCase.csproj" />
     <Project Path="services/ai-intelligence/Monergy.Services.AiIntelligence.csproj" />
     <Project Path="services/audit/Monergy.Services.Audit.csproj" />
     <Project Path="services/consent/Monergy.Services.Consent.csproj" />
@@ -26,6 +27,7 @@
     <Project Path="build/local/Monergy.LocalAccessAuditHost/Monergy.LocalAccessAuditHost.csproj" />
   </Folder>
   <Folder Name="/Tests/">
+    <Project Path="tests/application-case/Monergy.ApplicationCase.Tests/Monergy.ApplicationCase.Tests.csproj" />
     <Project Path="tests/architecture/Monergy.Architecture.Tests/Monergy.Architecture.Tests.csproj" />
     <Project Path="tests/customer-identity/Monergy.CustomerIdentity.Tests/Monergy.CustomerIdentity.Tests.csproj" />
     <Project Path="tests/financial-profile/Monergy.FinancialProfile.Tests/Monergy.FinancialProfile.Tests.csproj" />

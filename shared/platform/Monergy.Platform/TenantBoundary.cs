@@ -44,6 +44,7 @@ public sealed class TenantBoundaryOptions
             "Job Management Service" => "job-management",
             "Audit Service" => "audit",
             "AI Intelligence Service" => "ai-intelligence",
+            "Application & Case Service" => "application-case",
             _ => throw new InvalidOperationException("Unregistered service boundary."),
         };
         var customers = configuration.GetSection("Monergy:TenantBoundary:CustomerTenants").GetChildren()
