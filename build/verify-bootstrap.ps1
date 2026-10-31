@@ -80,14 +80,14 @@ $platformChildren = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'pla
 Add-Check 'D05 roots with CP-01 platform boundary' (Test-GovernedRootLayout $actualRoot $platformChildren) ($actualRoot -join ', ')
 
 $expectedServiceIds = @(
-    'customer-identity', 'consent', 'integration-gateway', 'evidence',
+    'application-case', 'customer-identity', 'consent', 'integration-gateway', 'evidence',
     'document-intelligence', 'financial-profile', 'financial-rules',
     'search-retrieval', 'ai-intelligence', 'reporting', 'job-management', 'audit'
 )
 $serviceCatalog = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'services/catalog.json') -Raw | ConvertFrom-Json
 $serviceIds = @($serviceCatalog.services | ForEach-Object { $_.id })
-Add-Check 'Twelve R3 service identities' (Test-ExactSet $serviceIds $expectedServiceIds) "$($serviceIds.Count) service entries"
-Add-Check 'Unique service artifact identities' (@($serviceCatalog.services.artifact | Select-Object -Unique).Count -eq 12) '12 independently named artifacts'
+Add-Check 'Thirteen current service identities' (Test-ExactSet $serviceIds $expectedServiceIds) "$($serviceIds.Count) service entries; twelve R3 plus P3-01 Application & Case"
+Add-Check 'Unique service artifact identities' (@($serviceCatalog.services.artifact | Select-Object -Unique).Count -eq 13) '13 independently named artifacts'
 $expectedVs02Features = [ordered]@{
     'evidence' = @('M2-WS03-E01-F02')
     'document-intelligence' = @('M2-WS03-E02-F01', 'M2-WS03-E02-F02')
@@ -163,6 +163,11 @@ foreach ($serviceId in $expectedScaffoldIds) {
             @($service[0].featureIds).Count -eq 0
     }
 }
+$applicationCase = @($serviceCatalog.services | Where-Object id -CEQ 'application-case')
+$applicationCaseStateValid = $applicationCase.Count -eq 1 -and
+    $applicationCase[0].status -ceq 'P3_IMPLEMENTATION_CANDIDATE_LOCAL_CI' -and
+    $applicationCase[0].featureImplementation -ceq 'POST_BASELINE_IMPLEMENTATION_CANDIDATE' -and
+    @($applicationCase[0].featureIds).Count -eq 0
 
 $serviceStateManifest = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'repository.manifest.json') -Raw | ConvertFrom-Json
 $d06Scope = Get-Content -LiteralPath (Join-Path $RepositoryRoot 'build/governance/d06-scope-lock.json') -Raw | ConvertFrom-Json
@@ -191,8 +196,8 @@ $d06GovernanceValid = $serviceStateManifest.d06Status -ceq 'CANDIDATE_PENDING_CT
     $d06Scope.architectureIntegrity.R8 -ceq 'ABSENT'
 
 $serviceStateValid = $vs02StateValid -and $financialRulesStateValid -and
-    $integrationGatewayStateValid -and $searchRetrievalStateValid -and $reportingStateValid -and $scaffoldStateValid -and $d06GovernanceValid
-Add-Check 'Controlled service realization state' $serviceStateValid 'Five VS-02 boundaries; D05 Rules accepted; D06 Gateway, D07 Search and D08 Reporting candidates; three scaffolds; SIMULATOR and governance limits preserved'
+    $integrationGatewayStateValid -and $searchRetrievalStateValid -and $reportingStateValid -and $scaffoldStateValid -and $applicationCaseStateValid -and $d06GovernanceValid
+Add-Check 'Controlled service realization state' $serviceStateValid 'Historical states remain preserved; P3-01 adds one bounded post-baseline LOCAL/CI Application & Case owner'
 
 $serviceFoldersValid = $true
 $migrationFoldersValid = $true
@@ -200,8 +205,8 @@ foreach ($serviceId in $expectedServiceIds) {
     $serviceFoldersValid = $serviceFoldersValid -and (Test-Path -LiteralPath (Join-Path $RepositoryRoot "services/$serviceId"))
     $migrationFoldersValid = $migrationFoldersValid -and (Test-Path -LiteralPath (Join-Path $RepositoryRoot "services/$serviceId/migrations"))
 }
-Add-Check 'Service source folders' $serviceFoldersValid 'All 12 governed folders exist'
-Add-Check 'Service-owned migration scaffolds' $migrationFoldersValid 'All 12 services own a migration history location'
+Add-Check 'Service source folders' $serviceFoldersValid 'All 13 current service folders exist'
+Add-Check 'Service-owned migration scaffolds' $migrationFoldersValid 'All 13 services own a migration history location'
 
 $sqlFiles = @(Get-ChildItem -LiteralPath (Join-Path $RepositoryRoot 'services') -Recurse -File -Filter '*.sql' | Where-Object { $_.FullName -cnotin $am05Migrations })
 if ($D10ForwardRegression) {

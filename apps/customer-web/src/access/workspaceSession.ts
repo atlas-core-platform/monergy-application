@@ -21,6 +21,7 @@ export type WorkspaceAuthorization =
   | { area: 'kyc-review'; authority: 'KycReviewer' }
   | { area: 'administration'; authority: 'TenantAdmin'; policyVersion: number }
   | { area: 'advisor'; authority: 'FinancialAdvisor'; policyVersion: number; subjectVersion: number; recordedRelationshipCount: number }
+  | { area: 'dsa'; authority: 'DsaCaseManager'; policyVersion: number; subjectVersion: number }
   | { area: 'product'; context: ProductWorkspaceContext };
 export interface WorkspaceSessionState {
   status: 'public' | 'connecting' | 'verifying' | 'authorized' | 'disconnected';

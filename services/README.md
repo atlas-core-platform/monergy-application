@@ -1,6 +1,8 @@
 # Service Boundaries
 
-`catalog.json` is the ownership inventory for the twelve deployable R3 services.
+`catalog.json` preserves the twelve deployable R3 services and adds the
+post-baseline Application & Case Service introduced by P3-01. The current
+inventory therefore contains thirteen independently deployable services.
 Each folder contains an independently compilable .NET 10 executable boundary
 and an independent Linux OCI definition. Nine boundaries use ASP.NET Core HTTP
 primary hosts. Document Intelligence, Job Management and Audit retain Worker
