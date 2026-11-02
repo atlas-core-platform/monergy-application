@@ -11,6 +11,12 @@ public static class DriveFailurePolicy
 {
     public const int RateLimitRetryAfterSeconds = 60;
 
+    private static readonly Action<ILogger, string, string, int, bool, Exception?> LogProviderFailure =
+        LoggerMessage.Define<string, string, int, bool>(
+            LogLevel.Warning,
+            new EventId(1, nameof(LogProviderFailure)),
+            "Provider operation did not complete. Provider {Provider}; failure {FailureCode}; status {Status}; retryable {Retryable}.");
+
     public static DriveFailureDecision Classify(TenantBoundaryException failure)
     {
         ArgumentNullException.ThrowIfNull(failure);
@@ -38,8 +44,9 @@ public static class DriveFailurePolicy
         return Results.Json(new { error = decision.Code }, statusCode: decision.Status);
     }
 
-    private static void Log(HttpContext http, string provider, DriveFailureDecision decision) =>
-        http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Monergy.ProviderFailure").LogWarning(
-            "Provider operation did not complete. Provider {Provider}; failure {FailureCode}; status {Status}; retryable {Retryable}.",
-            provider, decision.Code, decision.Status, decision.Retryable);
+    private static void Log(HttpContext http, string provider, DriveFailureDecision decision)
+    {
+        var logger = http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Monergy.ProviderFailure");
+        LogProviderFailure(logger, provider, decision.Code, decision.Status, decision.Retryable, null);
+    }
 }

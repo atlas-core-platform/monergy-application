@@ -53,6 +53,12 @@ public sealed class ConnectionOverviewApplication(
         "Not configured", "Ready to connect", "Setup in progress", "Connected", "Needs attention", "Unavailable"
     };
 
+    private static readonly Action<ILogger, string, string, string, string, Exception?> LogHealthProjected =
+        LoggerMessage.Define<string, string, string, string>(
+            LogLevel.Information,
+            new EventId(1, nameof(LogHealthProjected)),
+            "Connection health projected. Provider {ProviderCode}; state {ConnectionState}; permission {PermissionState}; health {HealthState}.");
+
     public async Task<ConnectionOverview> GetAsync(HttpContext http)
     {
         var owner = await owners.AuthorizeAsync(http).ConfigureAwait(false);
@@ -79,9 +85,8 @@ public sealed class ConnectionOverviewApplication(
             var healthState = ConnectionHealthProjection.From(state);
             summaries.Add(new(source.ProviderCode, source.Provider, state, permissionState, healthState, source.ManagePath,
                 checkedAt, state == "Connected" ? snapshot.LastConfirmedAt : null));
-            logger?.LogInformation(
-                "Connection health projected. Provider {ProviderCode}; state {ConnectionState}; permission {PermissionState}; health {HealthState}.",
-                source.ProviderCode, state, permissionState, healthState);
+            if (logger is not null)
+                LogHealthProjected(logger, source.ProviderCode, state, permissionState, healthState, null);
         }
         return new(owner.TenantId, owner.CustomerId, checkedAt, summaries);
     }
