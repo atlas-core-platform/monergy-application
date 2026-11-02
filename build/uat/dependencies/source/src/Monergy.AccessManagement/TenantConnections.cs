@@ -115,7 +115,8 @@ public sealed class ReferenceTenantIdentityDirectory : IVerifiedTenantIdentityDi
     public ValueTask<VerifiedTenantIdentity?> FindAsync(string tenantId, string actorId, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        var known = (tenantId is "T001" or "T002") && (actorId is "A100" or "A200" or "A300" or "A900" or "A901");
+        var known = (tenantId is "T001" or "T002") &&
+            (actorId is "A100" or "A200" or "A300" or "A400" or "A900" or "A901");
         return ValueTask.FromResult(known
             ? new VerifiedTenantIdentity(tenantId, actorId, actorId.ToLowerInvariant() + "@example.test")
             : null);
