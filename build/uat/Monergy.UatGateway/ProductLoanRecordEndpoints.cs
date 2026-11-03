@@ -15,7 +15,8 @@ public static class ProductLoanRecordEndpoints
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };
     public static void AddProductLoanRecords(this WebApplicationBuilder builder)
     {
-        if (builder.Configuration.GetValue<bool>("Monergy:Product:Enabled")) builder.Services.AddSingleton<ProductLoanRecordClient>();
+        if (builder.Configuration.GetValue<bool>("Monergy:Product:Enabled"))
+            builder.Services.AddSingleton(_ => new ProductLoanRecordClient(builder.Configuration));
     }
     public static void MapProductLoanRecords(this WebApplication app)
     {
@@ -175,13 +176,14 @@ public sealed class ProductLoanRecordClient : IDisposable
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };
     private readonly HttpClient client;
     private readonly Uri endpoint;
-    public ProductLoanRecordClient(IConfiguration configuration) : this(configuration,
-        new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })) { }
+    public ProductLoanRecordClient(IConfiguration configuration) : this(configuration, CreateClient()) { }
     public ProductLoanRecordClient(IConfiguration configuration, HttpClient httpClient)
     {
-        client = httpClient; client.Timeout = TimeSpan.FromSeconds(10); client.MaxResponseContentBufferSize = 1048576;
+        client = httpClient;
         endpoint = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:Product:FinancialProfileUrl"));
     }
+    private static HttpClient CreateClient() => new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
+    { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1048576 };
     public Task<LoanRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct, string? afterId = null) =>
         SendAsync<LoanRecordList>(session, customer, afterId is null ? "" : "?afterId=" + Uri.EscapeDataString(afterId), null, ct);
     public Task<ReviewedLoanRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct, int? revision = null) =>

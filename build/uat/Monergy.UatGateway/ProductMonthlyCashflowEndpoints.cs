@@ -12,7 +12,7 @@ namespace Monergy.UatGateway;
 public static class ProductMonthlyCashflowEndpoints
 {
     public static void AddProductMonthlyCashflow(this WebApplicationBuilder builder)
-    {if(builder.Configuration.GetValue<bool>("Monergy:Product:Enabled"))builder.Services.AddSingleton<ProductMonthlyCashflowClient>();}
+    {if(builder.Configuration.GetValue<bool>("Monergy:Product:Enabled"))builder.Services.AddSingleton(_=>new ProductMonthlyCashflowClient(builder.Configuration));}
     public static void MapProductMonthlyCashflow(this WebApplication app)
     {
         if(!app.Configuration.GetValue<bool>("Monergy:Product:Enabled"))return;
@@ -231,9 +231,11 @@ public sealed class ProductMonthlyCashflowClient:IDisposable
 {
     private readonly HttpClient client;private readonly Uri profile,rules;
     private static readonly JsonSerializerOptions Json=new(ContractJson.Options){RespectRequiredConstructorParameters=true,RespectNullableAnnotations=true,UnmappedMemberHandling=System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow};
-    public ProductMonthlyCashflowClient(IConfiguration config):this(config,new HttpClient(new SocketsHttpHandler{AllowAutoRedirect=false,UseProxy=false})){}
+    public ProductMonthlyCashflowClient(IConfiguration config):this(config,CreateClient()){}
     public ProductMonthlyCashflowClient(IConfiguration config,HttpClient client)
-    {this.client=client;client.Timeout=TimeSpan.FromSeconds(30);client.MaxResponseContentBufferSize=33554432;profile=TenantAccessIntegration.LoopbackRoot(config["Monergy:Product:FinancialProfileUrl"]??throw new InvalidOperationException("Financial Profile endpoint required."));rules=TenantAccessIntegration.LoopbackRoot(config["Monergy:Product:FinancialRulesUrl"]??throw new InvalidOperationException("Financial Rules endpoint required."));}
+    {this.client=client;profile=TenantAccessIntegration.LoopbackRoot(config["Monergy:Product:FinancialProfileUrl"]??throw new InvalidOperationException("Financial Profile endpoint required."));rules=TenantAccessIntegration.LoopbackRoot(config["Monergy:Product:FinancialRulesUrl"]??throw new InvalidOperationException("Financial Rules endpoint required."));}
+    private static HttpClient CreateClient()=>new(new SocketsHttpHandler{AllowAutoRedirect=false,UseProxy=false})
+    {Timeout=TimeSpan.FromSeconds(30),MaxResponseContentBufferSize=33554432};
     public Task<MonthlyCashflowComparison> Compare(CustomerOwnerSession s,string c,CompareMonthlyCashflow input,CancellationToken ct)=>Send<MonthlyCashflowComparison>(rules,s,c,"calculations/comparison",input,ct);
     public Task<ReviewedMonthlyCashflowPosition> SavePosition(CustomerOwnerSession s,string c,CreateMonthlyCashflowPosition input,CancellationToken ct)=>Send<ReviewedMonthlyCashflowPosition>(profile,s,c,"positions",input,ct);
     public Task<ReviewedMonthlyCashflowPosition> Position(CustomerOwnerSession s,string c,string id,CancellationToken ct)=>Send<ReviewedMonthlyCashflowPosition>(profile,s,c,"positions/"+Uri.EscapeDataString(id),null,ct);
