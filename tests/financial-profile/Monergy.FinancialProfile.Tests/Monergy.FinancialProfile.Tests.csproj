@@ -22,6 +22,7 @@
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductGoalContributionEndpoints.cs" Link="ProductGoalContributionEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductExpenseRecordEndpoints.cs" Link="ProductExpenseRecordEndpoints.cs" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/ProductLiabilityRecordEndpoints.cs" Link="ProductLiabilityRecordEndpoints.cs" />
+    <Compile Include="../../../build/uat/Monergy.UatGateway/GatewayExceptionBoundary.cs" Link="GatewayExceptionBoundary.cs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />

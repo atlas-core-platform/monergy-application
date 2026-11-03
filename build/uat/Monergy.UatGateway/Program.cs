@@ -48,11 +48,7 @@ app.Use(async (http, next) =>
     http.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'";
     if (http.Request.Headers.Origin.Count > 0 && http.Request.Headers.Origin.ToString() != $"{http.Request.Scheme}://{http.Request.Host}")
     { http.Response.StatusCode = 403; return; }
-    try { await next(http).ConfigureAwait(false); }
-    catch (TenantBoundaryException failure)
-    { http.Response.StatusCode = failure.Status; await http.Response.WriteAsJsonAsync(new { error = failure.Code }, http.RequestAborted).ConfigureAwait(false); }
-    catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException && !http.RequestAborted.IsCancellationRequested)
-    { http.Response.StatusCode = 503; await http.Response.WriteAsJsonAsync(new { error = "OWNER_UNAVAILABLE" }, http.RequestAborted).ConfigureAwait(false); }
+    await GatewayExceptionBoundary.InvokeAsync(http, next).ConfigureAwait(false);
 });
 app.UseProductAudit();
 app.UseStaticFiles();
