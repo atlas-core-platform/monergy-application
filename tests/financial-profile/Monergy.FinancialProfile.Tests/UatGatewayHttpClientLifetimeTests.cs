@@ -16,6 +16,42 @@ namespace Monergy.FinancialProfile.Tests;
 public sealed class UatGatewayHttpClientLifetimeTests
 {
     [Fact]
+    public async Task ReadinessThenAffectedRoutesAndRepeatKeepDedicatedClientsReusable()
+    {
+        var handler = new SuccessHandler();
+        using var shared = new HttpClient(handler)
+        { Timeout = TimeSpan.FromSeconds(7), MaxResponseContentBufferSize = 123456 };
+        var builder = WebApplication.CreateSlimBuilder();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.Configuration.AddInMemoryCollection(ConfigurationValues());
+        builder.Services.AddSingleton(shared);
+        builder.AddProductInvestmentRecords();
+        builder.AddProductLoanRecords();
+        builder.AddProductMonthlyCashflow();
+        await using var app = builder.Build();
+        app.MapGet("/health/ready", async (HttpClient client, CancellationToken cancellationToken) =>
+        {
+            var states = await Topology.ReadAsync(client, cancellationToken).ConfigureAwait(false);
+            return states.All(state => state.Available) ? Results.Ok() : Results.StatusCode(503);
+        });
+        app.MapGet("/product-api/v1/investment-records", (ProductInvestmentRecordClient _) => Results.Ok());
+        app.MapGet("/product-api/v1/loan-records", (ProductLoanRecordClient _) => Results.Ok());
+        app.MapGet("/product-api/v1/monthly-cashflow/positions", (ProductMonthlyCashflowClient _) => Results.Ok());
+        await app.StartAsync();
+
+        using var browser = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/health/ready")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/investment-records")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/loan-records")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/monthly-cashflow/positions")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/investment-records")).StatusCode);
+
+        Assert.Equal(Topology.Services.Length, handler.Calls);
+        Assert.Equal(TimeSpan.FromSeconds(7), shared.Timeout);
+        Assert.Equal(123456, shared.MaxResponseContentBufferSize);
+    }
+
+    [Fact]
     public async Task CohortClientsUseDedicatedProductionClientsAfterSharedClientHasSent()
     {
         var handler = new SuccessHandler();
