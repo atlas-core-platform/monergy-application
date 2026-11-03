@@ -19,7 +19,9 @@ param(
     [string]$KycConfigurationFile,
     [string]$EvidencePersistenceConfigurationFile,
     [string]$FinancialPersistenceConfigurationFile,
+    [string]$FinancialRulesPersistenceConfigurationFile,
     [switch]$RequireRetainedEvidenceAndFinancialProfile,
+    [switch]$RequireRetainedFinancialRules,
     [string]$ClassificationConfigurationFile,
     [switch]$RequireCustomerSetup,
     [switch]$EnableCustomerPan
@@ -233,6 +235,53 @@ if (Test-Path -LiteralPath $financialConfigPath) {
     }
 } elseif (-not [string]::IsNullOrWhiteSpace($FinancialPersistenceConfigurationFile)) {
     throw 'Financial Profile persistence configuration file was not found.'
+}
+# Financial Rules calculation receipts use their existing D09 PostgreSQL repository
+# only when the operator explicitly supplies and retains its runtime connection.
+$financialRulesPersistence = $null
+$financialRulesConfigPath = Join-Path $folder 'financial-rules-persistence.json'
+if (-not [string]::IsNullOrWhiteSpace($FinancialRulesPersistenceConfigurationFile)) { $financialRulesConfigPath = $FinancialRulesPersistenceConfigurationFile }
+if (Test-Path -LiteralPath $financialRulesConfigPath) {
+    if (-not $onboarding) { throw 'Financial Rules persistence requires an onboarding profile.' }
+    $financialRulesFile = Get-Item -LiteralPath $financialRulesConfigPath -ErrorAction Stop
+    if ($financialRulesFile.PSIsContainer -or $financialRulesFile.Length -gt 16384) { throw 'Invalid Financial Rules persistence file.' }
+    $financialRulesPersistence = Get-Content -LiteralPath $financialRulesFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($null -eq $financialRulesPersistence -or @($financialRulesPersistence.PSObject.Properties.Name).Count -ne 1 -or
+        $financialRulesPersistence.PSObject.Properties.Name -notcontains 'RuntimeConnection' -or
+        $financialRulesPersistence.RuntimeConnection -isnot [string] -or
+        [string]::IsNullOrWhiteSpace([string]$financialRulesPersistence.RuntimeConnection)) {
+        throw 'Financial Rules persistence requires only a nonempty RuntimeConnection.'
+    }
+    if ($Action -in @('Prepare','Start')) {
+        Save-Json 'financial-rules-persistence.json' $financialRulesPersistence
+        Protect-Files
+    }
+} elseif (-not [string]::IsNullOrWhiteSpace($FinancialRulesPersistenceConfigurationFile)) {
+    throw 'Financial Rules persistence configuration file was not found.'
+} elseif ($Action -in @('Prepare','Start')) {
+    $currentRules = Join-Path $folder 'financial-rules.json'
+    if (Test-Path -LiteralPath $currentRules) {
+        $priorRules = Get-Content -LiteralPath $currentRules -Raw -Encoding utf8 | ConvertFrom-Json
+        if ($null -ne $priorRules.Monergy.PSObject.Properties['Persistence'] -and
+            $priorRules.Monergy.Persistence.Provider -eq 'POSTGRESQL_S3') {
+            throw 'Retained Financial Rules expects PostgreSQL but its protected persistence binding is unavailable. Restore financial-rules-persistence.json; in-memory fallback is prohibited.'
+        }
+    }
+}
+if ($RequireRetainedFinancialRules) {
+    if ($null -eq $financialRulesPersistence) {
+        throw 'Restart-retained Financial Rules requires its protected PostgreSQL runtime connection. In-memory calculation receipts cannot satisfy restart acceptance.'
+    }
+    if ($Action -eq 'Verify') {
+        $rulesConfigFile = Join-Path $folder 'financial-rules.json'
+        if (-not (Test-Path -LiteralPath $rulesConfigFile)) { throw 'Missing protected financial-rules runtime configuration.' }
+        $rulesRuntimeConfig = Get-Content -LiteralPath $rulesConfigFile -Raw -Encoding utf8 | ConvertFrom-Json
+        if ($rulesRuntimeConfig.Monergy.ReferenceAdapters -ne 'false' -or
+            $rulesRuntimeConfig.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3' -or
+            [string]::IsNullOrWhiteSpace([string]$rulesRuntimeConfig.Monergy.Persistence.FinancialRules.RuntimeConnection)) {
+            throw 'Retained Financial Rules runtime is not explicitly PostgreSQL-backed. No restart-retention acceptance may be claimed.'
+        }
+    }
 }
 if ($RequireRetainedEvidenceAndFinancialProfile) {
     if ($null -eq $evidencePersistence -or $null -eq $financialPersistence) {
@@ -497,6 +546,10 @@ if ($Action -in @('Prepare','Start')) {
                     Enabled='true'; Url='http://127.0.0.1:5102/'; Token=$state.tokens.financialAuditEvent
                 }
             } elseif ($onboarding -and $service -eq 'financial-rules') {
+                if ($null -ne $financialRulesPersistence) {
+                    $config.Monergy.ReferenceAdapters='false'
+                    $config.Monergy.Persistence=@{ Provider='POSTGRESQL_S3'; FinancialRules=@{ RuntimeConnection=[string]$financialRulesPersistence.RuntimeConnection } }
+                }
                 $config.Monergy.NetWorth=@{ Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'; RuleVersion='1.0.0'; Formula='TOTAL_ASSETS_MINUS_TOTAL_LIABILITIES' }
                 $config.Monergy.MonthlyCashflow=@{ Enabled='true'; FinancialProfileUrl='http://127.0.0.1:5113/'; RuleVersion='1.0.0' }
             } elseif ($onboarding -and $service -eq 'reporting') {
