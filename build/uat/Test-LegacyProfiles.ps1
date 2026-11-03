@@ -150,6 +150,33 @@ $evidenceAgain=Get-Content (Join-Path $retainedDir 'evidence.json') -Raw | Conve
 if ($financeAgain.Monergy.ReferenceAdapters -ne 'false' -or $evidenceAgain.Monergy.ReferenceAdapters -ne 'false') { throw 'Durable profile silently fell back to reference adapters.' }
 'PASS: temporary-profile continuity gate denies, conversion blocked, dual durable opt-in persists on repeated Prepare.'
 
+$financialRulesPath=Join-Path $testRoot 'financial-rules-fixture.json'
+@{ RuntimeConnection='Host=127.0.0.1;Database=fixture_financial_rules;Username=fixture_financial_rules_runtime;Password=fixture-only' } | ConvertTo-Json -Depth 10 | Set-Content $financialRulesPath
+& $scriptPath -Action Prepare -Profile retained -EnableOnboarding -FinancialRulesPersistenceConfigurationFile $financialRulesPath -RequireRetainedFinancialRules
+$rulesConfig=Get-Content (Join-Path $retainedDir 'financial-rules.json') -Raw | ConvertFrom-Json
+if ($rulesConfig.Monergy.ReferenceAdapters -ne 'false' -or $rulesConfig.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3' -or
+    $rulesConfig.Monergy.Persistence.FinancialRules.RuntimeConnection -notlike '*fixture_financial_rules*') {
+    throw 'Physical Financial Rules opt-in missing.'
+}
+& $scriptPath -Action Prepare -Profile retained -EnableOnboarding -RequireRetainedFinancialRules
+$rulesAgain=Get-Content (Join-Path $retainedDir 'financial-rules.json') -Raw | ConvertFrom-Json
+if ($rulesAgain.Monergy.ReferenceAdapters -ne 'false' -or $rulesAgain.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3') {
+    throw 'Durable Financial Rules silently fell back to in-memory adapters.'
+}
+& $scriptPath -Action Verify -Profile retained -RequireRetainedFinancialRules
+$retainedRulesBinding=Join-Path $retainedDir 'financial-rules-persistence.json'
+$missingRulesBinding=$retainedRulesBinding+'.missing'
+Move-Item -LiteralPath $retainedRulesBinding -Destination $missingRulesBinding
+try {
+    $fallbackRejected=$false
+    try { & $scriptPath -Action Prepare -Profile retained -EnableOnboarding }
+    catch { $fallbackRejected=$_.Exception.Message -like '*in-memory fallback is prohibited*' }
+    if (-not $fallbackRejected) { throw 'Retained physical Financial Rules silently fell back without its protected binding.' }
+} finally {
+    Move-Item -LiteralPath $missingRulesBinding -Destination $retainedRulesBinding
+}
+'PASS: Financial Rules physical opt-in persists, verifies explicitly and fails closed when its retained binding is unavailable.'
+
 'PASS: Basic KYC onboarding configuration; syntax; fresh/default/legacy/onboarding configuration; retained membership repair; all non-destructive actions with mocked Docker/readiness; credential preservation; repeat-run stability; encryption conversion.'
 
 } finally { Remove-Item -LiteralPath $testRoot -Recurse -Force }

@@ -52,6 +52,7 @@ public static class FinancialRulesRegistration
     public static IServiceCollection AddFinancialRulesPhysicalPersistence(this IServiceCollection services, IConfiguration configuration)
     {
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
+        PhysicalPersistenceGuard.Require(configuration, "Monergy:Persistence:FinancialRules:RuntimeConnection");
         AddCommon(services, configuration);
         services.AddSingleton<ICalculationRepository, PostgresCalculationRepository>();
         AddNetWorth(services,configuration,true); AddMonthlyCashflow(services,configuration,true); AddLiquidityRatio(services,configuration,true);
