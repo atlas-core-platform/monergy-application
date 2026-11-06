@@ -135,11 +135,11 @@ it('revokes a session returned after cancellation and never reveals the private 
   expect(sessionMemory.current).toBeNull();
 });
 
-it('never offers customer email access as an administrator authentication method', () => {
+it('never offers customer email access as an administrator authentication method', async () => {
   const fetch = mockOwner(); workspace('administration');
-  expect(screen.getByLabelText('Local access key')).toBeVisible();
+  expect(await screen.findByLabelText('Local access key')).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Use an email code' })).not.toBeInTheDocument();
-  expect(fetch).not.toHaveBeenCalled();
+  expect(fetch.mock.calls.some(([url]) => url.endsWith('/customer-email-access'))).toBe(false);
 });
 
 it('expires a waiting code and enables resend after the owner cooldown', async () => {

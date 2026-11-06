@@ -472,9 +472,29 @@ if ($Action -in @('Prepare','Start')) {
                 if (-not [string]::IsNullOrWhiteSpace($AccountAgreementFile)) {
                     $publicationFile = Get-Item -LiteralPath $AccountAgreementFile -ErrorAction Stop
                     if ($publicationFile.PSIsContainer -or $publicationFile.Length -gt 1048576) { throw 'Invalid account-agreement publication file.' }
-                    $publication = Get-Content -LiteralPath $publicationFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+                    $publicationText = Get-Content -LiteralPath $publicationFile.FullName -Raw -Encoding utf8
+                    $publication = $publicationText | ConvertFrom-Json
                     if ($null -eq $publication -or @($publication.PSObject.Properties.Name).Count -ne 1 -or
                         $publication.PSObject.Properties.Name -notcontains 'Publications') { throw 'Account agreements require a Publications object.' }
+                    # ConvertFrom-Json materializes ISO timestamps as local DateTime values
+                    # on PowerShell 7. Preserve the operator's exact UTC publication text so
+                    # the owner does not receive a host-time-zone-shifted configuration.
+                    $publicationEntries = if ($publication.Publications -is [array]) {
+                        @($publication.Publications)
+                    } else {
+                        @($publication.Publications.PSObject.Properties | ForEach-Object Value)
+                    }
+                    $publishedAtMatches = @([regex]::Matches($publicationText, '"PublishedAt"\s*:\s*"(?<value>[^"\\]+)"'))
+                    if ($publicationEntries.Count -ne $publishedAtMatches.Count) { throw 'Each account-agreement publication requires one PublishedAt value.' }
+                    for ($publicationIndex = 0; $publicationIndex -lt $publicationEntries.Count; $publicationIndex++) {
+                        $publishedAtText = $publishedAtMatches[$publicationIndex].Groups['value'].Value
+                        $publishedAt = [DateTimeOffset]::MinValue
+                        if (-not [DateTimeOffset]::TryParseExact($publishedAtText, 'O', [Globalization.CultureInfo]::InvariantCulture,
+                            [Globalization.DateTimeStyles]::None, [ref]$publishedAt) -or $publishedAt.Offset -ne [TimeSpan]::Zero) {
+                            throw 'Account-agreement PublishedAt must be an exact UTC round-trip timestamp.'
+                        }
+                        $publicationEntries[$publicationIndex].PublishedAt = $publishedAtText
+                    }
                     # Owner validates tenant, kinds, exact body hashes and publication
                     # revision at startup; no fabricated content or acceptance is seeded.
                     $config.Monergy.AccountAgreements = $publication

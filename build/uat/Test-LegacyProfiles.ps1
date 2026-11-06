@@ -102,6 +102,33 @@ if ($null -ne $identityWithoutPersona.Monergy.PSObject.Properties['PersonaCreden
     throw 'Normal test profile unexpectedly enabled credential activation.'
 }
 'PASS: persona credentials require an explicit activation owner; tester activation uses no SMTP and production-like email configuration is unchanged.'
+$agreementPath=Join-Path $testRoot 'agreement-fixture.json'
+$agreementBody='LOCAL acceptance fixture only.'
+$agreementSha=[Security.Cryptography.SHA256]::Create()
+try { $agreementHash=($agreementSha.ComputeHash([Text.Encoding]::UTF8.GetBytes($agreementBody)) | ForEach-Object { $_.ToString('x2') }) -join '' }
+finally { $agreementSha.Dispose() }
+@{
+    Publications=@{ T001=@{
+        TenantId='T001'; PublishedAt='2026-11-06T00:00:00.0000000+00:00'; Documents=@(
+            @{Kind='TERMS';Version='local-1';Title='Terms';Body=$agreementBody;Sha256=$agreementHash},
+            @{Kind='PRIVACY';Version='local-1';Title='Privacy';Body=$agreementBody;Sha256=$agreementHash},
+            @{Kind='CONSENT';Version='local-1';Title='Consent';Body=$agreementBody;Sha256=$agreementHash}
+        )
+    } }
+} | ConvertTo-Json -Depth 10 | Set-Content $agreementPath
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -AccountAgreementFile $agreementPath
+$identityAgreementText=Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw
+if ($identityAgreementText -notmatch '"PublishedAt"\s*:\s*"2026-11-06T00:00:00\.0000000\+00:00"') {
+    throw 'Account-agreement publication timestamp changed with the host time zone.'
+}
+$nonUtcAgreement=Get-Content $agreementPath -Raw
+$nonUtcAgreement=$nonUtcAgreement.Replace('2026-11-06T00:00:00.0000000+00:00','2026-11-06T05:30:00.0000000+05:30')
+Set-Content $agreementPath $nonUtcAgreement
+$nonUtcRejected=$false
+try { & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -AccountAgreementFile $agreementPath }
+catch { $nonUtcRejected=$_.Exception.Message -like '*exact UTC round-trip timestamp*' }
+if (-not $nonUtcRejected) { throw 'Non-UTC account-agreement publication timestamp was accepted.' }
+'PASS: account-agreement UTC publication timestamp is preserved exactly and non-UTC input fails closed.'
 $durablePath=Join-Path $testRoot 'evidence-fixture.json'
 @{ RuntimeConnections=@{T001='Host=127.0.0.1;Database=fixture_evidence;Username=fixture'}; S3=@{ Endpoint='http://127.0.0.1:9000';Bucket='fixture';AccessKey='fixture';SecretKey='fixture'} } | ConvertTo-Json -Depth 10 | Set-Content $durablePath
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EvidencePersistenceConfigurationFile $durablePath
