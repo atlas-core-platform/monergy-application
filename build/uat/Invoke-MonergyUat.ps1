@@ -485,8 +485,8 @@ if ($Action -in @('Prepare','Start')) {
                         @($publication.Publications.PSObject.Properties | ForEach-Object Value)
                     }
                     $publishedAtMatches = @([regex]::Matches($publicationText, '"PublishedAt"\s*:\s*"(?<value>[^"\\]+)"'))
-                    if ($publicationEntries.Count -ne $publishedAtMatches.Count) { throw 'Each account-agreement publication requires one PublishedAt value.' }
-                    for ($publicationIndex = 0; $publicationIndex -lt $publicationEntries.Count; $publicationIndex++) {
+                    if (@($publicationEntries).Count -ne $publishedAtMatches.Count) { throw 'Each account-agreement publication requires one PublishedAt value.' }
+                    for ($publicationIndex = 0; $publicationIndex -lt @($publicationEntries).Count; $publicationIndex++) {
                         $publishedAtText = $publishedAtMatches[$publicationIndex].Groups['value'].Value
                         $publishedAt = [DateTimeOffset]::MinValue
                         if (-not [DateTimeOffset]::TryParseExact($publishedAtText, 'O', [Globalization.CultureInfo]::InvariantCulture,

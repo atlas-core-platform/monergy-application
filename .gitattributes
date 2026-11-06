@@ -2,3 +2,7 @@
 *.ps1 text eol=crlf
 *.psm1 text eol=crlf
 
+# This retained launcher was historically committed as CRLF. Keep its raw form so
+# bounded fixes do not rewrite the entire script during normalization.
+build/uat/Invoke-MonergyUat.ps1 -text
+

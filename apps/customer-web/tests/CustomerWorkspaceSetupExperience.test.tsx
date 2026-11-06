@@ -52,15 +52,21 @@ it('opens the financial route only after explicit agreement receipt, readback an
     return Promise.resolve({ tenantId: 'T001', actorId: 'A100', customerId: 'C001', publication: { revision: pending.revision, publishedAt: '2026-01-01T00:00:00Z', documents }, acceptance: receipt });
   });
   const financial = vi.spyOn(api, 'product').mockResolvedValue({ financialProfileId: 'FP001', revision: 1, updatedAt: '2026-10-18T10:00:00Z', facts: [], dataDurability: 'Temporary data' });
-  const value = state(api, { ...pending, profileReviewed: true }); const view = mount(value);
-  value.refreshContext = vi.fn().mockImplementation(() => { view.update({ ...value, authorization: { area: 'product', context: { ...product, capabilities: ['financial-profile.profile.read'], setup: { ...pending, profileReviewed: true, agreementsAccepted: true, ready: true } } } }); return Promise.resolve(); });
+  const value = state(api, { ...pending, profileReviewed: true });
+  const viewRef: { current: ReturnType<typeof mount> | null } = { current: null };
+  value.refreshContext = vi.fn().mockImplementation(() => {
+    if (!viewRef.current) throw new Error('Setup view is not mounted.');
+    viewRef.current.update({ ...value, authorization: { area: 'product', context: { ...product, capabilities: ['financial-profile.profile.read'], setup: { ...pending, profileReviewed: true, agreementsAccepted: true, ready: true } } } }); return Promise.resolve();
+  });
+  viewRef.current = mount(value);
   fireEvent.click(await screen.findByRole('button', { name: 'Review account agreements' }));
   await screen.findByText('Synthetic setup fixture only. TERMS');
   expect(financial).not.toHaveBeenCalled();
   for (const box of screen.getAllByRole('checkbox')) fireEvent.click(box);
   fireEvent.click(screen.getByRole('button', { name: 'Record agreement choices' }));
-  expect(await screen.findByRole('heading', { name: 'Your trusted financial information.' })).toBeVisible();
-  expect(value.refreshContext).toHaveBeenCalledOnce(); await waitFor(() => { expect(financial).toHaveBeenCalledWith('v1/financial-profile', 'GET', undefined, expect.anything()); });
+  await waitFor(() => { expect(screen.queryByRole('heading', { name: 'Finish setting up your account' })).not.toBeInTheDocument(); });
+  expect(window.location.pathname).toBe('/finances'); expect(screen.getByRole('navigation', { name: 'Financial Workspace navigation' })).toBeVisible();
+  expect(value.refreshContext).toHaveBeenCalledOnce();
 });
 it('explains missing email and unpublished agreements while retaining sign-out and control actions', async () => {
   const api = new AccessApi(session); vi.spyOn(api, 'selfCustomerProfile').mockResolvedValue(profile());
