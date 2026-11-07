@@ -177,6 +177,23 @@ $evidenceAgain=Get-Content (Join-Path $retainedDir 'evidence.json') -Raw | Conve
 if ($financeAgain.Monergy.ReferenceAdapters -ne 'false' -or $evidenceAgain.Monergy.ReferenceAdapters -ne 'false') { throw 'Durable profile silently fell back to reference adapters.' }
 'PASS: temporary-profile continuity gate denies, conversion blocked, dual durable opt-in persists on repeated Prepare.'
 
+$jobManagementPath=Join-Path $testRoot 'job-management-fixture.json'
+@{ RuntimeConnection='Host=127.0.0.1;Database=fixture_jobs;Username=fixture_job_runtime;Password=fixture-only' } | ConvertTo-Json -Depth 10 | Set-Content $jobManagementPath
+& $scriptPath -Action Prepare -Profile retained -EnableOnboarding -JobManagementPersistenceConfigurationFile $jobManagementPath -RequireRetainedDocumentProcessing
+$jobConfig=Get-Content (Join-Path $retainedDir 'job-management.json') -Raw | ConvertFrom-Json
+if ($jobConfig.Monergy.ReferenceAdapters -ne 'false' -or $jobConfig.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3' -or
+    $jobConfig.Monergy.Persistence.JobManagement.RuntimeConnection -notlike '*fixture_jobs*' -or
+    $jobConfig.Monergy.DocumentProcessing.Enabled -ne 'true') {
+    throw 'Physical Job Management document-processing opt-in missing.'
+}
+& $scriptPath -Action Prepare -Profile retained -EnableOnboarding -RequireRetainedDocumentProcessing
+$jobAgain=Get-Content (Join-Path $retainedDir 'job-management.json') -Raw | ConvertFrom-Json
+if ($jobAgain.Monergy.ReferenceAdapters -ne 'false' -or $jobAgain.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3') {
+    throw 'Durable Job Management silently fell back to in-memory adapters.'
+}
+& $scriptPath -Action Verify -Profile retained -RequireRetainedDocumentProcessing
+'PASS: Job Management physical opt-in preserves document-processing receipts and fails closed unless explicitly required.'
+
 $financialRulesPath=Join-Path $testRoot 'financial-rules-fixture.json'
 @{ RuntimeConnection='Host=127.0.0.1;Database=fixture_financial_rules;Username=fixture_financial_rules_runtime;Password=fixture-only' } | ConvertTo-Json -Depth 10 | Set-Content $financialRulesPath
 & $scriptPath -Action Prepare -Profile retained -EnableOnboarding -FinancialRulesPersistenceConfigurationFile $financialRulesPath -RequireRetainedFinancialRules

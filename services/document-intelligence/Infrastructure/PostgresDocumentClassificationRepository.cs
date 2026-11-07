@@ -66,7 +66,7 @@ public sealed partial class PostgresDocumentClassificationRepository : IDocument
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); deadline.CancelAfter(TimeSpan.FromSeconds(5));
-        try { foreach (var source in sources.Values) { await using var command = source.CreateCommand("SELECT tenant_id,classification_key,record,needs_review FROM document_classifications LIMIT 0; SELECT tenant_id,document_key,source_hash,result FROM document_ocr LIMIT 0"); await command.ExecuteNonQueryAsync(deadline.Token); } return HealthCheckResult.Healthy(); }
+        try { foreach (var source in sources.Values) { await using var command = source.CreateCommand("SELECT tenant_id,classification_key,record,needs_review FROM document_classifications LIMIT 0; SELECT tenant_id,document_key,source_hash,result FROM document_ocr LIMIT 0; SELECT tenant_id,processing_id,customer_id,state,updated_at,record FROM document_processing LIMIT 0; SELECT tenant_id,event_id,processing_id,event FROM document_processing_events LIMIT 0"); await command.ExecuteNonQueryAsync(deadline.Token); } return HealthCheckResult.Healthy(); }
         catch (Exception e) when (e is not OutOfMemoryException and not StackOverflowException) { return HealthCheckResult.Unhealthy("Configured classification database is unavailable."); }
     }
     public async ValueTask DisposeAsync() { foreach (var source in sources.Values) await source.DisposeAsync(); }

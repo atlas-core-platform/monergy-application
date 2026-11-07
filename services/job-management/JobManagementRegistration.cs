@@ -78,19 +78,29 @@ public static class JobManagementRegistration
         IConfiguration configuration)
     {
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
+        var documentProcessing = configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled");
         var reportGeneration = configuration.GetValue<bool>("Monergy:ReportGeneration:Enabled");
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<PostgresJobRepository>();
         services.AddSingleton<IJobRepository>(provider=>provider.GetRequiredService<PostgresJobRepository>());
         services.AddSingleton<IJobAdministrationRepository>(provider=>provider.GetRequiredService<PostgresJobRepository>());
-        if (reportGeneration)
+        if (documentProcessing || reportGeneration)
         {
             services.AddSingleton<TenantAccessClient>();
             services.AddSingleton<OwnerBackedJobExecutionPolicy>();
             services.AddSingleton<IJobAuthorizationPolicy>(provider => provider.GetRequiredService<OwnerBackedJobExecutionPolicy>());
             services.AddSingleton<IJobConsentDecisionPort>(provider => provider.GetRequiredService<OwnerBackedJobExecutionPolicy>());
-            services.AddSingleton<HttpReportGenerationTarget>();
-            services.AddSingleton<IJobExecutionTarget>(provider => provider.GetRequiredService<HttpReportGenerationTarget>());
+            if (documentProcessing)
+            {
+                services.AddSingleton<DocumentProcessingJobRegistry>();
+                services.AddSingleton<HttpDocumentProcessingTarget>();
+                services.AddSingleton<IJobExecutionTarget>(provider => provider.GetRequiredService<HttpDocumentProcessingTarget>());
+            }
+            if (reportGeneration)
+            {
+                services.AddSingleton<HttpReportGenerationTarget>();
+                services.AddSingleton<IJobExecutionTarget>(provider => provider.GetRequiredService<HttpReportGenerationTarget>());
+            }
         }
         else
         {

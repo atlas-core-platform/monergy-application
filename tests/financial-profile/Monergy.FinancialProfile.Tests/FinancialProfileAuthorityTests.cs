@@ -77,7 +77,10 @@ public sealed class FinancialProfileAuthorityTests
             "key-income-1");
         var created = await application.NormalizeSourceFactsAsync(createRequest);
         repository.DrainOutbox();
-        var replay = await application.NormalizeSourceFactsAsync(createRequest);
+        var replay = await application.NormalizeSourceFactsAsync(createRequest with
+        {
+            Payload = createRequest.Payload with { RequestedAt = createRequest.Payload.RequestedAt.AddMinutes(5) }
+        });
         Assert.False(replay.Data!.Facts.Single().Created);
         Assert.Empty(repository.DrainOutbox());
 

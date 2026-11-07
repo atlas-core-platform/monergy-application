@@ -37,11 +37,11 @@ public sealed class JobManagementHttpAdapterWorker(
             builder.Services.AddSingleton(ownerServices.GetRequiredService<TenantBoundaryOptions>());
             builder.Services.AddSingleton(ownerServices.GetRequiredService<TenantAccessClient>());
         }
-        var documentProcessing =
-            ReferenceAdapterGuard.IsSelected(configuration) &&
+        var ownerBacked = ReferenceAdapterGuard.IsSelected(configuration) ||
+            PhysicalPersistenceGuard.IsSelected(configuration);
+        var documentProcessing = ownerBacked &&
             configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled");
-        var reportGeneration =
-            ReferenceAdapterGuard.IsSelected(configuration) &&
+        var reportGeneration = ownerBacked &&
             configuration.GetValue<bool>("Monergy:ReportGeneration:Enabled");
 
         if (documentProcessing || reportGeneration)
@@ -68,6 +68,7 @@ public sealed class JobManagementHttpAdapterWorker(
             builder.Services.AddSingleton(ownerServices.GetRequiredService<IJobConsentDecisionPort>());
         }
         await using var app = builder.Build();
+        app.UseMiddleware<JobManagementOwnerExceptionMiddleware>();
         if (tenantBoundary)
             app.UseMiddleware<TenantBoundaryMiddleware>();
         app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
@@ -88,5 +89,31 @@ public sealed class JobManagementHttpAdapterWorker(
         {
         }
         await app.StopAsync(CancellationToken.None).ConfigureAwait(false);
+    }
+}
+
+/// <summary>
+/// The secondary LOCAL owner adapter has internal workload routes which do not
+/// pass through TenantBoundaryMiddleware's contract exception translation.
+/// Preserve the typed owner status without exposing exception diagnostics.
+/// </summary>
+public sealed class JobManagementOwnerExceptionMiddleware(RequestDelegate next)
+{
+    public async Task InvokeAsync(HttpContext http)
+    {
+        try
+        {
+            await next(http).ConfigureAwait(false);
+        }
+        catch (TenantBoundaryException failure)
+        {
+            if (http.Response.HasStarted) throw;
+            http.Response.Clear();
+            http.Response.Headers.CacheControl = "no-store";
+            http.Response.StatusCode = failure.Status;
+            await http.Response.WriteAsJsonAsync(
+                new { error = failure.Code },
+                cancellationToken: http.RequestAborted).ConfigureAwait(false);
+        }
     }
 }

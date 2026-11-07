@@ -33,7 +33,7 @@ public sealed class PostgresFinancialProfileRepository : IFinancialProfileReposi
         FinancialNormalizationIdentity idempotencyIdentity, ContractRequest<NormalizeSourceFacts> request,
         FinancialProfileChangeTransition profileChange, CancellationToken cancellationToken)
     {
-        var payloadJson = JsonSerializer.Serialize(request.Payload, ContractJson.Options);
+        var payloadJson = FinancialNormalizationIdentity.PayloadSignature(request.Payload);
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(payloadJson)));
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);

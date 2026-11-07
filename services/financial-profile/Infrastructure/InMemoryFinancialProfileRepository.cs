@@ -1,6 +1,5 @@
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using Monergy.Contracts;
 using Monergy.Services.FinancialProfile.Application;
 
@@ -30,7 +29,7 @@ public sealed class InMemoryFinancialProfileRepository : IFinancialProfileReposi
         cancellationToken.ThrowIfCancellationRequested();
         lock (sync)
         {
-            var payloadSignature = JsonSerializer.Serialize(request.Payload, ContractJson.Options);
+            var payloadSignature = FinancialNormalizationIdentity.PayloadSignature(request.Payload);
             if (idempotency.TryGetValue(idempotencyIdentity, out var prior))
             {
                 if (!string.Equals(idempotencyPayloads[idempotencyIdentity], payloadSignature, StringComparison.Ordinal))

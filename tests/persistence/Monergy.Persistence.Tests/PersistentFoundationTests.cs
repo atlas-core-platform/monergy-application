@@ -297,7 +297,11 @@ public sealed partial class PersistentFoundationTests
             Assert.NotNull(profile);
             Assert.Single(profile.Facts);
             Assert.NotNull(await reconstructed.GetProvenanceAsync(first.Provenance[0].FinancialProvenanceId, default));
-            var replay = await reconstructed.NormalizeAsync(identity, request, transition, default);
+            var replayRequest = request with
+            {
+                Payload = request.Payload with { RequestedAt = request.Payload.RequestedAt.AddMinutes(5) }
+            };
+            var replay = await reconstructed.NormalizeAsync(identity, replayRequest, transition, default);
             Assert.False(replay.Persisted);
             Assert.Equal(first.Facts[0].FinancialFactId, replay.Facts[0].FinancialFactId);
 

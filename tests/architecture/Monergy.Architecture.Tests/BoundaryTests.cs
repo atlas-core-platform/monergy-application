@@ -96,6 +96,7 @@ public sealed class BoundaryTests
         Assert.Contains("ownerServices.GetRequiredService<JobManagementApplication>()", jobAdapter, StringComparison.Ordinal);
         Assert.Contains("ownerServices.GetRequiredService<IJobRepository>()", jobAdapter, StringComparison.Ordinal);
         Assert.Contains("ownerServices.GetRequiredService<DocumentProcessingJobRegistry>()", jobAdapter, StringComparison.Ordinal);
+        Assert.Contains("PhysicalPersistenceGuard.IsSelected(configuration)", jobAdapter, StringComparison.Ordinal);
     }
 
     [Fact]

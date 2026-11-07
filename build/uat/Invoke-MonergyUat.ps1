@@ -19,8 +19,10 @@ param(
     [string]$KycConfigurationFile,
     [string]$EvidencePersistenceConfigurationFile,
     [string]$FinancialPersistenceConfigurationFile,
+    [string]$JobManagementPersistenceConfigurationFile,
     [string]$FinancialRulesPersistenceConfigurationFile,
     [switch]$RequireRetainedEvidenceAndFinancialProfile,
+    [switch]$RequireRetainedDocumentProcessing,
     [switch]$RequireRetainedFinancialRules,
     [string]$ClassificationConfigurationFile,
     [switch]$RequireCustomerSetup,
@@ -236,6 +238,29 @@ if (Test-Path -LiteralPath $financialConfigPath) {
 } elseif (-not [string]::IsNullOrWhiteSpace($FinancialPersistenceConfigurationFile)) {
     throw 'Financial Profile persistence configuration file was not found.'
 }
+# Optional durable Job Management is required when restart acceptance must preserve
+# processing receipts/results rather than only their downstream owner records.
+$jobManagementPersistence = $null
+$jobManagementConfigPath = Join-Path $folder 'job-management-persistence.json'
+if (-not [string]::IsNullOrWhiteSpace($JobManagementPersistenceConfigurationFile)) { $jobManagementConfigPath = $JobManagementPersistenceConfigurationFile }
+if (Test-Path -LiteralPath $jobManagementConfigPath) {
+    if (-not $onboarding) { throw 'Job Management persistence requires an onboarding profile.' }
+    $jobManagementFile = Get-Item -LiteralPath $jobManagementConfigPath -ErrorAction Stop
+    if ($jobManagementFile.PSIsContainer -or $jobManagementFile.Length -gt 16384) { throw 'Invalid Job Management persistence file.' }
+    $jobManagementPersistence = Get-Content -LiteralPath $jobManagementFile.FullName -Raw -Encoding utf8 | ConvertFrom-Json
+    if ($null -eq $jobManagementPersistence -or @($jobManagementPersistence.PSObject.Properties.Name).Count -ne 1 -or
+        $jobManagementPersistence.PSObject.Properties.Name -notcontains 'RuntimeConnection' -or
+        $jobManagementPersistence.RuntimeConnection -isnot [string] -or
+        [string]::IsNullOrWhiteSpace([string]$jobManagementPersistence.RuntimeConnection)) {
+        throw 'Job Management persistence requires only a nonempty RuntimeConnection.'
+    }
+    if ($Action -in @('Prepare','Start') -and -not $RequireRetainedDocumentProcessing) {
+        Save-Json 'job-management-persistence.json' $jobManagementPersistence
+        Protect-Files
+    }
+} elseif (-not [string]::IsNullOrWhiteSpace($JobManagementPersistenceConfigurationFile)) {
+    throw 'Job Management persistence configuration file was not found.'
+}
 # Financial Rules calculation receipts use their existing D09 PostgreSQL repository
 # only when the operator explicitly supplies and retains its runtime connection.
 $financialRulesPersistence = $null
@@ -302,6 +327,25 @@ if ($RequireRetainedEvidenceAndFinancialProfile) {
             if ($runtimeConfig.Monergy.ReferenceAdapters -ne 'false' -or $runtimeConfig.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3') {
                 throw "Retained $service runtime still uses a non-durable business adapter. No restart-retention acceptance may be claimed."
             }
+        }
+    }
+}
+if ($RequireRetainedDocumentProcessing) {
+    if ($null -eq $jobManagementPersistence) {
+        throw 'Restart-retained document processing requires configured durable Job Management storage. Supply a protected runtime connection; do not reset the retained profile.'
+    }
+    if ($Action -in @('Prepare','Start')) {
+        Save-Json 'job-management-persistence.json' $jobManagementPersistence
+        Protect-Files
+    }
+    if ($Action -eq 'Verify') {
+        $jobConfigFile = Join-Path $folder 'job-management.json'
+        if (-not (Test-Path -LiteralPath $jobConfigFile)) { throw 'Missing protected Job Management runtime configuration.' }
+        $jobRuntimeConfig = Get-Content -LiteralPath $jobConfigFile -Raw -Encoding utf8 | ConvertFrom-Json
+        if ($jobRuntimeConfig.Monergy.ReferenceAdapters -ne 'false' -or
+            $jobRuntimeConfig.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3' -or
+            [string]::IsNullOrWhiteSpace([string]$jobRuntimeConfig.Monergy.Persistence.JobManagement.RuntimeConnection)) {
+            throw 'Retained Job Management runtime is not explicitly PostgreSQL-backed. No processing-result restart acceptance may be claimed.'
         }
     }
 }
@@ -587,6 +631,10 @@ if ($Action -in @('Prepare','Start')) {
                     FinancialProfileUrl='http://127.0.0.1:5113/'
                 }
             } elseif ($onboarding -and $service -eq 'job-management') {
+                if ($null -ne $jobManagementPersistence) {
+                    $config.Monergy.ReferenceAdapters='false'
+                    $config.Monergy.Persistence=@{ Provider='POSTGRESQL_S3'; JobManagement=@{ RuntimeConnection=[string]$jobManagementPersistence.RuntimeConnection } }
+                }
                 $config.Monergy.DocumentProcessing=@{
                     Enabled='true'; DocumentIntelligenceUrl='http://127.0.0.1:5112/'
                     DocumentIntelligenceToken=$state.tokens.documentControl; ControlToken=$state.tokens.jobControl

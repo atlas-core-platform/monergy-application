@@ -19,6 +19,8 @@ public static class DocumentIntelligenceRegistration
             services.AddSingleton<PostgresDocumentClassificationRepository>();
             services.AddSingleton<IDocumentClassificationRepository>(p => p.GetRequiredService<PostgresDocumentClassificationRepository>());
             services.AddSingleton<IDocumentOcrRepository>(p => p.GetRequiredService<PostgresDocumentClassificationRepository>());
+            services.AddSingleton<IDocumentProcessingRepository>(p => p.GetRequiredService<PostgresDocumentClassificationRepository>());
+            services.AddSingleton<IClassificationMonitoringRepository>(p => p.GetRequiredService<PostgresDocumentClassificationRepository>());
             services.AddHealthChecks().AddCheck<PostgresDocumentClassificationRepository>("classification-storage");
         }
         else
@@ -28,9 +30,12 @@ public static class DocumentIntelligenceRegistration
         }
         services.AddSingleton<DocumentOcrService>();
         services.AddSingleton<DocumentClassifier>();
-        services.AddSingleton<InMemoryDocumentProcessingRepository>();
-        services.AddSingleton<IClassificationMonitoringRepository>(provider=>provider.GetRequiredService<InMemoryDocumentProcessingRepository>());
-        services.AddSingleton<IDocumentProcessingRepository>(provider => provider.GetRequiredService<InMemoryDocumentProcessingRepository>());
+        if (!configuration.GetSection("Monergy:Classification:RuntimeConnections").GetChildren().Any())
+        {
+            services.AddSingleton<InMemoryDocumentProcessingRepository>();
+            services.AddSingleton<IClassificationMonitoringRepository>(provider=>provider.GetRequiredService<InMemoryDocumentProcessingRepository>());
+            services.AddSingleton<IDocumentProcessingRepository>(provider => provider.GetRequiredService<InMemoryDocumentProcessingRepository>());
+        }
         services.AddSingleton<IImageTextRecognizer, TesseractImageTextRecognizer>();
         services.AddSingleton<SalarySlipPngExtractor>();
         services.AddSingleton<SalarySlipJpegExtractor>();

@@ -12,7 +12,7 @@ builder.Services.AddHealthChecks();
 var physicalPersistence = PhysicalPersistenceGuard.IsSelected(builder.Configuration);
 var referenceAdapter = ReferenceAdapterGuard.IsSelected(builder.Configuration);
 var documentProcessing =
-    referenceAdapter &&
+    (referenceAdapter || physicalPersistence) &&
     builder.Configuration.GetValue<bool>("Monergy:DocumentProcessing:Enabled");
 var reportGeneration =
     (referenceAdapter || physicalPersistence) &&
