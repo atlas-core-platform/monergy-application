@@ -22,13 +22,10 @@ public sealed class ReviewedAssetSourceTests
     [Theory]
     [InlineData("text", "PROPERTY")]
     [InlineData("text", "VEHICLE")]
-    [InlineData("text", "BANK_ACCOUNT")]
     [InlineData("csv", "PROPERTY")]
     [InlineData("csv", "VEHICLE")]
-    [InlineData("csv", "BANK_ACCOUNT")]
     [InlineData("xlsx", "PROPERTY")]
     [InlineData("xlsx", "VEHICLE")]
-    [InlineData("xlsx", "BANK_ACCOUNT")]
     public async Task ExplicitAssetTypeSurvivesOwnerHttpAdoptionReplayConflictAndReadback(string format, string ownerType)
     {
         var original = Assert.Single(await new StructuredDocumentExtractor().ExtractAsync(FinancialSourceCategoryTests.Source(format,"ASSET"),"source-run",default));
@@ -92,6 +89,7 @@ public sealed class ReviewedAssetSourceTests
     [InlineData("asset", "VEHICLE", "ASSET", "property-sale-deed-png-ocr/1.0.0")]
     [InlineData("asset", "PROPERTY", "ASSET", "vehicle-purchase-invoice-png-ocr/1.0.0")]
     [InlineData("asset", "PROPERTY", "ASSET", "unknown/1.0.0")]
+    [InlineData("asset", "BANK_ACCOUNT", "ASSET", "financial-csv/1.0.0")]
     public void UnknownUnselectedUnsupportedOrDocumentDerivedChoicesAreRejected(string choiceId,string choice,string type,string version)
     {
         Assert.Throws<FinancialSourceSelectionException>(()=>FinancialSourceFactBoundary.ReviewedTypes([("asset",type,version)],[(choiceId,choice)]));

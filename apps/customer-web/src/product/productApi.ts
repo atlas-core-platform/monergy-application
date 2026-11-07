@@ -153,7 +153,7 @@ export interface ProductFinancialSource {
 
 export interface ProductAssetTypeSelection {
   sourceFactId: string;
-  assetType: 'PROPERTY' | 'VEHICLE' | 'BANK_ACCOUNT';
+  assetType: 'PROPERTY' | 'VEHICLE';
 }
 
 export interface ProductFinancialFact {

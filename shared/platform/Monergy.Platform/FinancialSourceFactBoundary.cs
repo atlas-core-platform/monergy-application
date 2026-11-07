@@ -52,7 +52,7 @@ public static class FinancialSourceFactBoundary
         var assigned = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var choice in choices ?? [])
         {
-            if (string.IsNullOrWhiteSpace(choice.SourceFactId) || choice.AssetType is not ("PROPERTY" or "VEHICLE" or "BANK_ACCOUNT") ||
+            if (string.IsNullOrWhiteSpace(choice.SourceFactId) || choice.AssetType is not ("PROPERTY" or "VEHICLE") ||
                 !source.TryGetValue(choice.SourceFactId, out var fact) || !CanReviewAssetType(fact.Type, fact.Version) ||
                 !assigned.TryAdd(choice.SourceFactId, choice.AssetType))
                 throw new FinancialSourceSelectionException(invalid);
