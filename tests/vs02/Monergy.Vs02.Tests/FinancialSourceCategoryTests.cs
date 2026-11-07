@@ -92,7 +92,8 @@ public sealed class FinancialSourceCategoryTests
         var result = await app.NormalizeSourceFactsAsync(Vs02TestContext.Request(Vs02ContractNames.NormalizeSourceFacts,
             new NormalizeSourceFacts("category-profile","customer-001","mixed-run",[known,unknown],"reviewed-document-facts/1.0.0",DateTimeOffset.UtcNow),"category-mixed","category-mixed"));
         Assert.Equal("financial.normalization.invalid",result.Error?.Code); Assert.Null(await repository.GetProfileAsync("category-profile",default)); Assert.Empty(repository.DrainOutbox());
-        Assert.Equal("BANK_ACCOUNT",FinancialSourceFactBoundary.ForCustomer("BANK_ACCOUNT"));
+        Assert.Equal("ASSET",FinancialSourceFactBoundary.ForCustomer("BANK_ACCOUNT"));
+        Assert.Equal("BANK_ACCOUNT",FinancialSourceFactBoundary.CustomerAssetType("BANK_ACCOUNT"));
     }
     private static async Task<ContractResult<TData>> Send<TPayload,TData>(HttpClient client,string cid,ContractRequest<TPayload> request)
     {
