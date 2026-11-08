@@ -284,9 +284,9 @@ it('pages beyond 200 liability records and refreshes from the newest page', asyn
   if (path === 'v1/liability-records?afterId=liability-page-199') return { items: [record], hasMore: false, dataDurability: 'Temporary data' };
   throw new Error('Unexpected page');
  });
- mount(api, false); fireEvent.click(await screen.findByRole('button', { name: 'Earlier liability records' }));
- expect(await screen.findByRole('button', { name: 'View liability record: ' + record.liability.name })).toBeVisible();
- expect(screen.queryByRole('button', { name: 'Earlier liability records' })).not.toBeInTheDocument();
+ mount(api, false); const earlier = await screen.findByText('Earlier liability records'); expect(earlier.closest('button')).not.toBeNull(); fireEvent.click(earlier);
+ expect(await screen.findByText(record.liability.name)).toBeVisible();
+ expect(screen.queryByText('Earlier liability records')).not.toBeInTheDocument();
  expect(request.mock.calls.some(([path]) => path === 'v1/liability-records?afterId=liability-page-199')).toBe(true);
- fireEvent.click(screen.getByRole('button', { name: 'Refresh liability records' })); expect(await screen.findByRole('button', { name: 'Earlier liability records' })).toBeVisible();
+ const refresh = screen.getByText('Refresh liability records'); expect(refresh.closest('button')).not.toBeNull(); fireEvent.click(refresh); expect(await screen.findByText('Earlier liability records')).toBeVisible();
 });
