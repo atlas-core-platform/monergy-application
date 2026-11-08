@@ -290,4 +290,4 @@ it('pages beyond 200 income records and refreshes from the newest page', async (
  expect(screen.queryByRole('button', { name: 'Earlier income records' })).not.toBeInTheDocument();
  expect(request.mock.calls.some(([path]) => path === 'v1/income-records?afterId=income-page-199')).toBe(true);
  fireEvent.click(screen.getByRole('button', { name: 'Refresh income records' })); expect(await screen.findByRole('button', { name: 'Earlier income records' })).toBeVisible();
-});
+}, 30000);

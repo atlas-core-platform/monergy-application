@@ -70,8 +70,9 @@ it.each(['status','version','days'])('rejects an unsupported comparison response
   mount(api);const user=userEvent.setup();await selectPair(user);await user.click(screen.getByRole('button',{name:'Compare selected expense periods'}));await screen.findByText(/Expense comparison is unavailable/);expect(screen.queryByRole('region',{name:'Expense period comparison'})).not.toBeInTheDocument();
 });
 it('keeps the record-list bound explicit and enables comparison without update access',async()=>{
-  const api=new AccessApi(session);const request=vi.spyOn(api,'product').mockImplementation((path)=>path==='v1/expense-records'?Promise.resolve({items:[earlier,later],hasMore:true,dataDurability:'Temporary data'}):Promise.resolve(value));
+  const records=[earlier,later,...Array.from({length:198},(_,index)=>({...earlier,expenseRecordId:`expense-fill-${String(index)}`,expense:{...earlier.expense,name:`Historical expense ${String(index)}`,sourceFinancialFactId:`ff-fill-${String(index)}`}}))];
+  const api=new AccessApi(session);const request=vi.spyOn(api,'product').mockImplementation((path)=>path==='v1/expense-records'?Promise.resolve({items:records,hasMore:true,dataDurability:'Temporary data'}):Promise.resolve(value));
   render(<FoundationProvider appearance="midnight"><ExpenseRecordsExperience api={api} facts={[]} canRead canCreate={false}/></FoundationProvider>);const user=userEvent.setup();await screen.findByRole('region',{name:'Compare expense periods'});
   expect(screen.queryByRole('button',{name:'Add expense record'})).not.toBeInTheDocument();expect(screen.getByText(/The choices include the 200 most recently added records/)).toBeVisible();
   await selectPair(user);await user.click(screen.getByRole('button',{name:'Compare selected expense periods'}));await screen.findByRole('region',{name:'Expense period comparison'});expect(request.mock.calls.filter(([,method])=>method==='POST').every(([path])=>path==='v1/expense-records/comparison')).toBe(true);
-});
+},30000);

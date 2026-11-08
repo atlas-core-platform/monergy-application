@@ -15,7 +15,8 @@ public static class ProductExpenseRecordEndpoints
     { RespectRequiredConstructorParameters=true, RespectNullableAnnotations=true, UnmappedMemberHandling=System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };
     public static void AddProductExpenseRecords(this WebApplicationBuilder builder)
     {
-        if (builder.Configuration.GetValue<bool>("Monergy:Product:Enabled")) builder.Services.AddSingleton<ProductExpenseRecordClient>();
+        if (builder.Configuration.GetValue<bool>("Monergy:Product:Enabled"))
+            builder.Services.AddSingleton(_ => new ProductExpenseRecordClient(builder.Configuration));
     }
     public static void MapProductExpenseRecords(this WebApplication app)
     {
@@ -184,13 +185,14 @@ public sealed class ProductExpenseRecordClient : IDisposable
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };
     private readonly HttpClient client;
     private readonly Uri endpoint;
-    public ProductExpenseRecordClient(IConfiguration configuration) : this(configuration,
-        new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })) { }
+    public ProductExpenseRecordClient(IConfiguration configuration) : this(configuration, CreateClient()) { }
     public ProductExpenseRecordClient(IConfiguration configuration, HttpClient httpClient)
     {
-        client = httpClient; client.Timeout = TimeSpan.FromSeconds(10); client.MaxResponseContentBufferSize = 1048576;
+        client = httpClient;
         endpoint = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:Product:FinancialProfileUrl"));
     }
+    private static HttpClient CreateClient() => new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
+    { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1048576 };
     public Task<ExpenseRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct, string? afterId = null) =>
         SendAsync<ExpenseRecordList>(session, customer, afterId is null ? "" : "?afterId=" + Uri.EscapeDataString(afterId), null, ct);
     public Task<ReviewedExpenseRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct, int? revision = null) =>
