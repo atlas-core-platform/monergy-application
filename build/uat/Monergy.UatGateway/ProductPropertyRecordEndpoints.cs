@@ -15,7 +15,8 @@ public static class ProductPropertyRecordEndpoints
     { RespectRequiredConstructorParameters=true, RespectNullableAnnotations=true, UnmappedMemberHandling=System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };
     public static void AddProductPropertyRecords(this WebApplicationBuilder builder)
     {
-        if (builder.Configuration.GetValue<bool>("Monergy:Product:Enabled")) builder.Services.AddSingleton<ProductPropertyRecordClient>();
+        if (builder.Configuration.GetValue<bool>("Monergy:Product:Enabled"))
+            builder.Services.AddSingleton(_ => new ProductPropertyRecordClient(builder.Configuration));
     }
     public static void MapProductPropertyRecords(this WebApplication app)
     {
@@ -194,13 +195,14 @@ public sealed class ProductPropertyRecordClient : IDisposable
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };
     private readonly HttpClient client;
     private readonly Uri endpoint;
-    public ProductPropertyRecordClient(IConfiguration configuration) : this(configuration,
-        new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })) { }
+    public ProductPropertyRecordClient(IConfiguration configuration) : this(configuration, CreateClient()) { }
     public ProductPropertyRecordClient(IConfiguration configuration, HttpClient httpClient)
     {
-        client = httpClient; client.Timeout = TimeSpan.FromSeconds(10); client.MaxResponseContentBufferSize = 1048576;
+        client = httpClient;
         endpoint = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:Product:FinancialProfileUrl"));
     }
+    private static HttpClient CreateClient() => new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
+    { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1048576 };
     public Task<PropertyRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct, string? afterId = null) =>
         SendAsync<PropertyRecordList>(session, customer, afterId is null ? "" : "?afterId=" + Uri.EscapeDataString(afterId), null, ct);
     public Task<ReviewedPropertyRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct, int? revision = null) =>
