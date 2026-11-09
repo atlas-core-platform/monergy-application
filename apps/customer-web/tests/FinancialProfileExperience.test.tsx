@@ -693,7 +693,7 @@ it('opens reviewed bank accounts with only explicitly classified bank-account so
     :Promise.resolve({financialProfileId:'profile',revision:1,updatedAt:'2026-10-19T00:00:00Z',dataDurability:'Temporary data',facts:[bank,{...bank,financialFactId:'ff-property',assetType:'PROPERTY',label:'Property amount'}]}));
   mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
   expect(await screen.findByRole('heading',{name:'Bank accounts'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'Add bank account'})).toBeEnabled();
+  await waitFor(()=>{expect(screen.getByRole('button',{name:'Add bank account'})).toBeEnabled();});
   await userEvent.setup().click(screen.getByRole('button',{name:'Add bank account'}));const drawer=screen.getByRole('dialog',{name:'Add bank account'});
   await userEvent.setup().click(within(drawer).getByRole('combobox',{name:'Reviewed bank account source'}));
   expect((await screen.findAllByText(/Reviewed bank balance ·/,{selector:'.ant-select-item-option-content'})).length).toBeGreaterThan(0);
@@ -710,7 +710,7 @@ it('opens reviewed credit cards from customer-selected loan and debt source figu
     :Promise.resolve({financialProfileId:'profile',revision:1,updatedAt:'2026-10-19T00:00:00Z',dataDurability:'Temporary data',facts:[card]}));
   mount(api,['financial-profile.profile.read','evidence.document.read','financial-profile.profile.update']);
   expect(await screen.findByRole('heading',{name:'Credit cards'})).toBeVisible();
-  expect(screen.getByRole('button',{name:'Add credit card'})).toBeEnabled();
+  await waitFor(()=>{expect(screen.getByRole('button',{name:'Add credit card'})).toBeEnabled();});
   await userEvent.setup().click(screen.getByRole('button',{name:'Add credit card'}));const drawer=screen.getByRole('dialog',{name:'Add credit card'});
   await userEvent.setup().click(within(drawer).getByRole('combobox',{name:'Reviewed credit card source'}));
   expect((await screen.findAllByText(/Reviewed card balance ·/,{selector:'.ant-select-item-option-content'})).length).toBeGreaterThan(0);

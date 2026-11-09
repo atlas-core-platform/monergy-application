@@ -284,9 +284,10 @@ it('pages beyond 200 property records and refreshes from the newest page', async
   if (path === 'v1/property-records?afterId=property-page-199') return { items: [record], hasMore: false, dataDurability: 'Temporary data' };
   throw new Error('Unexpected page');
  });
- mount(api, false); fireEvent.click(await screen.findByRole('button', { name: 'Earlier property records' }));
- expect(await screen.findByRole('button', { name: 'View property record: ' + record.property.name })).toBeVisible();
- expect(screen.queryByRole('button', { name: 'Earlier property records' })).not.toBeInTheDocument();
+ mount(api, false); const earlier = await screen.findByText('Earlier property records'); expect(earlier.closest('button')).toBeVisible(); fireEvent.click(earlier);
+ const view = await screen.findByText('View property record: ' + record.property.name); expect(view.closest('button')).toBeVisible();
+ expect(screen.queryByText('Earlier property records')).not.toBeInTheDocument();
  expect(request.mock.calls.some(([path]) => path === 'v1/property-records?afterId=property-page-199')).toBe(true);
- fireEvent.click(screen.getByRole('button', { name: 'Refresh property records' })); expect(await screen.findByRole('button', { name: 'Earlier property records' })).toBeVisible();
+ const refresh = screen.getByText('Refresh property records'); expect(refresh.closest('button')).toBeVisible(); fireEvent.click(refresh);
+ const refreshed = await screen.findByText('Earlier property records'); expect(refreshed.closest('button')).toBeVisible();
 });

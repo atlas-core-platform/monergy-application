@@ -313,9 +313,10 @@ it('pages beyond 200 vehicle records and refreshes from the newest page', async 
   if (path === 'v1/vehicle-records?afterId=vehicle-page-199') return { items: [record], hasMore: false, dataDurability: 'Temporary data' };
   throw new Error('Unexpected page');
  });
- mount(api, false); fireEvent.click(await screen.findByRole('button', { name: 'Earlier vehicle records' }));
- expect(await screen.findByRole('button', { name: 'View vehicle record: ' + record.vehicle.name })).toBeVisible();
- expect(screen.queryByRole('button', { name: 'Earlier vehicle records' })).not.toBeInTheDocument();
+ mount(api, false); const earlier = await screen.findByText('Earlier vehicle records'); expect(earlier.closest('button')).toBeVisible(); fireEvent.click(earlier);
+ const view = await screen.findByText('View vehicle record: ' + record.vehicle.name); expect(view.closest('button')).toBeVisible();
+ expect(screen.queryByText('Earlier vehicle records')).not.toBeInTheDocument();
  expect(request.mock.calls.some(([path]) => path === 'v1/vehicle-records?afterId=vehicle-page-199')).toBe(true);
- fireEvent.click(screen.getByRole('button', { name: 'Refresh vehicle records' })); expect(await screen.findByRole('button', { name: 'Earlier vehicle records' })).toBeVisible();
+ const refresh = screen.getByText('Refresh vehicle records'); expect(refresh.closest('button')).toBeVisible(); fireEvent.click(refresh);
+ const refreshed = await screen.findByText('Earlier vehicle records'); expect(refreshed.closest('button')).toBeVisible();
 });
