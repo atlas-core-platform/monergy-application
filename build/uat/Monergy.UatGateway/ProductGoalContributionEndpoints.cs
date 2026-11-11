@@ -15,7 +15,8 @@ public static class ProductGoalContributionEndpoints
     { RespectRequiredConstructorParameters=true, RespectNullableAnnotations=true, UnmappedMemberHandling=System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };
     public static void AddProductGoalContributions(this WebApplicationBuilder builder)
     {
-        if (builder.Configuration.GetValue<bool>("Monergy:Product:Enabled")) builder.Services.AddSingleton<ProductGoalContributionClient>();
+        if (builder.Configuration.GetValue<bool>("Monergy:Product:Enabled"))
+            builder.Services.AddSingleton(_ => new ProductGoalContributionClient(builder.Configuration));
     }
     public static void MapProductGoalContributions(this WebApplication app)
     {
@@ -199,13 +200,14 @@ public sealed class ProductGoalContributionClient : IDisposable
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };
     private readonly HttpClient client;
     private readonly Uri endpoint;
-    public ProductGoalContributionClient(IConfiguration configuration) : this(configuration,
-        new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })) { }
+    public ProductGoalContributionClient(IConfiguration configuration) : this(configuration, CreateClient()) { }
     public ProductGoalContributionClient(IConfiguration configuration, HttpClient httpClient)
     {
-        client = httpClient; client.Timeout = TimeSpan.FromSeconds(10); client.MaxResponseContentBufferSize = 1048576;
+        client = httpClient;
         endpoint = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:Product:FinancialProfileUrl"));
     }
+    private static HttpClient CreateClient() => new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
+    { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1048576 };
     public Task<GoalContributionList> ListAsync(CustomerOwnerSession session, string customer,string financialGoalId, CancellationToken ct) =>
         SendAsync<GoalContributionList>(session, customer, "?financialGoalId="+Uri.EscapeDataString(financialGoalId), null, ct);
     public Task<ReportedGoalContribution> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct, int? revision = null) =>

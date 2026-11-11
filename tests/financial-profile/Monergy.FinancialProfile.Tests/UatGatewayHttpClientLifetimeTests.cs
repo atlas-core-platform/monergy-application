@@ -35,6 +35,8 @@ public sealed class UatGatewayHttpClientLifetimeTests
         builder.AddProductVehicleRecords();
         builder.AddProductInsuranceRecords();
         builder.AddProductTaxRecords();
+        builder.AddProductFinancialGoals();
+        builder.AddProductGoalContributions();
         builder.AddProductAssetSnapshot();
         await using var app = builder.Build();
         app.MapGet("/health/ready", async (HttpClient client, CancellationToken cancellationToken) =>
@@ -52,11 +54,17 @@ public sealed class UatGatewayHttpClientLifetimeTests
         app.MapGet("/product-api/v1/vehicle-records", (ProductVehicleRecordClient _) => Results.Ok());
         app.MapGet("/product-api/v1/insurance-records", (ProductInsuranceRecordClient _) => Results.Ok());
         app.MapGet("/product-api/v1/tax-records", (ProductTaxRecordClient _) => Results.Ok());
+        app.MapGet("/product-api/v1/financial-goals", (ProductFinancialGoalClient _) => Results.Ok());
+        app.MapGet("/product-api/v1/goal-contributions", (ProductGoalContributionClient _) => Results.Ok());
         app.MapGet("/product-api/v1/asset-records/snapshot", (ProductAssetSnapshotClient _) => Results.Ok());
         await app.StartAsync();
 
         using var browser = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) };
         Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/health/ready")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/financial-goals")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/goal-contributions")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/financial-goals")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/goal-contributions")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/investment-records")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/loan-records")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await browser.GetAsync("/product-api/v1/monthly-cashflow/positions")).StatusCode);
@@ -104,6 +112,8 @@ public sealed class UatGatewayHttpClientLifetimeTests
         builder.AddProductVehicleRecords();
         builder.AddProductInsuranceRecords();
         builder.AddProductTaxRecords();
+        builder.AddProductFinancialGoals();
+        builder.AddProductGoalContributions();
         builder.AddProductAssetSnapshot();
         await using var app = builder.Build();
 
@@ -117,6 +127,8 @@ public sealed class UatGatewayHttpClientLifetimeTests
         var vehicle = app.Services.GetRequiredService<ProductVehicleRecordClient>();
         var insurance = app.Services.GetRequiredService<ProductInsuranceRecordClient>();
         var tax = app.Services.GetRequiredService<ProductTaxRecordClient>();
+        var goals = app.Services.GetRequiredService<ProductFinancialGoalClient>();
+        var contributions = app.Services.GetRequiredService<ProductGoalContributionClient>();
         var snapshot = app.Services.GetRequiredService<ProductAssetSnapshotClient>();
 
         Assert.NotSame(shared, OwnedClient(investment));
@@ -129,6 +141,8 @@ public sealed class UatGatewayHttpClientLifetimeTests
         Assert.NotSame(shared, OwnedClient(vehicle));
         Assert.NotSame(shared, OwnedClient(insurance));
         Assert.NotSame(shared, OwnedClient(tax));
+        Assert.NotSame(shared, OwnedClient(goals));
+        Assert.NotSame(shared, OwnedClient(contributions));
         Assert.Same(shared, OwnedClient(snapshot));
         Assert.Equal(TimeSpan.FromSeconds(10), OwnedClient(investment).Timeout);
         Assert.Equal(TimeSpan.FromSeconds(10), OwnedClient(loan).Timeout);
@@ -140,6 +154,8 @@ public sealed class UatGatewayHttpClientLifetimeTests
         Assert.Equal(TimeSpan.FromSeconds(10), OwnedClient(vehicle).Timeout);
         Assert.Equal(TimeSpan.FromSeconds(10), OwnedClient(insurance).Timeout);
         Assert.Equal(TimeSpan.FromSeconds(10), OwnedClient(tax).Timeout);
+        Assert.Equal(TimeSpan.FromSeconds(10), OwnedClient(goals).Timeout);
+        Assert.Equal(TimeSpan.FromSeconds(10), OwnedClient(contributions).Timeout);
         Assert.Equal(1048576, OwnedClient(investment).MaxResponseContentBufferSize);
         Assert.Equal(1048576, OwnedClient(loan).MaxResponseContentBufferSize);
         Assert.Equal(33554432, OwnedClient(cashflow).MaxResponseContentBufferSize);
@@ -150,6 +166,8 @@ public sealed class UatGatewayHttpClientLifetimeTests
         Assert.Equal(1048576, OwnedClient(vehicle).MaxResponseContentBufferSize);
         Assert.Equal(1048576, OwnedClient(insurance).MaxResponseContentBufferSize);
         Assert.Equal(1048576, OwnedClient(tax).MaxResponseContentBufferSize);
+        Assert.Equal(1048576, OwnedClient(goals).MaxResponseContentBufferSize);
+        Assert.Equal(1048576, OwnedClient(contributions).MaxResponseContentBufferSize);
         Assert.Equal(TimeSpan.FromSeconds(7), shared.Timeout);
         Assert.Equal(123456, shared.MaxResponseContentBufferSize);
         Assert.Equal(1, handler.Calls);
@@ -175,6 +193,8 @@ public sealed class UatGatewayHttpClientLifetimeTests
         _ = new ProductVehicleRecordClient(configuration, shared);
         _ = new ProductInsuranceRecordClient(configuration, shared);
         _ = new ProductTaxRecordClient(configuration, shared);
+        _ = new ProductFinancialGoalClient(configuration, shared);
+        _ = new ProductGoalContributionClient(configuration, shared);
         _ = new ProductAssetSnapshotClient(configuration, shared);
 
         Assert.Equal(TimeSpan.FromSeconds(17), shared.Timeout);
