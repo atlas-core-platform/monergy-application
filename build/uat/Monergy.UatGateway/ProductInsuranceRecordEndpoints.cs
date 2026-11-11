@@ -15,7 +15,8 @@ public static class ProductInsuranceRecordEndpoints
     { RespectRequiredConstructorParameters=true, RespectNullableAnnotations=true, UnmappedMemberHandling=System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };
     public static void AddProductInsuranceRecords(this WebApplicationBuilder builder)
     {
-        if (builder.Configuration.GetValue<bool>("Monergy:Product:Enabled")) builder.Services.AddSingleton<ProductInsuranceRecordClient>();
+        if (builder.Configuration.GetValue<bool>("Monergy:Product:Enabled"))
+            builder.Services.AddSingleton(_ => new ProductInsuranceRecordClient(builder.Configuration));
     }
     public static void MapProductInsuranceRecords(this WebApplication app)
     {
@@ -193,13 +194,14 @@ public sealed class ProductInsuranceRecordClient : IDisposable
     { RespectRequiredConstructorParameters = true, RespectNullableAnnotations = true, UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow };
     private readonly HttpClient client;
     private readonly Uri endpoint;
-    public ProductInsuranceRecordClient(IConfiguration configuration) : this(configuration,
-        new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })) { }
+    public ProductInsuranceRecordClient(IConfiguration configuration) : this(configuration, CreateClient()) { }
     public ProductInsuranceRecordClient(IConfiguration configuration, HttpClient httpClient)
     {
-        client = httpClient; client.Timeout = TimeSpan.FromSeconds(10); client.MaxResponseContentBufferSize = 1048576;
+        client = httpClient;
         endpoint = TenantAccessIntegration.LoopbackRoot(TenantAccessIntegration.Required(configuration, "Monergy:Product:FinancialProfileUrl"));
     }
+    private static HttpClient CreateClient() => new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
+    { Timeout = TimeSpan.FromSeconds(10), MaxResponseContentBufferSize = 1048576 };
     public Task<InsuranceRecordList> ListAsync(CustomerOwnerSession session, string customer, CancellationToken ct) =>
         SendAsync<InsuranceRecordList>(session, customer, "", null, ct);
     public Task<ReviewedInsuranceRecord> ReadAsync(CustomerOwnerSession session, string customer, string id, CancellationToken ct, int? revision = null) =>
