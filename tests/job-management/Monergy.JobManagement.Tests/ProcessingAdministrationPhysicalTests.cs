@@ -8,6 +8,7 @@ using Xunit;
 
 namespace Monergy.JobManagement.Tests;
 
+[Collection(PhysicalDatabaseSerialGroup.Name)]
 public sealed class ProcessingAdministrationPhysicalTests
 {
     [Fact, Trait("Category", "Physical")]
@@ -94,13 +95,14 @@ public sealed class ProcessingAdministrationPhysicalTests
             var current = (await restarted.GetAsync(jobId, default))!;
             var first = new AdminJobChange(Guid.NewGuid().ToString("N"), JobAdministration.Revision(current), "cancel", "Reviewed cancellation");
             var second = first with { OperationId = Guid.NewGuid().ToString("N") };
+            var conflicts = new System.Collections.Concurrent.ConcurrentBag<string>();
             async Task<bool> Attempt(AdminJobChange request)
             {
                 try { await restarted.ChangeAdminAsync(scope, "A900", jobId, request, time.AddSeconds(4), default); return true; }
-                catch (TenantBoundaryException exception) when (exception.Status == 409) { return false; }
+                catch (TenantBoundaryException exception) when (exception.Status == 409) { conflicts.Add(exception.Message); return false; }
             }
             var results = await Task.WhenAll(Attempt(first), Attempt(second));
-            Assert.Single(results, result => result);
+            Assert.True(results.Count(result => result) == 1, string.Join(",", conflicts));
             Assert.Equal("CANCELLED", (await restarted.ReadAdminAsync(scope, jobId, default))!.State);
             Assert.Equal(2, (await restarted.HistoryAdminAsync(scope, jobId, null, default)).Items.Count);
         }

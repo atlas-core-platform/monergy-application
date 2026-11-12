@@ -30,7 +30,7 @@ public sealed class GoogleDriveJourneyTests
     public async Task ConcurrentExactImportRetriesReturnOneEvidenceReceipt()
     {
         using var fixture = new Fixture(); var view = await fixture.Connect();
-        var input = new DriveSelection(view.Version, "file-1", "15");
+        var input = new DriveSelection(view.Version, "file-1", "10");
         var results = await Task.WhenAll(fixture.App.ImportAsync(fixture.Http, input), fixture.App.ImportAsync(fixture.Http, input));
         Assert.Equal(results[0], results[1]); Assert.Equal(1, fixture.Owners.Imports);
         Assert.Single((await fixture.App.StatusAsync(fixture.Http)).Imports);

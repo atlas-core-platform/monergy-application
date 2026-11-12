@@ -1,0 +1,7 @@
+services:
+  postgres:
+    ports: !override
+      - '55642:5432'
+  seaweedfs:
+    ports: !override
+      - '58543:8333'

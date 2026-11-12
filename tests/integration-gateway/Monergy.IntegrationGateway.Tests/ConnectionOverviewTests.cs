@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Monergy.Platform;
 using Monergy.Services.IntegrationGateway.Connections;
+using System.Globalization;
 using Xunit;
 
 namespace Monergy.IntegrationGateway.Tests;
@@ -14,7 +15,7 @@ public sealed class ConnectionOverviewTests
         [
             new Source("onedrive", "OneDrive", "/connections/onedrive", new("Needs attention")),
             new Source("google-drive", "Google Drive", "/connections/google-drive",
-                new("Connected", DateTimeOffset.Parse("2026-10-30T06:00:00Z"))),
+                new("Connected", DateTimeOffset.Parse("2026-10-30T06:00:00Z", CultureInfo.InvariantCulture))),
         ], new Clock());
 
         var result = await app.GetAsync(new DefaultHttpContext());
@@ -27,7 +28,7 @@ public sealed class ConnectionOverviewTests
         Assert.Equal("Status available", result.Connections[0].HealthState);
         Assert.Equal("Review required", result.Connections[1].PermissionState);
         Assert.Equal("Attention required", result.Connections[1].HealthState);
-        Assert.All(result.Connections, item => Assert.Equal(DateTimeOffset.Parse("2026-10-30T06:15:00Z"), item.CheckedAt));
+        Assert.All(result.Connections, item => Assert.Equal(DateTimeOffset.Parse("2026-10-30T06:15:00Z", CultureInfo.InvariantCulture), item.CheckedAt));
         Assert.NotNull(result.Connections[0].LastConfirmedAt);
         Assert.Null(result.Connections[1].LastConfirmedAt);
     }
@@ -125,6 +126,6 @@ public sealed class ConnectionOverviewTests
 
     private sealed class Clock : TimeProvider
     {
-        public override DateTimeOffset GetUtcNow() => DateTimeOffset.Parse("2026-10-30T06:15:00Z");
+        public override DateTimeOffset GetUtcNow() => DateTimeOffset.Parse("2026-10-30T06:15:00Z", CultureInfo.InvariantCulture);
     }
 }

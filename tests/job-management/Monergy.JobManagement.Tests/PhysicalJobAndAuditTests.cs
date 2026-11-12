@@ -16,6 +16,7 @@ using Xunit;
 
 namespace Monergy.JobManagement.Tests;
 
+[Collection(PhysicalDatabaseSerialGroup.Name)]
 public sealed class PhysicalJobAndAuditTests
 {
     [Fact, Trait("Category", "Physical")]
@@ -194,6 +195,8 @@ public sealed class PhysicalJobAndAuditTests
     {
         var configuration = JobTestContext.Configuration();
         var suffix = Guid.NewGuid().ToString("N");
+        var customerId = $"customer-activity-{suffix}";
+        var otherCustomerId = $"customer-other-{suffix}";
         var clock = new MutableTimeProvider(JobTestContext.Now);
         await using var repository = new PostgresJobRepository(configuration);
         var app = new JobManagementApplication(repository, new CapturingTelemetry(), clock);
@@ -213,28 +216,30 @@ public sealed class PhysicalJobAndAuditTests
 
         var firstId = $"job-activity-a-{suffix}";
         var secondId = $"job-activity-b-{suffix}";
-        await app.ScheduleJobAsync(Activity(firstId, $"key-a-{suffix}", "document-version-a"));
+        await app.ScheduleJobAsync(Activity(firstId, $"key-a-{suffix}", "document-version-a",
+            JobTestContext.Security(customerId)));
         clock.Advance(TimeSpan.FromMinutes(1));
-        await app.ScheduleJobAsync(Activity(secondId, $"key-b-{suffix}", "document-version-b"));
+        await app.ScheduleJobAsync(Activity(secondId, $"key-b-{suffix}", "document-version-b",
+            JobTestContext.Security(customerId)));
         await app.ScheduleJobAsync(JobTestContext.Schedule($"job-unrelated-{suffix}", $"key-u-{suffix}"));
         await app.ScheduleJobAsync(Activity($"job-other-{suffix}", $"key-o-{suffix}", "document-version-other",
-            JobTestContext.Security("customer-other")));
+            JobTestContext.Security(otherCustomerId)));
 
         var listed = await repository.ListCustomerAsync(
-            JobTestContext.CustomerId, "document-processing", 20, default);
+            customerId, "document-processing", 20, default);
 
         Assert.Equal(2, listed.Count);
         Assert.Equal(secondId, listed[0].JobId);
         Assert.Equal(firstId, listed[1].JobId);
         Assert.All(listed, job =>
         {
-            Assert.Equal(JobTestContext.CustomerId, job.CustomerId);
+            Assert.Equal(customerId, job.CustomerId);
             Assert.Equal("document-processing", job.JobName);
         });
         var other = await repository.ListCustomerAsync(
-            "customer-other", "document-processing", 20, default);
+            otherCustomerId, "document-processing", 20, default);
         Assert.Single(other);
-        Assert.Equal("customer-other", other[0].CustomerId);
+        Assert.Equal(otherCustomerId, other[0].CustomerId);
     }
 
     [Fact, Trait("Category", "Physical")]
