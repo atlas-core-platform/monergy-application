@@ -1,0 +1,87 @@
+services:
+  postgres:
+    ports:
+      - '127.0.0.1:55651:5432'
+  customer-identity:
+    environment:
+      SSL_CERT_FILE: /run/cohort-o/ca-bundle.pem
+    volumes:
+      - type: bind
+        source: '${COHORT_O_PRIVATE_ROOT}/ca-bundle.pem'
+        target: /run/cohort-o/ca-bundle.pem
+        read_only: true
+  integration-gateway:
+    environment:
+      SSL_CERT_FILE: /run/cohort-o/ca-bundle.pem
+    volumes:
+      - type: bind
+        source: '${COHORT_O_PRIVATE_ROOT}/ca-bundle.pem'
+        target: /run/cohort-o/ca-bundle.pem
+        read_only: true
+    depends_on:
+      qa-provider-fixture:
+        condition: service_started
+  smtp-fixture:
+    image: monergy-local-uat:${COMPOSE_PROJECT_NAME}
+    pull_policy: never
+    user: '${UAT_UID:-1654}'
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=16m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    restart: unless-stopped
+    network_mode: service:workspace
+    entrypoint: [dotnet]
+    command: [/fixture/CohortNSmtpFixture.dll, --port, '2525', --certificate, /run/cohort-o/smtp-server.pfx, --authentication, /run/cohort-o/smtp-auth.json, --mailbox, /mailbox]
+    volumes:
+      - type: bind
+        source: '${COHORT_O_SMTP_BINARY_ROOT}'
+        target: /fixture
+        read_only: true
+      - type: bind
+        source: '${COHORT_O_PRIVATE_ROOT}/smtp-server.pfx'
+        target: /run/cohort-o/smtp-server.pfx
+        read_only: true
+      - type: bind
+        source: '${COHORT_O_PRIVATE_ROOT}/smtp-auth.json'
+        target: /run/cohort-o/smtp-auth.json
+        read_only: true
+      - type: bind
+        source: '${COHORT_O_MAILBOX_ROOT}'
+        target: /mailbox
+    depends_on:
+      workspace:
+        condition: service_started
+  qa-provider-fixture:
+    image: monergy-local-uat:${COMPOSE_PROJECT_NAME}
+    pull_policy: never
+    user: '${UAT_UID:-1654}'
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=16m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    restart: unless-stopped
+    networks:
+      default:
+        aliases: [cohort-o-provider]
+    entrypoint: [dotnet]
+    command: [/fixture/CohortOProviderFixture.dll, '8443', /run/cohort-o/provider-server.pfx, /run/cohort-o/provider-auth.json, /receipts/provider-calls.ndjson]
+    volumes:
+      - type: bind
+        source: '${COHORT_O_PROVIDER_BINARY_ROOT}'
+        target: /fixture
+        read_only: true
+      - type: bind
+        source: '${COHORT_O_PRIVATE_ROOT}/provider-server.pfx'
+        target: /run/cohort-o/provider-server.pfx
+        read_only: true
+      - type: bind
+        source: '${COHORT_O_PRIVATE_ROOT}/provider-auth.json'
+        target: /run/cohort-o/provider-auth.json
+        read_only: true
+      - type: bind
+        source: '${COHORT_O_PROVIDER_RECEIPT_ROOT}'
+        target: /receipts
+    depends_on:
+      workspace:
+        condition: service_started

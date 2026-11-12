@@ -166,12 +166,22 @@ public sealed class DocumentVaultTests
             builder.Services.AddSingleton(new TenantAccessClient(config, new HttpClient(authority)));
             builder.Services.AddSingleton(new TenantBoundaryOptions { Service = "evidence", CapabilityPrefix = "evidence.", ProbeUrl = "http://127.0.0.1:5111/", CustomerTenants = new Dictionary<string, string> { ["customer-one"] = "T001", ["foreign-customer"] = "T002" } });
             builder.Services.AddSingleton<IDocumentVaultRepository>(repo); builder.Services.AddSingleton<IEvidenceRepository>(repo);
-            var content = new ReferenceEvidenceContentStore(); builder.Services.AddSingleton(content);
+            var content = new ReferenceEvidenceContentStore(); builder.Services.AddSingleton<IEvidenceIntakeStore>(new Intake(content));
             builder.Services.AddSingleton(new EvidenceApplication(repo, content, new CapturingTelemetry(), TimeProvider.System));
             var app = builder.Build(); app.MapDocumentVault(); app.MapKycEvidence(); await app.StartAsync();
             var url = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single(); var client = new HttpClient { BaseAddress = new Uri(url) };
             client.DefaultRequestHeaders.Add("X-Monergy-Tenant", "T001"); client.DefaultRequestHeaders.Add("X-Monergy-Session", "session-one"); return new(app, client, authority, repo, content);
         }
         public async ValueTask DisposeAsync() { client.Dispose(); await app.DisposeAsync(); }
+    }
+    private sealed class Intake(ReferenceEvidenceContentStore inner) : IEvidenceIntakeStore
+    {
+        public Task<EvidenceContentDescriptor> StageScannedAsync(string operationId, byte[] bytes, string contentType,
+            EvidenceMalwareCheck check, EvidenceSourceLocation? source, CancellationToken ct) =>
+            inner.StageScannedAsync(operationId, bytes, contentType, check, source, ct);
+        public Task<byte[]?> ReadRegisteredAsync(EvidenceVersionRecord version, CancellationToken ct) =>
+            inner.ReadRegisteredAsync(version, ct);
+        public Task<EvidenceContentDescriptor?> GetDescriptorAsync(string reference, CancellationToken ct) =>
+            inner.GetDescriptorAsync(reference, ct);
     }
 }

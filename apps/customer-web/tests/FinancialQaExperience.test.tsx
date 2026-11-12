@@ -88,6 +88,14 @@ it('renders insufficient-data history without fabricated facts', async () => {
   mount(api); expect(await screen.findByText('Insufficient source information.')).toBeVisible(); expect(screen.queryByText('Salary source 100 USD')).not.toBeInTheDocument();
   expect(screen.getByText('Insufficient information')).toBeVisible();
 });
+it('renders only the owner-defined incomplete calculation marker for an insufficient summary', async () => {
+  const api = new AccessApi(session); const incomplete = { ...answer.claims[0], id: 'calculation-incomplete', kind: 'Calculation', text: 'Financial Rules could not calculate net worth.', documentVersionId: '', calculationId: 'networth-incomplete' };
+  const request = vi.spyOn(api, 'product').mockImplementation(path => Promise.resolve(path.endsWith('/configuration') ? configuration : [{ ...answer, state: 'INSUFFICIENT_DATA', introduction: 'Insufficient source information.', claims: [incomplete] }]));
+  mount(api); expect(await screen.findByText(incomplete.text)).toBeVisible(); expect(screen.getByText('Insufficient information')).toBeVisible();
+  cleanup(); request.mockRestore();
+  const invalidApi = new AccessApi(session); vi.spyOn(invalidApi, 'product').mockImplementation(path => Promise.resolve(path.endsWith('/configuration') ? configuration : [{ ...answer, state: 'INSUFFICIENT_DATA', claims: [{ ...incomplete, id: 'invented-total' }] }]));
+  mount(invalidApi); expect(await screen.findByText(/Q&A could not be loaded/)).toBeVisible(); expect(screen.queryByText(incomplete.text)).not.toBeInTheDocument();
+});
 it('renders a safe unsupported result without citations and rejects unsupported results carrying claims', async () => {
   const api = new AccessApi(session); const request = vi.spyOn(api, 'product').mockImplementation(path => Promise.resolve(path.endsWith('/configuration') ? configuration : [{ ...answer, state: 'UNSUPPORTED', introduction: 'This request could not be safely grounded.', claims: [] }]));
   mount(api); expect(await screen.findByText('Unsupported request')).toBeVisible(); expect(screen.getByText('This request could not be safely grounded.')).toBeVisible(); expect(screen.queryByRole('link', { name: 'Open source document version' })).not.toBeInTheDocument();

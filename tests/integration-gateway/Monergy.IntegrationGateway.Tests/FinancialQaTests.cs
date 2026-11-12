@@ -187,6 +187,8 @@ public sealed partial class FinancialQaTests
                 Vs02ContractNames.GetEvidenceReference => new EvidenceReference("evidence-1","document-1","version-1","customer","reference://private","hash","text/plain"),
                 _ => throw new InvalidOperationException()
             };
+            if (name == Vs02ContractNames.GetEvidenceReference)
+                Assert.Equal("/contracts/cid-022/v1", request.RequestUri!.AbsolutePath);
             return new(HttpStatusCode.OK) { Content=System.Net.Http.Json.JsonContent.Create(new {
                 contractName=name, contractVersion=body.GetProperty("contractVersion").GetString(), requestId=body.GetProperty("requestId").GetString(),
                 correlationId=body.GetProperty("correlationId").GetString(), outcome="Success",data,error=(object?)null },options:ContractJson.Options) };

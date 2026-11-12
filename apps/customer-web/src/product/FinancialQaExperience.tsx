@@ -12,9 +12,11 @@ interface Answer { answerId: string; operationId: string; question: string; stat
 interface View { scope: string; configuration?: Configuration; answers: Answer[]; error: string; busy: boolean }
 const uuid = () => crypto.randomUUID().replaceAll('-', '');
 function validAnswer(answer: Answer | null | undefined) {
+  const incompleteClaims = answer?.state === 'INSUFFICIENT_DATA' && answer.claims.length <= 2 &&
+    answer.claims.every(claim => ['Calculation', 'MonthlyCalculation'].includes(claim.kind) && claim.id.endsWith('-incomplete'));
   return answer && /^[a-f0-9]{32}$/.test(answer.answerId) && ['SOURCES', 'INSUFFICIENT_DATA', 'UNSUPPORTED', 'NOT_COMPLETED'].includes(answer.state) &&
     typeof answer.question === 'string' && typeof answer.introduction === 'string' && Array.isArray(answer.claims) && answer.claims.length <= 10 &&
-    (answer.state === 'SOURCES' ? answer.claims.length > 0 : answer.claims.length === 0) && new Set(answer.claims.map(claim => claim.id)).size === answer.claims.length &&
+    (answer.state === 'SOURCES' ? answer.claims.length > 0 : answer.state === 'INSUFFICIENT_DATA' ? answer.claims.length === 0 || incompleteClaims : answer.claims.length === 0) && new Set(answer.claims.map(claim => claim.id)).size === answer.claims.length &&
     Number.isFinite(Date.parse(answer.recordedAt)) && answer.claims.every((c: Claim | null) => c != null && ['FinancialFact', 'DocumentExcerpt', 'Calculation', 'MonthlyCalculation'].includes(c.kind) && typeof c.text === 'string' &&
       typeof c.id === 'string' && c.id.length > 0 && typeof c.sourceId === 'string' && typeof c.documentVersionId === 'string' && Number.isInteger(c.revision) && c.revision > 0);
 }

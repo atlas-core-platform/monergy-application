@@ -10,7 +10,7 @@ public static class KycEvidenceEndpoints
     public static void MapKycEvidence(this WebApplication app)
     {
         app.MapGet("/local/v1/customers/{customerId}/kyc-evidence/{versionId}", async (string customerId, string versionId, HttpContext http,
-            TenantAccessClient access, TenantBoundaryOptions bindings, IEvidenceRepository repo) =>
+            TenantAccessClient access, TenantBoundaryOptions bindings, IEvidenceRepository repo, IEvidenceIntakeStore content) =>
         {
             http.Response.Headers.CacheControl = "no-store";
             try
@@ -24,8 +24,7 @@ public static class KycEvidenceEndpoints
                 var row = await repo.GetVersionAsync(versionId,http.RequestAborted);
                 if (row is null || row.CustomerId != customerId || row.TenantId != tenant) throw new TenantBoundaryException("KYC_EVIDENCE_NOT_FOUND",404);
                 if (row.ContentType is not ("application/pdf" or "image/png" or "image/jpeg") || row.MalwareCheck is null) throw new TenantBoundaryException("KYC_EVIDENCE_UNSUPPORTED",422);
-                var content = http.RequestServices.GetService<ReferenceEvidenceContentStore>();
-                var bytes = content is null ? null : await content.ReadBytesAsync(row.ContentReference,http.RequestAborted);
+                var bytes = await content.ReadRegisteredAsync(row,http.RequestAborted);
                 if (bytes is null || bytes.Length is <1 or >1_048_576 || Convert.ToHexStringLower(SHA256.HashData(bytes)) != row.ContentSha256) throw new TenantBoundaryException("KYC_EVIDENCE_UNAVAILABLE",503);
                 var after = await access.EvaluateCustomerAsync(http,"evidence.document.read",customerId);
                 if (after.Outcome != "Allow" || before.ActorId != after.ActorId || before.SubjectVersion != after.SubjectVersion || before.PolicyVersion != after.PolicyVersion || before.CustomerVersion != after.CustomerVersion || before.ConsentVersion != after.ConsentVersion) throw new TenantBoundaryException("ACCESS_CHANGED",403);
