@@ -158,6 +158,15 @@ static string? Route(string path, string method)
         path == "/identity-api/local/v1/administration/sessions" && method == "GET")
         return "http://127.0.0.1:5101" + path[13..];
     const string cases = "/case-api/local/v1/cases";
+    const string advisorCases = "/case-api/local/v1/cases/advisor/customers/";
+    if (path.StartsWith(advisorCases, StringComparison.Ordinal))
+    {
+        var parts = path[advisorCases.Length..].Split('/');
+        if (parts.Length == 2 && TenantAccessClient.Identifier(parts[0], 128) &&
+            (parts[1] == "engagement" && method == "GET" ||
+             parts[1] is "notes" or "communications" or "application-stage" && method == "POST"))
+            return "http://127.0.0.1:5120" + path[9..];
+    }
     if (path is "/case-api/local/v1/cases/context" or "/case-api/local/v1/cases/work" && method == "GET" ||
         path == cases + "/me" && method is "GET" or "POST")
         return "http://127.0.0.1:5120" + path[9..];

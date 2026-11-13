@@ -5,11 +5,12 @@ import { FoundationProvider, WorkspaceIcon } from '@monergy/ui-foundation';
 import { AccessApiError, displayError } from './accessApi';
 import type { AccessRecord, ResourceDirectoryItem } from './accessApi';
 import { localUat, useWorkspaceSession } from './workspaceSession';
-import { OnboardingContext } from './onboarding';
-import type {
-  DefaultAccessPackAdoptionResult,
-  DefaultAccessPackPlan,
-  TenantSetupState,
+import {
+  CURRENT_DEFAULT_ACCESS_PACK_VERSION,
+  OnboardingContext,
+  type DefaultAccessPackAdoptionResult,
+  type DefaultAccessPackPlan,
+  type TenantSetupState,
 } from './onboarding';
 import { ImportDrawer } from './ImportDrawer';
 import './onboarding.css';
@@ -115,7 +116,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
             : null;
         if (
           packPlan &&
-          (packPlan.targetVersion !== '2.5' ||
+          (packPlan.targetVersion !== CURRENT_DEFAULT_ACCESS_PACK_VERSION ||
             packPlan.policyVersion !== state.policyVersion ||
             !/^[0-9a-f]{64}$/.test(packPlan.planHash))
         )
@@ -238,7 +239,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
       case 'UPDATE_PERMISSION':
         return `Update access permission: ${before?.[1] ?? 'current permission'} → ${after?.[1] ?? 'recommended permission'}`;
       case 'SET_PACK_VERSION':
-        return `Recommended access model: version ${change.before ?? 'current'} → ${change.after ?? packPlan?.targetVersion ?? '2.5'}`;
+        return `Recommended access model: version ${change.before ?? 'current'} → ${change.after ?? packPlan?.targetVersion ?? CURRENT_DEFAULT_ACCESS_PACK_VERSION}`;
       default:
         return 'Update the recommended access configuration';
     }
@@ -345,7 +346,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                       showIcon
                       type="info"
                       title="Recommended access update available"
-                      description={`Review the changes from version ${pack?.installedVersion ?? 'not installed'} to ${packPlan?.targetVersion ?? '2.5'}. Existing people, customer assignments and organization-owned custom access remain unchanged unless the reviewed plan says otherwise.`}
+                      description={`Review the changes from version ${pack?.installedVersion ?? 'not installed'} to ${packPlan?.targetVersion ?? CURRENT_DEFAULT_ACCESS_PACK_VERSION}. Existing people, customer assignments and organization-owned custom access remain unchanged unless the reviewed plan says otherwise.`}
                     />
                     <section aria-label="Recommended access update review">
                       <h3>Review changes</h3>
@@ -602,7 +603,9 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
                         {
                           key: 'access',
                           label: 'Recommended access',
-                          children: pack?.ready ? 'Version 2.5 confirmed' : 'Needs attention',
+                          children: pack?.ready
+                            ? `Version ${CURRENT_DEFAULT_ACCESS_PACK_VERSION} confirmed`
+                            : 'Needs attention',
                         },
                         {
                           key: 'people',

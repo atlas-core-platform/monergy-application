@@ -30,6 +30,10 @@ const accessPage = (overrides: Record<string, unknown> = {}) => ({
   tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
   items: [access(overrides)],
 });
+const engagement = (overrides: Record<string, unknown> = {}) => ({
+  customerId: 'C001', version: 0, applicationStage: 'Not started', updatedAt: null,
+  activities: [], dataDurability: 'Durable test data', ...overrides,
+});
 function mount() {
   return render(
     <FoundationProvider appearance="midnight">
@@ -48,6 +52,7 @@ function owner(contextStatus = 200, foreignActor = false) {
       subjectVersion: 3, customers: [],
     }));
     if (url.endsWith('/access-requests')) return Promise.resolve(json(accessPage()));
+    if (url.endsWith('/advisor/customers/C001/engagement')) return Promise.resolve(json(engagement()));
     if (url.endsWith('/advisor/context')) return Promise.resolve(json(
       contextStatus === 200 ? { ...advisor(), ...(foreignActor ? { actorId: 'A100' } : {}) }
         : { error: 'ADVISOR_ROLE_REQUIRED' }, contextStatus));
@@ -135,7 +140,7 @@ it('shows a read-only reviewed financial fact only after a consent-authorized cu
     return mock(url);
   });
   mount(); await connect();
-  await userEvent.click(await screen.findByRole('button', { name: 'Review information' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Open customer workspace' }));
   expect(await screen.findByText('Reviewed income')).toBeVisible();
   expect(screen.getByText(/Source: Reviewed income document/)).toBeVisible();
   expect(screen.getAllByText('Verified Customer').length).toBeGreaterThan(0);
@@ -158,10 +163,53 @@ it('fails closed when the owner revokes financial access after listing the assig
     return fallback(url);
   });
   mount(); await connect();
-  await userEvent.click(await screen.findByRole('button', { name: 'Review information' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Open customer workspace' }));
   await waitFor(() => { expect(requests.mock.calls.some(([url]) => url.endsWith('/advisor/customers/C001/financial-profile'))).toBe(true); });
   expect(screen.queryByText('Financial information (read only)')).not.toBeInTheDocument();
   expect(screen.queryByText('Reviewed income')).not.toBeInTheDocument();
+});
+it('records only governed advisor activity for a currently authorized assigned customer', async () => {
+  vi.stubGlobal('crypto', { randomUUID: () => 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee' });
+  const requests = owner();
+  const fallback = requests.getMockImplementation();
+  if (!fallback) throw Error('Missing owner mock');
+  requests.mockImplementation((url: string, options?: RequestInit) => {
+    if (url.endsWith('/access-requests')) return Promise.resolve(json(accessPage({
+      requestId: 'c'.repeat(32), state: 'Fulfilled', hasAccess: true, canRequest: false,
+      decisionAt: new Date().toISOString(), fulfilledAt: new Date().toISOString(),
+    })));
+    if (url.endsWith('/v1/advisor/customers')) return Promise.resolve(json({
+      tenantId: 'T001', actorId: 'A300', policyVersion: 4, subjectVersion: 3,
+      customers: [{ customerId: 'C001', displayName: 'Verified Customer' }],
+    }));
+    if (url.endsWith('/advisor/customers/C001/financial-profile')) return Promise.resolve(json({
+      revision: 1, facts: [{ financialFactId: 'fact-income-1', factType: 'INCOME', label: 'Reviewed income',
+        value: 50000, currency: 'INR', effectiveDate: '2026-10-01', revision: 1,
+        source: { sourceName: 'Reviewed income document' } }],
+    }));
+    if (url.endsWith('/advisor/customers/C001/engagement')) return Promise.resolve(json(engagement()));
+    if (url.endsWith('/advisor/customers/C001/notes') && options?.method === 'POST') {
+      expect(typeof options.body).toBe('string');
+      expect(JSON.parse(options.body as string)).toEqual({
+        operationId: 'e'.repeat(32), expectedVersion: 0,
+        note: 'Prepare affordability discussion', sourceFactIds: ['fact-income-1'],
+      });
+      return Promise.resolve(json(engagement({ version: 1, updatedAt: new Date().toISOString(), activities: [{
+        activityId: 'a'.repeat(32), kind: 'NOTE', body: 'Prepare affordability discussion',
+        sourceFactIds: ['fact-income-1'], applicationStage: null, version: 1,
+        occurredAt: new Date().toISOString(),
+      }] })));
+    }
+    return fallback(url, options);
+  });
+  mount(); await connect();
+  await userEvent.click(await screen.findByRole('button', { name: 'Open customer workspace' }));
+  await userEvent.click(await screen.findByRole('checkbox', { name: 'Reviewed income' }));
+  await userEvent.type(screen.getByLabelText('Advisory note'), 'Prepare affordability discussion');
+  await userEvent.click(screen.getByRole('button', { name: 'Save advisory note' }));
+  expect(await screen.findByText('The source-backed advisory note was recorded.')).toBeVisible();
+  expect(screen.getByText('1 reviewed source reference retained')).toBeVisible();
+  expect(requests.mock.calls.filter(([url]) => url.endsWith('/advisor/customers/C001/notes'))).toHaveLength(1);
 });
 it('never displays an invalid owner customer label', async () => {
   const requests = owner();

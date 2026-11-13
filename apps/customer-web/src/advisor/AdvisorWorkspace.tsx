@@ -1,6 +1,8 @@
-import { Alert, Button, Card, Descriptions, Empty, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Checkbox, Descriptions, Empty, Input, List, Space, Spin, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { useWorkspaceSession } from '../access/workspaceSession';
+import { advisorEngagement, nextAdvisorStage } from './advisorEngagementModels';
+import type { AdvisorEngagement } from './advisorEngagementModels';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -139,6 +141,12 @@ export default function AdvisorWorkspace() {
   const [clients, setClients] = useState<NamedCustomer[]>([]);
   const [selection, setSelection] = useState<NamedCustomer | null>(null);
   const [review, setReview] = useState<FinancialReview | null>(null);
+  const [engagement, setEngagement] = useState<AdvisorEngagement | null>(null);
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [note, setNote] = useState('');
+  const [communication, setCommunication] = useState('');
+  const [activityBusy, setActivityBusy] = useState(false);
+  const [activityNotice, setActivityNotice] = useState('');
   const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
@@ -159,6 +167,7 @@ export default function AdvisorWorkspace() {
       setClients([]);
       setSelection(null);
       setReview(null);
+      setEngagement(null);
       setNotice('');
       return api.product<unknown>('v1/advisor/customers', 'GET', undefined, abort.signal);
     }).then(data => {
@@ -205,13 +214,23 @@ export default function AdvisorWorkspace() {
     setLoading(true);
     setNotice('');
     setReview(null);
+    setEngagement(null);
+    setSelectedSources([]);
+    setNote('');
+    setCommunication('');
+    setActivityNotice('');
     setSelection(null);
     try {
-      const received = await api.product<unknown>(
-        'v1/advisor/customers/' + encodeURIComponent(customer.customerId) + '/financial-profile');
+      const customerPath = encodeURIComponent(customer.customerId);
+      const [received, engagementResponse] = await Promise.all([
+        api.product<unknown>('v1/advisor/customers/' + customerPath + '/financial-profile'),
+        api.case<unknown>('advisor/customers/' + customerPath + '/engagement'),
+      ]);
       const value = financialReview(received);
+      const work = advisorEngagement(engagementResponse, customer.customerId);
       setSelection(customer);
       setReview(value);
+      setEngagement(work);
     } catch {
       setNotice('Financial information is unavailable or access has changed. Review the assignment and current consent.');
     } finally {
@@ -234,6 +253,45 @@ export default function AdvisorWorkspace() {
     } finally {
       setAccessBusy(false);
     }
+  }
+
+  async function mutateEngagement(path: string, body: Record<string, unknown>, success: string): Promise<boolean> {
+    if (!api || !selection || !engagement || activityBusy) return false;
+    setActivityBusy(true);
+    setActivityNotice('');
+    try {
+      const value = await api.case<unknown>('advisor/customers/' + encodeURIComponent(selection.customerId) + '/' + path,
+        'POST', { operationId: newOperationId(), expectedVersion: engagement.version, ...body });
+      setEngagement(advisorEngagement(value, selection.customerId));
+      setActivityNotice(success);
+      return true;
+    } catch {
+      setActivityNotice('The update was not confirmed. Access or this workspace may have changed; refresh the customer before retrying.');
+      return false;
+    } finally { setActivityBusy(false); }
+  }
+
+  async function saveNote() {
+    if (!note.trim() || selectedSources.length === 0) return;
+    if (await mutateEngagement('notes', { note: note.trim(), sourceFactIds: selectedSources },
+      'The source-backed advisory note was recorded.')) {
+      setNote('');
+      setSelectedSources([]);
+    }
+  }
+
+  async function recordCommunication() {
+    if (!communication.trim()) return;
+    if (await mutateEngagement('communications', { message: communication.trim() },
+      'The customer communication was recorded. No external message was sent.'))
+      setCommunication('');
+  }
+
+  async function advanceApplication() {
+    if (!engagement) return;
+    const stage = nextAdvisorStage(engagement.applicationStage);
+    if (!stage) return;
+    await mutateEngagement('application-stage', { stage }, 'The application preparation stage was updated.');
   }
 
   return (
@@ -278,7 +336,7 @@ export default function AdvisorWorkspace() {
             description="The capability is visible, but an Organization Administrator cannot grant it in its current configuration." />}
       </Card>
 
-      <Card title="Customers available for review" className="mt-4"
+      <Card title="Assigned customer work queue" className="mt-4"
         extra={<Button type="link" disabled={loading} onClick={() => { setRefresh(value => value + 1); }}>Refresh access</Button>}>
         {loading && <Spin aria-label="Checking customer access" />}
         {notice && <Alert type="warning" showIcon title={notice} />}
@@ -288,7 +346,7 @@ export default function AdvisorWorkspace() {
             <div key={customer.customerId} role="listitem"
               className="flex items-center justify-between gap-4 border-b border-solid border-border px-2 py-4 last:border-b-0">
               <Text strong>{customer.displayName}</Text>
-              <Button onClick={() => { void openReview(customer); }} disabled={loading}>Review information</Button>
+              <Button onClick={() => { void openReview(customer); }} disabled={loading}>Open customer workspace</Button>
             </div>
           ))}
         </div>
@@ -303,7 +361,12 @@ export default function AdvisorWorkspace() {
                 <div role="listitem" key={fact.financialFactId}
                   className="border-b border-solid border-border px-2 py-4 last:border-b-0">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Text strong>{fact.label}</Text>
+                    <Checkbox checked={selectedSources.includes(fact.financialFactId)}
+                      onChange={event => { setSelectedSources(previous => event.target.checked
+                        ? [...previous, fact.financialFactId]
+                        : previous.filter(value => value !== fact.financialFactId)); }}>
+                      <Text strong>{fact.label}</Text>
+                    </Checkbox>
                     <Tag>{categories[fact.factType] ?? 'Financial information'}</Tag>
                   </div>
                   <div className="mt-2"><Text>{amount(fact)}</Text></div>
@@ -312,6 +375,60 @@ export default function AdvisorWorkspace() {
               ))}
             </div>}
       </Card>}
+
+      {review && selection && engagement && <>
+        <Card title="Source-backed analysis preparation" className="mt-4"
+          extra={<Tag>{selectedSources.length} source{selectedSources.length === 1 ? '' : 's'} selected</Tag>}>
+          <Paragraph>Select one or more reviewed facts above, then record a bounded advisory note. Only source references—not copied financial values—are retained in the activity history.</Paragraph>
+          <Input.TextArea aria-label="Advisory note" value={note} maxLength={600} rows={3}
+            onChange={event => { setNote(event.target.value); }}
+            placeholder="Record the analysis preparation or customer follow-up needed." />
+          <Button className="mt-3" type="primary" loading={activityBusy}
+            disabled={activityBusy || !note.trim() || selectedSources.length === 0}
+            onClick={() => { void saveNote(); }}>Save advisory note</Button>
+        </Card>
+
+        <Card title="Customer communication" className="mt-4">
+          <Alert type="info" showIcon title="Communication record only"
+            description="This records what should be communicated in the governed activity history. It does not send email, SMS or a notification." />
+          <Input.TextArea className="mt-3" aria-label="Customer communication" value={communication} maxLength={600} rows={3}
+            onChange={event => { setCommunication(event.target.value); }}
+            placeholder="Record the customer-ready update or information request." />
+          <Button className="mt-3" loading={activityBusy} disabled={activityBusy || !communication.trim()}
+            onClick={() => { void recordCommunication(); }}>Record communication</Button>
+        </Card>
+
+        <Card title="Application preparation" className="mt-4"
+          extra={<Tag color={engagement.applicationStage === 'Ready for submission' ? 'success' : 'processing'}>
+            {engagement.applicationStage}</Tag>}>
+          <Paragraph>Track preparation only. Underwriting, approval, pricing and lender decisions are outside this workspace.</Paragraph>
+          {nextAdvisorStage(engagement.applicationStage) && <Button loading={activityBusy} disabled={activityBusy}
+            onClick={() => { void advanceApplication(); }}>
+            Move to {nextAdvisorStage(engagement.applicationStage)}
+          </Button>}
+          {!nextAdvisorStage(engagement.applicationStage) &&
+            <Alert type="success" showIcon title="Ready for separate submission" description="No lender decision has been made." />}
+        </Card>
+
+        <Card title="Governed activity history" className="mt-4"
+          extra={<Tag>{engagement.dataDurability}</Tag>}>
+          {activityNotice && <Alert className="mb-4" showIcon
+            type={activityNotice.includes('not confirmed') ? 'warning' : 'success'} title={activityNotice} />}
+          {engagement.activities.length === 0 ? <Empty description="No advisory activity has been recorded." /> :
+            <List dataSource={[...engagement.activities].reverse()} renderItem={activity => <List.Item>
+              <Space orientation="vertical" size={0}>
+                <Text strong>{activity.kind === 'NOTE' ? 'Advisory note' :
+                  activity.kind === 'COMMUNICATION' ? 'Customer communication' : 'Application stage'}</Text>
+                {activity.body && <Text>{activity.body}</Text>}
+                {activity.applicationStage && <Text>{activity.applicationStage}</Text>}
+                {activity.sourceFactIds.length > 0 && <Text type="secondary">
+                  {activity.sourceFactIds.length} reviewed source reference{activity.sourceFactIds.length === 1 ? '' : 's'} retained
+                </Text>}
+                <Text type="secondary">{date(activity.occurredAt)}</Text>
+              </Space>
+            </List.Item>} />}
+        </Card>
+      </>}
     </main>
   );
 }

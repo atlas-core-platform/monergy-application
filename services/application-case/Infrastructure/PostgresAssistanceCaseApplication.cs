@@ -220,7 +220,7 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
             var valid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
                 SELECT EXISTS(
                     SELECT 1 FROM application_case.tenant_identity
-                    WHERE singleton AND tenant_id=@Tenant AND schema_version=1)
+                    WHERE singleton AND tenant_id=@Tenant AND schema_version=2)
                   AND has_table_privilege(current_user,'application_case.assistance_cases','SELECT,INSERT')
                   AND has_column_privilege(current_user,'application_case.assistance_cases','state','UPDATE')
                   AND has_column_privilege(current_user,'application_case.assistance_cases','version','UPDATE')
@@ -228,6 +228,12 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
                   AND has_column_privilege(current_user,'application_case.assistance_cases','accepted_by','UPDATE')
                   AND has_table_privilege(current_user,'application_case.assistance_case_operations','SELECT,INSERT')
                   AND has_table_privilege(current_user,'application_case.assistance_case_events','SELECT,INSERT')
+                  AND has_table_privilege(current_user,'application_case.advisor_engagements','SELECT,INSERT')
+                  AND has_column_privilege(current_user,'application_case.advisor_engagements','version','UPDATE')
+                  AND has_column_privilege(current_user,'application_case.advisor_engagements','application_stage','UPDATE')
+                  AND has_column_privilege(current_user,'application_case.advisor_engagements','updated_at','UPDATE')
+                  AND has_table_privilege(current_user,'application_case.advisor_engagement_activities','SELECT,INSERT')
+                  AND has_table_privilege(current_user,'application_case.advisor_engagement_operations','SELECT,INSERT')
                   AND NOT has_schema_privilege(current_user,'application_case','CREATE')
                   AND NOT has_schema_privilege(current_user,'public','CREATE')
                   AND NOT has_database_privilege(current_user,current_database(),'CREATE')
@@ -235,6 +241,11 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
                   AND NOT has_table_privilege(current_user,'application_case.assistance_cases','DELETE,TRUNCATE')
                   AND NOT has_table_privilege(current_user,'application_case.assistance_case_operations','UPDATE,DELETE,TRUNCATE')
                   AND NOT has_table_privilege(current_user,'application_case.assistance_case_events','UPDATE,DELETE,TRUNCATE')
+                  AND NOT has_table_privilege(current_user,'application_case.advisor_engagements','DELETE,TRUNCATE')
+                  AND NOT has_column_privilege(current_user,'application_case.advisor_engagements','customer_id','UPDATE')
+                  AND NOT has_column_privilege(current_user,'application_case.advisor_engagements','advisor_actor_id','UPDATE')
+                  AND NOT has_table_privilege(current_user,'application_case.advisor_engagement_activities','UPDATE,DELETE,TRUNCATE')
+                  AND NOT has_table_privilege(current_user,'application_case.advisor_engagement_operations','UPDATE,DELETE,TRUNCATE')
                   AND NOT EXISTS(
                     SELECT 1 FROM pg_roles WHERE rolname=current_user
                     AND (rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication));
@@ -262,7 +273,7 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
         return row ?? throw new ApplicationCaseException("CASE_NOT_FOUND", 404);
     }
 
-    private static Task LockAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+    private static Task<int> LockAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         string value, CancellationToken ct) => connection.ExecuteAsync(Command(
             "SELECT pg_advisory_xact_lock(hashtextextended(@Value,0));",
             new { Value = value }, transaction, ct));
@@ -275,7 +286,7 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
             WHERE tenant_id=@Tenant AND actor_id=@Actor AND operation_id=@Operation;
             """, new { Tenant = context.TenantId, Actor = context.ActorId, Operation = operation }, transaction, ct));
 
-    private static Task InsertOperationAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+    private static Task<int> InsertOperationAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         CaseActorContext context, string operation, string caseId, string action, CancellationToken ct) =>
         connection.ExecuteAsync(Command("""
             INSERT INTO application_case.assistance_case_operations(
@@ -284,7 +295,7 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
             """, new { Tenant = context.TenantId, Actor = context.ActorId, Operation = operation,
                 Case = caseId, Action = action }, transaction, ct));
 
-    private static Task InsertEventAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
+    private static Task<int> InsertEventAsync(NpgsqlConnection connection, NpgsqlTransaction transaction,
         CaseRow row, string action, DateTimeOffset occurredAt, CancellationToken ct) =>
         connection.ExecuteAsync(Command("""
             INSERT INTO application_case.assistance_case_events(

@@ -770,7 +770,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4','2.5','2.6')) {
+            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4','2.5','2.6','2.7')) {
                 throw 'The Access Management owner has not confirmed a supported Default Access Pack.'
             }
 
@@ -792,6 +792,36 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
         }
     }
     Save-Text 'p3-case-policy-initialized' $state.instanceId
+    Protect-Files
+}
+if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-advisor-policy-2-7-initialized'))) {
+    foreach ($tenantId in @('T001','T002')) {
+        $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        try {
+            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
+            if ($pack.installedVersion -ne '2.7') {
+                $plan = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/plan" -Headers $headers -TimeoutSec 15
+                if ($plan.targetVersion -ne '2.7' -or $plan.alreadyInstalled -or @($plan.conflicts).Count -ne 0) {
+                    throw "Default Access Pack 2.7 cannot be adopted safely for $tenantId."
+                }
+                $adoption = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/adopt" -Method Post -ContentType 'application/json' -Headers $headers -Body (@{
+                    expectedPolicyVersion=$plan.policyVersion
+                    operationId='p3-advisor-policy-2-7'
+                    planHash=$plan.planHash
+                }|ConvertTo-Json) -TimeoutSec 30
+                if ($adoption.packVersion -ne '2.7') { throw "Default Access Pack adoption returned an unexpected version for $tenantId." }
+            }
+            $confirmed = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
+            if ($confirmed.installedVersion -ne '2.7' -or $confirmed.installedIdentity -ne 'monergy-default-access-pack/2.7') {
+                throw "Default Access Pack 2.7 readback failed for $tenantId."
+            }
+        } finally {
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+        }
+    }
+    Save-Text 'p3-advisor-policy-2-7-initialized' $state.instanceId
     Protect-Files
 }
 Write-Host "Local customer workspace is ready: $url/"

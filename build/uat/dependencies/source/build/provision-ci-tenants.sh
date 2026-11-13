@@ -29,9 +29,9 @@ SQL
 done
 for tenant in T001 T002; do
   lower="${tenant,,}"
-  docker exec -i "$container_id" psql -U postgres -d "am_${lower}" -v ON_ERROR_STOP=1 -At <<'SQL' | grep -qx '1|8|15|6'
+  docker exec -i "$container_id" psql -U postgres -d "am_${lower}" -v ON_ERROR_STOP=1 -At <<'SQL' | grep -qx '1|8|16|5'
 SELECT
-  CASE WHEN (SELECT default_access_pack_version FROM am.tenant_identity WHERE singleton)='2.6' THEN 1 ELSE 0 END,
+  CASE WHEN (SELECT default_access_pack_version FROM am.tenant_identity WHERE singleton)='2.7' THEN 1 ELSE 0 END,
   (SELECT count(*) FROM am.roles),
   (SELECT count(*) FROM am.permissions),
   (SELECT count(*) FROM am.roles r WHERE NOT EXISTS (

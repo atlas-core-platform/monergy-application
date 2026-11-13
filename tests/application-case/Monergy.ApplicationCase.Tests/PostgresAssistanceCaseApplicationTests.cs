@@ -27,7 +27,10 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
             await using var owner = new NpgsqlConnection(Required($"P3_APPLICATION_CASE_{tenant}_OWNER"));
             await owner.OpenAsync();
             await owner.ExecuteAsync("""
-                TRUNCATE application_case.assistance_case_events,
+                TRUNCATE application_case.advisor_engagement_activities,
+                    application_case.advisor_engagement_operations,
+                    application_case.advisor_engagements,
+                    application_case.assistance_case_events,
                     application_case.assistance_case_operations,
                     application_case.assistance_cases;
                 """);
@@ -119,11 +122,53 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
             "DELETE FROM application_case.assistance_case_operations;",
             "UPDATE application_case.assistance_cases SET customer_id='forged';",
             "DELETE FROM application_case.assistance_cases;",
+            "UPDATE application_case.advisor_engagement_activities SET body='forged';",
+            "DELETE FROM application_case.advisor_engagement_activities;",
+            "UPDATE application_case.advisor_engagement_operations SET action='NOTE';",
+            "DELETE FROM application_case.advisor_engagement_operations;",
+            "UPDATE application_case.advisor_engagements SET customer_id='forged';",
+            "DELETE FROM application_case.advisor_engagements;",
             "UPDATE application_case.tenant_identity SET tenant_id='T002';",
         }) await Assert.ThrowsAsync<PostgresException>(() => runtime.ExecuteAsync(sql));
     }
 
+    [Fact]
+    public async Task AdvisorEngagementIsDurableIdempotentAndTenantIsolated()
+    {
+        var advisor = Advisor("T001", "A300", "C001");
+        AdvisorEngagementView first;
+        await using (var owner = AdvisorOwner())
+        {
+            first = await owner.AddNoteAsync(advisor,
+                new(Op('d'), 0, "Prepare affordability discussion", ["fact-income-1"]),
+                Confirm(advisor), default);
+            var replay = await owner.AddNoteAsync(advisor,
+                new(Op('d'), 0, "Prepare affordability discussion", ["fact-income-1"]),
+                Confirm(advisor), default);
+            Assert.Equal(1, replay.Version);
+            Assert.Single(replay.Activities);
+        }
+
+        await using var reconstructed = AdvisorOwner();
+        var durable = await reconstructed.ReadAsync(advisor, default);
+        Assert.Equal(first.Version, durable.Version);
+        Assert.Equal("Durable test data", durable.DataDurability);
+        Assert.Equal(["fact-income-1"], Assert.Single(durable.Activities).SourceFactIds);
+        Assert.Equal(0, (await reconstructed.ReadAsync(Advisor("T002", "A300", "C001"), default)).Version);
+
+        var values = ConfigurationValues();
+        values["Monergy:Persistence:ApplicationCase:RuntimeConnections:T002"] =
+            Required("P3_APPLICATION_CASE_T001_RUNTIME");
+        await using var wrong = new PostgresAdvisorEngagementApplication(
+            new ConfigurationBuilder().AddInMemoryCollection(values).Build(), new FixedTimeProvider(Now));
+        Assert.Equal("CASE_BINDING_INVALID", (await Assert.ThrowsAsync<ApplicationCaseException>(() =>
+            wrong.ReadAsync(Advisor("T002", "A300", "C001"), default))).Code);
+    }
+
     private static PostgresAssistanceCaseApplication Owner() => new(
+        new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
+        new FixedTimeProvider(Now));
+    private static PostgresAdvisorEngagementApplication AdvisorOwner() => new(
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
 
@@ -140,8 +185,12 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
         new(tenant, actor, customer, 1, 1, AssistanceCaseApplication.CustomerCapability);
     private static CaseActorContext Dsa(string tenant, string actor) =>
         new(tenant, actor, null, 1, 1, AssistanceCaseApplication.DsaCapability);
+    private static AdvisorEngagementContext Advisor(string tenant, string actor, string customer) =>
+        new(tenant, actor, customer, 1, 1, 1, 1);
     private static string Op(char value) => new(value, 32);
     private static Func<CancellationToken, Task<CaseActorContext>> Confirm(CaseActorContext value) =>
+        _ => Task.FromResult(value);
+    private static Func<CancellationToken, Task<AdvisorEngagementContext>> Confirm(AdvisorEngagementContext value) =>
         _ => Task.FromResult(value);
     private static string Required(string name) => Environment.GetEnvironmentVariable(name)
         ?? throw new InvalidOperationException($"Physical test configuration {name} is required.");
