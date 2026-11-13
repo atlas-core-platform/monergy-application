@@ -1,0 +1,52 @@
+services:
+  postgres:
+    ports:
+      - '127.0.0.1:55661:5432'
+  customer-identity:
+    environment:
+      SSL_CERT_FILE: /run/cohort-p/ca-bundle.pem
+    volumes:
+      - type: bind
+        source: '${COHORT_P_PRIVATE_ROOT}/ca-bundle.pem'
+        target: /run/cohort-p/ca-bundle.pem
+        read_only: true
+  smtp-fixture:
+    image: monergy-local-uat:${COMPOSE_PROJECT_NAME}
+    pull_policy: never
+    user: '${UAT_UID:-1654}'
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=16m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    restart: unless-stopped
+    network_mode: service:workspace
+    entrypoint: [dotnet]
+    command:
+      - /fixture/CohortNSmtpFixture.dll
+      - --port
+      - '2525'
+      - --certificate
+      - /run/cohort-p/smtp-server.pfx
+      - --authentication
+      - /run/cohort-p/smtp-auth.json
+      - --mailbox
+      - /mailbox
+    volumes:
+      - type: bind
+        source: '${COHORT_P_SMTP_BINARY_ROOT}'
+        target: /fixture
+        read_only: true
+      - type: bind
+        source: '${COHORT_P_PRIVATE_ROOT}/smtp-server.pfx'
+        target: /run/cohort-p/smtp-server.pfx
+        read_only: true
+      - type: bind
+        source: '${COHORT_P_PRIVATE_ROOT}/smtp-auth.json'
+        target: /run/cohort-p/smtp-auth.json
+        read_only: true
+      - type: bind
+        source: '${COHORT_P_MAILBOX_ROOT}'
+        target: /mailbox
+    depends_on:
+      workspace:
+        condition: service_started

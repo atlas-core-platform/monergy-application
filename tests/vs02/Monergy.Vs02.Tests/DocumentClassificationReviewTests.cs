@@ -137,6 +137,15 @@ public sealed class DocumentClassificationReviewTests
     { await using var host = await Host.Start(); using var body = new StringContent(json, Encoding.UTF8, "application/json"); Assert.Equal(HttpStatusCode.BadRequest, (await host.Client.PostAsync("customer-001/document-version-001", body)).StatusCode); Assert.Equal(1, (await host.Repository.ReadAsync("T001", "customer-001", "document-version-001", default))!.Revision); }
     [Fact] public async Task LargeReviewBodyIsBoundedBeforeMutation()
     { await using var host = await Host.Start(); using var body = new StringContent(new string('x', 5000), Encoding.UTF8, "application/json"); Assert.Equal(HttpStatusCode.RequestEntityTooLarge, (await host.Client.PostAsync("customer-001/document-version-001", body)).StatusCode); }
+    [Fact] public async Task StorageOutageReturnsSanitizedJson()
+    {
+        await using var host = await Host.Start(repository: new UnavailableRepository());
+        var response = await host.Client.GetAsync("?status=all");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl!.ToString());
+        Assert.Equal(new Dictionary<string, string> { ["error"] = "CLASSIFICATION_STORAGE_UNAVAILABLE" },
+            await response.Content.ReadFromJsonAsync<Dictionary<string, string>>());
+    }
     private static DocumentClassification Row(string version = "document-version-001") => new("T001", "customer-001", version, new('a', 64), ClassificationRules.Version, "UNCLASSIFIED", "NO_SUPPORTED_TITLE", DateTimeOffset.UtcNow, 1, []);
     private static EvidenceContent Source(string text) => new(new("evidence-001", "document-001", "document-version-001", "customer-001", "reference://source", ClassificationRules.Hash(Encoding.UTF8.GetBytes(text)), "text/plain"), text);
     private static DocumentClassifier Classifier(IDocumentClassificationRepository repo) => new(repo, new Recognizer(), new Renderer(), TimeProvider.System);
@@ -153,12 +162,20 @@ public sealed class DocumentClassificationReviewTests
         public int Calls, Status = 200, DenyAfter = int.MaxValue;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) { Calls++; return Task.FromResult(new HttpResponseMessage((HttpStatusCode)(Calls > DenyAfter ? 403 : Status)) { Content = JsonContent.Create(new TenantAdminContext("T001", "A900", 1, "TenantAdmin")) }); }
     }
-    private sealed class Host(WebApplication app, HttpClient client, Authority authority, InMemoryDocumentClassificationRepository repository) : IAsyncDisposable
+    private sealed class UnavailableRepository : IDocumentClassificationRepository
     {
-        public HttpClient Client => client; public Authority Authority => authority; public InMemoryDocumentClassificationRepository Repository => repository;
-        public static async Task<Host> Start(bool allow = true)
+        private static InvalidOperationException Unavailable() => new("Synthetic unavailable storage.");
+        public Task<DocumentClassification> RecordAsync(DocumentClassification candidate, CancellationToken ct) => throw Unavailable();
+        public Task<DocumentClassification?> ReadAsync(string tenant, string customer, string version, CancellationToken ct) => throw Unavailable();
+        public Task<IReadOnlyList<DocumentClassification>> ListAsync(string tenant, bool unknownOnly, string? after, CancellationToken ct) => throw Unavailable();
+        public Task<DocumentClassification> ReviewAsync(string tenant, string customer, string version, string actor, ClassificationChange change, DateTimeOffset now, CancellationToken ct) => throw Unavailable();
+    }
+    private sealed class Host(WebApplication app, HttpClient client, Authority authority, IDocumentClassificationRepository repository) : IAsyncDisposable
+    {
+        public HttpClient Client => client; public Authority Authority => authority; public IDocumentClassificationRepository Repository => repository;
+        public static async Task<Host> Start(bool allow = true, IDocumentClassificationRepository? repository = null)
         {
-            var repo = new InMemoryDocumentClassificationRepository(); await repo.RecordAsync(Row(), default);
+            var memory = new InMemoryDocumentClassificationRepository(); await memory.RecordAsync(Row(), default); var repo = repository ?? memory;
             var config = new ConfigurationManager { ["Monergy:ExecutionZone"] = "CI_EPHEMERAL" }; if (allow) config["Monergy:Classification:Reviewers:T001:0"] = "A900";
             var authority = new Authority(); var builder = WebApplication.CreateBuilder(); builder.Logging.ClearProviders(); builder.WebHost.UseUrls("http://127.0.0.1:0");
             builder.Services.AddSingleton(new TenantAccessClient(config, new HttpClient(authority))); builder.Services.AddSingleton(new ClassificationReviewPolicy(config)); builder.Services.AddSingleton<IDocumentClassificationRepository>(repo); builder.Services.AddSingleton(TimeProvider.System);

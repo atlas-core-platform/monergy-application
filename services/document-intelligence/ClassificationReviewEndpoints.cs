@@ -27,7 +27,8 @@ public static class ClassificationReviewEndpoints
             if (http.Request.ContentLength > 4096) return Results.StatusCode(413);
             try { return await next(context); }
             catch (TenantBoundaryException e) { return Results.Json(new { error = e.Code }, statusCode: e.Status); }
-            catch (Exception e) when (e is HttpRequestException or InvalidOperationException or NpgsqlException) { return Results.StatusCode(503); }
+            catch (Exception e) when (e is HttpRequestException or InvalidOperationException or NpgsqlException)
+            { return Results.Json(new { error = "CLASSIFICATION_STORAGE_UNAVAILABLE" }, statusCode: 503); }
         });
         group.MapGet("", async (HttpContext http, TenantAccessClient access, TenantBoundaryOptions bindings, IDocumentClassificationRepository repository, ClassificationReviewPolicy policy) => {
             var admin = await access.RequireAdministratorAsync(http); var q = http.Request.Query;
