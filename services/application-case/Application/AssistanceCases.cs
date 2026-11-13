@@ -41,7 +41,18 @@ public sealed record AssistanceCaseHistory(
 public sealed record CreateAssistanceCase(string OperationId);
 public sealed record AcceptAssistanceCase(string OperationId, int ExpectedVersion);
 
-public sealed class AssistanceCaseApplication(TimeProvider clock) : IDisposable
+public interface IAssistanceCaseApplication
+{
+    Task<AssistanceCaseView> CreateAsync(CaseActorContext before, CreateAssistanceCase request,
+        Func<CancellationToken, Task<CaseActorContext>> confirm, CancellationToken ct);
+    Task<IReadOnlyList<AssistanceCaseView>> ListCustomerAsync(CaseActorContext context, CancellationToken ct);
+    Task<IReadOnlyList<AssistanceCaseView>> ListDsaAsync(CaseActorContext context, CancellationToken ct);
+    Task<AssistanceCaseView> AcceptAsync(string caseId, CaseActorContext before, AcceptAssistanceCase request,
+        Func<CancellationToken, Task<CaseActorContext>> confirm, CancellationToken ct);
+    Task<AssistanceCaseHistory> HistoryAsync(string caseId, CaseActorContext context, CancellationToken ct);
+}
+
+public sealed class AssistanceCaseApplication(TimeProvider clock) : IAssistanceCaseApplication, IDisposable
 {
     public const string CustomerCapability = "application-case.case.create";
     public const string DsaCapability = "application-case.case.accept";

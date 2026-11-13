@@ -69,7 +69,7 @@ export default function DsaCaseWorkspace() {
           ] : []}>
             <List.Item.Meta title={<Space><Text strong>{item.requestType}</Text>
               <Tag color={item.state === 'Accepted' ? 'success' : 'processing'}>{item.assignedToMe ? 'Assigned to you' : item.state}</Tag></Space>}
-              description={`Submitted ${displayDate(item.createdAt)} · Reference ${item.caseId}`} />
+              description={`Submitted ${displayDate(item.createdAt)} · Reference ${item.caseId} · ${item.dataDurability}`} />
           </List.Item>} />}
       </Card>
     </main>

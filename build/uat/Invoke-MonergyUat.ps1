@@ -121,7 +121,7 @@ if (-not (Test-Path $profileFile)) {
     $databases = @(); $identities = @()
     foreach ($tenantId in @('T001','T002')) {
         $ownerServices = @('am','customer-identity','audit')
-        if ($EnableOnboarding) { $ownerServices += 'consent' }
+        if ($EnableOnboarding) { $ownerServices += @('consent','application-case') }
         foreach ($service in $ownerServices) {
             $databases += @{ service=$service; tenant=$tenantId; name=('uat_'+$service.Replace('-','_')+'_'+$tenantId.ToLowerInvariant()); ownerPassword=(Secret); runtimePassword=(Secret); deliveryPassword=$(if ($service -eq 'am') { Secret } else { $null }) }
         }
@@ -151,17 +151,24 @@ foreach ($name in @('membership','context','provisioning','identityEvent','audit
 }
 $Port = [int]$state.port
 $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
-# P3-01 adds a new reference persona without rotating or replacing any retained
-# profile credential. Existing named profiles receive only the missing A400 key.
+# P3-01 adds a new persona and P3-02 adds its durable owner without rotating or
+# replacing retained credentials. Existing profiles receive only missing keys.
 if ($Action -in @('Prepare','Start')) {
-    $identitiesChanged = $false
+    $profileChanged = $false
     foreach ($tenantId in @('T001','T002')) {
         if (-not @($state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A400' }).Count) {
             $state.identities += [pscustomobject]@{ tenantId=$tenantId; actorId='A400'; token=(Secret) }
-            $identitiesChanged = $true
+            $profileChanged = $true
+        }
+        if ($onboarding -and -not @($state.databases | Where-Object { $_.tenant -eq $tenantId -and $_.service -eq 'application-case' }).Count) {
+            $state.databases += [pscustomobject]@{
+                service='application-case'; tenant=$tenantId; name=('uat_application_case_'+$tenantId.ToLowerInvariant())
+                ownerPassword=(Secret); runtimePassword=(Secret); deliveryPassword=$null
+            }
+            $profileChanged = $true
         }
     }
-    if ($identitiesChanged) { Save-Json 'profile.json' $state; Protect-Files }
+    if ($profileChanged) { Save-Json 'profile.json' $state; Protect-Files }
 }
 if ($EnableCustomerPan -and -not $onboarding) { throw 'Customer PAN requires an onboarding profile.' }
 if ($EnableEmailAccess -and -not $onboarding) { throw 'Customer email access requires an onboarding profile with verified customer ownership.' }
@@ -661,10 +668,17 @@ if ($Action -in @('Prepare','Start')) {
                 EncryptionKey=(Convert-HexToBase64 ([string]$state.tokens.financialQaProtection)) }
         }
         if ($service -eq 'application-case') {
-            $config.Monergy.ReferenceAdapters='true'
+            $config.Monergy.ReferenceAdapters=$(if ($onboarding) { 'false' } else { 'true' })
             $config.Monergy.AccessIntegration=@{ Enabled='true'; CustomerRelationships='true';
                 AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
                 CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
+            if ($onboarding) {
+                $connections=@{}
+                foreach ($db in $state.databases | Where-Object service -eq 'application-case') {
+                    $connections[$db.tenant]=Connection $db 'runtime'
+                }
+                $config.Monergy.Persistence=@{ Provider='POSTGRESQL_S3'; ApplicationCase=@{ RuntimeConnections=$connections } }
+            }
         }
         Save-Json "$service.json" $config
     }

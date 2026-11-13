@@ -15,6 +15,7 @@ const submitted = { caseId: 'case-0123456789abcdef01234567', requestType: 'Finan
   assignedToMe: false, dataDurability: 'Temporary data' } as const;
 const accepted = { ...submitted, state: 'Accepted', version: 2,
   acceptedAt: '2026-10-31T10:01:00Z', assignedToMe: true } as const;
+const durableAccepted = { ...accepted, dataDurability: 'Durable test data' } as const;
 
 function state(api: AccessApi, area: 'product' | 'dsa'): WorkspaceSessionState {
   return { status: 'authorized', session, api, authorization: area === 'product'
@@ -66,7 +67,7 @@ it('lets an eligible DSA accept exactly the visible version without exposing cus
   vi.stubGlobal('crypto', { randomUUID: () => 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' });
   const dsaSession = { ...session, actorId: 'D300' }; const api = new AccessApi(dsaSession); let write: unknown;
   vi.spyOn(api, 'case').mockImplementation((_path, method = 'GET', body) => {
-    if (method === 'POST') { write = body; return Promise.resolve(accepted); }
+    if (method === 'POST') { write = body; return Promise.resolve(durableAccepted); }
     return Promise.resolve({ tenantId: 'T001', actorId: 'D300', items: [submitted] });
   });
   mount(<DsaCaseWorkspace />, { ...state(api, 'dsa'), session: dsaSession });
@@ -74,6 +75,7 @@ it('lets an eligible DSA accept exactly the visible version without exposing cus
   expect(await screen.findByText(/now assigned to you/)).toBeVisible();
   expect(write).toEqual({ operationId: 'b'.repeat(32), expectedVersion: 1 });
   expect(screen.getByText('Assigned to you')).toBeVisible();
+  expect(screen.getByText(/Durable test data/)).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Accept case' })).not.toBeInTheDocument();
   expect(screen.queryByText(/A100|C001|customer name|net worth/i)).not.toBeInTheDocument();
 });

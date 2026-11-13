@@ -15,7 +15,10 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.UnmappedMemberHandling =
         System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow;
 });
-builder.Services.AddApplicationCaseReferenceAdapters(builder.Configuration);
+if (PhysicalPersistenceGuard.IsSelected(builder.Configuration))
+    builder.Services.AddApplicationCasePhysicalPersistence(builder.Configuration);
+else
+    builder.Services.AddApplicationCaseReferenceAdapters(builder.Configuration);
 
 var app = builder.Build();
 app.Use(async (http, next) =>

@@ -84,7 +84,7 @@ export default function CustomerAssistanceCases() {
             <List.Item actions={[<Button key="history" type="link" onClick={() => { void openHistory(item); }}>View history</Button>] }>
               <List.Item.Meta title={<Space><Text strong>{item.requestType}</Text>
                 <Tag color={item.state === 'Accepted' ? 'success' : 'processing'}>{item.state}</Tag></Space>}
-                description={`Submitted ${displayDate(item.createdAt)} · Reference ${item.caseId}`} />
+                description={`Submitted ${displayDate(item.createdAt)} · Reference ${item.caseId} · ${item.dataDurability}`} />
             </List.Item>
           )} />}
       </Card>

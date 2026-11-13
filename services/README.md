@@ -18,11 +18,11 @@ another service implementation.
 Each service remains an independent source, artifact, persistence, identity and
 migration boundary even if future physical infrastructure is consolidated.
 
-The `migrations/` folders remain deliberately empty. D03 introduces no
-database technology, schema, migration, shared migration authority, or
-application-startup migration behavior. Its in-memory repositories, fixture
-extractor and append-only audit store are non-production reference adapters
-guarded to LOCAL/CI execution zones.
+Service-owned `migrations/` folders remain isolated by owner. D03 introduced no
+database technology or shared migration authority; later accepted increments
+added owner-specific physical persistence. P3-02 adds the first Application &
+Case PostgreSQL migration and bounded runtime adapter for LOCAL/CI while keeping
+migration execution outside application startup.
 
 D04 expands only Financial Profile Service and the already-governed Audit
 consumer. Financial Profile now owns provider-neutral current profile/fact

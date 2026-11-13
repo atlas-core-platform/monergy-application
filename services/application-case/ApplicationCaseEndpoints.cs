@@ -20,7 +20,7 @@ public static class ApplicationCaseEndpoints
             });
         });
         routes.MapGet("/me", async (HttpContext http, ApplicationCaseAuthority authority,
-            AssistanceCaseApplication owner) =>
+            IAssistanceCaseApplication owner) =>
         {
             var context = await authority.RequireCustomerAsync(http).ConfigureAwait(false);
             return Results.Ok(new
@@ -31,7 +31,7 @@ public static class ApplicationCaseEndpoints
             });
         });
         routes.MapPost("/me", async (CreateAssistanceCase request, HttpContext http,
-            ApplicationCaseAuthority authority, AssistanceCaseApplication owner) =>
+            ApplicationCaseAuthority authority, IAssistanceCaseApplication owner) =>
         {
             var context = await authority.RequireCustomerAsync(http).ConfigureAwait(false);
             var result = await owner.CreateAsync(context, request,
@@ -39,13 +39,13 @@ public static class ApplicationCaseEndpoints
             return Results.Ok(result);
         });
         routes.MapGet("/me/{caseId}/history", async (string caseId, HttpContext http,
-            ApplicationCaseAuthority authority, AssistanceCaseApplication owner) =>
+            ApplicationCaseAuthority authority, IAssistanceCaseApplication owner) =>
         {
             var context = await authority.RequireCustomerAsync(http).ConfigureAwait(false);
             return Results.Ok(await owner.HistoryAsync(caseId, context, http.RequestAborted).ConfigureAwait(false));
         });
         routes.MapGet("/work", async (HttpContext http, ApplicationCaseAuthority authority,
-            AssistanceCaseApplication owner) =>
+            IAssistanceCaseApplication owner) =>
         {
             var context = await authority.RequireDsaAsync(http).ConfigureAwait(false);
             return Results.Ok(new
@@ -56,7 +56,7 @@ public static class ApplicationCaseEndpoints
             });
         });
         routes.MapPost("/{caseId}/accept", async (string caseId, AcceptAssistanceCase request,
-            HttpContext http, ApplicationCaseAuthority authority, AssistanceCaseApplication owner) =>
+            HttpContext http, ApplicationCaseAuthority authority, IAssistanceCaseApplication owner) =>
         {
             var context = await authority.RequireDsaAsync(http).ConfigureAwait(false);
             return Results.Ok(await owner.AcceptAsync(caseId, context, request,
