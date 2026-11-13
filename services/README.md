@@ -22,7 +22,9 @@ Service-owned `migrations/` folders remain isolated by owner. D03 introduced no
 database technology or shared migration authority; later accepted increments
 added owner-specific physical persistence. P3-02 adds the first Application &
 Case PostgreSQL migration and bounded runtime adapter for LOCAL/CI while keeping
-migration execution outside application startup.
+migration execution outside application startup. P3-03 advances that owner schema
+for Financial Advisor engagement history without introducing a shared database or
+moving Access Management, Customer Identity or Consent authority into the service.
 
 D04 expands only Financial Profile Service and the already-governed Audit
 consumer. Financial Profile now owns provider-neutral current profile/fact

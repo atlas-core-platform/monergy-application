@@ -62,5 +62,36 @@ public static class ApplicationCaseEndpoints
             return Results.Ok(await owner.AcceptAsync(caseId, context, request,
                 _ => authority.RequireDsaAsync(http), http.RequestAborted).ConfigureAwait(false));
         });
+
+        routes.MapGet("/advisor/customers/{customerId}/engagement", async (string customerId,
+            HttpContext http, ApplicationCaseAuthority authority, IAdvisorEngagementApplication owner) =>
+        {
+            var context = await authority.RequireAdvisorEngagementAsync(http, customerId).ConfigureAwait(false);
+            return Results.Ok(await owner.ReadAsync(context, http.RequestAborted).ConfigureAwait(false));
+        });
+        routes.MapPost("/advisor/customers/{customerId}/notes", async (string customerId,
+            AddAdvisorNote request, HttpContext http, ApplicationCaseAuthority authority,
+            IAdvisorEngagementApplication owner) =>
+        {
+            var context = await authority.RequireAdvisorEngagementAsync(http, customerId).ConfigureAwait(false);
+            return Results.Ok(await owner.AddNoteAsync(context, request,
+                _ => authority.RequireAdvisorEngagementAsync(http, customerId), http.RequestAborted).ConfigureAwait(false));
+        });
+        routes.MapPost("/advisor/customers/{customerId}/communications", async (string customerId,
+            RecordCustomerCommunication request, HttpContext http, ApplicationCaseAuthority authority,
+            IAdvisorEngagementApplication owner) =>
+        {
+            var context = await authority.RequireAdvisorEngagementAsync(http, customerId).ConfigureAwait(false);
+            return Results.Ok(await owner.RecordCommunicationAsync(context, request,
+                _ => authority.RequireAdvisorEngagementAsync(http, customerId), http.RequestAborted).ConfigureAwait(false));
+        });
+        routes.MapPost("/advisor/customers/{customerId}/application-stage", async (string customerId,
+            AdvanceAdvisorApplication request, HttpContext http, ApplicationCaseAuthority authority,
+            IAdvisorEngagementApplication owner) =>
+        {
+            var context = await authority.RequireAdvisorEngagementAsync(http, customerId).ConfigureAwait(false);
+            return Results.Ok(await owner.AdvanceApplicationAsync(context, request,
+                _ => authority.RequireAdvisorEngagementAsync(http, customerId), http.RequestAborted).ConfigureAwait(false));
+        });
     }
 }

@@ -110,7 +110,8 @@ internal static partial class LocalUatBootstrap
                         "application-case" => "application_case.tenant_identity",
                         _ => "customer_identity.tenant_identity",
                     };
-                    await ExecuteAsync(scoped, $"INSERT INTO {table} VALUES(true,@value,1) ON CONFLICT(singleton) DO NOTHING;", database.Tenant).ConfigureAwait(false);
+                    var schemaVersion = database.Service == "application-case" ? 2 : 1;
+                    await ExecuteAsync(scoped, $"INSERT INTO {table} VALUES(true,@value,{schemaVersion}) ON CONFLICT(singleton) DO NOTHING;", database.Tenant).ConfigureAwait(false);
                     if ((string?)await ScalarAsync(scoped, $"SELECT tenant_id FROM {table} WHERE singleton;").ConfigureAwait(false) != database.Tenant)
                         throw new InvalidOperationException("Tenant database mismatch.");
                 }
@@ -154,7 +155,7 @@ internal static partial class LocalUatBootstrap
             "customer-identity" => $"GRANT INSERT(session_hash,actor_id,subject_version,device_class,client_family),UPDATE(revoked) ON customer_identity.trusted_sessions TO {runtime}; GRANT INSERT,UPDATE(version) ON customer_identity.access_subject_versions TO {runtime}; GRANT UPDATE(version) ON customer_identity.access_policy_version TO {runtime}; GRANT INSERT ON customer_identity.access_event_inbox TO {runtime}; GRANT INSERT(actor_id,normalized_email) ON customer_identity.tenant_principals TO {runtime}; GRANT INSERT ON customer_identity.provisioning_receipts TO {runtime}; GRANT INSERT,UPDATE ON customer_identity.email_access_challenges TO {runtime}; GRANT INSERT ON customer_identity.email_access_events TO {runtime};",
             "audit" => $"GRANT INSERT ON audit.evidence,audit.inbox,audit.access_event_inbox,audit.product_activity TO {runtime};",
             "consent" => $"GRANT INSERT ON consent.grants,consent.receipts,consent.audit,consent.outbox,consent.provider_grants,consent.provider_evidence TO {runtime}; GRANT UPDATE(version,folder_id,revoked_at) ON consent.provider_grants TO {runtime}; GRANT UPDATE(revoked_at) ON consent.grants TO {runtime}; GRANT UPDATE(version) ON consent.state TO {runtime};",
-            "application-case" => $"GRANT INSERT ON application_case.assistance_cases,application_case.assistance_case_operations,application_case.assistance_case_events TO {runtime}; GRANT UPDATE(state,version,accepted_at,accepted_by) ON application_case.assistance_cases TO {runtime};",
+            "application-case" => $"GRANT INSERT ON application_case.assistance_cases,application_case.assistance_case_operations,application_case.assistance_case_events,application_case.advisor_engagements,application_case.advisor_engagement_activities,application_case.advisor_engagement_operations TO {runtime}; GRANT UPDATE(state,version,accepted_at,accepted_by) ON application_case.assistance_cases TO {runtime}; GRANT UPDATE(version,application_stage,updated_at) ON application_case.advisor_engagements TO {runtime};",
             _ => throw new InvalidOperationException("Unknown service."),
         });
     }

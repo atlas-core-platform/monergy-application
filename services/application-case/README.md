@@ -4,6 +4,10 @@ P3-01 introduces the first bounded Phase 3 owner journey: a Customer opens one a
 financial-assistance case and an eligible DSA / Case Manager in the same tenant accepts it.
 P3-02 adds the tenant-bound PostgreSQL owner, append-only lifecycle/operation evidence and
 restart recovery while preserving the exact P3-01 authority and privacy boundaries.
+P3-03 adds the bounded Financial Advisor engagement owner for assigned customers: source-
+referenced analysis notes, recorded customer communications and pre-submission application
+stages. Those activities are append-only and versioned; the current stage is the only mutable
+business projection.
 
 The owner derives tenant, actor and Customer identity from the verified session. The browser
 cannot post those identifiers or select an assignee. Acceptance is atomic, version checked,
@@ -14,3 +18,10 @@ PostgreSQL adapter. The physical adapter preserves cases, idempotency receipts a
 history across restart; installed-browser and production acceptance remain separate gates.
 Case acceptance grants no financial data access, Consent, customer/resource assignment,
 advice, underwriting or lender decision authority.
+
+Advisor engagement access requires the dedicated mutation capability together with the
+existing financial-profile and evidence read capabilities. Access Management re-evaluates the
+active Financial Advisor role, exact customer assignment, resource grants and current Consent
+for every read and mutation. The browser cannot post tenant or advisor identity. Notes retain
+canonical fact references rather than copied financial values, communication is a governed
+record rather than an email/SMS delivery, and `Ready for submission` is not a lender decision.
