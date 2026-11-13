@@ -107,7 +107,7 @@ internal static partial class LocalUatBootstrap
             if (tenant.Environment != "LOCAL" || tenant.RequestId != profile.InstanceId + ":" + tenant.TenantId)
                 return TenantProvisioningResult.Failure("LOCAL_PLACEMENT_MISMATCH");
             var databases = profile.Databases.Where(database => database.Tenant == tenant.TenantId).ToArray();
-            if (databases.Length != 4) return TenantProvisioningResult.Failure("MANDATORY_OWNERS_INCOMPLETE");
+            if (databases.Length != 5) return TenantProvisioningResult.Failure("MANDATORY_OWNERS_INCOMPLETE");
             var facts = new List<string>();
             foreach (var database in databases)
             {
@@ -118,7 +118,12 @@ internal static partial class LocalUatBootstrap
                 }
                 await using var connection = new NpgsqlConnection(Connection(database.Name, database.Name + "_runtime", database.RuntimePassword));
                 await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-                var schema = database.Service == "customer-identity" ? "customer_identity" : database.Service;
+                var schema = database.Service switch
+                {
+                    "customer-identity" => "customer_identity",
+                    "application-case" => "application_case",
+                    _ => database.Service,
+                };
                 var table = database.Service == "audit" ? "audit.access_tenant_identity" : schema + ".tenant_identity";
                 var sql = $"SELECT tenant_id=@tenant FROM {table} WHERE singleton;";
                 if (step == TenantProvisioningStep.ServiceMigrationsApplied)

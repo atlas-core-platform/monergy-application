@@ -72,7 +72,8 @@ def ready():
 
 def sql(database, query):
     # Cluster-owner fixture injection only, bounded to this disposable CI instance.
-    assert database in {'uat_consent_t001', 'uat_customer_identity_t001', 'uat_am_t001', 'uat_audit_t001'}
+    assert database in {'uat_consent_t001', 'uat_customer_identity_t001', 'uat_am_t001', 'uat_audit_t001',
+                        'uat_application_case_t001'}
     return subprocess.run(compose_command + ['exec', '-T', 'postgres', 'psql', '-U', 'postgres', '-d', database, '-At', '-v', 'ON_ERROR_STOP=1', '-c', query],
                           check=True, capture_output=True, text=True, timeout=30).stdout.strip()
 
@@ -101,6 +102,26 @@ def grant(session, request_id):
 ready()
 owner = login()
 other_admin = login(tenant='T002')
+case_customer = login('A100')
+dsa = login('A400')
+
+# The Customer → DSA journey is owned durably by Application & Case. Restarting
+# that owner must preserve both the case and its immutable lifecycle history.
+case_created = call('/case-api/local/v1/cases/me', 'POST', {'operationId': 'a' * 32}, case_customer)
+assert case_created['state'] == 'Submitted' and case_created['dataDurability'] == 'Durable test data'
+dsa_queue = call('/case-api/local/v1/cases/work', session=dsa)
+assert len(dsa_queue['items']) == 1 and dsa_queue['items'][0]['caseId'] == case_created['caseId']
+case_accepted = call('/case-api/local/v1/cases/' + case_created['caseId'] + '/accept', 'POST',
+                     {'operationId': 'b' * 32, 'expectedVersion': 1}, dsa)
+assert case_accepted['state'] == 'Accepted' and case_accepted['assignedToMe'] is True
+compose('restart', 'application-case')
+ready()
+customer_cases = call('/case-api/local/v1/cases/me', session=case_customer)
+assert len(customer_cases['items']) == 1 and customer_cases['items'][0]['state'] == 'Accepted'
+case_history = call('/case-api/local/v1/cases/me/' + case_created['caseId'] + '/history', session=case_customer)
+assert [event['action'] for event in case_history['events']] == ['Submitted', 'Accepted']
+assert case_history['dataDurability'] == 'Durable test data'
+
 role = next(item['id'] for item in admin('roles')['items'] if item['code'] == 'uat-boundary-tester')
 for actor in ('A100', 'A200', 'A300'):
     member(actor, role)
@@ -488,11 +509,13 @@ assert consent_version(customer) >= 7
 assert sql('uat_consent_t001', 'SELECT (SELECT count(*) FROM consent.audit)=(SELECT count(*) FROM consent.outbox);') == 't'
 assert sql('uat_consent_t001', "SELECT NOT has_table_privilege('uat_consent_t001_runtime','consent.audit','UPDATE,DELETE,TRUNCATE') AND NOT has_column_privilege('uat_consent_t001_runtime','consent.grants','expires_at','UPDATE');") == 't'
 assert sql('uat_customer_identity_t001', "SELECT NOT has_table_privilege('uat_customer_identity_t001_runtime','customer_identity.customers','INSERT,UPDATE,DELETE,TRUNCATE');") == 't'
+assert sql('uat_application_case_t001', "SELECT has_table_privilege('uat_application_case_t001_runtime','application_case.assistance_case_events','INSERT') AND NOT has_table_privilege('uat_application_case_t001_runtime','application_case.assistance_case_events','UPDATE,DELETE,TRUNCATE') AND NOT has_column_privilege('uat_application_case_t001_runtime','application_case.assistance_cases','customer_id','UPDATE');") == 't'
 
 summary = {'checks': checks, 'scope': 'LOCAL/UAT onboarding', 'productionAccepted': False,
            'validated': ['owner-confirmed Default Access Pack 2.5 and setup review/replay', 'server-resolved customer product entry', 'idempotent customer document intake', 'customer-scoped document library, exact version history and source details', 'authorized durable document processing and extracted-information review', 'explicit reviewed Income/Expense promotion to Financial Profile with source history and canonical Financial Audit delivery', 'Financial Passport exact fact/source-history drill-down and exact authorized source-document projection', 'customer-bound basic Financial Summary and exact export from authoritative Financial Profile facts', 'customer-authorized lexical search across current Documents and trusted Financial information', 'recoverable Customer document-processing activity, completed result drill-down and resumable reviewed Financial promotion from durable Job Management', 'canonical Job Audit delivery',
                          'verified customer self-access', 'advisor relationship and Consent', 'document/report owner tampering',
-                         'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit'],
+                         'Consent atomic rollback', 'Consent expiry and revocation', 'owner version invalidation', 'owner outage', 'role-change cleanup', 'durable receipts and owner audit',
+                         'durable Customer to DSA assistance case and restart recovery'],
            'limitations': ['Business data uses owner reference adapters.', 'The processor accepts structured LOCAL/UAT text and does not claim OCR or production AI.', 'Only customer-reviewed Income/Expense source facts are promoted; OCR/production AI and additional financial fact types remain out of scope.', 'Consent outbox delivery is not claimed.']}
 (root / '.artifacts/onboarding-acceptance.json').write_text(json.dumps(summary, indent=2) + '\n')
 print('Local onboarding owner/process acceptance passed:', checks, 'checks.')

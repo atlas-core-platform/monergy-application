@@ -6,7 +6,7 @@ export interface AssistanceCase {
   createdAt: string;
   acceptedAt: string | null;
   assignedToMe: boolean;
-  dataDurability: 'Temporary data';
+  dataDurability: 'Temporary data' | 'Durable test data';
 }
 
 export interface AssistanceCaseEvent {
@@ -33,7 +33,8 @@ export function caseItem(value: unknown): AssistanceCase {
       item.state !== 'Submitted' && item.state !== 'Accepted' ||
       typeof item.version !== 'number' || !Number.isSafeInteger(item.version) || item.version < 1 ||
       !date(item.createdAt) || !(item.acceptedAt === null || date(item.acceptedAt)) ||
-      typeof item.assignedToMe !== 'boolean' || item.dataDurability !== 'Temporary data' ||
+      typeof item.assignedToMe !== 'boolean' ||
+      (item.dataDurability !== 'Temporary data' && item.dataDurability !== 'Durable test data') ||
       item.state === 'Submitted' && item.acceptedAt !== null ||
       item.state === 'Accepted' && item.acceptedAt === null)
     throw new Error('CASE_OWNER_RESPONSE_INVALID');
@@ -52,7 +53,8 @@ export function casePage(value: unknown, tenant: string, actor: string): Assista
 
 export function caseHistory(value: unknown, caseId: string): AssistanceCaseEvent[] {
   const history = record(value);
-  if (history.caseId !== caseId || history.dataDurability !== 'Temporary data' ||
+  if (history.caseId !== caseId ||
+      (history.dataDurability !== 'Temporary data' && history.dataDurability !== 'Durable test data') ||
       !Array.isArray(history.events) || history.events.length < 1 || history.events.length > 10)
     throw new Error('CASE_HISTORY_INVALID');
   const events = history.events.map(raw => {
