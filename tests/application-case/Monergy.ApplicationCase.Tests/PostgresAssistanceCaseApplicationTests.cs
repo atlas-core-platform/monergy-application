@@ -27,7 +27,11 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
             await using var owner = new NpgsqlConnection(Required($"P3_APPLICATION_CASE_{tenant}_OWNER"));
             await owner.OpenAsync();
             await owner.ExecuteAsync("""
-                TRUNCATE application_case.advisor_engagement_activities,
+                TRUNCATE application_case.lender_application_events,
+                    application_case.lender_application_operations,
+                    application_case.lender_application_documents,
+                    application_case.lender_applications,
+                    application_case.advisor_engagement_activities,
                     application_case.advisor_engagement_operations,
                     application_case.advisor_engagements,
                     application_case.assistance_case_events,
@@ -128,6 +132,14 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
             "DELETE FROM application_case.advisor_engagement_operations;",
             "UPDATE application_case.advisor_engagements SET customer_id='forged';",
             "DELETE FROM application_case.advisor_engagements;",
+            "UPDATE application_case.lender_application_events SET reason='forged';",
+            "DELETE FROM application_case.lender_application_events;",
+            "UPDATE application_case.lender_application_operations SET action='DECISION';",
+            "DELETE FROM application_case.lender_application_operations;",
+            "UPDATE application_case.lender_applications SET assigned_lender_actor_id='A501';",
+            "DELETE FROM application_case.lender_applications;",
+            "UPDATE application_case.lender_application_documents SET present=false;",
+            "DELETE FROM application_case.lender_application_documents;",
             "UPDATE application_case.tenant_identity SET tenant_id='T002';",
         }) await Assert.ThrowsAsync<PostgresException>(() => runtime.ExecuteAsync(sql));
     }
@@ -165,10 +177,50 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
             wrong.ReadAsync(Advisor("T002", "A300", "C001"), default))).Code);
     }
 
+    [Fact]
+    public async Task LenderAssignmentReviewAndDecisionAreDurableIdempotentAndIsolated()
+    {
+        await SeedLenderApplicationAsync("T001", "loan-001", "A500");
+        var lender = Lender("T001", "A500");
+        await using (var owner = LenderOwner())
+        {
+            var assigned = Assert.Single(await owner.ListAsync(lender, default));
+            Assert.Equal("Assigned", assigned.State);
+            var identity = await owner.ReviewDocumentAsync(assigned.ApplicationId, "identity", lender,
+                new(Op('e'), 1), Confirm(lender), default);
+            var replay = await owner.ReviewDocumentAsync(assigned.ApplicationId, "identity", lender,
+                new(Op('e'), 1), Confirm(lender), default);
+            Assert.Equal(identity.Version, replay.Version);
+            _ = await owner.ReviewDocumentAsync(assigned.ApplicationId, "income", lender,
+                new(Op('f'), 2), Confirm(lender), default);
+            _ = await owner.ReviewDocumentAsync(assigned.ApplicationId, "bank-statements", lender,
+                new(Op('a'), 3), Confirm(lender), default);
+            var decided = await owner.RecordDecisionAsync(assigned.ApplicationId, lender,
+                new(Op('b'), 4, "Approved", "Recorded under the lender's governed review policy."),
+                Confirm(lender), default);
+            Assert.Equal("Approved", decided.Decision?.Decision);
+        }
+
+        await using var reconstructed = LenderOwner();
+        var durable = Assert.Single(await reconstructed.ListAsync(lender, default));
+        Assert.Equal("Decided", durable.State);
+        Assert.Equal("Durable test data", durable.DataDurability);
+        Assert.Empty(await reconstructed.ListAsync(Lender("T001", "A501"), default));
+        Assert.Empty(await reconstructed.ListAsync(Lender("T002", "A500"), default));
+
+        await using var db = new NpgsqlConnection(Required("P3_APPLICATION_CASE_T001_OWNER"));
+        await db.OpenAsync();
+        Assert.Equal(4, await db.ExecuteScalarAsync<int>("SELECT count(*) FROM application_case.lender_application_events WHERE application_id='loan-001';"));
+        Assert.Equal(4, await db.ExecuteScalarAsync<int>("SELECT count(*) FROM application_case.lender_application_operations WHERE application_id='loan-001';"));
+    }
+
     private static PostgresAssistanceCaseApplication Owner() => new(
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
     private static PostgresAdvisorEngagementApplication AdvisorOwner() => new(
+        new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
+        new FixedTimeProvider(Now));
+    private static PostgresLenderApplication LenderOwner() => new(
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
 
@@ -187,11 +239,31 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
         new(tenant, actor, null, 1, 1, AssistanceCaseApplication.DsaCapability);
     private static AdvisorEngagementContext Advisor(string tenant, string actor, string customer) =>
         new(tenant, actor, customer, 1, 1, 1, 1);
+    private static LenderContext Lender(string tenant, string actor) => new(tenant, actor, 1, 1);
     private static string Op(char value) => new(value, 32);
     private static Func<CancellationToken, Task<CaseActorContext>> Confirm(CaseActorContext value) =>
         _ => Task.FromResult(value);
     private static Func<CancellationToken, Task<AdvisorEngagementContext>> Confirm(AdvisorEngagementContext value) =>
         _ => Task.FromResult(value);
+    private static Func<CancellationToken, Task<LenderContext>> Confirm(LenderContext value) =>
+        _ => Task.FromResult(value);
+    private static async Task SeedLenderApplicationAsync(string tenant, string application, string actor)
+    {
+        await using var owner = new NpgsqlConnection(Required($"P3_APPLICATION_CASE_{tenant}_OWNER"));
+        await owner.OpenAsync();
+        await owner.ExecuteAsync("""
+            INSERT INTO application_case.lender_applications(
+                tenant_id,application_id,application_reference,assigned_lender_actor_id,
+                assignment_source,state,version,assigned_at)
+            VALUES(@Tenant,@Application,'Lending application 001',@Actor,
+                'physical-test-fixture','Assigned',1,@Now);
+            INSERT INTO application_case.lender_application_documents(
+                tenant_id,application_id,document_code,label,sequence,present)
+            VALUES(@Tenant,@Application,'identity','Identity document',1,true),
+                  (@Tenant,@Application,'income','Income evidence',2,true),
+                  (@Tenant,@Application,'bank-statements','Bank statements',3,true);
+            """, new { Tenant = tenant, Application = application, Actor = actor, Now });
+    }
     private static string Required(string name) => Environment.GetEnvironmentVariable(name)
         ?? throw new InvalidOperationException($"Physical test configuration {name} is required.");
     private static async Task<object> Attempt(Func<Task<AssistanceCaseView>> action)

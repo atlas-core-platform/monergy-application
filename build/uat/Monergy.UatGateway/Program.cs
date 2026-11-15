@@ -167,6 +167,20 @@ static string? Route(string path, string method)
              parts[1] is "notes" or "communications" or "application-stage" && method == "POST"))
             return "http://127.0.0.1:5120" + path[9..];
     }
+    const string lenderCases = "/case-api/local/v1/cases/lender/";
+    if (path.StartsWith(lenderCases, StringComparison.Ordinal))
+    {
+        var parts = path[lenderCases.Length..].Split('/');
+        if (parts.Length == 1 && parts[0] is "context" or "applications" && method == "GET")
+            return "http://127.0.0.1:5120" + path[9..];
+        if (parts.Length == 3 && parts[0] == "applications" &&
+            TenantAccessClient.Identifier(parts[1], 128) && parts[2] == "decision" && method == "POST")
+            return "http://127.0.0.1:5120" + path[9..];
+        if (parts.Length == 5 && parts[0] == "applications" &&
+            TenantAccessClient.Identifier(parts[1], 128) && parts[2] == "documents" &&
+            TenantAccessClient.Identifier(parts[3], 64) && parts[4] == "review" && method == "POST")
+            return "http://127.0.0.1:5120" + path[9..];
+    }
     if (path is "/case-api/local/v1/cases/context" or "/case-api/local/v1/cases/work" && method == "GET" ||
         path == cases + "/me" && method is "GET" or "POST")
         return "http://127.0.0.1:5120" + path[9..];

@@ -5,6 +5,17 @@ namespace Monergy.Services.ApplicationCase;
 
 public sealed class ApplicationCaseAuthority(CustomerOwnerClient owners, TenantAccessClient access)
 {
+    public async Task<LenderContext> RequireLenderAsync(HttpContext http)
+    {
+        var session = await owners.SessionAsync(http).ConfigureAwait(false);
+        var decision = await access.EvaluateAsync(http,
+            new(LenderApplicationPolicy.Capability, null, null)).ConfigureAwait(false);
+        if (decision.Outcome != "Allow" || decision.ActorId != session.ActorId ||
+            decision.SubjectVersion != session.SubjectVersion)
+            throw new ApplicationCaseException("LENDER_APPLICATION_ACCESS_REQUIRED", 403);
+        return new(session.TenantId, session.ActorId, decision.PolicyVersion, decision.SubjectVersion);
+    }
+
     public async Task<AdvisorEngagementContext> RequireAdvisorEngagementAsync(HttpContext http, string customerId)
     {
         if (!TenantAccessClient.Identifier(customerId, 128))

@@ -12,7 +12,7 @@ const validDestination = (value: string) => value.startsWith('/welcome#tenant=')
 export function PersonaTesterWelcomeRequestEntry({
   returnPath, onBack,
 }: {
-  returnPath: '/' | '/access' | '/advisor' | '/dsa';
+  returnPath: '/' | '/access' | '/advisor' | '/dsa' | '/lender';
   onBack: () => void;
 }) {
   const [form] = Form.useForm<Values>();
