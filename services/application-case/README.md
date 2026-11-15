@@ -8,6 +8,10 @@ P3-03 adds the bounded Financial Advisor engagement owner for assigned customers
 referenced analysis notes, recorded customer communications and pre-submission application
 stages. Those activities are append-only and versioned; the current stage is the only mutable
 business projection.
+P3-04 adds the bounded Lender Professional owner for explicitly assigned applications: a
+required-document checklist, document-review receipts and one lender-owned decision. It does
+not infer underwriting, eligibility, pricing or creditworthiness and it does not submit to a
+provider.
 
 The owner derives tenant, actor and Customer identity from the verified session. The browser
 cannot post those identifiers or select an assignee. Acceptance is atomic, version checked,
@@ -25,3 +29,11 @@ active Financial Advisor role, exact customer assignment, resource grants and cu
 for every read and mutation. The browser cannot post tenant or advisor identity. Notes retain
 canonical fact references rather than copied financial values, communication is a governed
 record rather than an email/SMS delivery, and `Ready for submission` is not a lender decision.
+
+Lender workspace access requires the dedicated lender-review capability plus a current explicit
+Application & Case assignment. Every read and mutation rechecks the active role, capability and
+assignment; tenant, actor and assignment identifiers are never accepted from the browser.
+Document-review and decision operations are idempotent and version checked, and their receipts
+are append-only. Customer-reviewed information is supporting evidence only. The application
+assignment and final decision belong to Application & Case; lender-provider delivery and any
+external underwriting policy remain separate future integrations.

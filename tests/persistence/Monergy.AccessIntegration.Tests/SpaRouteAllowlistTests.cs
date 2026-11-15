@@ -8,6 +8,7 @@ public sealed class SpaRouteAllowlistTests
     [Theory]
     [InlineData("/advisor")]
     [InlineData("/dsa")]
+    [InlineData("/lender")]
     [InlineData("/cases")]
     [InlineData("/welcome")]
     [InlineData("/")]
@@ -24,6 +25,7 @@ public sealed class SpaRouteAllowlistTests
 
     [Theory]
     [InlineData("/advisor/")]
+    [InlineData("/lender/private")]
     [InlineData("/advisor/private")]
     [InlineData("/Advisor")]
     [InlineData("/welcome/anything")]

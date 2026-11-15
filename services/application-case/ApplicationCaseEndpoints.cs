@@ -93,5 +93,45 @@ public static class ApplicationCaseEndpoints
             return Results.Ok(await owner.AdvanceApplicationAsync(context, request,
                 _ => authority.RequireAdvisorEngagementAsync(http, customerId), http.RequestAborted).ConfigureAwait(false));
         });
+
+        routes.MapGet("/lender/context", async (HttpContext http, ApplicationCaseAuthority authority) =>
+        {
+            var context = await authority.RequireLenderAsync(http).ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                context.TenantId,
+                context.ActorId,
+                authority = "LenderProfessional",
+                context.PolicyVersion,
+                context.SubjectVersion,
+            });
+        });
+        routes.MapGet("/lender/applications", async (HttpContext http,
+            ApplicationCaseAuthority authority, ILenderApplication owner) =>
+        {
+            var context = await authority.RequireLenderAsync(http).ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                context.TenantId,
+                context.ActorId,
+                items = await owner.ListAsync(context, http.RequestAborted).ConfigureAwait(false),
+            });
+        });
+        routes.MapPost("/lender/applications/{applicationId}/documents/{documentCode}/review", async (
+            string applicationId, string documentCode, ReviewLenderDocument request, HttpContext http,
+            ApplicationCaseAuthority authority, ILenderApplication owner) =>
+        {
+            var context = await authority.RequireLenderAsync(http).ConfigureAwait(false);
+            return Results.Ok(await owner.ReviewDocumentAsync(applicationId, documentCode, context, request,
+                _ => authority.RequireLenderAsync(http), http.RequestAborted).ConfigureAwait(false));
+        });
+        routes.MapPost("/lender/applications/{applicationId}/decision", async (
+            string applicationId, RecordLenderDecision request, HttpContext http,
+            ApplicationCaseAuthority authority, ILenderApplication owner) =>
+        {
+            var context = await authority.RequireLenderAsync(http).ConfigureAwait(false);
+            return Results.Ok(await owner.RecordDecisionAsync(applicationId, context, request,
+                _ => authority.RequireLenderAsync(http), http.RequestAborted).ConfigureAwait(false));
+        });
     }
 }

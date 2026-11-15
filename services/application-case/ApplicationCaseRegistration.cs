@@ -21,6 +21,9 @@ public static class ApplicationCaseRegistration
         services.AddSingleton<AdvisorEngagementApplication>();
         services.AddSingleton<IAdvisorEngagementApplication>(provider =>
             provider.GetRequiredService<AdvisorEngagementApplication>());
+        services.AddSingleton<LenderApplication>();
+        services.AddSingleton<ILenderApplication>(provider =>
+            provider.GetRequiredService<LenderApplication>());
         return services;
     }
 
@@ -39,6 +42,9 @@ public static class ApplicationCaseRegistration
         services.AddSingleton<PostgresAdvisorEngagementApplication>();
         services.AddSingleton<IAdvisorEngagementApplication>(provider =>
             provider.GetRequiredService<PostgresAdvisorEngagementApplication>());
+        services.AddSingleton<PostgresLenderApplication>();
+        services.AddSingleton<ILenderApplication>(provider =>
+            provider.GetRequiredService<PostgresLenderApplication>());
         services.AddHealthChecks().AddCheck<PostgresAssistanceCaseApplication>("application-case-storage");
         return services;
     }

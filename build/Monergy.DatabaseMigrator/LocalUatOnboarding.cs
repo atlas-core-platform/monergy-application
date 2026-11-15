@@ -9,7 +9,7 @@ internal static partial class LocalUatBootstrap
 {
     private const string OnboardingFolder = "/var/lib/monergy-onboarding";
     private const int ExpectedAccessManagementSchemaVersion = 8;
-    private static readonly string[] ReferenceActors = ["A100", "A200", "A300", "A900", "A901"];
+    private static readonly string[] ReferenceActors = ["A100", "A200", "A300", "A500", "A900", "A901"];
 
     private static async Task PrepareOnboardingAsync(UatProfile profile)
     {
@@ -77,6 +77,34 @@ internal static partial class LocalUatBootstrap
         await transaction.CommitAsync().ConfigureAwait(false);
     }
 
+    private static async Task SeedLenderApplicationAsync(NpgsqlConnection connection, string tenant, string instance)
+    {
+        var applicationId = tenant == "T001" ? "local-loan-001" : "local-loan-002";
+        var reference = tenant == "T001" ? "Lending application 001" : "Lending application 002";
+        await using var command = new NpgsqlCommand("""
+            INSERT INTO application_case.lender_applications(
+                tenant_id,application_id,application_reference,assigned_lender_actor_id,
+                assignment_source,state,version,assigned_at)
+            VALUES(@tenant,@application,@reference,'A500',@source,'Assigned',1,clock_timestamp())
+            ON CONFLICT(tenant_id,application_id) DO NOTHING;
+            INSERT INTO application_case.lender_application_documents(
+                tenant_id,application_id,document_code,label,sequence,present)
+            VALUES(@tenant,@application,'identity','Identity document',1,true),
+                  (@tenant,@application,'income','Income evidence',2,true),
+                  (@tenant,@application,'bank-statements','Bank statements',3,true)
+            ON CONFLICT(tenant_id,application_id,document_code) DO NOTHING;
+            SELECT assigned_lender_actor_id='A500' AND assignment_source=@source
+            FROM application_case.lender_applications
+            WHERE tenant_id=@tenant AND application_id=@application;
+            """, connection);
+        command.Parameters.AddWithValue("tenant", tenant);
+        command.Parameters.AddWithValue("application", applicationId);
+        command.Parameters.AddWithValue("reference", reference);
+        command.Parameters.AddWithValue("source", "local-uat-fixture:" + instance + ":" + applicationId);
+        if (await command.ExecuteScalarAsync().ConfigureAwait(false) is not true)
+            throw new InvalidOperationException("Reference lender assignment mismatch.");
+    }
+
     private static async Task RecordOnboardingAsync(UatProfile profile, NpgsqlConnection cluster)
     {
         Directory.CreateDirectory(OnboardingFolder);
@@ -127,7 +155,7 @@ internal static partial class LocalUatBootstrap
                 var table = database.Service == "audit" ? "audit.access_tenant_identity" : schema + ".tenant_identity";
                 var sql = $"SELECT tenant_id=@tenant FROM {table} WHERE singleton;";
                 if (step == TenantProvisioningStep.ServiceMigrationsApplied)
-                    sql = $"SELECT tenant_id=@tenant AND schema_version={(database.Service == "am" ? ExpectedAccessManagementSchemaVersion : database.Service == "application-case" ? 2 : 1)} FROM {table} WHERE singleton;";
+                    sql = $"SELECT tenant_id=@tenant AND schema_version={(database.Service == "am" ? ExpectedAccessManagementSchemaVersion : database.Service == "application-case" ? 3 : 1)} FROM {table} WHERE singleton;";
                 if (step == TenantProvisioningStep.InitialAdministratorIdentityProvisioned && database.Service == "customer-identity")
                     sql = "SELECT EXISTS(SELECT 1 FROM customer_identity.tenant_principals WHERE actor_id='A900' AND normalized_email='a900@example.test');";
                 if (step == TenantProvisioningStep.AccessManagementBootstrapped && database.Service == "am")
