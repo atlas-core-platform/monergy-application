@@ -3,12 +3,10 @@ import { WorkspaceIcon } from '@monergy/ui-foundation';
 import {
   Alert,
   Button,
-  Card,
   Collapse,
   Drawer,
   Empty,
   Modal,
-  Space,
   Spin,
   Table,
   Tag,
@@ -18,7 +16,7 @@ import { useEffect, useState } from 'react';
 import { displayError } from './accessApi';
 import type { AccessApi } from './accessApi';
 
-type View = 'sessions' | 'audit' | 'services' | 'readiness';
+type View = 'sessions' | 'audit';
 interface SessionRow {
   sessionReference: string;
   actorId: string;
@@ -40,17 +38,6 @@ interface AuditRow {
     correlationId: string;
   };
 }
-interface ServiceRow {
-  id: string;
-  label: string;
-  implementation: string;
-  available: boolean;
-}
-interface Gate {
-  id: string;
-  state: string;
-  detail: string;
-}
 interface Page<T> {
   items: T[];
   nextCursor: string | null;
@@ -58,8 +45,6 @@ interface Page<T> {
 const headings: Record<View, string> = {
   sessions: 'Security & Sessions',
   audit: 'Access Activity',
-  services: 'Connected services',
-  readiness: 'Release readiness',
 };
 const activityLabels: Record<string, string> = {
   'permission.saved': 'Permission saved',
@@ -85,7 +70,7 @@ const dates = (value: string) =>
 export function AccessOperations({
   api,
   onExpired,
-  views = ['sessions', 'audit', 'services', 'readiness'],
+  views = ['sessions', 'audit'],
 }: {
   views?: View[];
   api: AccessApi;
@@ -105,27 +90,13 @@ export function AccessOperations({
             }}
           >
             <WorkspaceIcon
-              name={
-                key === 'sessions'
-                  ? 'shield'
-                  : key === 'audit'
-                    ? 'evidence'
-                    : key === 'services'
-                      ? 'layers'
-                      : 'check'
-              }
+              name={key === 'sessions' ? 'shield' : 'evidence'}
               size={22}
             />
             <span>
               <strong>{headings[key]}</strong>
               <small>
-                {key === 'sessions'
-                  ? 'Review and revoke access'
-                  : key === 'audit'
-                    ? 'Trace changes to their owner'
-                    : key === 'services'
-                      ? 'Health, scope and limitations'
-                      : 'See what remains before release'}
+                {key === 'sessions' ? 'Review and revoke access' : 'Trace changes to their owner'}
               </small>
             </span>
             <WorkspaceIcon name="arrow" size={16} />
@@ -172,8 +143,6 @@ function OperationsDrawer({
   const [notice, setNotice] = useState('');
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [events, setEvents] = useState<AuditRow[]>([]);
-  const [services, setServices] = useState<ServiceRow[]>([]);
-  const [gates, setGates] = useState<Gate[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const [revoke, setRevoke] = useState<{ actor: string; version: number } | null>(null);
@@ -185,8 +154,6 @@ function OperationsDrawer({
       setCursor(null);
       setSessions([]);
       setEvents([]);
-      setServices([]);
-      setGates([]);
       try {
         if (view === 'sessions') {
           const page = await api.owner<Page<SessionRow>>(
@@ -205,18 +172,6 @@ function OperationsDrawer({
           );
           setEvents(page.items);
           setCursor(page.nextCursor);
-        }
-        if (view === 'services') {
-          const result = await api.owner<{ services: ServiceRow[] }>(
-            'uat',
-            'v1/topology',
-            abort.signal,
-          );
-          setServices(result.services);
-        }
-        if (view === 'readiness') {
-          const result = await api.owner<{ gates: Gate[] }>('uat', 'v1/readiness', abort.signal);
-          setGates(result.gates);
         }
       } catch (failure) {
         if (!abort.signal.aborted) {
@@ -421,48 +376,6 @@ function OperationsDrawer({
                 />
               )
             )}
-          </>
-        )}
-        {view === 'services' && (
-          <>
-            <Alert
-              type="info"
-              showIcon
-              title="Service health confirms a running boundary. The scope below identifies which business journeys are implemented."
-              className="access-notice"
-            />
-            <div className="access-service-list">
-              {services.map((service) => (
-                <Card key={service.id} size="small">
-                  <Space>
-                    <Tag color={service.available ? 'success' : 'error'}>
-                      {service.available ? 'Running' : 'Unavailable'}
-                    </Tag>
-                    <strong>{service.label}</strong>
-                  </Space>
-                  <p>{service.implementation}</p>
-                </Card>
-              ))}
-            </div>
-          </>
-        )}
-        {view === 'readiness' && (
-          <>
-            <Alert
-              type="warning"
-              showIcon
-              title="Test environment · Production acceptance pending"
-              className="access-notice"
-            />
-            <div className="access-service-list">
-              {gates.map((gate) => (
-                <Card key={gate.id} size="small">
-                  <Tag color="warning">{gate.state}</Tag>
-                  <strong>{gate.id}</strong>
-                  <p>{gate.detail}</p>
-                </Card>
-              ))}
-            </div>
           </>
         )}
         {cursor && (

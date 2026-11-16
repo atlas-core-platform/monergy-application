@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 const profile = JSON.parse(readFileSync('.artifacts/uat/ci/profile.json', 'utf8')) as {
   identities: { tenantId: string; actorId: string; token: string }[];
+  platformAuthority: { actorId: string; token: string };
   onboarding?: boolean;
 };
 test('local UAT direct routes and invalid credentials never expose the protected shell', async ({
@@ -13,7 +14,6 @@ test('local UAT direct routes and invalid credentials never expose the protected
     '/reports',
     '/foundation',
     '/vs02',
-    '/operations',
     '/access/users',
   ]) {
     await page.goto(route);
@@ -21,6 +21,12 @@ test('local UAT direct routes and invalid credentials never expose the protected
     await expect(page.locator('.mw-shell')).toHaveCount(0);
     await expect(page.getByRole('navigation')).toHaveCount(0);
   }
+  for (const route of ['/operations', '/platform']) {
+    await page.goto(route);
+    await expect(page.getByLabel('Platform Administrator key')).toBeVisible();
+    await expect(page.locator('.mw-shell')).toHaveCount(0);
+  }
+  await page.goto('/access/users');
   await page.getByLabel('Local access key').fill('invalid-uat-test-key');
   await page.getByRole('button', { name: 'Connect workspace', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Unable to connect');
@@ -155,17 +161,13 @@ test('real tenant administration, sessions, canonical audit and service readines
   await expect(page.getByRole('button', { name: 'Revoke all for A900' }).first()).toBeVisible();
   await navigation.getByRole('link', { name: 'Access Activity', exact: true }).click();
   await expect(page.getByText('All user sessions revoked', { exact: true }).first()).toBeVisible();
-  await page.goto('/operations');
+  await page.goto('/platform');
   await page
-    .getByLabel('Local access key')
-    .fill(
-      profile.identities.find(
-        (identity) => identity.tenantId === 'T001' && identity.actorId === 'A900',
-      )?.token ?? '',
-    );
-  await page.getByRole('button', { name: 'Connect workspace' }).click();
-  await page.getByRole('button', { name: /Connected services/ }).click();
-  await expect(page.getByText('Running', { exact: true })).toHaveCount(13);
+    .getByLabel('Platform Administrator key')
+    .fill(profile.platformAuthority.token);
+  await page.getByRole('button', { name: 'Connect platform workspace' }).click();
+  await expect(page.getByRole('heading', { name: 'Platform health' })).toBeVisible();
+  await expect(page.getByText('Running', { exact: true })).toHaveCount(14);
   await expect(
     page.getByText(
       profile.onboarding
@@ -173,16 +175,12 @@ test('real tenant administration, sessions, canonical audit and service readines
         : 'Service scaffold; no live consent journey',
     ),
   ).toBeVisible();
-  await page.getByLabel('Close', { exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await page.getByRole('button', { name: /Release readiness/ }).click();
-  await expect(page.getByText('Test environment · Production acceptance pending')).toBeVisible();
-  await page.getByLabel('Close', { exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Release readiness' })).toBeVisible();
+  await expect(page.getByText(/No tenant membership, customer-data access/)).toBeVisible();
   await page.screenshot({ path: '.artifacts/uat-workspace.png', fullPage: true });
   // Browser refresh cannot recover a bearer token from browser storage.
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Connect workspace' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Connect platform workspace' })).toBeVisible();
   await expect(page.locator('.mw-shell')).toHaveCount(0);
   expect(
     await page.evaluate(() =>

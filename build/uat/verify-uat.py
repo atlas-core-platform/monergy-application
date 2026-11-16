@@ -16,11 +16,13 @@ assert os.environ.get('MONERGY_UAT_DISPOSABLE') == profile['instanceId'], 'Expli
 base = 'http://127.0.0.1:' + str(profile['port'])
 checks = 0
 
-def call(path, method='GET', body=None, session=None, headers=None, status=200):
+def call(path, method='GET', body=None, session=None, platform_session=None, headers=None, status=200):
     global checks
     fields = {'Content-Type': 'application/json', **(headers or {})}
     if session:
         fields.update({'X-Monergy-Tenant': session['tenantId'], 'X-Monergy-Session': session['authenticationContextId']})
+    if platform_session:
+        fields.update({'X-Monergy-Platform-Session': platform_session['session']})
     request = urllib.request.Request(base + path, method=method, headers=fields,
         data=None if body is None else json.dumps(body).encode())
     try:
@@ -67,7 +69,7 @@ ready()
 # Direct links and browser reloads must receive the shell without broadening API routing.
 for path in ('/access', '/access/users', '/access/users/history', '/access/roles',
              '/access/permissions', '/access/groups', '/access/resources',
-             '/access/activity', '/access/sessions', '/operations'):
+             '/access/activity', '/access/sessions', '/operations', '/platform'):
     with urllib.request.urlopen(base + path, timeout=15) as response:
         assert response.status == 200 and response.headers.get('Content-Type', '').startswith('text/html'), path
         assert b'id="root"' in response.read(), path
@@ -86,10 +88,14 @@ assert all(item['displayName'] and item['displayName'] != item['resourceId'] for
 assert {item['resourceId'] for item in call(directory_path, session=other)['items']} == {'other-customer', 'C002'}
 call(directory_path, session={**owner, 'tenantId': 'T002'}, status=401)
 call('/uat-api/v1/resource-directory/document', session=owner, status=422)
-call('/uat-api/v1/topology', status=401)
-services = call('/uat-api/v1/topology', session=owner)['services']
-assert len(services) == 13 and all(item['available'] for item in services)
-assert call('/uat-api/v1/readiness', session=owner)['productionAccepted'] is False
+call('/platform-api/local/v1/topology', status=401)
+call('/platform-api/local/v1/topology', session=owner, status=403)
+platform = call('/platform-api/local/v1/sessions', 'POST', {'key': profile['platformAuthority']['token']})
+platform_context = call('/platform-api/local/v1/context', platform_session=platform)
+assert platform_context['actorId'] == 'A950' and platform_context['tenantAccess'] is False
+services = call('/platform-api/local/v1/topology', platform_session=platform)['services']
+assert len(services) == 14 and all(item['available'] for item in services)
+assert call('/platform-api/local/v1/readiness', platform_session=platform)['productionAccepted'] is False
 call('/internal/v1/tenant-sessions/validate', 'POST', {}, status=404)
 call('/reference/events/audit', 'POST', {}, status=404)
 call('/access-api/v1/administration/context', session={**owner, 'tenantId':'T002'}, status=401)
@@ -99,7 +105,7 @@ for actor in ('A100','A300'):
         admin('members','POST',{'expectedPolicyVersion':revision(),'actorId':actor})
 no_role = login(actor='A300')
 call(directory_path, session=no_role, status=403)
-for path in ('/identity-api/local/v1/administration/sessions','/audit-api/local/v1/administration/access-events','/uat-api/v1/topology'):
+for path in ('/identity-api/local/v1/administration/sessions','/audit-api/local/v1/administration/access-events','/platform-api/local/v1/topology'):
     call(path, session=no_role, status=403)
 catalog = call('/access-api/v1/capabilities', session=owner)['capabilities']
 permission = admin('permissions','POST',{'expectedPolicyVersion':revision(),'code':'uat-all-boundaries','label':'Disposable UAT capabilities',
