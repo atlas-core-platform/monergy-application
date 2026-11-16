@@ -4,10 +4,10 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "2f29b6341ba4ce64345c3abbc6d6c653d010b3cc",
-  "sourceTree": "aac2bcbc59126bb60ff5ee69863dd404851b09b2",
-  "verificationStatus": "P3_08_SOURCE_VALIDATED",
-  "candidatePullRequest": 29,
+  "commit": "60b58be8f15aaac30194117ecfce057b22f2bec3",
+  "sourceTree": "ab825555e1345732016dc3abc40665fdf302bf03",
+  "verificationStatus": "P3_10_PHYSICAL_REMEDIATION_CANDIDATE",
+  "candidatePullRequest": 30,
   "files": [
     {
       "path": "build/prepare-ci-databases.sh",
@@ -135,7 +135,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/TenantConnections.cs",
-      "gitBlobSha": "bead0788398fc097dab99b52ff65c2d4e249f8fa"
+      "gitBlobSha": "fb703b6103cb9d611ce03cda9f9796eee01953dc"
     },
     {
       "path": "tools/Monergy.AccessManagement.DeliveryReference/fixture.sql",

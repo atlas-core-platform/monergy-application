@@ -73,6 +73,26 @@ public sealed class BoundaryTests
     }
 
     [Fact]
+    public void LocalOnboardingPersonaActorsRemainAdmissibleButPlatformAuthorityStaysSeparate()
+    {
+        var onboarding = File.ReadAllText(Path.Combine(
+            RepositoryRoot, "build", "Monergy.DatabaseMigrator", "LocalUatOnboarding.cs"));
+        var migration = File.ReadAllText(Path.Combine(
+            ServicesRoot, "customer-identity", "migrations", "0016_phase3_reference_personas.sql"));
+
+        foreach (var actor in new[]
+                 { "A100", "A200", "A300", "A400", "A500", "A600", "A700", "A800", "A850", "A900", "A901" })
+        {
+            Assert.Contains($"\"{actor}\"", onboarding, StringComparison.Ordinal);
+            Assert.Contains($"'{actor}'", migration, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("^ci-[0-9a-f]{32}$", migration, StringComparison.Ordinal);
+        Assert.DoesNotContain("'A950'", migration, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"A950\"", onboarding, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ServiceHostsMatchTheApprovedPrimaryResponsibilitySplit()
     {
         foreach (var serviceId in ServiceIds)
