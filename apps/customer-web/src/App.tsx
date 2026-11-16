@@ -285,19 +285,25 @@ export function App() {
     return <FoundationProvider appearance="midnight"><PersonaWelcomeEntry /></FoundationProvider>;
   if (window.location.pathname === '/platform' || window.location.pathname === '/operations')
     return <Suspense fallback={<main aria-busy="true">Loading Platform Administration…</main>}><PlatformAdministratorPortal /></Suspense>;
-  const area = window.location.pathname === '/advisor' ? 'advisor' :
-    window.location.pathname === '/dsa' ? 'dsa' :
-    window.location.pathname === '/operations-support' ? 'operations-support' :
-    window.location.pathname === '/kyc/reviews' ? 'kyc-review' :
-    window.location.pathname === '/access' ||
-    window.location.pathname.startsWith('/access/')
-      ? 'administration'
-      : 'product';
+  const area = workspaceAreaForPath(window.location.pathname);
   return (
     <WorkspaceSessionProvider area={area} key={area}>
       <WorkspaceApplication />
     </WorkspaceSessionProvider>
   );
+}
+
+export function workspaceAreaForPath(pathname: string) {
+  if (pathname === '/advisor') return 'advisor' as const;
+  if (pathname === '/dsa') return 'dsa' as const;
+  if (pathname === '/lender') return 'lender' as const;
+  if (pathname === '/financial-professional') return 'financial-professional' as const;
+  if (pathname === '/property-valuer') return 'property-valuer' as const;
+  if (pathname === '/legal-advisor') return 'legal-advisor' as const;
+  if (pathname === '/operations-support') return 'operations-support' as const;
+  if (pathname === '/kyc/reviews') return 'kyc-review' as const;
+  if (pathname === '/access' || pathname.startsWith('/access/')) return 'administration' as const;
+  return 'product' as const;
 }
 function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
   const { session, authorization, signOut } = useWorkspaceSession();

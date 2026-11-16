@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { WorkspaceEntry } from '../src/access/WorkspaceEntry';
 import { WorkspaceSessionProvider } from '../src/access/WorkspaceSessionProvider';
+import { workspaceAreaForPath } from '../src/App';
 
 const session = (actorId = 'A300') => ({
   tenantId: 'T001', actorId, subjectVersion: 3,
@@ -23,6 +24,23 @@ const mountOperationsSupport = () => render(<FoundationProvider appearance="midn
   </WorkspaceSessionProvider>
 </FoundationProvider>);
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+it.each([
+  ['/access', 'administration'],
+  ['/access/users', 'administration'],
+  ['/advisor', 'advisor'],
+  ['/dsa', 'dsa'],
+  ['/lender', 'lender'],
+  ['/financial-professional', 'financial-professional'],
+  ['/property-valuer', 'property-valuer'],
+  ['/legal-advisor', 'legal-advisor'],
+  ['/operations-support', 'operations-support'],
+  ['/kyc/reviews', 'kyc-review'],
+  ['/', 'product'],
+  ['/evidence', 'product'],
+])('maps %s to the exact authorization area %s', (path, area) => {
+  expect(workspaceAreaForPath(path)).toBe(area);
+});
 
 it('prefers activated email/password when enabled and verifies current Advisor authority', async () => {
   const request = vi.fn((url: string) => {
