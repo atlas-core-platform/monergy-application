@@ -162,9 +162,17 @@ public sealed class ApplicationCaseAuthority(CustomerOwnerClient owners, TenantA
 
         var profile = await RequireAsync("financial-profile.profile.read").ConfigureAwait(false);
         var evidence = await RequireAsync("evidence.document.read").ConfigureAwait(false);
-        var engagement = await RequireAsync(AdvisorEngagementPolicy.Capability).ConfigureAwait(false);
-        if (profile.CustomerVersion != evidence.CustomerVersion || profile.CustomerVersion != engagement.CustomerVersion ||
-            profile.ConsentVersion != evidence.ConsentVersion || profile.ConsentVersion != engagement.ConsentVersion)
+        // Engagement is a tenant-scoped professional action, not customer information
+        // that the customer can grant through the bounded sharing contract. Keep its
+        // role/capability decision with Access Management while the two customer data
+        // reads independently prove assignment, exact resource authority and Consent.
+        var engagement = await access.EvaluateAsync(http,
+            new(AdvisorEngagementPolicy.Capability, "customer", customerId)).ConfigureAwait(false);
+        if (engagement is not { Outcome: "Allow" } || engagement.ActorId != advisor.ActorId ||
+            engagement.PolicyVersion != advisor.PolicyVersion || engagement.SubjectVersion != advisor.SubjectVersion)
+            throw new ApplicationCaseException("ADVISOR_CUSTOMER_ACCESS_REQUIRED", 403);
+        if (profile.CustomerVersion != evidence.CustomerVersion ||
+            profile.ConsentVersion != evidence.ConsentVersion)
             throw new ApplicationCaseException("ADVISOR_AUTHORITY_CHANGED", 409);
         var customer = await owners.CustomerAsync(session.TenantId, customerId, http.RequestAborted).ConfigureAwait(false);
         if (customer.OwnerActorId == session.ActorId || customer.Version != profile.CustomerVersion)

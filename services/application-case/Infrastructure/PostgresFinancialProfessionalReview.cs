@@ -334,7 +334,18 @@ public sealed class PostgresFinancialProfessionalReview : IFinancialProfessional
         long? CertifiedConsentVersion);
     private sealed record SourceRow(string Code, string Label, string Owner, string Reference,
         long AssignedVersion, long CurrentVersion, DateTime? ReviewedAt);
-    private sealed record NoteRow(string Note, string[] SourceCodes, DateTime RecordedAt, string RecordedBy);
+    // Npgsql exposes PostgreSQL arrays through DbDataReader as System.Array. Dapper's
+    // positional-record constructor matching therefore cannot bind a text[] column to
+    // a string[] constructor parameter, even though the runtime value is a string[].
+    // Property materialization keeps the precise public type while remaining compatible
+    // with the physical provider metadata.
+    private sealed class NoteRow
+    {
+        public string Note { get; init; } = "";
+        public string[] SourceCodes { get; init; } = [];
+        public DateTime RecordedAt { get; init; }
+        public string RecordedBy { get; init; } = "";
+    }
     private sealed record CertificationSourceRow(string Code, string Owner, string Reference, long Version);
     private sealed record OperationRow(string ReviewId, string Action);
 }
