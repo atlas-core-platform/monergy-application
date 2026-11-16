@@ -93,6 +93,24 @@ public sealed class BoundaryTests
     }
 
     [Fact]
+    public void TenantSetupPinsTheCurrentVendoredDefaultAccessPackEverywhere()
+    {
+        var accessPack = File.ReadAllText(Path.Combine(
+            RepositoryRoot, "build", "uat", "dependencies", "source", "src",
+            "Monergy.AccessManagement", "DefaultAccessPack.cs"));
+        var gateway = File.ReadAllText(Path.Combine(
+            RepositoryRoot, "build", "uat", "Monergy.UatGateway", "TenantSetupEndpoints.cs"));
+        var customerWeb = File.ReadAllText(Path.Combine(
+            RepositoryRoot, "apps", "customer-web", "src", "access", "onboarding.ts"));
+
+        Assert.Contains("public const string Version = \"2.12\"", accessPack, StringComparison.Ordinal);
+        Assert.Contains("public const string Identity = \"monergy-default-access-pack/2.12\"", accessPack, StringComparison.Ordinal);
+        Assert.Contains("RequiredPackVersion = \"2.12\"", gateway, StringComparison.Ordinal);
+        Assert.Contains("RequiredPackIdentity = \"monergy-default-access-pack/2.12\"", gateway, StringComparison.Ordinal);
+        Assert.Contains("CURRENT_DEFAULT_ACCESS_PACK_VERSION = '2.12'", customerWeb, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ServiceHostsMatchTheApprovedPrimaryResponsibilitySplit()
     {
         foreach (var serviceId in ServiceIds)
