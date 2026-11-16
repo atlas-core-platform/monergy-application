@@ -36,7 +36,7 @@ public static class ProductAuditCapture
  {
   var parts=path.Split('/',StringSplitOptions.RemoveEmptyEntries);
   if(action.StartsWith("DOCUMENT_",StringComparison.Ordinal)&&parts.Length>3&&TenantAccessClient.Identifier(parts[3],160))return parts[3];
-  if(action=="JOB_RECOVERY"&&parts.Length==7&&parts[0]=="jobs-api"&&parts[1]=="local"&&parts[2]=="v1"&&parts[3]=="administration"&&parts[4]=="processing"&&parts[6]=="changes"&&TenantAccessClient.Identifier(parts[5],128))return parts[5];
+  if(action=="JOB_RECOVERY"&&parts.Length==7&&parts[0]=="jobs-api"&&parts[1]=="local"&&parts[2]=="v1"&&parts[3] is "administration" or "operations"&&parts[4]=="processing"&&parts[6]=="changes"&&TenantAccessClient.Identifier(parts[5],128))return parts[5];
   return null;
  }
  public static void UseProductAudit(this WebApplication app)

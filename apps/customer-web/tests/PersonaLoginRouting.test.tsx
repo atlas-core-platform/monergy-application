@@ -17,6 +17,11 @@ const mount = () => render(<FoundationProvider appearance="midnight">
     <WorkspaceEntry area="advisor"><h2>Protected advisor workspace</h2></WorkspaceEntry>
   </WorkspaceSessionProvider>
 </FoundationProvider>);
+const mountOperationsSupport = () => render(<FoundationProvider appearance="midnight">
+  <WorkspaceSessionProvider area="operations-support">
+    <WorkspaceEntry area="operations-support"><h2>Protected recovery workspace</h2></WorkspaceEntry>
+  </WorkspaceSessionProvider>
+</FoundationProvider>);
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 it('prefers activated email/password when enabled and verifies current Advisor authority', async () => {
@@ -66,4 +71,45 @@ it('retains local testing only when credential activation is disabled', async ()
   mount();
   expect(await screen.findByLabelText('Local access key')).toBeVisible();
   expect(screen.queryByRole('textbox', { name: 'Email address' })).not.toBeInTheDocument();
+});
+
+it('verifies the exact Operations Support authority before opening recovery', async () => {
+  const request = vi.fn((url: string) => {
+    if (url.endsWith('/persona-credentials')) return Promise.resolve(json({ enabled: true }));
+    if (url.endsWith('/persona-credentials/sign-in')) return Promise.resolve(json(session('A850')));
+    if (url.endsWith('/operations/context')) return Promise.resolve(json({
+      tenantId: 'T001', actorId: 'A850', authority: 'OperationsSupport',
+      policyVersion: 12, subjectVersion: 3,
+    }));
+    return Promise.resolve(json({}, 404));
+  });
+  vi.stubGlobal('fetch', request);
+  mountOperationsSupport();
+  const user = userEvent.setup();
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Email address' }),
+    { target: { value: 'a850@example.test' } });
+  await user.type(screen.getByLabelText('Password'), 'a long password value');
+  await user.click(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByText('Protected recovery workspace')).toBeVisible();
+  expect(request.mock.calls.some(([url]) => url.endsWith('/operations/context'))).toBe(true);
+});
+
+it('fails closed when the recovery owner does not confirm Operations Support', async () => {
+  const request = vi.fn((url: string) => {
+    if (url.endsWith('/persona-credentials')) return Promise.resolve(json({ enabled: true }));
+    if (url.endsWith('/persona-credentials/sign-in')) return Promise.resolve(json(session('A100')));
+    if (url.endsWith('/operations/context'))
+      return Promise.resolve(json({ error: 'OPERATIONS_SUPPORT_REQUIRED' }, 403));
+    if (url.endsWith('/revoke')) return Promise.resolve(json({ revoked: true }));
+    return Promise.resolve(json({}, 404));
+  });
+  vi.stubGlobal('fetch', request);
+  mountOperationsSupport();
+  const user = userEvent.setup();
+  fireEvent.change(await screen.findByRole('textbox', { name: 'Email address' }),
+    { target: { value: 'a100@example.test' } });
+  await user.type(screen.getByLabelText('Password'), 'a long password value');
+  await user.click(screen.getByRole('button', { name: 'Sign in' }));
+  expect(await screen.findByText('An active Operations Support recovery permission is required.')).toBeVisible();
+  expect(screen.queryByText('Protected recovery workspace')).not.toBeInTheDocument();
 });

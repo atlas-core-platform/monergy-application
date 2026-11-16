@@ -42,6 +42,7 @@ const LenderWorkspace = lazy(() => import('./lender/LenderWorkspace'));
 const FinancialProfessionalWorkspace = lazy(() => import('./financial-professional/FinancialProfessionalWorkspace'));
 const PropertyValuerWorkspace = lazy(() => import('./property-valuer/PropertyValuerWorkspace'));
 const LegalAdvisorWorkspace = lazy(() => import('./legal-advisor/LegalAdvisorWorkspace'));
+const OperationsSupportWorkspace = lazy(() => import('./operations-support/OperationsSupportWorkspace'));
 const { Paragraph, Text, Title } = Typography;
 
 function ToolchainFoundation() {
@@ -137,6 +138,7 @@ function RouteContent() {
   if (window.location.pathname === '/financial-professional') return <Suspense fallback={<main aria-busy="true">Loading Financial Professional workspace…</main>}><FinancialProfessionalWorkspace /></Suspense>;
   if (window.location.pathname === '/property-valuer') return <Suspense fallback={<main aria-busy="true">Loading Property Valuer workspace…</main>}><PropertyValuerWorkspace /></Suspense>;
   if (window.location.pathname === '/legal-advisor') return <Suspense fallback={<main aria-busy="true">Loading Legal Advisor workspace…</main>}><LegalAdvisorWorkspace /></Suspense>;
+  if (window.location.pathname === '/operations-support') return <Suspense fallback={<main aria-busy="true">Loading Operations Support workspace…</main>}><OperationsSupportWorkspace /></Suspense>;
   if (window.location.pathname === '/cases') return <Suspense fallback={<main aria-busy="true">Loading assistance cases…</main>}><CustomerAssistanceCases /></Suspense>;
   if (window.location.pathname === '/financial-qa') return <RequestAccessGate target="customer.financial-qa" requiredCapabilities={['ai-intelligence.analysis.execute', 'search.query.execute', 'financial-profile.profile.read', 'evidence.document.read']}><Suspense fallback={<main aria-busy="true">Loading Q&A…</main>}><FinancialQaExperience /></Suspense></RequestAccessGate>;
   if (window.location.pathname === '/settings/sessions')
@@ -282,6 +284,7 @@ export function App() {
     return <FoundationProvider appearance="midnight"><PersonaWelcomeEntry /></FoundationProvider>;
   const area = window.location.pathname === '/advisor' ? 'advisor' :
     window.location.pathname === '/dsa' ? 'dsa' :
+    window.location.pathname === '/operations-support' ? 'operations-support' :
     window.location.pathname === '/kyc/reviews' ? 'kyc-review' :
     window.location.pathname === '/access' ||
     window.location.pathname.startsWith('/access/') ||
@@ -300,7 +303,7 @@ function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
   return (
     <WorkspaceShell
       {...props}
-      context={product?.customerName ?? (authorization?.area === 'advisor' ? 'Financial Advisor' : authorization?.area === 'dsa' ? 'DSA / Case Manager' : session ? 'Organization Settings' : undefined)}
+      context={product?.customerName ?? (authorization?.area === 'advisor' ? 'Financial Advisor' : authorization?.area === 'dsa' ? 'DSA / Case Manager' : authorization?.area === 'operations-support' ? 'Operations Support' : session ? 'Organization Settings' : undefined)}
       actions={
         session ? (
           <Button
@@ -339,7 +342,7 @@ function WorkspaceApplication() {
       // Crossing into/out of the Advisor security area must remount the
       // WorkspaceSessionProvider; a client-side history push would retain
       // the previous area's verified authorization until a full reload.
-      const securityArea = (value: string) => value === '/advisor' ? 'advisor' : value === '/dsa' ? 'dsa' : 'default';
+      const securityArea = (value: string) => value === '/advisor' ? 'advisor' : value === '/dsa' ? 'dsa' : value === '/operations-support' ? 'operations-support' : 'default';
       if (url.origin === window.location.origin &&
           securityArea(window.location.pathname) !== securityArea(url.pathname))
         return;
@@ -355,6 +358,7 @@ function WorkspaceApplication() {
             '/access',
             '/advisor',
             '/dsa',
+            '/operations-support',
             '/cases',
             '/reports',
             '/search',
@@ -385,9 +389,11 @@ function WorkspaceApplication() {
     path === '/access' || path.startsWith('/access/') || path === '/operations';
   const inAdvisor = path === '/advisor';
   const inDsa = path === '/dsa';
+  const inOperationsSupport = path === '/operations-support';
   const advisorNavigation = [{id:'advisor-overview', label:'Overview', icon:'home' as const, href:'/advisor'}];
   const dsaNavigation = [{id:'dsa-cases', label:'Assistance cases', icon:'changes' as const, href:'/dsa'}];
-  const navigation = inDsa ? dsaNavigation : inAdvisor ? advisorNavigation : path==='/kyc/reviews' ? [{id:'kyc-reviews',label:'KYC reviews',icon:'shield' as const,href:'/kyc/reviews'}] : inAdministration ? accessDestinations : destinations;
+  const operationsSupportNavigation = [{id:'operational-recovery', label:'Operational recovery', icon:'changes' as const, href:'/operations-support'}];
+  const navigation = inOperationsSupport ? operationsSupportNavigation : inDsa ? dsaNavigation : inAdvisor ? advisorNavigation : path==='/kyc/reviews' ? [{id:'kyc-reviews',label:'KYC reviews',icon:'shield' as const,href:'/kyc/reviews'}] : inAdministration ? accessDestinations : destinations;
   const current =
     navigation.find(
       (destination) =>
@@ -400,7 +406,7 @@ function WorkspaceApplication() {
       : `${current?.label ?? 'Overview'} · Monergy`;
   }, [inAdministration, current?.label]);
   const productProtected = ['/', '/actions', '/cases', '/evidence', '/finances', '/net-worth', '/monthly-cashflow', '/financial-qa', '/search', '/reports', '/consent', '/connections', '/connections/google-drive', '/connections/onedrive', '/profile', '/kyc', '/kyc/reviews', '/settings/sessions', '/settings/agreements'].includes(path);
-  const gated = inAdvisor || inDsa || inAdministration || productProtected || localUat;
+  const gated = inOperationsSupport || inAdvisor || inDsa || inAdministration || productProtected || localUat;
   useEffect(() => {
     document.documentElement.dataset.monergyTheme = 'midnight';
   }, []);
@@ -412,7 +418,10 @@ function WorkspaceApplication() {
     <SessionShell
       appearance="midnight"
       destinations={navigation}
-      module={inDsa ? {
+      module={inOperationsSupport ? {
+         name: 'Operations Support', homeHref: '/operations-support',
+         guide: <p>Operational recovery is limited to safe job metadata and eligible retry or cancellation actions. This authority cannot grant access, approve Consent or make professional decisions.</p>,
+       } : inDsa ? {
          name: 'DSA Case Workspace', homeHref: '/dsa',
          guide: <p>Accepting an assistance case does not grant access to financial information. Customer data, assignments, Consent and lender decisions remain separately governed.</p>,
        } : inAdvisor ? {
@@ -439,7 +448,7 @@ function WorkspaceApplication() {
   return (
     <FoundationProvider appearance="midnight">
       {gated ? (
-        <WorkspaceEntry area={inDsa ? 'dsa' : inAdvisor ? 'advisor' : path==='/kyc/reviews'?'kyc-review':inAdministration ? 'administration' : 'product'}>
+        <WorkspaceEntry area={inOperationsSupport ? 'operations-support' : inDsa ? 'dsa' : inAdvisor ? 'advisor' : path==='/kyc/reviews'?'kyc-review':inAdministration ? 'administration' : 'product'}>
           {inAdministration ? (
             <Suspense
               fallback={

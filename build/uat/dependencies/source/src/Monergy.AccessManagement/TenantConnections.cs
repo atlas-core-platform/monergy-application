@@ -116,7 +116,7 @@ public sealed class ReferenceTenantIdentityDirectory : IVerifiedTenantIdentityDi
     {
         ct.ThrowIfCancellationRequested();
         var known = (tenantId is "T001" or "T002") &&
-            (actorId is "A100" or "A200" or "A300" or "A400" or "A900" or "A901");
+            (actorId is "A100" or "A200" or "A300" or "A400" or "A850" or "A900" or "A901");
         return ValueTask.FromResult(known
             ? new VerifiedTenantIdentity(tenantId, actorId, actorId.ToLowerInvariant() + "@example.test")
             : null);

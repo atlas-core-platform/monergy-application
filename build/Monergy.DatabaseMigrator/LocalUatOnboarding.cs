@@ -9,7 +9,7 @@ internal static partial class LocalUatBootstrap
 {
     private const string OnboardingFolder = "/var/lib/monergy-onboarding";
     private const int ExpectedAccessManagementSchemaVersion = 8;
-    private static readonly string[] ReferenceActors = ["A100", "A200", "A300", "A400", "A500", "A600", "A700", "A800", "A900", "A901"];
+    private static readonly string[] ReferenceActors = ["A100", "A200", "A300", "A400", "A500", "A600", "A700", "A800", "A850", "A900", "A901"];
 
     private static async Task PrepareOnboardingAsync(UatProfile profile)
     {

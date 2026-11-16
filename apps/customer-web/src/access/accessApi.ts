@@ -193,7 +193,8 @@ export class AccessApi {
           failure.status === 403 &&
           ['TENANT_ADMIN_REQUIRED', 'ADVISOR_ROLE_REQUIRED',
            'PRODUCT_CUSTOMER_REQUIRED', 'CUSTOMER_CASE_ACCESS_REQUIRED',
-           'DSA_CASE_ACCESS_REQUIRED', 'KYC_REVIEW_DENIED', 'AUTHORITY_ENDED'].includes(failure.code))
+           'DSA_CASE_ACCESS_REQUIRED', 'KYC_REVIEW_DENIED', 'OPERATIONS_SUPPORT_REQUIRED',
+           'AUTHORITY_ENDED'].includes(failure.code))
       )
         this.lifecycle?.onFailure(failure);
       throw failure;
@@ -220,6 +221,17 @@ export class AccessApi {
     return this.guarded<T>('/jobs-api/local/v1/administration/processing' + path, {
       method, headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
       body: body === undefined ? undefined : JSON.stringify(body), signal,
+    });
+  }
+  processingOperations<T>(path = '', method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/jobs-api/local/v1/operations/processing' + path, {
+      method, headers: { 'Content-Type': 'application/json', 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId },
+      body: body === undefined ? undefined : JSON.stringify(body), signal,
+    });
+  }
+  operationsContext<T>(signal?: AbortSignal): Promise<T> {
+    return this.guarded<T>('/jobs-api/local/v1/operations/context', {
+      headers: { 'X-Monergy-Tenant': this.session.tenantId, 'X-Monergy-Session': this.session.authenticationContextId }, signal,
     });
   }
   customerAdministration<T>(path = '', method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
