@@ -18,7 +18,7 @@ public sealed class ApplicationCasePhysicalOwners
 [Collection(ApplicationCasePhysicalOwners.Name)]
 public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
 {
-    private static readonly DateTimeOffset Now = new(2026, 11, 13, 10, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Now = new(2026, 11, 16, 10, 0, 0, TimeSpan.Zero);
 
     public async Task InitializeAsync()
     {
