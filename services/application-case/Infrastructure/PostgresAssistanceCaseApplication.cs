@@ -80,7 +80,7 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
 
         var now = clock.GetUtcNow();
         var created = new CaseRow("case-" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(12)),
-            before.TenantId, before.CustomerId!, before.ActorId, RequestType, "Submitted", 1, now, null, null);
+            before.TenantId, before.CustomerId!, before.ActorId, RequestType, "Submitted", 1, now.UtcDateTime, null, null);
         await connection.ExecuteAsync(Command("""
             INSERT INTO application_case.assistance_cases(
                 case_id,tenant_id,customer_id,customer_actor_id,request_type,state,version,created_at)
@@ -156,7 +156,7 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
         var current = await confirm(ct).ConfigureAwait(false);
         RequireUnchanged(before, current);
         var now = clock.GetUtcNow();
-        var accepted = row with { State = "Accepted", Version = row.Version + 1, AcceptedAt = now, AcceptedBy = before.ActorId };
+        var accepted = row with { State = "Accepted", Version = row.Version + 1, AcceptedAt = now.UtcDateTime, AcceptedBy = before.ActorId };
         var changed = await connection.ExecuteAsync(Command("""
             UPDATE application_case.assistance_cases
             SET state='Accepted',version=@Version,accepted_at=@AcceptedAt,accepted_by=@AcceptedBy
@@ -351,7 +351,7 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
 
     private sealed record CaseRow(string CaseId, string TenantId, string CustomerId,
         string CustomerActorId, string RequestType, string State, int Version,
-        DateTimeOffset CreatedAt, DateTimeOffset? AcceptedAt, string? AcceptedBy);
+        DateTime CreatedAt, DateTime? AcceptedAt, string? AcceptedBy);
     private sealed record OperationRow(string CaseId, string Action);
-    private sealed record CaseEventRow(string EventId, string Action, int Version, DateTimeOffset OccurredAt);
+    private sealed record CaseEventRow(string EventId, string Action, int Version, DateTime OccurredAt);
 }

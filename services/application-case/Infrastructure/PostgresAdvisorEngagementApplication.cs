@@ -249,8 +249,8 @@ public sealed class PostgresAdvisorEngagementApplication : IAdvisorEngagementApp
     }
 
     private sealed record EngagementRow(string TenantId, string AdvisorActorId, string CustomerId,
-        int Version, string ApplicationStage, DateTimeOffset UpdatedAt);
+        int Version, string ApplicationStage, DateTime UpdatedAt);
     private sealed record ActivityRow(string ActivityId, string Kind, string? Body, string[] SourceFactIds,
-        string? ApplicationStage, int Version, DateTimeOffset OccurredAt);
+        string? ApplicationStage, int Version, DateTime OccurredAt);
     private sealed record OperationRow(string CustomerId, string Action);
 }

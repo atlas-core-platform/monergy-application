@@ -345,11 +345,11 @@ public sealed class PostgresPropertyValuationApplication : IPropertyValuationApp
     }
 
     private sealed record AssignmentRow(string ValuationId, string PropertyReference,
-        string PropertyLabel, string CustomerId, string State, int Version, DateTimeOffset AssignedAt);
+        string PropertyLabel, string CustomerId, string State, int Version, DateTime AssignedAt);
     private sealed record EvidenceRow(string Code, string Label, string Owner, string Reference,
-        long AssignedVersion, long CurrentVersion, DateTimeOffset? InspectedAt);
+        long AssignedVersion, long CurrentVersion, DateTime? InspectedAt);
     private sealed record RevisionRow(int Revision, decimal MarketValue, string Currency,
-        DateOnly EffectiveDate, string Basis, string Findings, DateTimeOffset RecordedAt,
+        DateOnly EffectiveDate, string Basis, string Findings, DateTime RecordedAt,
         string RecordedBy, long PolicyVersion, long SubjectVersion, long CustomerVersion,
         long ConsentVersion);
     private sealed record SnapshotRow(int Revision, string Code, string Owner, string Reference, long Version);

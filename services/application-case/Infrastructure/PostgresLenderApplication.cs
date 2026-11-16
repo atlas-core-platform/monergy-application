@@ -239,7 +239,7 @@ public sealed class PostgresLenderApplication : ILenderApplication, IAsyncDispos
     }
 
     private sealed record ApplicationRow(string ApplicationId, string ApplicationReference, string State,
-        int Version, DateTimeOffset AssignedAt, string? Decision, string? DecisionReason, DateTimeOffset? DecidedAt);
-    private sealed record DocumentRow(string Code, string Label, bool Present, DateTimeOffset? ReviewedAt);
+        int Version, DateTime AssignedAt, string? Decision, string? DecisionReason, DateTime? DecidedAt);
+    private sealed record DocumentRow(string Code, string Label, bool Present, DateTime? ReviewedAt);
     private sealed record OperationRow(string ApplicationId, string Action);
 }

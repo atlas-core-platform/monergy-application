@@ -328,13 +328,13 @@ public sealed class PostgresFinancialProfessionalReview : IFinancialProfessional
     }
 
     private sealed record ReviewRow(string ReviewId, string ReviewReference, string CustomerId,
-        string State, int Version, DateTimeOffset AssignedAt, string? CertificationOutcome,
-        string? CertificationRationale, DateTimeOffset? CertifiedAt, string? CertifiedBy,
+        string State, int Version, DateTime AssignedAt, string? CertificationOutcome,
+        string? CertificationRationale, DateTime? CertifiedAt, string? CertifiedBy,
         long? CertifiedPolicyVersion, long? CertifiedSubjectVersion, long? CertifiedCustomerVersion,
         long? CertifiedConsentVersion);
     private sealed record SourceRow(string Code, string Label, string Owner, string Reference,
-        long AssignedVersion, long CurrentVersion, DateTimeOffset? ReviewedAt);
-    private sealed record NoteRow(string Note, string[] SourceCodes, DateTimeOffset RecordedAt, string RecordedBy);
+        long AssignedVersion, long CurrentVersion, DateTime? ReviewedAt);
+    private sealed record NoteRow(string Note, string[] SourceCodes, DateTime RecordedAt, string RecordedBy);
     private sealed record CertificationSourceRow(string Code, string Owner, string Reference, long Version);
     private sealed record OperationRow(string ReviewId, string Action);
 }

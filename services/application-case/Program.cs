@@ -37,6 +37,21 @@ app.Use(async (http, next) =>
         await http.Response.WriteAsJsonAsync(new { error = failure.Code }, http.RequestAborted)
             .ConfigureAwait(false);
     }
+    catch (Exception failure) when (failure is System.Data.Common.DbException or HttpRequestException or
+        InvalidOperationException or ArgumentException or System.Text.Json.JsonException or NotSupportedException)
+    {
+        if (http.Response.HasStarted) throw;
+        http.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await http.Response.WriteAsJsonAsync(new { error = "APPLICATION_CASE_UNAVAILABLE" },
+            http.RequestAborted).ConfigureAwait(false);
+    }
+    catch (OperationCanceledException) when (!http.RequestAborted.IsCancellationRequested)
+    {
+        if (http.Response.HasStarted) throw;
+        http.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+        await http.Response.WriteAsJsonAsync(new { error = "APPLICATION_CASE_UNAVAILABLE" },
+            http.RequestAborted).ConfigureAwait(false);
+    }
 });
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
 app.MapHealthChecks("/health/ready");

@@ -342,10 +342,10 @@ public sealed class PostgresLegalReviewApplication : ILegalReviewApplication, IA
     }
 
     private sealed record AssignmentRow(string ReviewId, string MatterReference,
-        string MatterLabel, string CustomerId, string State, int Version, DateTimeOffset AssignedAt);
+        string MatterLabel, string CustomerId, string State, int Version, DateTime AssignedAt);
     private sealed record EvidenceRow(string Code, string Label, string Owner, string Reference,
-        long AssignedVersion, long CurrentVersion, DateTimeOffset? InspectedAt);
-    private sealed record RevisionRow(int Revision, string Outcome, string Findings, DateTimeOffset RecordedAt,
+        long AssignedVersion, long CurrentVersion, DateTime? InspectedAt);
+    private sealed record RevisionRow(int Revision, string Outcome, string Findings, DateTime RecordedAt,
         string RecordedBy, long PolicyVersion, long SubjectVersion, long CustomerVersion,
         long ConsentVersion);
     private sealed record SnapshotRow(int Revision, string Code, string Owner, string Reference, long Version);
