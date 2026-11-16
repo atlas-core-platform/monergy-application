@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, it, vi } from 'vitest';
 import { WorkspaceEntry } from '../src/access/WorkspaceEntry';
 import { WorkspaceSessionProvider } from '../src/access/WorkspaceSessionProvider';
-import { workspaceAreaForPath } from '../src/App';
+import { workspaceAreaForPath } from '../src/workspaceAreaForPath';
 
 const session = (actorId = 'A300') => ({
   tenantId: 'T001', actorId, subjectVersion: 3,
