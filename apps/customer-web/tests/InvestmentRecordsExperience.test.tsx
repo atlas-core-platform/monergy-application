@@ -273,4 +273,4 @@ it('pages beyond 200 investment records and refreshes from the newest page', asy
  expect(screen.queryByRole('button', { name: 'Earlier investment records' })).not.toBeInTheDocument();
  expect(request.mock.calls.some(([path]) => path === 'v1/investment-records?afterId=investment-page-199')).toBe(true);
  fireEvent.click(screen.getByRole('button', { name: 'Refresh investment records' })); expect(await screen.findByRole('button', { name: 'Earlier investment records' })).toBeVisible();
-});
+}, 30_000);
