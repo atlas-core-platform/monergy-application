@@ -39,6 +39,7 @@ const AdvisorWorkspace = lazy(() => import('./advisor/AdvisorWorkspace'));
 const CustomerAssistanceCases = lazy(() => import('./cases/CustomerAssistanceCases'));
 const DsaCaseWorkspace = lazy(() => import('./cases/DsaCaseWorkspace'));
 const LenderWorkspace = lazy(() => import('./lender/LenderWorkspace'));
+const FinancialProfessionalWorkspace = lazy(() => import('./financial-professional/FinancialProfessionalWorkspace'));
 const { Paragraph, Text, Title } = Typography;
 
 function ToolchainFoundation() {
@@ -131,6 +132,7 @@ function RouteContent() {
   if (window.location.pathname === '/advisor') return <Suspense fallback={<main aria-busy="true">Loading Advisor workspace…</main>}><AdvisorWorkspace /></Suspense>;
   if (window.location.pathname === '/dsa') return <Suspense fallback={<main aria-busy="true">Loading case workspace…</main>}><DsaCaseWorkspace /></Suspense>;
   if (window.location.pathname === '/lender') return <Suspense fallback={<main aria-busy="true">Loading lender workspace…</main>}><LenderWorkspace /></Suspense>;
+  if (window.location.pathname === '/financial-professional') return <Suspense fallback={<main aria-busy="true">Loading Financial Professional workspace…</main>}><FinancialProfessionalWorkspace /></Suspense>;
   if (window.location.pathname === '/cases') return <Suspense fallback={<main aria-busy="true">Loading assistance cases…</main>}><CustomerAssistanceCases /></Suspense>;
   if (window.location.pathname === '/financial-qa') return <RequestAccessGate target="customer.financial-qa" requiredCapabilities={['ai-intelligence.analysis.execute', 'search.query.execute', 'financial-profile.profile.read', 'evidence.document.read']}><Suspense fallback={<main aria-busy="true">Loading Q&A…</main>}><FinancialQaExperience /></Suspense></RequestAccessGate>;
   if (window.location.pathname === '/settings/sessions')

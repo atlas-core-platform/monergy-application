@@ -4,7 +4,7 @@ param(
     [ValidatePattern('^[a-z][a-z0-9-]{0,30}$')][string]$Profile = 'default',
     [ValidateRange(1024,65535)][int]$Port = 4173,
     [ValidateSet('T001','T002')][string]$Tenant = 'T001',
-    [ValidateSet('A900','A100','A200','A300','A400','A500')][string]$Actor = 'A900',
+    [ValidateSet('A900','A100','A200','A300','A400','A500','A600')][string]$Actor = 'A900',
     [switch]$ConfirmReset,
     [switch]$EnableOnboarding,
     [switch]$EnableEmailAccess,
@@ -125,7 +125,7 @@ if (-not (Test-Path $profileFile)) {
         foreach ($service in $ownerServices) {
             $databases += @{ service=$service; tenant=$tenantId; name=('uat_'+$service.Replace('-','_')+'_'+$tenantId.ToLowerInvariant()); ownerPassword=(Secret); runtimePassword=(Secret); deliveryPassword=$(if ($service -eq 'am') { Secret } else { $null }) }
         }
-        $localActors = @('A900','A100','A300','A400','A500')
+        $localActors = @('A900','A100','A300','A400','A500','A600')
         if ($EnableOnboarding) { $localActors += 'A200' }
         foreach ($actorId in $localActors) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
     }
@@ -162,6 +162,10 @@ if ($Action -in @('Prepare','Start')) {
         }
         if (-not @($state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A500' }).Count) {
             $state.identities += [pscustomobject]@{ tenantId=$tenantId; actorId='A500'; token=(Secret) }
+            $profileChanged = $true
+        }
+        if (-not @($state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A600' }).Count) {
+            $state.identities += [pscustomobject]@{ tenantId=$tenantId; actorId='A600'; token=(Secret) }
             $profileChanged = $true
         }
         if ($onboarding -and -not @($state.databases | Where-Object { $_.tenant -eq $tenantId -and $_.service -eq 'application-case' }).Count) {
@@ -469,6 +473,7 @@ if ($Action -eq 'Credentials') {
         'A300' { 'Financial Advisor / configured reviewer' }
         'A400' { 'DSA / Case Manager' }
         'A500' { 'Lender Professional' }
+        'A600' { 'Chartered Accountant / Financial Professional' }
     }
     Write-Host "Local UAT only | Tenant $Tenant | Actor $Actor | Persona $persona"
     Write-Output $identity.token
@@ -678,6 +683,7 @@ if ($Action -in @('Prepare','Start')) {
                 AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
                 CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
             if ($onboarding) {
+                $config.Monergy.ApplicationCase=@{ ConsentUrl='http://127.0.0.1:5110/'; ConsentToken=$state.tokens.consent }
                 $connections=@{}
                 foreach ($db in $state.databases | Where-Object service -eq 'application-case') {
                     $connections[$db.tenant]=Connection $db 'runtime'
@@ -740,14 +746,14 @@ if (-not $ready) { Compose @('ps','--all'); throw 'UAT readiness timed out. Insp
 # Fixture membership is created through AM once per bootstrap revision; subsequent
 # starts preserve operator changes. The revisioned marker repairs retained profiles
 # whose older marker exists while one or more advertised local identities are absent.
-$memberBootstrapMarker = Join-Path $folder 'reference-members-v4-initialized'
+$memberBootstrapMarker = Join-Path $folder 'reference-members-v5-initialized'
 if ($Action -eq 'Start' -and -not (Test-Path $memberBootstrapMarker)) {
     foreach ($tenantId in @('T001','T002')) {
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
-            $memberActors = @('A100','A300','A400','A500')
+            $memberActors = @('A100','A300','A400','A500','A600')
             if ($onboarding) { $memberActors += 'A200' }
             foreach ($actorId in $memberActors) {
                 $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
@@ -775,7 +781,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4','2.5','2.6','2.7','2.8')) {
+            if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4','2.5','2.6','2.7','2.8','2.9')) {
                 throw 'The Access Management owner has not confirmed a supported Default Access Pack.'
             }
 
@@ -806,21 +812,21 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($pack.installedVersion -ne '2.7') {
+            if ($pack.installedVersion -notin @('2.7','2.8','2.9')) {
                 $plan = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/plan" -Headers $headers -TimeoutSec 15
-                if ($plan.targetVersion -ne '2.7' -or $plan.alreadyInstalled -or @($plan.conflicts).Count -ne 0) {
-                    throw "Default Access Pack 2.7 cannot be adopted safely for $tenantId."
+                if ($plan.targetVersion -ne '2.9' -or $plan.alreadyInstalled -or @($plan.conflicts).Count -ne 0) {
+                    throw "The current Default Access Pack cannot be adopted safely for $tenantId."
                 }
                 $adoption = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/adopt" -Method Post -ContentType 'application/json' -Headers $headers -Body (@{
                     expectedPolicyVersion=$plan.policyVersion
                     operationId='p3-advisor-policy-2-7'
                     planHash=$plan.planHash
                 }|ConvertTo-Json) -TimeoutSec 30
-                if ($adoption.packVersion -ne '2.7') { throw "Default Access Pack adoption returned an unexpected version for $tenantId." }
+                if ($adoption.packVersion -ne '2.9') { throw "Default Access Pack adoption returned an unexpected version for $tenantId." }
             }
             $confirmed = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($confirmed.installedVersion -ne '2.7' -or $confirmed.installedIdentity -ne 'monergy-default-access-pack/2.7') {
-                throw "Default Access Pack 2.7 readback failed for $tenantId."
+            if ($confirmed.installedVersion -notin @('2.7','2.8','2.9') -or $confirmed.installedIdentity -ne "monergy-default-access-pack/$($confirmed.installedVersion)") {
+                throw "Advisor-capable Default Access Pack readback failed for $tenantId."
             }
         } finally {
             Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
@@ -836,21 +842,21 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
         try {
             $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($pack.installedVersion -ne '2.8') {
+            if ($pack.installedVersion -notin @('2.8','2.9')) {
                 $plan = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/plan" -Headers $headers -TimeoutSec 15
-                if ($plan.targetVersion -ne '2.8' -or $plan.alreadyInstalled -or @($plan.conflicts).Count -ne 0) {
-                    throw "Default Access Pack 2.8 cannot be adopted safely for $tenantId."
+                if ($plan.targetVersion -ne '2.9' -or $plan.alreadyInstalled -or @($plan.conflicts).Count -ne 0) {
+                    throw "The current Default Access Pack cannot be adopted safely for $tenantId."
                 }
                 $adoption = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/adopt" -Method Post -ContentType 'application/json' -Headers $headers -Body (@{
                     expectedPolicyVersion=$plan.policyVersion
                     operationId='p3-lender-policy-2-8'
                     planHash=$plan.planHash
                 }|ConvertTo-Json) -TimeoutSec 30
-                if ($adoption.packVersion -ne '2.8') { throw "Default Access Pack adoption returned an unexpected version for $tenantId." }
+                if ($adoption.packVersion -ne '2.9') { throw "Default Access Pack adoption returned an unexpected version for $tenantId." }
             }
             $confirmed = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
-            if ($confirmed.installedVersion -ne '2.8' -or $confirmed.installedIdentity -ne 'monergy-default-access-pack/2.8') {
-                throw "Default Access Pack 2.8 readback failed for $tenantId."
+            if ($confirmed.installedVersion -notin @('2.8','2.9') -or $confirmed.installedIdentity -ne "monergy-default-access-pack/$($confirmed.installedVersion)") {
+                throw "Lender-capable Default Access Pack readback failed for $tenantId."
             }
             $roles = Invoke-RestMethod "$url/access-api/v1/administration/roles?limit=100" -Headers $headers -TimeoutSec 15
             $lenderRole = $roles.items | Where-Object code -eq 'lender-professional'
@@ -868,6 +874,45 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
     Save-Text 'p3-lender-policy-2-8-initialized' $state.instanceId
     Protect-Files
 }
+if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-financial-professional-policy-2-9-initialized'))) {
+    foreach ($tenantId in @('T001','T002')) {
+        $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        try {
+            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
+            if ($pack.installedVersion -ne '2.9') {
+                $plan = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/plan" -Headers $headers -TimeoutSec 15
+                if ($plan.targetVersion -ne '2.9' -or $plan.alreadyInstalled -or @($plan.conflicts).Count -ne 0) {
+                    throw "Default Access Pack 2.9 cannot be adopted safely for $tenantId."
+                }
+                $adoption = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/adopt" -Method Post -ContentType 'application/json' -Headers $headers -Body (@{
+                    expectedPolicyVersion=$plan.policyVersion
+                    operationId='p3-financial-professional-policy-2-9'
+                    planHash=$plan.planHash
+                }|ConvertTo-Json) -TimeoutSec 30
+                if ($adoption.packVersion -ne '2.9') { throw "Default Access Pack adoption returned an unexpected version for $tenantId." }
+            }
+            $confirmed = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
+            if ($confirmed.installedVersion -ne '2.9' -or $confirmed.installedIdentity -ne 'monergy-default-access-pack/2.9') {
+                throw "Default Access Pack 2.9 readback failed for $tenantId."
+            }
+            $roles = Invoke-RestMethod "$url/access-api/v1/administration/roles?limit=100" -Headers $headers -TimeoutSec 15
+            $professionalRole = $roles.items | Where-Object code -eq 'financial-professional'
+            if ($null -eq $professionalRole) { throw 'The Financial Professional role is missing from the owner-confirmed Default Access Pack.' }
+            $members = Invoke-RestMethod "$url/access-api/v1/administration/members?limit=100" -Headers $headers -TimeoutSec 15
+            $member = $members.items | Where-Object actorId -eq 'A600'
+            if ($null -eq $member) { throw 'The Financial Professional membership is missing.' }
+            if ($member.businessRoleId -ne $professionalRole.id) {
+                Invoke-RestMethod "$url/access-api/v1/administration/members/A600" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;businessRoleId=$professionalRole.id;active=$true;tenantAdmin=$false}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+            }
+        } finally {
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+        }
+    }
+    Save-Text 'p3-financial-professional-policy-2-9-initialized' $state.instanceId
+    Protect-Files
+}
 Write-Host "Local customer workspace is ready: $url/"
 Write-Host "Local access administration is ready: $url/access"
 Write-Host 'Administration, identities, sessions and access audit persist across Stop/Start.'
@@ -876,6 +921,7 @@ Write-Host "Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Actio
 if ($onboarding) { Write-Host "Show the customer key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A100" }
 if ($onboarding) { Write-Host "Show the DSA / Case Manager key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A400" }
 if ($onboarding) { Write-Host "Show the Lender Professional key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A500" }
+if ($onboarding) { Write-Host "Show the Financial Professional key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A600" }
 if ($Action -eq 'Welcome') {
     foreach ($name in @('personaTesterAccess','personaTesterChallenge')) {
         if ($null -eq $state.tokens.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$state.tokens.$name)) {
@@ -883,7 +929,7 @@ if ($Action -eq 'Welcome') {
         }
     }
     $email = $Actor.ToLowerInvariant() + '@example.test'
-    $returnPath = switch ($Actor) { 'A900' { '/access' } 'A300' { '/advisor' } 'A400' { '/dsa' } 'A500' { '/lender' } default { '/' } }
+    $returnPath = switch ($Actor) { 'A900' { '/access' } 'A300' { '/advisor' } 'A400' { '/dsa' } 'A500' { '/lender' } 'A600' { '/financial-professional' } default { '/' } }
     $request = @{ tenantId=$Tenant; email=$email; returnPath=$returnPath; requestId=[guid]::NewGuid().ToString('N') } | ConvertTo-Json -Compress
     $headers = @{ 'X-Monergy-Tester-Activation'=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess)) }
     $welcome = Invoke-RestMethod "$url/identity-api/local/v1/persona-credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15

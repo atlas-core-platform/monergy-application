@@ -9,7 +9,7 @@ internal static partial class LocalUatBootstrap
 {
     private const string OnboardingFolder = "/var/lib/monergy-onboarding";
     private const int ExpectedAccessManagementSchemaVersion = 8;
-    private static readonly string[] ReferenceActors = ["A100", "A200", "A300", "A500", "A900", "A901"];
+    private static readonly string[] ReferenceActors = ["A100", "A200", "A300", "A400", "A500", "A600", "A900", "A901"];
 
     private static async Task PrepareOnboardingAsync(UatProfile profile)
     {
@@ -105,6 +105,40 @@ internal static partial class LocalUatBootstrap
             throw new InvalidOperationException("Reference lender assignment mismatch.");
     }
 
+    private static async Task SeedFinancialProfessionalReviewAsync(NpgsqlConnection connection, string tenant, string instance)
+    {
+        var customer = tenant == "T001" ? "reference-customer" : "other-customer";
+        var review = tenant == "T001" ? "local-financial-review-001" : "local-financial-review-002";
+        var reference = tenant == "T001" ? "Financial review 001" : "Financial review 002";
+        await using var command = new NpgsqlCommand("""
+            INSERT INTO application_case.financial_professional_reviews(
+                tenant_id,review_id,review_reference,customer_id,assigned_professional_actor_id,
+                assignment_source,state,version,assigned_at)
+            VALUES(@tenant,@review,@reference,@customer,'A600',@source,'Assigned',1,clock_timestamp())
+            ON CONFLICT(tenant_id,review_id) DO NOTHING;
+            INSERT INTO application_case.financial_review_sources(
+                tenant_id,review_id,source_code,label,owner_service,resource_reference,
+                sequence,assigned_version,current_version)
+            VALUES(@tenant,@review,'profile-summary','Customer-reviewed financial profile','Financial Profile',
+                    @profile,1,1,1),
+                  (@tenant,@review,'supporting-evidence','Supporting evidence index','Evidence',
+                    @evidence,2,1,1)
+            ON CONFLICT(tenant_id,review_id,source_code) DO NOTHING;
+            SELECT assigned_professional_actor_id='A600' AND customer_id=@customer AND assignment_source=@source
+            FROM application_case.financial_professional_reviews
+            WHERE tenant_id=@tenant AND review_id=@review;
+            """, connection);
+        command.Parameters.AddWithValue("tenant", tenant);
+        command.Parameters.AddWithValue("review", review);
+        command.Parameters.AddWithValue("reference", reference);
+        command.Parameters.AddWithValue("customer", customer);
+        command.Parameters.AddWithValue("source", "local-uat-fixture:" + instance + ":" + review);
+        command.Parameters.AddWithValue("profile", tenant == "T001" ? "financial-profile-source-001" : "financial-profile-source-002");
+        command.Parameters.AddWithValue("evidence", tenant == "T001" ? "evidence-source-001" : "evidence-source-002");
+        if (await command.ExecuteScalarAsync().ConfigureAwait(false) is not true)
+            throw new InvalidOperationException("Reference Financial Professional assignment mismatch.");
+    }
+
     private static async Task RecordOnboardingAsync(UatProfile profile, NpgsqlConnection cluster)
     {
         Directory.CreateDirectory(OnboardingFolder);
@@ -155,7 +189,7 @@ internal static partial class LocalUatBootstrap
                 var table = database.Service == "audit" ? "audit.access_tenant_identity" : schema + ".tenant_identity";
                 var sql = $"SELECT tenant_id=@tenant FROM {table} WHERE singleton;";
                 if (step == TenantProvisioningStep.ServiceMigrationsApplied)
-                    sql = $"SELECT tenant_id=@tenant AND schema_version={(database.Service == "am" ? ExpectedAccessManagementSchemaVersion : database.Service == "application-case" ? 3 : 1)} FROM {table} WHERE singleton;";
+                    sql = $"SELECT tenant_id=@tenant AND schema_version={(database.Service == "am" ? ExpectedAccessManagementSchemaVersion : database.Service == "application-case" ? 4 : 1)} FROM {table} WHERE singleton;";
                 if (step == TenantProvisioningStep.InitialAdministratorIdentityProvisioned && database.Service == "customer-identity")
                     sql = "SELECT EXISTS(SELECT 1 FROM customer_identity.tenant_principals WHERE actor_id='A900' AND normalized_email='a900@example.test');";
                 if (step == TenantProvisioningStep.AccessManagementBootstrapped && database.Service == "am")

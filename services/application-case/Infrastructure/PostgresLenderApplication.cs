@@ -197,7 +197,7 @@ public sealed class PostgresLenderApplication : ILenderApplication, IAsyncDispos
             var valid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
                 SELECT EXISTS(
                     SELECT 1 FROM application_case.tenant_identity
-                    WHERE singleton AND tenant_id=@Tenant AND schema_version=3)
+                    WHERE singleton AND tenant_id=@Tenant AND schema_version=4)
                   AND has_table_privilege(current_user,'application_case.lender_applications','SELECT')
                   AND has_column_privilege(current_user,'application_case.lender_applications','state','UPDATE')
                   AND has_column_privilege(current_user,'application_case.lender_applications','version','UPDATE')

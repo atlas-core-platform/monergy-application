@@ -44,7 +44,7 @@ public sealed record RolePolicySnapshot(string RoleId, long PolicyVersion, IRead
 
 public sealed class CapabilityCatalog
 {
-    public const string CurrentVersion = "2026-11-15.1";
+    public const string CurrentVersion = "2026-11-16.1";
     private readonly IReadOnlyDictionary<string, CapabilityDefinition> _byId;
 
     public CapabilityCatalog()
@@ -69,7 +69,8 @@ public sealed class CapabilityCatalog
             New("application-case.case.create", "application-case", null, "create", "Create assistance case", CapabilityRisk.Mutation, AuditRequirement.AllDecisions),
             New("application-case.case.accept", "application-case", null, "accept", "Accept assistance case", CapabilityRisk.Mutation, AuditRequirement.AllDecisions),
             New("application-case.advisor-engagement.manage", "application-case", "customer", "manage", "Manage assigned customer advisory engagement", CapabilityRisk.Mutation, AuditRequirement.AllDecisions),
-            New("application-case.lender-application.review", "application-case", null, "review", "Review assigned lending application", CapabilityRisk.Mutation, AuditRequirement.AllDecisions)
+            New("application-case.lender-application.review", "application-case", null, "review", "Review assigned lending application", CapabilityRisk.Mutation, AuditRequirement.AllDecisions),
+            New("application-case.financial-review.certify", "application-case", null, "certify", "Review and certify assigned financial information", CapabilityRisk.Mutation, AuditRequirement.AllDecisions)
         };
         _byId = new ReadOnlyDictionary<string, CapabilityDefinition>(
             values.ToDictionary(value => value.CapabilityId, StringComparer.Ordinal));

@@ -251,11 +251,11 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
     'operations-support':
       'Operational support access becomes available only through implemented support operations.',
     'dsa-case-manager':
-      'Case-management tasks remain unavailable until the case owner is implemented.',
+      'Assistance-case work is limited to submitted cases and the current case-acceptance capability.',
     'lender-professional':
-      'Lending tasks remain unavailable until application/lender owners are implemented.',
+      'Lending review requires an exact application assignment and remains a lender-owned decision.',
     'financial-professional':
-      'Professional verification tasks remain unavailable until governed engagements are implemented.',
+      'Financial review requires an exact assignment, current customer sharing and signer-owned certification.',
     'property-valuer':
       'Valuation tasks remain unavailable until governed valuation assignments are implemented.',
     'legal-advisor':

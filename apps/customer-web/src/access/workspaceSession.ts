@@ -23,6 +23,7 @@ export type WorkspaceAuthorization =
   | { area: 'advisor'; authority: 'FinancialAdvisor'; policyVersion: number; subjectVersion: number; recordedRelationshipCount: number }
   | { area: 'dsa'; authority: 'DsaCaseManager'; policyVersion: number; subjectVersion: number }
   | { area: 'lender'; authority: 'LenderProfessional'; policyVersion: number; subjectVersion: number }
+  | { area: 'financial-professional'; authority: 'FinancialProfessional'; policyVersion: number; subjectVersion: number }
   | { area: 'product'; context: ProductWorkspaceContext };
 export interface WorkspaceSessionState {
   status: 'public' | 'connecting' | 'verifying' | 'authorized' | 'disconnected';
