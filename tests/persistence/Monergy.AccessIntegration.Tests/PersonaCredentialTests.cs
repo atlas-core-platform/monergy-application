@@ -121,6 +121,43 @@ public sealed class PersonaCredentialTests
     }
 
     [Theory]
+    [InlineData("/")]
+    [InlineData("/access")]
+    [InlineData("/advisor")]
+    [InlineData("/dsa")]
+    [InlineData("/lender")]
+    [InlineData("/financial-professional")]
+    [InlineData("/property-valuer")]
+    public async Task TesterWelcomeAllowsOnlyImplementedPersonaWorkspaceDestinations(string returnPath)
+    {
+        var fixture = new Fixture();
+        var owner = new PersonaTesterActivation(fixture.Repository, fixture.Protector,
+            fixture.Passwords, TimeProvider.System);
+
+        var created = await owner.CreateWelcomeLinkAsync(new(
+            "T001", "a300@example.test", returnPath, new string('c', 32)), default);
+        var path = Assert.IsType<string>(created.GetType().GetProperty("welcomePath")!.GetValue(created));
+
+        Assert.EndsWith("&return=" + Uri.EscapeDataString(returnPath), path, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TesterWelcomeRejectsAnUnimplementedWorkspaceDestination()
+    {
+        var fixture = new Fixture();
+        var owner = new PersonaTesterActivation(fixture.Repository, fixture.Protector,
+            fixture.Passwords, TimeProvider.System);
+
+        var denied = await Assert.ThrowsAsync<TenantAccessException>(() =>
+            owner.CreateWelcomeLinkAsync(new(
+                "T001", "a300@example.test", "/legal-advisor", new string('d', 32)), default));
+
+        Assert.Equal("WELCOME_DESTINATION_INVALID", denied.Code);
+        Assert.Equal(400, denied.StatusCode);
+        Assert.Equal(0, fixture.Repository.TesterIssues);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]

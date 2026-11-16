@@ -27,7 +27,13 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
             await using var owner = new NpgsqlConnection(Required($"P3_APPLICATION_CASE_{tenant}_OWNER"));
             await owner.OpenAsync();
             await owner.ExecuteAsync("""
-                TRUNCATE application_case.financial_review_events,
+                TRUNCATE application_case.property_valuation_events,
+                    application_case.property_valuation_operations,
+                    application_case.property_valuation_revision_evidence,
+                    application_case.property_valuation_revisions,
+                    application_case.property_valuation_evidence,
+                    application_case.property_valuation_assignments,
+                    application_case.financial_review_events,
                     application_case.financial_review_operations,
                     application_case.financial_review_certification_sources,
                     application_case.financial_review_notes,
@@ -146,6 +152,16 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
             "DELETE FROM application_case.lender_applications;",
             "UPDATE application_case.lender_application_documents SET present=false;",
             "DELETE FROM application_case.lender_application_documents;",
+            "UPDATE application_case.property_valuation_revisions SET findings='forged';",
+            "DELETE FROM application_case.property_valuation_revisions;",
+            "UPDATE application_case.property_valuation_revision_evidence SET source_version=99;",
+            "DELETE FROM application_case.property_valuation_revision_evidence;",
+            "UPDATE application_case.property_valuation_events SET action='VALUATION';",
+            "DELETE FROM application_case.property_valuation_events;",
+            "UPDATE application_case.property_valuation_assignments SET assigned_valuer_actor_id='A701';",
+            "DELETE FROM application_case.property_valuation_assignments;",
+            "UPDATE application_case.property_valuation_evidence SET current_version=99;",
+            "DELETE FROM application_case.property_valuation_evidence;",
             "UPDATE application_case.tenant_identity SET tenant_id='T002';",
         }) await Assert.ThrowsAsync<PostgresException>(() => runtime.ExecuteAsync(sql));
     }
@@ -265,6 +281,59 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
         Assert.False(await runtime.ExecuteScalarAsync<bool>("SELECT has_table_privilege('application_case.financial_review_events','UPDATE,DELETE,TRUNCATE');"));
     }
 
+    [Fact]
+    public async Task PropertyValuationIsDurableVersionedSourceBoundAndTenantIsolated()
+    {
+        await SeedPropertyValuationAsync("T001", "valuation-001", "A700", "C001");
+        var valuer = PropertyValuer("T001", "A700");
+        var authority = PropertyAuthority("T001", "A700", "C001");
+        await using (var owner = PropertyOwner())
+        {
+            var assigned = Assert.Single(await owner.ListAsync(valuer, Confirm(authority), default));
+            var inspected = await owner.InspectEvidenceAsync(assigned.ValuationId, "property-record", valuer,
+                new(Op('a'), 1), Confirm(authority), default);
+            var replay = await owner.InspectEvidenceAsync(assigned.ValuationId, "property-record", valuer,
+                new(Op('a'), 1), Confirm(authority), default);
+            Assert.Equal(inspected.Version, replay.Version);
+            var reused = await Assert.ThrowsAsync<ApplicationCaseException>(() => owner.InspectEvidenceAsync(
+                assigned.ValuationId, "title-evidence", valuer, new(Op('a'), 1),
+                Confirm(authority), default));
+            Assert.Equal("OPERATION_REUSE_CONFLICT", reused.Code);
+            _ = await owner.InspectEvidenceAsync(assigned.ValuationId, "title-evidence", valuer,
+                new(Op('b'), 2), Confirm(authority), default);
+            _ = await owner.RecordValuationAsync(assigned.ValuationId, valuer,
+                new(Op('c'), 3, 425000m, "USD", new DateOnly(2026, 11, 15),
+                    "Comparable sales", "Initial source-bound professional valuation."),
+                Confirm(authority), default);
+            var revised = await owner.RecordValuationAsync(assigned.ValuationId, valuer,
+                new(Op('d'), 4, 430000m, "USD", new DateOnly(2026, 11, 16),
+                    "Comparable sales", "Revised source-bound professional valuation."),
+                Confirm(authority), default);
+            Assert.Equal(2, revised.Revisions.Count);
+        }
+
+        await using var reconstructed = PropertyOwner();
+        var durable = Assert.Single(await reconstructed.ListAsync(valuer, Confirm(authority), default));
+        Assert.Equal("Durable test data", durable.DataDurability);
+        Assert.Equal(2, durable.Revisions.Count);
+        Assert.Empty(await reconstructed.ListAsync(PropertyValuer("T001", "A701"),
+            Confirm(PropertyAuthority("T001", "A701", "C001")), default));
+        Assert.Empty(await reconstructed.ListAsync(PropertyValuer("T002", "A700"),
+            Confirm(PropertyAuthority("T002", "A700", "C002")), default));
+        var customer = Assert.Single(await reconstructed.ListCustomerResultsAsync(
+            Customer("T001", "A100", "C001"), default));
+        Assert.Equal(430000m, customer.MarketValue);
+
+        await using var db = new NpgsqlConnection(Required("P3_APPLICATION_CASE_T001_OWNER"));
+        await db.OpenAsync();
+        Assert.Equal(4, await db.ExecuteScalarAsync<int>("SELECT count(*) FROM application_case.property_valuation_events WHERE valuation_id='valuation-001';"));
+        Assert.Equal(4, await db.ExecuteScalarAsync<int>("SELECT count(*) FROM application_case.property_valuation_revision_evidence WHERE valuation_id='valuation-001';"));
+        await using var runtime = new NpgsqlConnection(Required("P3_APPLICATION_CASE_T001_RUNTIME"));
+        await runtime.OpenAsync();
+        Assert.True(await runtime.ExecuteScalarAsync<bool>("SELECT has_table_privilege('application_case.property_valuation_revisions','SELECT,INSERT');"));
+        Assert.False(await runtime.ExecuteScalarAsync<bool>("SELECT has_table_privilege('application_case.property_valuation_revisions','UPDATE,DELETE,TRUNCATE');"));
+    }
+
     private static PostgresAssistanceCaseApplication Owner() => new(
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
@@ -275,6 +344,9 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
     private static PostgresFinancialProfessionalReview ProfessionalOwner() => new(
+        new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
+        new FixedTimeProvider(Now));
+    private static PostgresPropertyValuationApplication PropertyOwner() => new(
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
 
@@ -297,6 +369,9 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
     private static FinancialProfessionalContext Professional(string tenant, string actor) => new(tenant, actor, 1, 1);
     private static FinancialProfessionalReviewContext ProfessionalAuthority(string tenant, string actor, string customer) =>
         new(tenant, actor, customer, 1, 1, 1, 1);
+    private static PropertyValuerContext PropertyValuer(string tenant, string actor) => new(tenant, actor, 1, 1);
+    private static PropertyValuationContext PropertyAuthority(string tenant, string actor, string customer) =>
+        new(tenant, actor, customer, 1, 1, 1, 1);
     private static string Op(char value) => new(value, 32);
     private static Func<CancellationToken, Task<CaseActorContext>> Confirm(CaseActorContext value) =>
         _ => Task.FromResult(value);
@@ -306,6 +381,9 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
         _ => Task.FromResult(value);
     private static Func<string, CancellationToken, Task<FinancialProfessionalReviewContext>> Confirm(
         FinancialProfessionalReviewContext value) => (customer, _) =>
+            Task.FromResult(customer == value.CustomerId ? value : throw new ApplicationCaseException("CUSTOMER_CONTEXT_INVALID", 400));
+    private static Func<string, CancellationToken, Task<PropertyValuationContext>> Confirm(
+        PropertyValuationContext value) => (customer, _) =>
             Task.FromResult(customer == value.CustomerId ? value : throw new ApplicationCaseException("CUSTOMER_CONTEXT_INVALID", 400));
     private static async Task SeedLenderApplicationAsync(string tenant, string application, string actor)
     {
@@ -342,6 +420,25 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
                   (@Tenant,@Review,'supporting-evidence','Supporting evidence index','Evidence',
                     'evidence-source-001',2,1,1);
             """, new { Tenant = tenant, Review = review, Actor = actor, Customer = customer, Now });
+    }
+    private static async Task SeedPropertyValuationAsync(string tenant, string valuation, string actor, string customer)
+    {
+        await using var owner = new NpgsqlConnection(Required($"P3_APPLICATION_CASE_{tenant}_OWNER"));
+        await owner.OpenAsync();
+        await owner.ExecuteAsync("""
+            INSERT INTO application_case.property_valuation_assignments(
+                tenant_id,valuation_id,property_reference,property_label,customer_id,
+                assigned_valuer_actor_id,assignment_source,state,version,assigned_at)
+            VALUES(@Tenant,@Valuation,'property-saved','Family home',@Customer,@Actor,
+                'physical-test-fixture','Assigned',1,@Now);
+            INSERT INTO application_case.property_valuation_evidence(
+                tenant_id,valuation_id,evidence_code,label,owner_service,resource_reference,
+                sequence,assigned_version,current_version)
+            VALUES(@Tenant,@Valuation,'property-record','Customer-reviewed property record','Financial Profile',
+                    'property-saved',1,1,1),
+                  (@Tenant,@Valuation,'title-evidence','Assigned title evidence','Evidence',
+                    'evidence-source-001',2,1,1);
+            """, new { Tenant = tenant, Valuation = valuation, Actor = actor, Customer = customer, Now });
     }
     private static string Required(string name) => Environment.GetEnvironmentVariable(name)
         ?? throw new InvalidOperationException($"Physical test configuration {name} is required.");

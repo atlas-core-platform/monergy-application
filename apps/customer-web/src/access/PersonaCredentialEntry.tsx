@@ -29,7 +29,7 @@ export function PersonaCredentialEntry({
   onSignIn: (tenant: string, email: string, password: string) => Promise<void>;
   onCancel: () => void;
   activationMode?: 'email' | 'tester-link';
-  returnPath?: '/' | '/access' | '/advisor' | '/dsa' | '/lender' | '/financial-professional';
+  returnPath?: '/' | '/access' | '/advisor' | '/dsa' | '/lender' | '/financial-professional' | '/property-valuer';
 }) {
   const [form] = Form.useForm<Values>();
   const [mode, setMode] = useState<Mode>('login');

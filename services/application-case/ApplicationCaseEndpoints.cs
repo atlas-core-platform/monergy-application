@@ -187,5 +187,61 @@ public static class ApplicationCaseEndpoints
                 (customer, _) => authority.RequireFinancialProfessionalReviewAsync(http, customer),
                 http.RequestAborted).ConfigureAwait(false));
         });
+
+        routes.MapGet("/property-valuer/context", async (HttpContext http,
+            ApplicationCaseAuthority authority) =>
+        {
+            var context = await authority.RequirePropertyValuerAsync(http).ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                context.TenantId,
+                context.ActorId,
+                authority = "PropertyValuer",
+                context.PolicyVersion,
+                context.SubjectVersion,
+            });
+        });
+        routes.MapGet("/property-valuer/valuations", async (HttpContext http,
+            ApplicationCaseAuthority authority, IPropertyValuationApplication owner) =>
+        {
+            var context = await authority.RequirePropertyValuerAsync(http).ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                context.TenantId,
+                context.ActorId,
+                items = await owner.ListAsync(context,
+                    (customer, _) => authority.RequirePropertyValuationAsync(http, customer),
+                    http.RequestAborted).ConfigureAwait(false),
+            });
+        });
+        routes.MapPost("/property-valuer/valuations/{valuationId}/evidence/{evidenceCode}/inspection", async (
+            string valuationId, string evidenceCode, InspectPropertyEvidence request, HttpContext http,
+            ApplicationCaseAuthority authority, IPropertyValuationApplication owner) =>
+        {
+            var context = await authority.RequirePropertyValuerAsync(http).ConfigureAwait(false);
+            return Results.Ok(await owner.InspectEvidenceAsync(valuationId, evidenceCode, context, request,
+                (customer, _) => authority.RequirePropertyValuationAsync(http, customer),
+                http.RequestAborted).ConfigureAwait(false));
+        });
+        routes.MapPost("/property-valuer/valuations/{valuationId}/revisions", async (
+            string valuationId, RecordPropertyValuation request, HttpContext http,
+            ApplicationCaseAuthority authority, IPropertyValuationApplication owner) =>
+        {
+            var context = await authority.RequirePropertyValuerAsync(http).ConfigureAwait(false);
+            return Results.Ok(await owner.RecordValuationAsync(valuationId, context, request,
+                (customer, _) => authority.RequirePropertyValuationAsync(http, customer),
+                http.RequestAborted).ConfigureAwait(false));
+        });
+        routes.MapGet("/property-valuations/me", async (HttpContext http,
+            ApplicationCaseAuthority authority, IPropertyValuationApplication owner) =>
+        {
+            var context = await authority.RequireCustomerAsync(http).ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                context.TenantId,
+                context.ActorId,
+                items = await owner.ListCustomerResultsAsync(context, http.RequestAborted).ConfigureAwait(false),
+            });
+        });
     }
 }
