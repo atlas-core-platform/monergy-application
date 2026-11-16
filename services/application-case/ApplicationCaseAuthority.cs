@@ -6,6 +6,40 @@ namespace Monergy.Services.ApplicationCase;
 public sealed class ApplicationCaseAuthority(CustomerOwnerClient owners, TenantAccessClient access,
     FinancialProfessionalConsentClient professionalConsent)
 {
+    public async Task<LegalAdvisorContext> RequireLegalAdvisorAsync(HttpContext http)
+    {
+        var session = await owners.SessionAsync(http).ConfigureAwait(false);
+        var decision = await access.EvaluateAsync(http,
+            new(LegalReviewPolicy.Capability, null, null)).ConfigureAwait(false);
+        if (decision.Outcome != "Allow" || decision.ActorId != session.ActorId ||
+            decision.SubjectVersion != session.SubjectVersion)
+            throw new ApplicationCaseException("LEGAL_ADVISOR_ACCESS_REQUIRED", 403);
+        return new(session.TenantId, session.ActorId, decision.PolicyVersion, decision.SubjectVersion);
+    }
+
+    public async Task<LegalReviewContext> RequireLegalReviewAsync(HttpContext http, string customerId)
+    {
+        if (!TenantAccessClient.Identifier(customerId, 128))
+            throw new ApplicationCaseException("CUSTOMER_CONTEXT_INVALID", 400);
+        var advisor = await RequireLegalAdvisorAsync(http).ConfigureAwait(false);
+        var customer = await owners.CustomerAsync(advisor.TenantId, customerId, http.RequestAborted)
+            .ConfigureAwait(false);
+        if (!customer.Active || customer.TenantId != advisor.TenantId || customer.CustomerId != customerId ||
+            customer.OwnerActorId == advisor.ActorId || customer.Version < 1)
+            throw new ApplicationCaseException("LEGAL_ADVISOR_CUSTOMER_ACCESS_REQUIRED", 403);
+        var consent = await professionalConsent.EvaluateAsync(advisor.TenantId, advisor.ActorId,
+            customerId, "evidence.document.read", http.RequestAborted).ConfigureAwait(false);
+        if (!consent.Allowed || consent.ExpiresAt is null || consent.ExpiresAt <= DateTimeOffset.UtcNow)
+            throw new ApplicationCaseException("LEGAL_ADVISOR_CUSTOMER_ACCESS_REQUIRED", 403);
+        var confirmed = await RequireLegalAdvisorAsync(http).ConfigureAwait(false);
+        var currentCustomer = await owners.CustomerAsync(advisor.TenantId, customerId, http.RequestAborted)
+            .ConfigureAwait(false);
+        if (confirmed != advisor || currentCustomer != customer)
+            throw new ApplicationCaseException("LEGAL_ADVISOR_AUTHORITY_CHANGED", 409);
+        return new(advisor.TenantId, advisor.ActorId, customerId, advisor.PolicyVersion,
+            advisor.SubjectVersion, customer.Version, consent.Version);
+    }
+
     public async Task<PropertyValuerContext> RequirePropertyValuerAsync(HttpContext http)
     {
         var session = await owners.SessionAsync(http).ConfigureAwait(false);

@@ -31,6 +31,9 @@ public static class ApplicationCaseRegistration
         services.AddSingleton<PropertyValuationApplication>();
         services.AddSingleton<IPropertyValuationApplication>(provider =>
             provider.GetRequiredService<PropertyValuationApplication>());
+        services.AddSingleton<LegalReviewApplication>();
+        services.AddSingleton<ILegalReviewApplication>(provider =>
+            provider.GetRequiredService<LegalReviewApplication>());
         return services;
     }
 
@@ -59,6 +62,9 @@ public static class ApplicationCaseRegistration
         services.AddSingleton<PostgresPropertyValuationApplication>();
         services.AddSingleton<IPropertyValuationApplication>(provider =>
             provider.GetRequiredService<PostgresPropertyValuationApplication>());
+        services.AddSingleton<PostgresLegalReviewApplication>();
+        services.AddSingleton<ILegalReviewApplication>(provider =>
+            provider.GetRequiredService<PostgresLegalReviewApplication>());
         services.AddHealthChecks().AddCheck<PostgresAssistanceCaseApplication>("application-case-storage");
         return services;
     }

@@ -296,7 +296,7 @@ public sealed class PostgresPropertyValuationApplication : IPropertyValuationApp
         {
             var valid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
                 SELECT EXISTS(SELECT 1 FROM application_case.tenant_identity
-                    WHERE singleton AND tenant_id=@Tenant AND schema_version=5)
+                    WHERE singleton AND tenant_id=@Tenant AND schema_version=6)
                   AND has_table_privilege(current_user,'application_case.property_valuation_assignments','SELECT')
                   AND has_column_privilege(current_user,'application_case.property_valuation_assignments','state','UPDATE')
                   AND has_column_privilege(current_user,'application_case.property_valuation_assignments','version','UPDATE')

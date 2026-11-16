@@ -211,6 +211,22 @@ static string? Route(string path, string method)
     }
     if (path == "/case-api/local/v1/cases/property-valuations/me" && method == "GET")
         return "http://127.0.0.1:5120" + path[9..];
+    const string legalCases = "/case-api/local/v1/cases/legal-advisor/";
+    if (path.StartsWith(legalCases, StringComparison.Ordinal))
+    {
+        var parts = path[legalCases.Length..].Split('/');
+        if (parts.Length == 1 && parts[0] is "context" or "reviews" && method == "GET")
+            return "http://127.0.0.1:5120" + path[9..];
+        if (parts.Length == 3 && parts[0] == "reviews" &&
+            TenantAccessClient.Identifier(parts[1], 128) && parts[2] == "revisions" && method == "POST")
+            return "http://127.0.0.1:5120" + path[9..];
+        if (parts.Length == 5 && parts[0] == "reviews" &&
+            TenantAccessClient.Identifier(parts[1], 128) && parts[2] == "documents" &&
+            TenantAccessClient.Identifier(parts[3], 64) && parts[4] == "inspection" && method == "POST")
+            return "http://127.0.0.1:5120" + path[9..];
+    }
+    if (path == "/case-api/local/v1/cases/legal-reviews/me" && method == "GET")
+        return "http://127.0.0.1:5120" + path[9..];
     if (path is "/case-api/local/v1/cases/context" or "/case-api/local/v1/cases/work" && method == "GET" ||
         path == cases + "/me" && method is "GET" or "POST")
         return "http://127.0.0.1:5120" + path[9..];
