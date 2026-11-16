@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 
-export const CURRENT_DEFAULT_ACCESS_PACK_VERSION = '2.7';
+export const CURRENT_DEFAULT_ACCESS_PACK_VERSION = '2.12';
 
 export interface OnboardingFeatures {
   customerRelationships: boolean;
