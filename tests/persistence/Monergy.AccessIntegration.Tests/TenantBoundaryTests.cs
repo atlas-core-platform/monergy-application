@@ -216,6 +216,19 @@ public sealed class TenantBoundaryTests
         Assert.Equal(HttpStatusCode.OK, afterOwnerDisposal.StatusCode);
     }
 
+    [Fact]
+    public void CustomerOwnerClientAllowsPhysicalOwnerPersistenceInLocalComposition()
+    {
+        var values = OwnerConfiguration().AsEnumerable()
+            .Where(item => item.Value is not null)
+            .ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
+        values["Monergy:Persistence:Provider"] = PhysicalPersistenceGuard.Provider;
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
+
+        using var client = new HttpClient(new ResponseHandler(new { ready = true }));
+        using var owner = new CustomerOwnerClient(configuration, client);
+    }
+
     private static TenantBoundaryOptions Options() => new() { Service = "evidence", CapabilityPrefix = "evidence.", ProbeUrl = "http://127.0.0.1:5111/", CustomerTenants = new Dictionary<string, string> { ["C001"] = "T001" } };
     private static IConfiguration OwnerConfiguration() => new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
     {

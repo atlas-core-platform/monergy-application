@@ -12,7 +12,7 @@ public static class TenantAccessIntegration
     {
         ArgumentNullException.ThrowIfNull(configuration);
         if (!IsSelected(configuration) || configuration["Monergy:ExecutionZone"] is not ("LOCAL" or "CI_EPHEMERAL") ||
-            ReferenceAdapterGuard.IsSelected(configuration) || !string.IsNullOrEmpty(configuration["Monergy:Persistence:Provider"]))
+            ReferenceAdapterGuard.IsSelected(configuration))
             throw new InvalidOperationException("Tenant owner integration requires an exclusive LOCAL/CI composition.");
     }
 
