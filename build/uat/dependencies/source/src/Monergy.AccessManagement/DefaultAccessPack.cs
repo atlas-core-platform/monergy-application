@@ -8,8 +8,8 @@ public sealed record DefaultRoleTemplate(
 
 public static class DefaultAccessPack
 {
-    public const string Version = "2.11";
-    public const string Identity = "monergy-default-access-pack/2.11";
+    public const string Version = "2.12";
+    public const string Identity = "monergy-default-access-pack/2.12";
 
     internal static IReadOnlyList<DefaultPermissionTemplate> Version1Permissions { get; } =
     [
@@ -106,11 +106,18 @@ public static class DefaultAccessPack
             ("application-case.property-valuation.manage", AuthorizationScope.Tenant))
     ];
 
-    public static IReadOnlyList<DefaultPermissionTemplate> Permissions { get; } =
+    internal static IReadOnlyList<DefaultPermissionTemplate> Version211Permissions { get; } =
     [
         .. Version210Permissions,
         Permission("default-permission-legal-review-manage", "assigned-legal-review", "Review assigned legal documents",
             ("application-case.legal-review.manage", AuthorizationScope.Tenant))
+    ];
+
+    public static IReadOnlyList<DefaultPermissionTemplate> Permissions { get; } =
+    [
+        .. Version211Permissions,
+        Permission("default-permission-job-recover", "operational-job-recovery", "Recover permitted operational jobs",
+            ("job-management.job.recover", AuthorizationScope.Tenant))
     ];
 
 
@@ -380,11 +387,18 @@ public static class DefaultAccessPack
         Role("default-role-legal-advisor", "legal-advisor", "Legal Advisor / Advocate")
     ];
 
-    public static IReadOnlyList<DefaultRoleTemplate> Roles { get; } =
+    internal static IReadOnlyList<DefaultRoleTemplate> Version211Roles { get; } =
     [
         .. Version210Roles.Where(role => role.Code != "legal-advisor"),
         Role("default-role-legal-advisor", "legal-advisor", "Legal Advisor / Advocate",
             "default-permission-legal-review-manage")
+    ];
+
+    public static IReadOnlyList<DefaultRoleTemplate> Roles { get; } =
+    [
+        .. Version211Roles.Where(role => role.Code != "operations-support"),
+        Role("default-role-operations-support", "operations-support", "Operations Support",
+            "default-permission-job-recover")
     ];
 
     public static void Validate(CapabilityCatalog catalog)

@@ -31,6 +31,7 @@ public sealed class ProductAuditCaptureTests
  [InlineData("/product-api/v1/evidence/document-version-one/processing","POST","DOCUMENT_UPDATE")]
  [InlineData("/product-api/v1/reports","POST","REPORT_GENERATION")]
  [InlineData("/jobs-api/local/v1/administration/processing/report-job-one/changes","POST","JOB_RECOVERY")]
+ [InlineData("/jobs-api/local/v1/operations/processing/report-job-one/changes","POST","JOB_RECOVERY")]
  [InlineData("/audit-api/local/v1/administration/audit-log/export","GET","DATA_EXPORT")]
  [InlineData("/product-api/v1/context","GET","API_ACCESS")]
  public void MinimumActivityMatrixUsesRouteCategoriesWithoutLoggingRawUrls(string path,string method,string action)

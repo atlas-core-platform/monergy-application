@@ -4,10 +4,10 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "5d7d3a0081407392aec309eac768189ad31efc3c",
-  "sourceTree": "7c24d8ce5bb2b5f987e2f0f259f44df0c18ec195",
-  "verificationStatus": "P3_07_SOURCE_VALIDATED",
-  "candidatePullRequest": 28,
+  "commit": "2f29b6341ba4ce64345c3abbc6d6c653d010b3cc",
+  "sourceTree": "aac2bcbc59126bb60ff5ee69863dd404851b09b2",
+  "verificationStatus": "P3_08_SOURCE_VALIDATED",
+  "candidatePullRequest": 29,
   "files": [
     {
       "path": "build/prepare-ci-databases.sh",
@@ -15,7 +15,7 @@
     },
     {
       "path": "build/provision-ci-tenants.sh",
-      "gitBlobSha": "4443d47596bbd4417c0f2b860c92b31c58dd8227"
+      "gitBlobSha": "c1455f534a88e4ceeea5e4e5ac8a420ceab09357"
     },
     {
       "path": "Directory.Build.props",
@@ -79,7 +79,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/DefaultAccessPack.cs",
-      "gitBlobSha": "bdb7cd5661f74216c171d5d38424e6cecf9c0e62"
+      "gitBlobSha": "b90eb0974166e8d8d1cbe0c1d7bc7a107319f64b"
     },
     {
       "path": "src/Monergy.AccessManagement/EventDeliveryProtocol.cs",
@@ -95,7 +95,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/ModelsAndEvaluator.cs",
-      "gitBlobSha": "12bc692883d3636db4a5f93203d330f5f29e3fe1"
+      "gitBlobSha": "47c23fcedc824f52bbd7c78d2e121dca20a9dd1a"
     },
     {
       "path": "src/Monergy.AccessManagement/Monergy.AccessManagement.csproj",
@@ -111,7 +111,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessAdministration.cs",
-      "gitBlobSha": "8cc8046e1e6780633422776fb9fa4418ae987b75"
+      "gitBlobSha": "08bfb29365e759afbb039fabd0528ffb065664ae"
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessPolicyStore.cs",
@@ -135,7 +135,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/TenantConnections.cs",
-      "gitBlobSha": "6aa6974e67da2be8d13bfa0291de8e38eb2bc2a2"
+      "gitBlobSha": "bead0788398fc097dab99b52ff65c2d4e249f8fa"
     },
     {
       "path": "tools/Monergy.AccessManagement.DeliveryReference/fixture.sql",

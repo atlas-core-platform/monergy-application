@@ -3,56 +3,77 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Routing;
 using Monergy.Platform;
 using Monergy.Services.JobManagement.Application;
 namespace Monergy.Services.JobManagement;
+
+public sealed record OperationsSupportContext(string TenantId,string ActorId,string Authority,long PolicyVersion,long SubjectVersion);
 
 public static class JobAdministrationEndpoints
 {
  private static readonly JsonSerializerOptions Json=new(JsonSerializerDefaults.Web){PropertyNameCaseInsensitive=false,RespectRequiredConstructorParameters=true,RespectNullableAnnotations=true,UnmappedMemberHandling=JsonUnmappedMemberHandling.Disallow};
  public static void MapJobAdministration(this WebApplication app,bool allowRetry=true,bool allowReportRetry=false)
  {
-  var group=app.MapGroup("/local/v1/administration/processing");group.AddEndpointFilter(Filter);
+  MapGroup(app.MapGroup("/local/v1/administration/processing"),false,allowRetry,allowReportRetry);
+  var operations=app.MapGroup("/local/v1/operations");
+  operations.MapGet("/context",async(HttpContext http,TenantAccessClient access)=>
+  {
+   var support=await Require(http,access,true);return new OperationsSupportContext(support.TenantId,support.ActorId,support.Authority,support.PolicyVersion,support.SubjectVersion);
+  }).AddEndpointFilter(Filter);
+  MapGroup(operations.MapGroup("/processing"),true,allowRetry,allowReportRetry);
+ }
+ private static void MapGroup(RouteGroupBuilder group,bool operationsSupport,bool allowRetry,bool allowReportRetry)
+ {
+  group.AddEndpointFilter(Filter);
   group.MapGet("",async(HttpContext http,TenantAccessClient access,TenantBoundaryOptions bindings,IJobAdministrationRepository repo)=>{
-   var admin=await access.RequireAdministratorAsync(http);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);var q=Query(http.Request,"search","state","customerId","after","documentVersionId");var query=new AdminJobQuery(q.GetValueOrDefault("search")??"",q.GetValueOrDefault("state")??"all",q.GetValueOrDefault("customerId"),q.GetValueOrDefault("after"),q.GetValueOrDefault("documentVersionId"));JobAdministration.Query(query);
+   var admin=await Require(http,access,operationsSupport);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);var q=Query(http.Request,"search","state","customerId","after","documentVersionId");var query=new AdminJobQuery(q.GetValueOrDefault("search")??"",q.GetValueOrDefault("state")??"all",q.GetValueOrDefault("customerId"),q.GetValueOrDefault("after"),q.GetValueOrDefault("documentVersionId"));JobAdministration.Query(query);
    var page=await repo.ListAdminAsync(scope,query,http.RequestAborted);if(page.TenantId!=scope.TenantId||page.Items.Count>50||page.Items.Select(x=>x.JobId).Distinct().Count()!=page.Items.Count||page.NextCursor is not null&&(page.Items.Count!=50||page.NextCursor!=page.Items[^1].JobId)||page.Matching<page.Items.Count||page.Matching>page.Counts.Queued+page.Counts.Processing+page.Counts.Completed+page.Counts.Failed+page.Counts.Retrying+page.Counts.Cancelled||new[]{page.Counts.Queued,page.Counts.Processing,page.Counts.Completed,page.Counts.Failed,page.Counts.Retrying,page.Counts.Cancelled}.Any(x=>x<0))throw Invalid();
    AdminJobSummary? last=null;foreach(var row in page.Items){Bound(row,scope,row.JobId);if(query.DocumentVersionId is not null&&row.DocumentVersionId!=query.DocumentVersionId||query.State!="all"&&row.State!=query.State||query.CustomerId is not null&&row.CustomerId!=query.CustomerId||!row.JobId.Contains(query.Search,StringComparison.OrdinalIgnoreCase)||last is not null&&(row.RequestedAt>last.RequestedAt||row.RequestedAt==last.RequestedAt&&StringComparer.Ordinal.Compare(row.JobId,last.JobId)>=0))throw Invalid();last=row;}
-   await Confirm(http,access,admin);return page;
+   await Confirm(http,access,admin,operationsSupport);return page;
   });
   group.MapGet("/{jobId}",async(string jobId,HttpContext http,TenantAccessClient access,TenantBoundaryOptions bindings,IJobAdministrationRepository repo)=>{
-   var admin=await access.RequireAdministratorAsync(http);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);Id(jobId);Query(http.Request);var row=await repo.ReadAdminAsync(scope,jobId,http.RequestAborted)??throw Missing();Bound(row,scope,jobId);await Confirm(http,access,admin);return row;
+   var admin=await Require(http,access,operationsSupport);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);Id(jobId);Query(http.Request);var row=await repo.ReadAdminAsync(scope,jobId,http.RequestAborted)??throw Missing();Bound(row,scope,jobId);await Confirm(http,access,admin,operationsSupport);return row;
   });
   group.MapGet("/{jobId}/attempts",async(string jobId,HttpContext http,TenantAccessClient access,TenantBoundaryOptions bindings,IJobAdministrationRepository repo)=>{
-   var admin=await access.RequireAdministratorAsync(http);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);Id(jobId);var q=Query(http.Request,"beforeAttempt");int? before=null;if(q.TryGetValue("beforeAttempt",out var value)){if(!int.TryParse(value,out var number)||number<1||value!=number.ToString(CultureInfo.InvariantCulture))throw BadQuery();before=number;}
+   var admin=await Require(http,access,operationsSupport);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);Id(jobId);var q=Query(http.Request,"beforeAttempt");int? before=null;if(q.TryGetValue("beforeAttempt",out var value)){if(!int.TryParse(value,out var number)||number<1||value!=number.ToString(CultureInfo.InvariantCulture))throw BadQuery();before=number;}
    var page=await repo.AttemptsAdminAsync(scope,jobId,before,http.RequestAborted);if(page.TenantId!=scope.TenantId||page.JobId!=jobId||page.Items.Count>50||page.NextBeforeAttempt is not null&&(page.Items.Count!=50||page.NextBeforeAttempt!=page.Items[^1].Attempt))throw Invalid();var last=before??int.MaxValue;
    foreach(var row in page.Items){if(row.Attempt<1||row.Attempt>=last||row.StartedAt<DateTimeOffset.UnixEpoch||row.EndedAt<row.StartedAt||row.Outcome is not null&&!TenantAccessClient.Identifier(row.Outcome,160)||row.FailureCode is not null&&!TenantAccessClient.Identifier(row.FailureCode,160))throw Invalid();last=row.Attempt;}
-   await Confirm(http,access,admin);return page;
+   await Confirm(http,access,admin,operationsSupport);return page;
   });
   group.MapGet("/{jobId}/history",async(string jobId,HttpContext http,TenantAccessClient access,TenantBoundaryOptions bindings,IJobAdministrationRepository repo)=>{
-   var admin=await access.RequireAdministratorAsync(http);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);Id(jobId);var q=Query(http.Request,"beforeId");var before=q.GetValueOrDefault("beforeId");if(before is not null)Operation(before);
+   var admin=await Require(http,access,operationsSupport);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);Id(jobId);var q=Query(http.Request,"beforeId");var before=q.GetValueOrDefault("beforeId");if(before is not null)Operation(before);
    var page=await repo.HistoryAdminAsync(scope,jobId,before,http.RequestAborted);if(page.TenantId!=scope.TenantId||page.JobId!=jobId||page.Items.Count>50||page.Items.Select(x=>x.OperationId).Distinct().Count()!=page.Items.Count||page.NextBeforeId is not null&&(page.Items.Count!=50||page.NextBeforeId!=page.Items[^1].OperationId))throw Invalid();AdminJobReceipt? last=null;
-   foreach(var row in page.Items){Bound(row,scope,jobId);if(last is not null&&(row.RecordedAt>last.RecordedAt||row.RecordedAt==last.RecordedAt&&StringComparer.Ordinal.Compare(row.OperationId,last.OperationId)>=0))throw Invalid();last=row;}await Confirm(http,access,admin);return page;
+   foreach(var row in page.Items){Bound(row,scope,jobId);if(last is not null&&(row.RecordedAt>last.RecordedAt||row.RecordedAt==last.RecordedAt&&StringComparer.Ordinal.Compare(row.OperationId,last.OperationId)>=0))throw Invalid();last=row;}await Confirm(http,access,admin,operationsSupport);return page;
   });
   group.MapGet("/{jobId}/changes/{operationId}",async(string jobId,string operationId,HttpContext http,TenantAccessClient access,TenantBoundaryOptions bindings,IJobAdministrationRepository repo)=>{
-   var admin=await access.RequireAdministratorAsync(http);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);Id(jobId);Operation(operationId);Query(http.Request);var receipt=await repo.ReceiptAdminAsync(scope,jobId,operationId,http.RequestAborted)??throw new TenantBoundaryException("PROCESSING_CHANGE_NOT_FOUND",404);Bound(receipt,scope,jobId);if(receipt.OperationId!=operationId)throw Invalid();await Confirm(http,access,admin);return receipt;
+   var admin=await Require(http,access,operationsSupport);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);Id(jobId);Operation(operationId);Query(http.Request);var receipt=await repo.ReceiptAdminAsync(scope,jobId,operationId,http.RequestAborted)??throw new TenantBoundaryException("PROCESSING_CHANGE_NOT_FOUND",404);Bound(receipt,scope,jobId);if(receipt.OperationId!=operationId)throw Invalid();await Confirm(http,access,admin,operationsSupport);return receipt;
   });
   group.MapPost("/{jobId}/changes",async(string jobId,HttpContext http,TenantAccessClient access,TenantBoundaryOptions bindings,IJobAdministrationRepository repo,IJobRepository jobs,IJobAuthorizationPolicy authorization,IJobConsentDecisionPort consent)=>{
-   var admin=await access.RequireAdministratorAsync(http);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);Id(jobId);Query(http.Request);var change=await Read(http);JobAdministration.Change(change);
+   var admin=await Require(http,access,operationsSupport);var scope=Scope(admin,bindings,allowRetry,allowReportRetry);Id(jobId);Query(http.Request);var change=await Read(http);JobAdministration.Change(change);
    var current=await jobs.GetAsync(jobId,http.RequestAborted);if(current is null||!scope.Owns(current))throw Missing();
    var prior=await repo.ReceiptAdminAsync(scope,jobId,change.OperationId,http.RequestAborted);
-   if(prior is not null){JobAdministration.Match(prior,scope,admin.ActorId,jobId,change);Bound(prior,scope,jobId);await Confirm(http,access,admin);return prior;}
+   if(prior is not null){JobAdministration.Match(prior,scope,admin.ActorId,jobId,change);Bound(prior,scope,jobId);await Confirm(http,access,admin,operationsSupport);return prior;}
    if(change.Action=="retry")
    {
     if(!scope.AllowsRetry(current)||!JobAdministration.CanRetry(current))throw new TenantBoundaryException("PROCESSING_RETRY_UNAVAILABLE",409);
     var denied=await authorization.AuthorizeAsync(current.Security,current,current.CorrelationId,http.RequestAborted)??await consent.EvaluateAsync(current.Security,current,current.CorrelationId,http.RequestAborted);
     if(denied is not null)throw new TenantBoundaryException(denied.Category==Monergy.Contracts.ContractErrorCategory.DependencyFailure?"PROCESSING_PERMISSION_UNAVAILABLE":"PROCESSING_CUSTOMER_PERMISSION_REQUIRED",denied.Category==Monergy.Contracts.ContractErrorCategory.DependencyFailure?503:409);
    }
-   await Confirm(http,access,admin);var receipt=await repo.ChangeAdminAsync(scope,admin.ActorId,jobId,change,DateTimeOffset.UtcNow,http.RequestAborted);MatchResult(receipt,scope,admin.ActorId,jobId,change);Bound(receipt,scope,jobId);
-   var saved=await repo.ReceiptAdminAsync(scope,jobId,change.OperationId,http.RequestAborted);if(saved!=receipt)throw Invalid();await Confirm(http,access,admin);return receipt;
+   await Confirm(http,access,admin,operationsSupport);var receipt=await repo.ChangeAdminAsync(scope,admin.ActorId,jobId,change,DateTimeOffset.UtcNow,http.RequestAborted);MatchResult(receipt,scope,admin.ActorId,jobId,change);Bound(receipt,scope,jobId);
+   var saved=await repo.ReceiptAdminAsync(scope,jobId,change.OperationId,http.RequestAborted);if(saved!=receipt)throw Invalid();await Confirm(http,access,admin,operationsSupport);return receipt;
   });
  }
- private static AdminJobScope Scope(TenantAdminContext admin,TenantBoundaryOptions bindings,bool allowRetry,bool allowReportRetry)=>new(admin.TenantId,Array.AsReadOnly(bindings.CustomerTenants.Where(x=>x.Value!=admin.TenantId).Select(x=>x.Key).ToArray()),allowRetry,allowReportRetry);
- private static async Task Confirm(HttpContext http,TenantAccessClient access,TenantAdminContext admin){if(await access.RequireAdministratorAsync(http)!=admin)throw new TenantBoundaryException("ADMINISTRATOR_CONTEXT_CHANGED",409);}
+ private sealed record JobOperatorContext(string TenantId,string ActorId,long PolicyVersion,long SubjectVersion,string Authority);
+ private static AdminJobScope Scope(JobOperatorContext admin,TenantBoundaryOptions bindings,bool allowRetry,bool allowReportRetry)=>new(admin.TenantId,Array.AsReadOnly(bindings.CustomerTenants.Where(x=>x.Value!=admin.TenantId).Select(x=>x.Key).ToArray()),allowRetry,allowReportRetry);
+ private static async Task<JobOperatorContext> Require(HttpContext http,TenantAccessClient access,bool operationsSupport)
+ {
+  if(!operationsSupport){var admin=await access.RequireAdministratorAsync(http);return new(admin.TenantId,admin.ActorId,admin.PolicyVersion,0,admin.Authority);}
+  var decision=await access.EvaluateAsync(http,new("job-management.job.recover",null,null));
+  if(decision.Outcome!="Allow")throw new TenantBoundaryException("OPERATIONS_SUPPORT_REQUIRED",403);
+  return new(decision.TenantId,decision.ActorId,decision.PolicyVersion,decision.SubjectVersion,"OperationsSupport");
+ }
+ private static async Task Confirm(HttpContext http,TenantAccessClient access,JobOperatorContext admin,bool operationsSupport){if(await Require(http,access,operationsSupport)!=admin)throw new TenantBoundaryException(operationsSupport?"OPERATIONS_SUPPORT_CONTEXT_CHANGED":"ADMINISTRATOR_CONTEXT_CHANGED",409);}
  private static void Bound(AdminJobSummary row,AdminJobScope scope,string jobId)
  {if(row.TenantId!=scope.TenantId||row.JobId!=jobId||!TenantAccessClient.Identifier(row.JobId,128)||!TenantAccessClient.Identifier(row.CustomerId,128)||scope.ForeignCustomers.Contains(row.CustomerId,StringComparer.Ordinal)||row.Task is not ("Document processing" or "Financial report generation" or "Background task")||!JobAdministration.States.Contains(row.State,StringComparer.Ordinal)||row.DocumentVersionId is not null&&!TenantAccessClient.Identifier(row.DocumentVersionId,160)||row.Attempt<0||row.RetryCount<0||row.ReplayCount<0||row.RequestedAt<DateTimeOffset.UnixEpoch||row.UpdatedAt<DateTimeOffset.UnixEpoch||row.Revision.Length!=64||row.Revision.Any(x=>!char.IsAsciiHexDigit(x)||x is >='A' and <='F')||row.FailureCode is not null&&!TenantAccessClient.Identifier(row.FailureCode,160)||row.CancellationPending&&(row.State!="PROCESSING"||row.CanRetry||row.CanCancel)||row.CanRetry&&(row.Task is not ("Document processing" or "Financial report generation")||row.State is not ("FAILED" or "RETRYING"))||row.CanCancel&&row.State is "COMPLETED" or "CANCELLED"||row.NeedsOwnerReview&&(row.CanRetry||row.CanCancel))throw Invalid();}
  private static void Bound(AdminJobReceipt row,AdminJobScope scope,string jobId)

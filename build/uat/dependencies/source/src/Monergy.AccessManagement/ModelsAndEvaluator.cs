@@ -44,7 +44,7 @@ public sealed record RolePolicySnapshot(string RoleId, long PolicyVersion, IRead
 
 public sealed class CapabilityCatalog
 {
-    public const string CurrentVersion = "2026-11-16.3";
+    public const string CurrentVersion = "2026-11-16.4";
     private readonly IReadOnlyDictionary<string, CapabilityDefinition> _byId;
 
     public CapabilityCatalog()
@@ -64,6 +64,7 @@ public sealed class CapabilityCatalog
             New("financial-rules.calculation.execute", "financial-rules", "customer", "execute", "Execute calculation", CapabilityRisk.Mutation, AuditRequirement.AllDecisions),
             New("integration-gateway.connection.manage", "integration-gateway", "customer", "manage", "Manage provider operation", CapabilityRisk.Mutation, AuditRequirement.AllDecisions),
             New("job-management.job.read", "job-management", null, "read", "Read tenant jobs", CapabilityRisk.OrdinaryRead, AuditRequirement.Denials),
+            New("job-management.job.recover", "job-management", null, "recover", "Recover tenant jobs", CapabilityRisk.Mutation, AuditRequirement.AllDecisions),
             New("ai-intelligence.analysis.execute", "ai-intelligence", "customer", "execute", "Execute analysis", CapabilityRisk.Mutation, AuditRequirement.AllDecisions),
             New("audit.evidence.read", "audit", null, "read", "Read tenant audit evidence", CapabilityRisk.SensitiveRead, AuditRequirement.AllDecisions),
             New("application-case.case.create", "application-case", null, "create", "Create assistance case", CapabilityRisk.Mutation, AuditRequirement.AllDecisions),

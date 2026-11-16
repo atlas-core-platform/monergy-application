@@ -601,6 +601,11 @@ public sealed partial class PostgresAccessAdministration(
             baselinePermissions = DefaultAccessPack.Version210Permissions;
             baselineRoles = DefaultAccessPack.Version210Roles;
         }
+        else if (string.Equals(installedVersion, "2.11", StringComparison.Ordinal))
+        {
+            baselinePermissions = DefaultAccessPack.Version211Permissions;
+            baselineRoles = DefaultAccessPack.Version211Roles;
+        }
         else
         {
             conflicts.Add(installedVersion is null
