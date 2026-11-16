@@ -13,7 +13,7 @@ export function WorkspaceEntry({
   area = 'administration',
 }: {
   children: ReactNode;
-  area?: 'administration' | 'product' | 'kyc-review' | 'advisor' | 'dsa' | 'lender' | 'financial-professional' | 'property-valuer';
+  area?: 'administration' | 'product' | 'kyc-review' | 'advisor' | 'dsa' | 'lender' | 'financial-professional' | 'property-valuer' | 'legal-advisor';
 }) {
   const { status, session, message, connect, connectEmail, connectPassword, connectPersonaPassword, retry, cancel } = useWorkspaceSession();
   const [form] = Form.useForm<{ tenantId: string; key: string }>();
@@ -78,24 +78,24 @@ export function WorkspaceEntry({
       <main className="access-public-body">
         <section className="access-public-intro">
           <p className="workspace-eyebrow">
-            {area === 'administration' ? 'ORGANIZATION SETTINGS' : area === 'advisor' ? 'FINANCIAL ADVISOR WORKSPACE' : area === 'dsa' ? 'DSA CASE WORKSPACE' : area === 'lender' ? 'LENDER PROFESSIONAL WORKSPACE' : area === 'financial-professional' ? 'FINANCIAL PROFESSIONAL WORKSPACE' : area === 'property-valuer' ? 'PROPERTY VALUER WORKSPACE' : 'FINANCIAL WORKSPACE'}
+            {area === 'administration' ? 'ORGANIZATION SETTINGS' : area === 'advisor' ? 'FINANCIAL ADVISOR WORKSPACE' : area === 'dsa' ? 'DSA CASE WORKSPACE' : area === 'lender' ? 'LENDER PROFESSIONAL WORKSPACE' : area === 'financial-professional' ? 'FINANCIAL PROFESSIONAL WORKSPACE' : area === 'property-valuer' ? 'PROPERTY VALUER WORKSPACE' : area === 'legal-advisor' ? 'LEGAL ADVISOR WORKSPACE' : 'FINANCIAL WORKSPACE'}
           </p>
           <h1>
-            {area === 'administration' ? 'Clear access.' : area === 'advisor' ? 'Support clients.' : area === 'dsa' ? 'Accept assistance.' : area === 'lender' ? 'Review assignments.' : area === 'financial-professional' ? 'Review sources.' : area === 'property-valuer' ? 'Inspect property.' : 'Financial clarity.'}
+            {area === 'administration' ? 'Clear access.' : area === 'advisor' ? 'Support clients.' : area === 'dsa' ? 'Accept assistance.' : area === 'lender' ? 'Review assignments.' : area === 'financial-professional' ? 'Review sources.' : area === 'property-valuer' ? 'Inspect property.' : area === 'legal-advisor' ? 'Review assigned documents.' : 'Financial clarity.'}
             <br />
-            {area === 'administration' ? 'Confident decisions.' : area === 'advisor' ? 'Respect consent.' : area === 'dsa' ? 'One case at a time.' : area === 'lender' ? 'Own the decision.' : area === 'financial-professional' ? 'Own the certification.' : area === 'property-valuer' ? 'Own the valuation.' : 'Grounded in your information.'}
+            {area === 'administration' ? 'Confident decisions.' : area === 'advisor' ? 'Respect consent.' : area === 'dsa' ? 'One case at a time.' : area === 'lender' ? 'Own the decision.' : area === 'financial-professional' ? 'Own the certification.' : area === 'property-valuer' ? 'Own the valuation.' : area === 'legal-advisor' ? 'Own the legal outcome.' : 'Grounded in your information.'}
           </h1>
           <p>
             {area === 'administration'
               ? 'Manage the people, roles and access permissions that keep your organization in control.'
-              : area === 'advisor' ? 'Review your own role and permitted assignments. Customer information remains private until access and consent are verified.' : area === 'dsa' ? 'Accept a submitted assistance case without receiving financial records, customer Consent or lender authority.' : area === 'lender' ? 'Review only assigned applications and record the decision under your lender authority.' : area === 'financial-professional' ? 'Review only assigned, customer-shared sources and record your own professional conclusion.' : area === 'property-valuer' ? 'Inspect only assigned property evidence and record your own versioned professional conclusion.' : 'Bring your financial information together in a private, traceable workspace.'}
+              : area === 'advisor' ? 'Review your own role and permitted assignments. Customer information remains private until access and consent are verified.' : area === 'dsa' ? 'Accept a submitted assistance case without receiving financial records, customer Consent or lender authority.' : area === 'lender' ? 'Review only assigned applications and record the decision under your lender authority.' : area === 'financial-professional' ? 'Review only assigned, customer-shared sources and record your own professional conclusion.' : area === 'property-valuer' ? 'Inspect only assigned property evidence and record your own versioned professional conclusion.' : area === 'legal-advisor' ? 'Inspect only assigned legal documents and record your own versioned professional findings.' : 'Bring your financial information together in a private, traceable workspace.'}
           </p>
           <div className="access-public-assurance">
             <WorkspaceIcon name="shield" size={18} />
             <span>
               {area === 'administration'
                 ? 'Administration becomes available after your identity and organization authority have been verified.'
-                : area === 'advisor' ? 'Advisor access requires your active Financial Advisor role. Customer-specific work also requires assignment, permitted business capabilities and current consent.' : area === 'dsa' ? 'Case acceptance requires your current DSA / Case Manager capability. Financial information remains separately protected.' : area === 'lender' ? 'Lender access requires your current capability and an explicit application assignment. Unrelated applications remain hidden.' : area === 'financial-professional' ? 'Financial Professional access requires your current role, an exact review assignment and current customer sharing for both financial information and evidence.' : area === 'property-valuer' ? 'Property Valuer access requires your current role, an exact property assignment and current customer sharing for the assigned sources.' : 'Your workspace becomes available after your identity, customer ownership and product access have been verified.'}
+                : area === 'advisor' ? 'Advisor access requires your active Financial Advisor role. Customer-specific work also requires assignment, permitted business capabilities and current consent.' : area === 'dsa' ? 'Case acceptance requires your current DSA / Case Manager capability. Financial information remains separately protected.' : area === 'lender' ? 'Lender access requires your current capability and an explicit application assignment. Unrelated applications remain hidden.' : area === 'financial-professional' ? 'Financial Professional access requires your current role, an exact review assignment and current customer sharing for both financial information and evidence.' : area === 'property-valuer' ? 'Property Valuer access requires your current role, an exact property assignment and current customer sharing for the assigned sources.' : area === 'legal-advisor' ? 'Legal Advisor access requires your current role, an exact matter assignment and current customer sharing for the assigned Evidence documents.' : 'Your workspace becomes available after your identity, customer ownership and product access have been verified.'}
             </span>
           </div>
         </section>
@@ -144,7 +144,7 @@ export function WorkspaceEntry({
           ) : personaEntry && connectPersonaPassword ? (
             <PersonaCredentialEntry busy={busy} onSignIn={connectPersonaPassword}
               activationMode={personaActivation}
-              returnPath={area === 'administration' ? '/access' : area === 'advisor' ? '/advisor' : area === 'dsa' ? '/dsa' : area === 'lender' ? '/lender' : area === 'financial-professional' ? '/financial-professional' : area === 'property-valuer' ? '/property-valuer' : '/'}
+              returnPath={area === 'administration' ? '/access' : area === 'advisor' ? '/advisor' : area === 'dsa' ? '/dsa' : area === 'lender' ? '/lender' : area === 'financial-professional' ? '/financial-professional' : area === 'property-valuer' ? '/property-valuer' : area === 'legal-advisor' ? '/legal-advisor' : '/'}
               onCancel={() => { cancel(); setMethod('local'); }} />
           ) : emailEntry && connectEmail ? (
             <CustomerEmailEntry busy={busy} onVerify={connectEmail} onCancel={() => { cancel(); setMethod('local'); }} />

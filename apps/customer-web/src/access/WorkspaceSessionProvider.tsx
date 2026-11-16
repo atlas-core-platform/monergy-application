@@ -11,7 +11,7 @@ import type {
   WorkspaceSessionState,
 } from './workspaceSession';
 
-type WorkspaceArea = 'administration' | 'product' | 'kyc-review' | 'advisor' | 'dsa' | 'lender' | 'financial-professional' | 'property-valuer';
+type WorkspaceArea = 'administration' | 'product' | 'kyc-review' | 'advisor' | 'dsa' | 'lender' | 'financial-professional' | 'property-valuer' | 'legal-advisor';
 type Snapshot = Pick<
   WorkspaceSessionState,
   'status' | 'session' | 'api' | 'authorization' | 'message' | 'recovery'
@@ -125,6 +125,19 @@ async function verify(
         !Number.isSafeInteger(context.subjectVersion) || context.subjectVersion !== current.subjectVersion)
       throw new AccessApiError(503, 'PROPERTY_VALUER_CONTEXT_INVALID');
     return { area: 'property-valuer', authority: 'PropertyValuer',
+      policyVersion: context.policyVersion, subjectVersion: context.subjectVersion };
+  }
+  if (area === 'legal-advisor') {
+    const context = await new AccessApi(current).case<{
+      tenantId: string; actorId: string; authority: string;
+      policyVersion: number; subjectVersion: number;
+    }>('legal-advisor/context', 'GET', undefined, signal);
+    if (!validSession(current, current.tenantId) || context.tenantId !== current.tenantId ||
+        context.actorId !== current.actorId || context.authority !== 'LegalAdvisor' ||
+        !Number.isSafeInteger(context.policyVersion) || context.policyVersion < 1 ||
+        !Number.isSafeInteger(context.subjectVersion) || context.subjectVersion !== current.subjectVersion)
+      throw new AccessApiError(503, 'LEGAL_ADVISOR_CONTEXT_INVALID');
+    return { area: 'legal-advisor', authority: 'LegalAdvisor',
       policyVersion: context.policyVersion, subjectVersion: context.subjectVersion };
   }
   if (area === 'product') {
@@ -282,7 +295,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
             failure instanceof AccessApiError && failure.status === 403
               ? area === 'administration'
                 ? 'Organization Administrator access is required.'
-                : area === 'kyc-review' ? 'Current named KYC reviewer assignment is required.' : area === 'advisor' ? 'An active Financial Advisor / Relationship Manager role is required.' : area === 'dsa' ? 'An active DSA / Case Manager role is required.' : area === 'lender' ? 'An active Lender Professional role is required.' : area === 'financial-professional' ? 'An active Chartered Accountant / Financial Professional role is required.' : area === 'property-valuer' ? 'An active Property Valuer role is required.' : 'A customer workspace and product role are required.'
+                : area === 'kyc-review' ? 'Current named KYC reviewer assignment is required.' : area === 'advisor' ? 'An active Financial Advisor / Relationship Manager role is required.' : area === 'dsa' ? 'An active DSA / Case Manager role is required.' : area === 'lender' ? 'An active Lender Professional role is required.' : area === 'financial-professional' ? 'An active Chartered Accountant / Financial Professional role is required.' : area === 'property-valuer' ? 'An active Property Valuer role is required.' : area === 'legal-advisor' ? 'An active Legal Advisor / Advocate role is required.' : 'A customer workspace and product role are required.'
               : failure instanceof AccessApiError && failure.status === 401
                 ? method === 'password'
                   ? 'Unable to sign in. Check your organization, email and password, or use Forgot password.'

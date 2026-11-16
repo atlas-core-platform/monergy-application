@@ -259,7 +259,7 @@ export function LocalTenantSetup({ children }: { children: ReactNode }) {
     'property-valuer':
       'Valuation tasks remain unavailable until governed valuation assignments are implemented.',
     'legal-advisor':
-      'Legal-review tasks remain unavailable until governed legal matters are implemented.',
+      'Legal review requires an exact matter assignment and current customer sharing for assigned Evidence documents.',
   };
 
   return (

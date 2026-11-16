@@ -12,6 +12,7 @@ import PropertyRecordsExperience from './PropertyRecordsExperience';
 import VehicleRecordsExperience from './VehicleRecordsExperience';
 import LoanRecordsExperience from './LoanRecordsExperience';
 import ProfessionalPropertyValuations from './ProfessionalPropertyValuations';
+import ProfessionalLegalReviews from './ProfessionalLegalReviews';
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Collapse, Drawer, Skeleton, Spin, Tag } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -247,6 +248,7 @@ export default function FinancialProfileExperience() {
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
       {activeCategory === 'ASSET' && api && session && canRead && <ProfessionalPropertyValuations api={api} session={session} />}
+      {activeCategory === 'ASSET' && api && session && canRead && <ProfessionalLegalReviews api={api} session={session} />}
       {activeCategory === 'BANK_ACCOUNT' && api && canRead && <BankAccountRecordsExperience
         key={['bank-account',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
         facts={profile?.facts.filter(fact=>fact.factType==='ASSET'&&fact.assetType==='BANK_ACCOUNT') ?? []}

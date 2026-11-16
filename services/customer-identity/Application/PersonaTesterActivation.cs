@@ -45,7 +45,7 @@ public sealed class PersonaTesterActivation(
     TimeProvider clock)
 {
     private static readonly HashSet<string> ReturnPaths =
-        ["/", "/access", "/advisor", "/dsa", "/lender", "/financial-professional", "/property-valuer"];
+        ["/", "/access", "/advisor", "/dsa", "/lender", "/financial-professional", "/property-valuer", "/legal-advisor"];
 
     public async Task<object> CreateWelcomeLinkAsync(PersonaTesterWelcomeRequest request, CancellationToken ct)
     {

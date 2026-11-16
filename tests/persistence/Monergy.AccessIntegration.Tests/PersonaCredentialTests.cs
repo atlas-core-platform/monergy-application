@@ -128,6 +128,7 @@ public sealed class PersonaCredentialTests
     [InlineData("/lender")]
     [InlineData("/financial-professional")]
     [InlineData("/property-valuer")]
+    [InlineData("/legal-advisor")]
     public async Task TesterWelcomeAllowsOnlyImplementedPersonaWorkspaceDestinations(string returnPath)
     {
         var fixture = new Fixture();
@@ -150,7 +151,7 @@ public sealed class PersonaCredentialTests
 
         var denied = await Assert.ThrowsAsync<TenantAccessException>(() =>
             owner.CreateWelcomeLinkAsync(new(
-                "T001", "a300@example.test", "/legal-advisor", new string('d', 32)), default));
+                "T001", "a300@example.test", "/operations-support", new string('d', 32)), default));
 
         Assert.Equal("WELCOME_DESTINATION_INVALID", denied.Code);
         Assert.Equal(400, denied.StatusCode);

@@ -8,8 +8,8 @@ public sealed record DefaultRoleTemplate(
 
 public static class DefaultAccessPack
 {
-    public const string Version = "2.10";
-    public const string Identity = "monergy-default-access-pack/2.10";
+    public const string Version = "2.11";
+    public const string Identity = "monergy-default-access-pack/2.11";
 
     internal static IReadOnlyList<DefaultPermissionTemplate> Version1Permissions { get; } =
     [
@@ -99,11 +99,18 @@ public static class DefaultAccessPack
             ("application-case.financial-review.certify", AuthorizationScope.Tenant))
     ];
 
-    public static IReadOnlyList<DefaultPermissionTemplate> Permissions { get; } =
+    internal static IReadOnlyList<DefaultPermissionTemplate> Version210Permissions { get; } =
     [
         .. Version29Permissions,
         Permission("default-permission-property-valuation-manage", "assigned-property-valuation", "Inspect and value assigned property",
             ("application-case.property-valuation.manage", AuthorizationScope.Tenant))
+    ];
+
+    public static IReadOnlyList<DefaultPermissionTemplate> Permissions { get; } =
+    [
+        .. Version210Permissions,
+        Permission("default-permission-legal-review-manage", "assigned-legal-review", "Review assigned legal documents",
+            ("application-case.legal-review.manage", AuthorizationScope.Tenant))
     ];
 
 
@@ -345,7 +352,7 @@ public static class DefaultAccessPack
         Role("default-role-legal-advisor", "legal-advisor", "Legal Advisor / Advocate")
     ];
 
-    public static IReadOnlyList<DefaultRoleTemplate> Roles { get; } =
+    internal static IReadOnlyList<DefaultRoleTemplate> Version210Roles { get; } =
     [
         Role("default-role-customer", "customer", "Customer",
             "default-permission-profile-read",
@@ -371,6 +378,13 @@ public static class DefaultAccessPack
         Role("default-role-property-valuer", "property-valuer", "Property Valuer",
             "default-permission-property-valuation-manage"),
         Role("default-role-legal-advisor", "legal-advisor", "Legal Advisor / Advocate")
+    ];
+
+    public static IReadOnlyList<DefaultRoleTemplate> Roles { get; } =
+    [
+        .. Version210Roles.Where(role => role.Code != "legal-advisor"),
+        Role("default-role-legal-advisor", "legal-advisor", "Legal Advisor / Advocate",
+            "default-permission-legal-review-manage")
     ];
 
     public static void Validate(CapabilityCatalog catalog)

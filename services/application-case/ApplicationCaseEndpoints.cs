@@ -243,5 +243,47 @@ public static class ApplicationCaseEndpoints
                 items = await owner.ListCustomerResultsAsync(context, http.RequestAborted).ConfigureAwait(false),
             });
         });
+
+        routes.MapGet("/legal-advisor/context", async (HttpContext http,
+            ApplicationCaseAuthority authority) =>
+        {
+            var context = await authority.RequireLegalAdvisorAsync(http).ConfigureAwait(false);
+            return Results.Ok(new { context.TenantId, context.ActorId, authority = "LegalAdvisor",
+                context.PolicyVersion, context.SubjectVersion });
+        });
+        routes.MapGet("/legal-advisor/reviews", async (HttpContext http,
+            ApplicationCaseAuthority authority, ILegalReviewApplication owner) =>
+        {
+            var context = await authority.RequireLegalAdvisorAsync(http).ConfigureAwait(false);
+            return Results.Ok(new { context.TenantId, context.ActorId,
+                items = await owner.ListAsync(context,
+                    (customer, _) => authority.RequireLegalReviewAsync(http, customer),
+                    http.RequestAborted).ConfigureAwait(false) });
+        });
+        routes.MapPost("/legal-advisor/reviews/{reviewId}/documents/{documentCode}/inspection", async (
+            string reviewId, string documentCode, InspectLegalDocument request, HttpContext http,
+            ApplicationCaseAuthority authority, ILegalReviewApplication owner) =>
+        {
+            var context = await authority.RequireLegalAdvisorAsync(http).ConfigureAwait(false);
+            return Results.Ok(await owner.InspectEvidenceAsync(reviewId, documentCode, context, request,
+                (customer, _) => authority.RequireLegalReviewAsync(http, customer),
+                http.RequestAborted).ConfigureAwait(false));
+        });
+        routes.MapPost("/legal-advisor/reviews/{reviewId}/revisions", async (
+            string reviewId, RecordLegalReview request, HttpContext http,
+            ApplicationCaseAuthority authority, ILegalReviewApplication owner) =>
+        {
+            var context = await authority.RequireLegalAdvisorAsync(http).ConfigureAwait(false);
+            return Results.Ok(await owner.RecordReviewAsync(reviewId, context, request,
+                (customer, _) => authority.RequireLegalReviewAsync(http, customer),
+                http.RequestAborted).ConfigureAwait(false));
+        });
+        routes.MapGet("/legal-reviews/me", async (HttpContext http,
+            ApplicationCaseAuthority authority, ILegalReviewApplication owner) =>
+        {
+            var context = await authority.RequireCustomerAsync(http).ConfigureAwait(false);
+            return Results.Ok(new { context.TenantId, context.ActorId,
+                items = await owner.ListCustomerResultsAsync(context, http.RequestAborted).ConfigureAwait(false) });
+        });
     }
 }

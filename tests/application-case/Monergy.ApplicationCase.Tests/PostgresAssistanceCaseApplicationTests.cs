@@ -27,7 +27,13 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
             await using var owner = new NpgsqlConnection(Required($"P3_APPLICATION_CASE_{tenant}_OWNER"));
             await owner.OpenAsync();
             await owner.ExecuteAsync("""
-                TRUNCATE application_case.property_valuation_events,
+                TRUNCATE application_case.legal_review_events,
+                    application_case.legal_review_operations,
+                    application_case.legal_review_revision_evidence,
+                    application_case.legal_review_revisions,
+                    application_case.legal_review_evidence,
+                    application_case.legal_review_assignments,
+                    application_case.property_valuation_events,
                     application_case.property_valuation_operations,
                     application_case.property_valuation_revision_evidence,
                     application_case.property_valuation_revisions,
@@ -334,6 +340,47 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
         Assert.False(await runtime.ExecuteScalarAsync<bool>("SELECT has_table_privilege('application_case.property_valuation_revisions','UPDATE,DELETE,TRUNCATE');"));
     }
 
+    [Fact]
+    public async Task LegalReviewIsDurableDocumentBoundAndTenantIsolated()
+    {
+        await SeedLegalReviewAsync("T001", "legal-review-001", "A800", "C001");
+        var advisor = LegalAdvisor("T001", "A800");
+        var authority = LegalAuthority("T001", "A800", "C001");
+        await using (var owner = LegalOwner())
+        {
+            var assigned = Assert.Single(await owner.ListAsync(advisor, Confirm(authority), default));
+            var inspected = await owner.InspectEvidenceAsync(assigned.ReviewId, "estate-document", advisor,
+                new(Op('a'), 1), Confirm(authority), default);
+            var replay = await owner.InspectEvidenceAsync(assigned.ReviewId, "estate-document", advisor,
+                new(Op('a'), 1), Confirm(authority), default);
+            Assert.Equal(inspected.Version, replay.Version);
+            var reviewed = await owner.RecordReviewAsync(assigned.ReviewId, advisor,
+                new(Op('b'), 2, "ACTION_REQUIRED", "Update beneficiary details."), Confirm(authority), default);
+            Assert.Single(reviewed.Revisions);
+        }
+
+        await using var reconstructed = LegalOwner();
+        var durable = Assert.Single(await reconstructed.ListAsync(advisor, Confirm(authority), default));
+        Assert.Equal("Durable test data", durable.DataDurability);
+        Assert.Single(durable.Revisions);
+        Assert.Empty(await reconstructed.ListAsync(LegalAdvisor("T001", "A801"),
+            Confirm(LegalAuthority("T001", "A801", "C001")), default));
+        Assert.Empty(await reconstructed.ListAsync(LegalAdvisor("T002", "A800"),
+            Confirm(LegalAuthority("T002", "A800", "C002")), default));
+        var customer = Assert.Single(await reconstructed.ListCustomerResultsAsync(
+            Customer("T001", "A100", "C001"), default));
+        Assert.Equal("ACTION_REQUIRED", customer.Outcome);
+
+        await using var db = new NpgsqlConnection(Required("P3_APPLICATION_CASE_T001_OWNER"));
+        await db.OpenAsync();
+        Assert.Equal(2, await db.ExecuteScalarAsync<int>("SELECT count(*) FROM application_case.legal_review_events WHERE review_id='legal-review-001';"));
+        Assert.Equal(1, await db.ExecuteScalarAsync<int>("SELECT count(*) FROM application_case.legal_review_revision_evidence WHERE review_id='legal-review-001';"));
+        await using var runtime = new NpgsqlConnection(Required("P3_APPLICATION_CASE_T001_RUNTIME"));
+        await runtime.OpenAsync();
+        Assert.True(await runtime.ExecuteScalarAsync<bool>("SELECT has_table_privilege('application_case.legal_review_revisions','SELECT,INSERT');"));
+        Assert.False(await runtime.ExecuteScalarAsync<bool>("SELECT has_table_privilege('application_case.legal_review_revisions','UPDATE,DELETE,TRUNCATE');"));
+    }
+
     private static PostgresAssistanceCaseApplication Owner() => new(
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
@@ -347,6 +394,9 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
     private static PostgresPropertyValuationApplication PropertyOwner() => new(
+        new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
+        new FixedTimeProvider(Now));
+    private static PostgresLegalReviewApplication LegalOwner() => new(
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
 
@@ -372,6 +422,9 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
     private static PropertyValuerContext PropertyValuer(string tenant, string actor) => new(tenant, actor, 1, 1);
     private static PropertyValuationContext PropertyAuthority(string tenant, string actor, string customer) =>
         new(tenant, actor, customer, 1, 1, 1, 1);
+    private static LegalAdvisorContext LegalAdvisor(string tenant, string actor) => new(tenant, actor, 1, 1);
+    private static LegalReviewContext LegalAuthority(string tenant, string actor, string customer) =>
+        new(tenant, actor, customer, 1, 1, 1, 1);
     private static string Op(char value) => new(value, 32);
     private static Func<CancellationToken, Task<CaseActorContext>> Confirm(CaseActorContext value) =>
         _ => Task.FromResult(value);
@@ -384,6 +437,9 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
             Task.FromResult(customer == value.CustomerId ? value : throw new ApplicationCaseException("CUSTOMER_CONTEXT_INVALID", 400));
     private static Func<string, CancellationToken, Task<PropertyValuationContext>> Confirm(
         PropertyValuationContext value) => (customer, _) =>
+            Task.FromResult(customer == value.CustomerId ? value : throw new ApplicationCaseException("CUSTOMER_CONTEXT_INVALID", 400));
+    private static Func<string, CancellationToken, Task<LegalReviewContext>> Confirm(
+        LegalReviewContext value) => (customer, _) =>
             Task.FromResult(customer == value.CustomerId ? value : throw new ApplicationCaseException("CUSTOMER_CONTEXT_INVALID", 400));
     private static async Task SeedLenderApplicationAsync(string tenant, string application, string actor)
     {
@@ -439,6 +495,23 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
                   (@Tenant,@Valuation,'title-evidence','Assigned title evidence','Evidence',
                     'evidence-source-001',2,1,1);
             """, new { Tenant = tenant, Valuation = valuation, Actor = actor, Customer = customer, Now });
+    }
+    private static async Task SeedLegalReviewAsync(string tenant, string review, string actor, string customer)
+    {
+        await using var owner = new NpgsqlConnection(Required($"P3_APPLICATION_CASE_{tenant}_OWNER"));
+        await owner.OpenAsync();
+        await owner.ExecuteAsync("""
+            INSERT INTO application_case.legal_review_assignments(
+                tenant_id,review_id,matter_reference,matter_label,customer_id,
+                assigned_legal_advisor_actor_id,assignment_source,state,version,assigned_at)
+            VALUES(@Tenant,@Review,'matter-estate','Family estate documents',@Customer,@Actor,
+                'physical-test-fixture','Assigned',1,@Now);
+            INSERT INTO application_case.legal_review_evidence(
+                tenant_id,review_id,evidence_code,label,owner_service,resource_reference,
+                sequence,assigned_version,current_version)
+            VALUES(@Tenant,@Review,'estate-document','Assigned estate document','Evidence',
+                'evidence-source-001',1,1,1);
+            """, new { Tenant = tenant, Review = review, Actor = actor, Customer = customer, Now });
     }
     private static string Required(string name) => Environment.GetEnvironmentVariable(name)
         ?? throw new InvalidOperationException($"Physical test configuration {name} is required.");
