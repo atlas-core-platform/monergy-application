@@ -133,5 +133,59 @@ public static class ApplicationCaseEndpoints
             return Results.Ok(await owner.RecordDecisionAsync(applicationId, context, request,
                 _ => authority.RequireLenderAsync(http), http.RequestAborted).ConfigureAwait(false));
         });
+
+        routes.MapGet("/financial-professional/context", async (HttpContext http,
+            ApplicationCaseAuthority authority) =>
+        {
+            var context = await authority.RequireFinancialProfessionalAsync(http).ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                context.TenantId,
+                context.ActorId,
+                authority = "FinancialProfessional",
+                context.PolicyVersion,
+                context.SubjectVersion,
+            });
+        });
+        routes.MapGet("/financial-professional/reviews", async (HttpContext http,
+            ApplicationCaseAuthority authority, IFinancialProfessionalReview owner) =>
+        {
+            var context = await authority.RequireFinancialProfessionalAsync(http).ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                context.TenantId,
+                context.ActorId,
+                items = await owner.ListAsync(context,
+                    (customer, _) => authority.RequireFinancialProfessionalReviewAsync(http, customer),
+                    http.RequestAborted).ConfigureAwait(false),
+            });
+        });
+        routes.MapPost("/financial-professional/reviews/{reviewId}/sources/{sourceCode}/review", async (
+            string reviewId, string sourceCode, ReviewFinancialSource request, HttpContext http,
+            ApplicationCaseAuthority authority, IFinancialProfessionalReview owner) =>
+        {
+            var context = await authority.RequireFinancialProfessionalAsync(http).ConfigureAwait(false);
+            return Results.Ok(await owner.ReviewSourceAsync(reviewId, sourceCode, context, request,
+                (customer, _) => authority.RequireFinancialProfessionalReviewAsync(http, customer),
+                http.RequestAborted).ConfigureAwait(false));
+        });
+        routes.MapPost("/financial-professional/reviews/{reviewId}/notes", async (
+            string reviewId, AddFinancialProfessionalNote request, HttpContext http,
+            ApplicationCaseAuthority authority, IFinancialProfessionalReview owner) =>
+        {
+            var context = await authority.RequireFinancialProfessionalAsync(http).ConfigureAwait(false);
+            return Results.Ok(await owner.AddNoteAsync(reviewId, context, request,
+                (customer, _) => authority.RequireFinancialProfessionalReviewAsync(http, customer),
+                http.RequestAborted).ConfigureAwait(false));
+        });
+        routes.MapPost("/financial-professional/reviews/{reviewId}/certification", async (
+            string reviewId, RecordFinancialCertification request, HttpContext http,
+            ApplicationCaseAuthority authority, IFinancialProfessionalReview owner) =>
+        {
+            var context = await authority.RequireFinancialProfessionalAsync(http).ConfigureAwait(false);
+            return Results.Ok(await owner.CertifyAsync(reviewId, context, request,
+                (customer, _) => authority.RequireFinancialProfessionalReviewAsync(http, customer),
+                http.RequestAborted).ConfigureAwait(false));
+        });
     }
 }

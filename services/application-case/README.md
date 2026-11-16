@@ -1,5 +1,9 @@
 # Application & Case Service
 
+Owns assistance cases, assigned-customer advisory engagement, assigned lender application review, and the bounded
+Financial Professional source-review/certification record. Professional certification is signer-owned, Consent-bound and
+versioned; the service never converts AI/OCR/customer-entered data into statutory assurance.
+
 P3-01 introduces the first bounded Phase 3 owner journey: a Customer opens one active
 financial-assistance case and an eligible DSA / Case Manager in the same tenant accepts it.
 P3-02 adds the tenant-bound PostgreSQL owner, append-only lifecycle/operation evidence and

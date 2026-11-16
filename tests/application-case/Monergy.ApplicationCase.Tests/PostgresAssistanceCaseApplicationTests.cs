@@ -27,7 +27,13 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
             await using var owner = new NpgsqlConnection(Required($"P3_APPLICATION_CASE_{tenant}_OWNER"));
             await owner.OpenAsync();
             await owner.ExecuteAsync("""
-                TRUNCATE application_case.lender_application_events,
+                TRUNCATE application_case.financial_review_events,
+                    application_case.financial_review_operations,
+                    application_case.financial_review_certification_sources,
+                    application_case.financial_review_notes,
+                    application_case.financial_review_sources,
+                    application_case.financial_professional_reviews,
+                    application_case.lender_application_events,
                     application_case.lender_application_operations,
                     application_case.lender_application_documents,
                     application_case.lender_applications,
@@ -214,6 +220,51 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
         Assert.Equal(4, await db.ExecuteScalarAsync<int>("SELECT count(*) FROM application_case.lender_application_operations WHERE application_id='loan-001';"));
     }
 
+    [Fact]
+    public async Task FinancialProfessionalCertificationIsDurableSourceBoundAndTenantIsolated()
+    {
+        await SeedFinancialProfessionalReviewAsync("T001", "review-001", "A600", "C001");
+        var professional = Professional("T001", "A600");
+        var authority = ProfessionalAuthority("T001", "A600", "C001");
+        await using (var owner = ProfessionalOwner())
+        {
+            var assigned = Assert.Single(await owner.ListAsync(professional, Confirm(authority), default));
+            var profile = await owner.ReviewSourceAsync(assigned.ReviewId, "profile-summary", professional,
+                new(Op('c'), 1), Confirm(authority), default);
+            var replay = await owner.ReviewSourceAsync(assigned.ReviewId, "profile-summary", professional,
+                new(Op('c'), 1), Confirm(authority), default);
+            Assert.Equal(profile.Version, replay.Version);
+            _ = await owner.ReviewSourceAsync(assigned.ReviewId, "supporting-evidence", professional,
+                new(Op('d'), 2), Confirm(authority), default);
+            _ = await owner.AddNoteAsync(assigned.ReviewId, professional,
+                new(Op('e'), 3, "Reviewed both exact source versions.", ["profile-summary", "supporting-evidence"]),
+                Confirm(authority), default);
+            var certified = await owner.CertifyAsync(assigned.ReviewId, professional,
+                new(Op('f'), 4, "Certified with no exceptions", "Certified only for the recorded source snapshot."),
+                Confirm(authority), default);
+            Assert.Equal("Certified", certified.State);
+            Assert.Equal(2, certified.Certification?.Sources.Count);
+        }
+
+        await using var reconstructed = ProfessionalOwner();
+        var durable = Assert.Single(await reconstructed.ListAsync(professional, Confirm(authority), default));
+        Assert.Equal("Durable test data", durable.DataDurability);
+        Assert.Equal("A600", durable.Certification?.CertifiedBy);
+        Assert.Empty(await reconstructed.ListAsync(Professional("T001", "A601"),
+            Confirm(ProfessionalAuthority("T001", "A601", "C001")), default));
+        Assert.Empty(await reconstructed.ListAsync(Professional("T002", "A600"),
+            Confirm(ProfessionalAuthority("T002", "A600", "C002")), default));
+
+        await using var db = new NpgsqlConnection(Required("P3_APPLICATION_CASE_T001_OWNER"));
+        await db.OpenAsync();
+        Assert.Equal(4, await db.ExecuteScalarAsync<int>("SELECT count(*) FROM application_case.financial_review_events WHERE review_id='review-001';"));
+        Assert.Equal(2, await db.ExecuteScalarAsync<int>("SELECT count(*) FROM application_case.financial_review_certification_sources WHERE review_id='review-001';"));
+        await using var runtime = new NpgsqlConnection(Required("P3_APPLICATION_CASE_T001_RUNTIME"));
+        await runtime.OpenAsync();
+        Assert.True(await runtime.ExecuteScalarAsync<bool>("SELECT has_table_privilege('application_case.financial_review_certification_sources','SELECT,INSERT');"));
+        Assert.False(await runtime.ExecuteScalarAsync<bool>("SELECT has_table_privilege('application_case.financial_review_events','UPDATE,DELETE,TRUNCATE');"));
+    }
+
     private static PostgresAssistanceCaseApplication Owner() => new(
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
@@ -221,6 +272,9 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
     private static PostgresLenderApplication LenderOwner() => new(
+        new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
+        new FixedTimeProvider(Now));
+    private static PostgresFinancialProfessionalReview ProfessionalOwner() => new(
         new ConfigurationBuilder().AddInMemoryCollection(ConfigurationValues()).Build(),
         new FixedTimeProvider(Now));
 
@@ -240,6 +294,9 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
     private static AdvisorEngagementContext Advisor(string tenant, string actor, string customer) =>
         new(tenant, actor, customer, 1, 1, 1, 1);
     private static LenderContext Lender(string tenant, string actor) => new(tenant, actor, 1, 1);
+    private static FinancialProfessionalContext Professional(string tenant, string actor) => new(tenant, actor, 1, 1);
+    private static FinancialProfessionalReviewContext ProfessionalAuthority(string tenant, string actor, string customer) =>
+        new(tenant, actor, customer, 1, 1, 1, 1);
     private static string Op(char value) => new(value, 32);
     private static Func<CancellationToken, Task<CaseActorContext>> Confirm(CaseActorContext value) =>
         _ => Task.FromResult(value);
@@ -247,6 +304,9 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
         _ => Task.FromResult(value);
     private static Func<CancellationToken, Task<LenderContext>> Confirm(LenderContext value) =>
         _ => Task.FromResult(value);
+    private static Func<string, CancellationToken, Task<FinancialProfessionalReviewContext>> Confirm(
+        FinancialProfessionalReviewContext value) => (customer, _) =>
+            Task.FromResult(customer == value.CustomerId ? value : throw new ApplicationCaseException("CUSTOMER_CONTEXT_INVALID", 400));
     private static async Task SeedLenderApplicationAsync(string tenant, string application, string actor)
     {
         await using var owner = new NpgsqlConnection(Required($"P3_APPLICATION_CASE_{tenant}_OWNER"));
@@ -263,6 +323,25 @@ public sealed class PostgresAssistanceCaseApplicationTests : IAsyncLifetime
                   (@Tenant,@Application,'income','Income evidence',2,true),
                   (@Tenant,@Application,'bank-statements','Bank statements',3,true);
             """, new { Tenant = tenant, Application = application, Actor = actor, Now });
+    }
+    private static async Task SeedFinancialProfessionalReviewAsync(string tenant, string review, string actor, string customer)
+    {
+        await using var owner = new NpgsqlConnection(Required($"P3_APPLICATION_CASE_{tenant}_OWNER"));
+        await owner.OpenAsync();
+        await owner.ExecuteAsync("""
+            INSERT INTO application_case.financial_professional_reviews(
+                tenant_id,review_id,review_reference,customer_id,assigned_professional_actor_id,
+                assignment_source,state,version,assigned_at)
+            VALUES(@Tenant,@Review,'Financial review 001',@Customer,@Actor,
+                'physical-test-fixture','Assigned',1,@Now);
+            INSERT INTO application_case.financial_review_sources(
+                tenant_id,review_id,source_code,label,owner_service,resource_reference,
+                sequence,assigned_version,current_version)
+            VALUES(@Tenant,@Review,'profile-summary','Customer-reviewed financial profile','Financial Profile',
+                    'financial-profile-source-001',1,1,1),
+                  (@Tenant,@Review,'supporting-evidence','Supporting evidence index','Evidence',
+                    'evidence-source-001',2,1,1);
+            """, new { Tenant = tenant, Review = review, Actor = actor, Customer = customer, Now });
     }
     private static string Required(string name) => Environment.GetEnvironmentVariable(name)
         ?? throw new InvalidOperationException($"Physical test configuration {name} is required.");

@@ -14,6 +14,7 @@ public static class ApplicationCaseRegistration
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<CustomerOwnerClient>();
         services.AddSingleton<TenantAccessClient>();
+        services.AddSingleton<FinancialProfessionalConsentClient>();
         services.AddSingleton<ApplicationCaseAuthority>();
         services.AddSingleton<AssistanceCaseApplication>();
         services.AddSingleton<IAssistanceCaseApplication>(provider =>
@@ -24,6 +25,9 @@ public static class ApplicationCaseRegistration
         services.AddSingleton<LenderApplication>();
         services.AddSingleton<ILenderApplication>(provider =>
             provider.GetRequiredService<LenderApplication>());
+        services.AddSingleton<FinancialProfessionalReview>();
+        services.AddSingleton<IFinancialProfessionalReview>(provider =>
+            provider.GetRequiredService<FinancialProfessionalReview>());
         return services;
     }
 
@@ -35,6 +39,7 @@ public static class ApplicationCaseRegistration
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<CustomerOwnerClient>();
         services.AddSingleton<TenantAccessClient>();
+        services.AddSingleton<FinancialProfessionalConsentClient>();
         services.AddSingleton<ApplicationCaseAuthority>();
         services.AddSingleton<PostgresAssistanceCaseApplication>();
         services.AddSingleton<IAssistanceCaseApplication>(provider =>
@@ -45,6 +50,9 @@ public static class ApplicationCaseRegistration
         services.AddSingleton<PostgresLenderApplication>();
         services.AddSingleton<ILenderApplication>(provider =>
             provider.GetRequiredService<PostgresLenderApplication>());
+        services.AddSingleton<PostgresFinancialProfessionalReview>();
+        services.AddSingleton<IFinancialProfessionalReview>(provider =>
+            provider.GetRequiredService<PostgresFinancialProfessionalReview>());
         services.AddHealthChecks().AddCheck<PostgresAssistanceCaseApplication>("application-case-storage");
         return services;
     }

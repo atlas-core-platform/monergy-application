@@ -4,10 +4,10 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "0732df8a6f2cba016d117f2027c50390f5548212",
-  "sourceTree": "c66824f3cfe94a29a9b721e0523c20db5e4cecf9",
-  "verificationStatus": "P3_04_SOURCE_VALIDATED",
-  "candidatePullRequest": 25,
+  "commit": "23dd72c281c10b605b98df0dbce04151d38db585",
+  "sourceTree": "2eeec91d7311793cfa55240f905546eaadb380d7",
+  "verificationStatus": "P3_05_SOURCE_VALIDATED",
+  "candidatePullRequest": 26,
   "files": [
     {
       "path": "build/prepare-ci-databases.sh",
@@ -15,7 +15,7 @@
     },
     {
       "path": "build/provision-ci-tenants.sh",
-      "gitBlobSha": "f5e911271c5c6b40b932f30f66b3c401014e0bd3"
+      "gitBlobSha": "878d0d8faaa77b26333d3fe87010cdfdf1d6650e"
     },
     {
       "path": "Directory.Build.props",
@@ -79,7 +79,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/DefaultAccessPack.cs",
-      "gitBlobSha": "2e9108b8b57cd538e5d464aff8667a4f1de6e663"
+      "gitBlobSha": "7f3910896662d174917a3d38b01c9f166b8a4046"
     },
     {
       "path": "src/Monergy.AccessManagement/EventDeliveryProtocol.cs",
@@ -95,7 +95,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/ModelsAndEvaluator.cs",
-      "gitBlobSha": "ebf3fbbc142d0f15bbc687bf6c8ca35fe1b3abd4"
+      "gitBlobSha": "1c2144b8775a9c527fe4af98eaf219894520e860"
     },
     {
       "path": "src/Monergy.AccessManagement/Monergy.AccessManagement.csproj",
@@ -111,7 +111,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessAdministration.cs",
-      "gitBlobSha": "84174e0a7b30ce8b32029bf5167eb2327f9be75b"
+      "gitBlobSha": "4117d29221647bb8258f045dc56c5eb413e6f906"
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessPolicyStore.cs",
