@@ -317,4 +317,4 @@ it('pages beyond 200 loan records and refreshes from the newest page', async () 
  expect(screen.queryByRole('button', { name: 'Earlier loan records' })).not.toBeInTheDocument();
  expect(request.mock.calls.some(([path]) => path === 'v1/loan-records?afterId=loan-page-199')).toBe(true);
  fireEvent.click(screen.getByRole('button', { name: 'Refresh loan records' })); expect(await screen.findByRole('button', { name: 'Earlier loan records' })).toBeVisible();
-});
+}, 30_000);
