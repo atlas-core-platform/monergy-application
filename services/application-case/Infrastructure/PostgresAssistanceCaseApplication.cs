@@ -220,7 +220,7 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
             var valid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
                 SELECT EXISTS(
                     SELECT 1 FROM application_case.tenant_identity
-                    WHERE singleton AND tenant_id=@Tenant AND schema_version=4)
+                    WHERE singleton AND tenant_id=@Tenant AND schema_version=5)
                   AND has_table_privilege(current_user,'application_case.assistance_cases','SELECT,INSERT')
                   AND has_column_privilege(current_user,'application_case.assistance_cases','state','UPDATE')
                   AND has_column_privilege(current_user,'application_case.assistance_cases','version','UPDATE')

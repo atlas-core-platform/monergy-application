@@ -11,6 +11,7 @@ import CreditCardRecordsExperience from './CreditCardRecordsExperience';
 import PropertyRecordsExperience from './PropertyRecordsExperience';
 import VehicleRecordsExperience from './VehicleRecordsExperience';
 import LoanRecordsExperience from './LoanRecordsExperience';
+import ProfessionalPropertyValuations from './ProfessionalPropertyValuations';
 import { WorkspaceIcon } from '@monergy/ui-foundation';
 import { Alert, Button, Collapse, Drawer, Skeleton, Spin, Tag } from 'antd';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -55,7 +56,7 @@ const categoryFromLocation = (): FinancialCategory | '' => {
 const initialFactId = () => categoryFromLocation() === 'GOAL' ? '' : new URLSearchParams(window.location.search).get('fact') ?? '';
 
 export default function FinancialProfileExperience() {
-  const { api, authorization } = useWorkspaceSession();
+  const { api, authorization, session } = useWorkspaceSession();
   const product = authorization?.area === 'product' ? authorization.context : null;
   const canRead = product?.capabilities.includes('financial-profile.profile.read') ?? false;
   const canUpdate = product?.capabilities.includes('financial-profile.profile.update') ?? false;
@@ -245,6 +246,7 @@ export default function FinancialProfileExperience() {
         facts={profile?.facts.filter(fact=>fact.factType==='ASSET' && fact.assetType==='PROPERTY') ?? []}
         canRead={product?.capabilities.includes('evidence.document.read') ?? false}
         canCreate={product?.capabilities.includes('financial-profile.profile.update') ?? false} />}
+      {activeCategory === 'ASSET' && api && session && canRead && <ProfessionalPropertyValuations api={api} session={session} />}
       {activeCategory === 'BANK_ACCOUNT' && api && canRead && <BankAccountRecordsExperience
         key={['bank-account',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api}
         facts={profile?.facts.filter(fact=>fact.factType==='ASSET'&&fact.assetType==='BANK_ACCOUNT') ?? []}

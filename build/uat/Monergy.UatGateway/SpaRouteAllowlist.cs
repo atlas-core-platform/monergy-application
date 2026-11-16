@@ -11,7 +11,7 @@ public static class SpaRouteAllowlist
         "/access/permissions", "/access/groups", "/access/resources", "/access/activity",
         "/access/audit", "/access/sessions", "/access/customers", "/access/requests", "/access/processing",
         "/access/documents", "/access/classifications", "/operations",
-        "/advisor", "/dsa", "/lender", "/financial-professional", "/cases", "/welcome",
+        "/advisor", "/dsa", "/lender", "/financial-professional", "/property-valuer", "/cases", "/welcome",
         "/kyc", "/kyc/reviews", "/monthly-cashflow", "/net-worth",
         "/financial-qa", "/search", "/reports", "/finances", "/consent",
         "/connections", "/connections/google-drive", "/connections/onedrive", "/profile",

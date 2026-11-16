@@ -6,6 +6,51 @@ namespace Monergy.Services.ApplicationCase;
 public sealed class ApplicationCaseAuthority(CustomerOwnerClient owners, TenantAccessClient access,
     FinancialProfessionalConsentClient professionalConsent)
 {
+    public async Task<PropertyValuerContext> RequirePropertyValuerAsync(HttpContext http)
+    {
+        var session = await owners.SessionAsync(http).ConfigureAwait(false);
+        var decision = await access.EvaluateAsync(http,
+            new(PropertyValuationPolicy.Capability, null, null)).ConfigureAwait(false);
+        if (decision.Outcome != "Allow" || decision.ActorId != session.ActorId ||
+            decision.SubjectVersion != session.SubjectVersion)
+            throw new ApplicationCaseException("PROPERTY_VALUER_ACCESS_REQUIRED", 403);
+        return new(session.TenantId, session.ActorId, decision.PolicyVersion, decision.SubjectVersion);
+    }
+
+    public async Task<PropertyValuationContext> RequirePropertyValuationAsync(
+        HttpContext http, string customerId)
+    {
+        if (!TenantAccessClient.Identifier(customerId, 128))
+            throw new ApplicationCaseException("CUSTOMER_CONTEXT_INVALID", 400);
+        var valuer = await RequirePropertyValuerAsync(http).ConfigureAwait(false);
+        var customer = await owners.CustomerAsync(valuer.TenantId, customerId, http.RequestAborted)
+            .ConfigureAwait(false);
+        if (!customer.Active || customer.TenantId != valuer.TenantId || customer.CustomerId != customerId ||
+            customer.OwnerActorId == valuer.ActorId || customer.Version < 1)
+            throw new ApplicationCaseException("PROPERTY_VALUER_CUSTOMER_ACCESS_REQUIRED", 403);
+
+        async Task<FinancialProfessionalConsentDecision> RequireConsentAsync(string capability)
+        {
+            var decision = await professionalConsent.EvaluateAsync(valuer.TenantId, valuer.ActorId,
+                customerId, capability, http.RequestAborted).ConfigureAwait(false);
+            if (!decision.Allowed || decision.ExpiresAt is null || decision.ExpiresAt <= DateTimeOffset.UtcNow)
+                throw new ApplicationCaseException("PROPERTY_VALUER_CUSTOMER_ACCESS_REQUIRED", 403);
+            return decision;
+        }
+
+        var profile = await RequireConsentAsync("financial-profile.profile.read").ConfigureAwait(false);
+        var evidence = await RequireConsentAsync("evidence.document.read").ConfigureAwait(false);
+        if (profile.Version != evidence.Version)
+            throw new ApplicationCaseException("PROPERTY_VALUER_CONSENT_CHANGED", 409);
+        var confirmed = await RequirePropertyValuerAsync(http).ConfigureAwait(false);
+        var currentCustomer = await owners.CustomerAsync(valuer.TenantId, customerId, http.RequestAborted)
+            .ConfigureAwait(false);
+        if (confirmed != valuer || currentCustomer != customer)
+            throw new ApplicationCaseException("PROPERTY_VALUER_AUTHORITY_CHANGED", 409);
+        return new(valuer.TenantId, valuer.ActorId, customerId, valuer.PolicyVersion,
+            valuer.SubjectVersion, customer.Version, profile.Version);
+    }
+
     public async Task<FinancialProfessionalContext> RequireFinancialProfessionalAsync(HttpContext http)
     {
         var session = await owners.SessionAsync(http).ConfigureAwait(false);
