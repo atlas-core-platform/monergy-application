@@ -250,7 +250,15 @@ public sealed class PostgresAdvisorEngagementApplication : IAdvisorEngagementApp
 
     private sealed record EngagementRow(string TenantId, string AdvisorActorId, string CustomerId,
         int Version, string ApplicationStage, DateTime UpdatedAt);
-    private sealed record ActivityRow(string ActivityId, string Kind, string? Body, string[] SourceFactIds,
-        string? ApplicationStage, int Version, DateTime OccurredAt);
+    private sealed class ActivityRow
+    {
+        public string ActivityId { get; set; } = "";
+        public string Kind { get; set; } = "";
+        public string? Body { get; set; }
+        public string[] SourceFactIds { get; set; } = [];
+        public string? ApplicationStage { get; set; }
+        public int Version { get; set; }
+        public DateTime OccurredAt { get; set; }
+    }
     private sealed record OperationRow(string CustomerId, string Action);
 }
