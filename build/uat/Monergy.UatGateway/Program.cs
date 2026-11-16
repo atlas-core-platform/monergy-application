@@ -34,6 +34,7 @@ builder.AddProductExpenseRecords();
 builder.AddProductLiabilityRecords();
 builder.AddProductReporting();
 builder.AddProductSearch();
+builder.Services.AddPlatformAdministration(builder.Configuration);
 builder.Services.AddSingleton<GoogleDriveProxyClient>();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
 builder.Services.AddSingleton(new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
@@ -74,6 +75,7 @@ app.MapProductExpenseRecords();
 app.MapProductLiabilityRecords();
 app.MapProductReporting();
 app.MapProductSearch();
+app.MapPlatformAdministration();
 app.MapGet("/health/live", () => Results.Ok(new { profile = "local-uat", productionAccepted = false }));
 app.MapGet("/health/ready", async (HttpClient client, CancellationToken ct) =>
 {
@@ -84,32 +86,6 @@ app.MapGet("/uat-api/v1/context", async (HttpContext http, TenantAccessClient ac
 {
     var administrator = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
     return Results.Ok(new { administrator, environment = "Local UAT", authentication = "Local reference keys", productionAccepted = false });
-});
-app.MapGet("/uat-api/v1/topology", async (HttpContext http, TenantAccessClient access, HttpClient client) =>
-{
-    var administrator = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
-    return Results.Ok(new
-    {
-        administrator.TenantId,
-        services = await Topology.ReadAsync(client, http.RequestAborted,
-        app.Configuration.GetValue<bool>("Monergy:Onboarding:Enabled")).ConfigureAwait(false)
-    });
-});
-app.MapGet("/uat-api/v1/readiness", async (HttpContext http, TenantAccessClient access) =>
-{
-    var administrator = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
-    return Results.Ok(new
-    {
-        administrator.TenantId,
-        productionAccepted = false,
-        gates = new[] {
-        new { id = "identity", state = "Blocked", detail = "Production identity provider, MFA and invitation delivery are not configured." },
-        new { id = "transport", state = "Blocked", detail = "Workload identity, TLS and the production event transport require integration." },
-        new { id = "operations", state = "Blocked", detail = "Managed secrets, backups, restore drills, monitoring, HA/DR and capacity acceptance remain required." },
-        new { id = "business", state = "Blocked", detail = "The LOCAL structured-text processor is connected through Evidence, Job Management and Document Intelligence. Production OCR/AI providers, durable business persistence and financial-profile adoption remain unselected; this journey does not constitute Production acceptance." },
-        new { id = "governance", state = "Blocked", detail = "Historical D01–D16 and SG release acceptance remain unchanged. Local UAT does not confer Production approval." },
-    }
-    });
 });
 app.MapGet("/uat-api/v1/resource-directory/{resourceType}", async (
     string resourceType, HttpContext http, TenantAccessClient access, HttpClient client) =>

@@ -4,7 +4,7 @@ param(
     [ValidatePattern('^[a-z][a-z0-9-]{0,30}$')][string]$Profile = 'default',
     [ValidateRange(1024,65535)][int]$Port = 4173,
     [ValidateSet('T001','T002')][string]$Tenant = 'T001',
-    [ValidateSet('A900','A100','A200','A300','A400','A500','A600','A700','A800','A850')][string]$Actor = 'A900',
+    [ValidateSet('A900','A100','A200','A300','A400','A500','A600','A700','A800','A850','A950')][string]$Actor = 'A900',
     [switch]$ConfirmReset,
     [switch]$EnableOnboarding,
     [switch]$EnableEmailAccess,
@@ -129,7 +129,7 @@ if (-not (Test-Path $profileFile)) {
         if ($EnableOnboarding) { $localActors += 'A200' }
         foreach ($actorId in $localActors) { $identities += @{ tenantId=$tenantId; actorId=$actorId; token=(Secret) } }
     }
-    $new = @{ instanceId=[Guid]::NewGuid().ToString('N'); postgresPassword=(Secret); databases=$databases; identities=$identities; tokens=@{}; port=$Port; onboarding=[bool]$EnableOnboarding }
+    $new = @{ instanceId=[Guid]::NewGuid().ToString('N'); postgresPassword=(Secret); databases=$databases; identities=$identities; platformAuthority=@{ actorId='A950'; token=(Secret) }; tokens=@{}; port=$Port; onboarding=[bool]$EnableOnboarding }
     foreach ($name in @('membership','context','provisioning','identityEvent','auditEvent','jobAuditEvent','financialAuditEvent','customerContext','consent','recipientLabel','evidenceIntake','evidenceProcessing','jobControl','documentControl','reportJobControl')) { $new.tokens[$name] = Secret }
     Save-Json 'profile.json' $new
 }
@@ -155,6 +155,10 @@ $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$s
 # rotating or replacing retained credentials. Existing profiles receive only missing keys.
 if ($Action -in @('Prepare','Start')) {
     $profileChanged = $false
+    if ($null -eq $state.PSObject.Properties['platformAuthority']) {
+        $state | Add-Member -NotePropertyName platformAuthority -NotePropertyValue ([pscustomobject]@{ actorId='A950'; token=(Secret) })
+        $profileChanged = $true
+    }
     foreach ($tenantId in @('T001','T002')) {
         if (-not @($state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A400' }).Count) {
             $state.identities += [pscustomobject]@{ tenantId=$tenantId; actorId='A400'; token=(Secret) }
@@ -476,6 +480,15 @@ if ($Action -in @('Prepare','Start')) {
     if ($tokensChanged) { Save-Json 'profile.json' $state; Protect-Files }
 }
 if ($Action -eq 'Credentials') {
+    if ($Actor -eq 'A950') {
+        if ($null -eq $state.PSObject.Properties['platformAuthority'] -or
+            $state.platformAuthority.actorId -ne 'A950' -or [string]::IsNullOrWhiteSpace([string]$state.platformAuthority.token)) {
+            throw 'The selected profile has no valid Platform Administrator key.'
+        }
+        Write-Host 'Local UAT only | Platform authority | Actor A950 | Persona Platform Administrator'
+        Write-Output $state.platformAuthority.token
+        return
+    }
     $identity = $state.identities | Where-Object { $_.tenantId -eq $Tenant -and $_.actorId -eq $Actor }
     if ($null -eq $identity) { throw 'This actor has no key in the selected profile.' }
     $persona = switch ($Actor) {
@@ -719,7 +732,7 @@ if ($Action -in @('Prepare','Start')) {
         }
         Save-Json "delivery-$tenantId.json" $delivery
     }
-    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' } } }
+    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' }; PlatformAdministration=@{ AccessKey=$state.platformAuthority.token; OperationsPath='/var/lib/monergy-onboarding/platform-operations.json' } } }
     if ($onboarding) {
         $workspace.Monergy.AccessIntegration=@{
             Enabled='true'; CustomerRelationships='true'; AccessManagementUrl='http://127.0.0.1:5088/'
@@ -1050,6 +1063,7 @@ Write-Host "Local access administration is ready: $url/access"
 Write-Host 'Administration, identities, sessions and access audit persist across Stop/Start.'
 Write-Host 'Business reference data is illustrative and may reset. Production readiness remains blocked.'
 Write-Host "Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A900"
+Write-Host "Show the Platform Administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Actor A950"
 if ($onboarding) { Write-Host "Show the customer key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A100" }
 if ($onboarding) { Write-Host "Show the DSA / Case Manager key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A400" }
 if ($onboarding) { Write-Host "Show the Lender Professional key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A500" }

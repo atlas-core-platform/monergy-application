@@ -32,7 +32,9 @@ for enabled in (False, True):
         env = {key: value for key, value in os.environ.items() if not key.startswith(('Monergy__', 'ASPNETCORE_', 'DOTNET_ENVIRONMENT'))}
         env.update(ASPNETCORE_ENVIRONMENT='Development', DOTNET_ENVIRONMENT='Development',
                    DOTNET_PROCESSOR_COUNT='2', Monergy__ExecutionZone='LOCAL',
-                   Monergy__Product__Enabled=str(enabled).lower(), Monergy__Onboarding__Enabled='false')
+                   Monergy__Product__Enabled=str(enabled).lower(), Monergy__Onboarding__Enabled='false',
+                   Monergy__PlatformAdministration__AccessKey='startup-probe-only',
+                   Monergy__PlatformAdministration__OperationsPath=str(root / 'platform-operations.json'))
         with (root / 'gateway.log').open('w+') as log:
             process = subprocess.Popen([sys.argv[1], str(pathlib.Path(sys.argv[2]).resolve()),
                                         '--urls', f'http://127.0.0.1:{port}', '--contentRoot', folder],
@@ -53,6 +55,7 @@ for enabled in (False, True):
                 assert get(base + '/access') == (200, b'gateway-shell-probe')
                 assert get(base + '/kyc') == (200, b'gateway-shell-probe')
                 assert get(base + '/kyc/reviews') == (200, b'gateway-shell-probe')
+                assert get(base + '/platform') == (200, b'gateway-shell-probe')
                 # Owners are intentionally absent: readiness must fail cleanly, not crash routing.
                 assert get(base + '/health/ready')[0] == 503
                 ocr = base + '/ocr-api/local/v1/customers/customer-one/documents/version-one/ocr'

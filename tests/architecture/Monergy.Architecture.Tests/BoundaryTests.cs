@@ -51,6 +51,28 @@ public sealed class BoundaryTests
     }
 
     [Fact]
+    public void PlatformAdministrationRemainsOutsideTenantRolesAndBusinessServices()
+    {
+        var accessPack = File.ReadAllText(Path.Combine(
+            RepositoryRoot, "build", "uat", "dependencies", "source", "src",
+            "Monergy.AccessManagement", "DefaultAccessPack.cs"));
+        var gateway = File.ReadAllText(Path.Combine(
+            RepositoryRoot, "build", "uat", "Monergy.UatGateway", "PlatformAdministrationEndpoints.cs"));
+
+        Assert.DoesNotContain("platform-administrator", accessPack, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("X-Monergy-Platform-Session", gateway, StringComparison.Ordinal);
+        Assert.Contains("PLATFORM_AUTHORITY_SEPARATION_REQUIRED", gateway, StringComparison.Ordinal);
+        Assert.Contains("tenantAccess = false", gateway, StringComparison.Ordinal);
+        Assert.Contains("customerDataAccess = false", gateway, StringComparison.Ordinal);
+        Assert.Contains("breakGlassAvailable = false", gateway, StringComparison.Ordinal);
+        var launcher = File.ReadAllText(Path.Combine(
+            RepositoryRoot, "build", "uat", "Invoke-MonergyUat.ps1"));
+        Assert.Contains("platformAuthority=@{ actorId='A950'; token=(Secret) }", launcher, StringComparison.Ordinal);
+        Assert.Contains("PlatformAdministration=@{ AccessKey=$state.platformAuthority.token", launcher, StringComparison.Ordinal);
+        Assert.DoesNotContain("$localActors += 'A950'", launcher, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ServiceHostsMatchTheApprovedPrimaryResponsibilitySplit()
     {
         foreach (var serviceId in ServiceIds)
@@ -141,6 +163,7 @@ public sealed class BoundaryTests
             "job-management",
             "customer-identity", // AR-001 / AM-05 owner-local tenant sessions.
             "consent", // Approved continuation: bounded LOCAL/UAT customer Consent owner.
+            "application-case", // Phase 3 assigned professional workflows own durable case records.
         };
         var authorizedRoots = persistenceCohort
             .Select(serviceId => Path.GetFullPath(Path.Combine(ServicesRoot, serviceId, "migrations")))
@@ -193,6 +216,7 @@ public sealed class BoundaryTests
             "job-management",
             "customer-identity", // AR-001 / AM-05 owner-local tenant sessions.
             "consent", // Approved continuation: bounded LOCAL/UAT customer Consent owner.
+            "application-case", // Phase 3 assigned professional workflows own durable case records.
         };
 
         foreach (var projectPath in Directory.GetFiles(RepositoryRoot, "*.csproj", SearchOption.AllDirectories))
@@ -214,6 +238,7 @@ public sealed class BoundaryTests
             var persistenceBoundary = serviceId is not null && persistenceCohort.Contains(serviceId)
                 || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
                 || relative.StartsWith("tests/job-management/", StringComparison.Ordinal)
+                || relative.StartsWith("tests/application-case/", StringComparison.Ordinal)
                 || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal);
 
             if (packages.Contains("Npgsql", StringComparer.OrdinalIgnoreCase)
@@ -251,7 +276,9 @@ public sealed class BoundaryTests
             || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
             || relative.StartsWith("tests/vs02/", StringComparison.Ordinal)
             || relative.StartsWith("tests/job-management/", StringComparison.Ordinal)
-            || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal),
+            || relative.StartsWith("tests/application-case/", StringComparison.Ordinal)
+            || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal)
+            || relative.StartsWith("build/demo/cohort-p/", StringComparison.Ordinal),
             $"Physical persistence source escaped its D09 boundary: {relative}"));
     }
 

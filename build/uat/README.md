@@ -41,11 +41,11 @@ Keys are generated once, stored in an access-restricted local profile, and exclu
 5. **Resource access:** test a Resource-scoped permission with one resource granted and another denied. Resource grants complement the assigned role; they cannot create an unassigned capability.
 6. **Security & Sessions:** review issued/revoked/expired sessions; revoke all sessions for a member. Revocation immediately advances the access version and later marks durable session rows via delivery. A stored “Issued” label is not proof of current authorization.
 7. **Access activity:** see the resulting operation, actor, policy revision and canonical Audit evidence. Delivery is asynchronous; refresh after a committed change.
-8. **Operator tools at `/operations` → Connected services / Release readiness:** inspect all 13 health results, actual implemented scope and explicit Production blockers.
+8. **Platform Administration at `/platform`:** connect with the separate A950 Platform Administrator key, inspect all 14 service health results and explicit Production blockers, and record a bounded operational posture. This authority has no tenant membership, customer-data access, Consent authority or approved break-glass path.
 9. **Isolation:** sign out, connect to T002 with its own key and confirm that T001 people, roles and audit activity are absent. A T001 session cannot be used with a T002 header.
-10. **Restart:** Stop and Start, then verify the policy and audit history remain. Read-only Verify confirms all 13 service health endpoints; it does not mutate your UAT policies.
+10. **Restart:** Stop and Start, then verify the policy, access audit and platform posture history remain. Read-only Verify confirms all 14 service health endpoints; it does not mutate your UAT policies.
 
-Access Management has a dedicated navigation menu and guide. Onboarding history is under Users. Platform Search, Reports, Evidence and System Expert are absent from this module; the platform workspace remains at `/`. Operator diagnostics remain separately available at `/operations`.
+Access Management has a dedicated navigation menu and guide. Onboarding history is under Users. Platform Search, Reports, Evidence and System Expert are absent from this module; the customer workspace remains at `/`. Platform health and posture are separately available at `/platform`; `/operations` is a compatibility alias that requires the same separate platform credential.
 
 Search and Reports use the in-memory current session across internal navigation. The server checks tenant, customer ownership, actor/session binding and current permission on each request. Reference customer `reference-customer` belongs to T001; `other-customer` belongs to T002. Sample business data is available only where its reference owner supplies it; no fallback crosses tenants. Unadapted contracts fail closed.
 

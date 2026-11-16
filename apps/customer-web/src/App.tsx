@@ -43,6 +43,7 @@ const FinancialProfessionalWorkspace = lazy(() => import('./financial-profession
 const PropertyValuerWorkspace = lazy(() => import('./property-valuer/PropertyValuerWorkspace'));
 const LegalAdvisorWorkspace = lazy(() => import('./legal-advisor/LegalAdvisorWorkspace'));
 const OperationsSupportWorkspace = lazy(() => import('./operations-support/OperationsSupportWorkspace'));
+const PlatformAdministratorPortal = lazy(() => import('./platform-administration/PlatformAdministratorPortal'));
 const { Paragraph, Text, Title } = Typography;
 
 function ToolchainFoundation() {
@@ -282,13 +283,14 @@ function RouteContent() {
 export function App() {
   if (window.location.pathname === '/welcome')
     return <FoundationProvider appearance="midnight"><PersonaWelcomeEntry /></FoundationProvider>;
+  if (window.location.pathname === '/platform' || window.location.pathname === '/operations')
+    return <Suspense fallback={<main aria-busy="true">Loading Platform Administration…</main>}><PlatformAdministratorPortal /></Suspense>;
   const area = window.location.pathname === '/advisor' ? 'advisor' :
     window.location.pathname === '/dsa' ? 'dsa' :
     window.location.pathname === '/operations-support' ? 'operations-support' :
     window.location.pathname === '/kyc/reviews' ? 'kyc-review' :
     window.location.pathname === '/access' ||
-    window.location.pathname.startsWith('/access/') ||
-    window.location.pathname === '/operations'
+    window.location.pathname.startsWith('/access/')
       ? 'administration'
       : 'product';
   return (
@@ -368,7 +370,7 @@ function WorkspaceApplication() {
             '/settings/agreements',
             '/vs02',
             '/foundation',
-            '/operations',
+            '/operations', '/platform',
           ].includes(url.pathname) || url.pathname.startsWith('/access/')
         )
       )
@@ -385,8 +387,7 @@ function WorkspaceApplication() {
       document.removeEventListener('click', navigate);
     };
   }, []);
-  const inAdministration =
-    path === '/access' || path.startsWith('/access/') || path === '/operations';
+  const inAdministration = path === '/access' || path.startsWith('/access/');
   const inAdvisor = path === '/advisor';
   const inDsa = path === '/dsa';
   const inOperationsSupport = path === '/operations-support';

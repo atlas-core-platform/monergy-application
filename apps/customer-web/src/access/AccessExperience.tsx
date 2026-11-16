@@ -7,7 +7,7 @@ import { AccessApiError, displayError, recordId } from './accessApi';
 import type { AccessApi, AccessArea, AccessPage, AccessRecord } from './accessApi';
 import { AccessEditor } from './AccessEditor';
 import { ImportDrawer } from './ImportDrawer';
-import { AccessOperations, AccessOperationPage } from './AccessOperations';
+import { AccessOperationPage } from './AccessOperations';
 import { useWorkspaceSession } from './workspaceSession';
 import { WorkspaceSessionProvider } from './WorkspaceSessionProvider';
 import { WorkspaceEntry } from './WorkspaceEntry';
@@ -152,17 +152,6 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
           api={api}
           onExpired={fail}
         />
-      ) : path === '/operations' ? (
-        <>
-          <header className="access-page-header">
-            <div>
-              <p className="workspace-eyebrow">TEST ENVIRONMENT · OPERATOR TOOLS</p>
-              <h1>Environment operations</h1>
-              <p>Inspect local service connections and the remaining release gates.</p>
-            </div>
-          </header>
-          <AccessOperations api={api} onExpired={fail} views={['services', 'readiness']} />
-        </>
       ) : (
         <Empty description="This Organization Settings page does not exist.">
           <Button href="/access">Return to overview</Button>
