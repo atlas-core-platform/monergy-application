@@ -1,0 +1,146 @@
+{
+  "workstream": "UX-DEMO-01 — Persona Language & Demo Review",
+  "baseUrl": "http://127.0.0.1:4321",
+  "targetDurationSeconds": 190,
+  "resolution": { "width": 1280, "height": 720 },
+  "personas": [
+    {
+      "id": "customer",
+      "actorId": "A100",
+      "name": "Customer",
+      "filename": "01-customer.mp4",
+      "opening": "Understanding your finances and next steps",
+      "routes": [
+        { "path": "/", "heading": "Your financial overview", "caption": "See your financial overview and continue your journey." },
+        { "path": "/finances", "heading": "Your trusted financial information", "caption": "Review financial information and follow it back to its source." },
+        { "path": "/evidence", "heading": "Keep your financial documents together", "caption": "Keep supporting documents together without exposing private access details." },
+        { "path": "/cases", "heading": "Assistance cases", "caption": "Open a financial-assistance case and follow its progress." }
+      ],
+      "boundary": "Only your own approved financial workspace is available.",
+      "closing": "Reviewed finances, documents and assistance cases.",
+      "nonclaim": "Customer-reviewed information is not externally verified financial truth."
+    },
+    {
+      "id": "organization-administrator",
+      "actorId": "A900",
+      "name": "Organization Administrator",
+      "filename": "02-organization-administrator.mp4",
+      "opening": "Managing people, roles and organization access",
+      "routes": [
+        { "path": "/access/users", "heading": "People", "caption": "Manage people and their business roles." },
+        { "path": "/access/roles", "heading": "Roles", "caption": "Review the access included in each role." },
+        { "path": "/access/sessions", "heading": "Security & Sessions", "caption": "Review security activity and end sessions when needed." },
+        { "path": "/access/processing", "heading": "Document processing", "caption": "Review document-processing work that needs attention." },
+        { "path": "/access/audit", "heading": "Audit Log", "caption": "Review sensitive activity for the organization." }
+      ],
+      "boundary": "Administrators manage organization access; they do not inherit customer financial access.",
+      "closing": "Reviewed people, roles, sessions, processing and activity.",
+      "nonclaim": "Organization Administrator authority does not grant customer financial access."
+    },
+    {
+      "id": "financial-advisor",
+      "actorId": "A300",
+      "name": "Financial Advisor",
+      "filename": "03-financial-advisor.mp4",
+      "opening": "Working with an assigned customer's shared information",
+      "routes": [
+        { "path": "/advisor", "heading": "My Customers", "caption": "Open an assigned customer and review information they agreed to share.", "safeAction": "Open customer" }
+      ],
+      "boundary": "A customer appears only while role, assignment and permission to share are current.",
+      "closing": "Reviewed an assigned customer and the governed advisory controls.",
+      "nonclaim": "The Advisor view is read-only unless a supported professional action is explicitly recorded."
+    },
+    {
+      "id": "dsa-case-manager",
+      "actorId": "A400",
+      "name": "DSA / Case Manager",
+      "filename": "04-dsa-case-manager.mp4",
+      "opening": "Picking up and managing a customer assistance case",
+      "routes": [
+        { "path": "/dsa", "heading": "Cases", "caption": "Review submitted cases and the explicit Accept case action." }
+      ],
+      "boundary": "Accepting a case does not reveal the customer's financial information.",
+      "closing": "Reviewed the case queue, state and safe ownership boundary.",
+      "nonclaim": "The recording does not create or expose customer financial access."
+    },
+    {
+      "id": "lender-professional",
+      "actorId": "A500",
+      "name": "Lender Professional",
+      "filename": "05-lender-professional.mp4",
+      "opening": "Reviewing an assigned application and its documents",
+      "routes": [
+        { "path": "/lender", "heading": "Applications to Review", "caption": "Review required documents and the human decision controls.", "safeAction": "Open review" }
+      ],
+      "boundary": "Only assigned applications are shown; Monergy does not make the lending decision.",
+      "closing": "Reviewed an assigned application and its decision history.",
+      "nonclaim": "No automated lending decision or external verification is claimed."
+    },
+    {
+      "id": "financial-professional",
+      "actorId": "A600",
+      "name": "Financial Professional",
+      "filename": "06-financial-professional.mp4",
+      "opening": "Reviewing governed financial information",
+      "routes": [
+        { "path": "/financial-professional", "heading": "Financial Reviews", "caption": "Inspect assigned sources, professional notes and certification controls.", "safeAction": "Open review" }
+      ],
+      "boundary": "Only assigned reviews with current customer permission are available.",
+      "closing": "Reviewed source-linked information and professional conclusion controls.",
+      "nonclaim": "The recording does not imply statutory audit or tax certification."
+    },
+    {
+      "id": "property-valuer",
+      "actorId": "A700",
+      "name": "Property Valuer",
+      "filename": "07-property-valuer.mp4",
+      "opening": "Reviewing an assigned property and recording controls",
+      "routes": [
+        { "path": "/property-valuer", "heading": "Property Valuations", "caption": "Review property details, supporting documents and valuation history." }
+      ],
+      "boundary": "A professional valuation remains distinct from customer-reported information.",
+      "closing": "Reviewed the assigned property and professional valuation controls.",
+      "nonclaim": "Monergy calculations are not represented as a professional valuation."
+    },
+    {
+      "id": "legal-advisor",
+      "actorId": "A800",
+      "name": "Legal Advisor",
+      "filename": "08-legal-advisor.mp4",
+      "opening": "Reviewing an assigned legal matter",
+      "routes": [
+        { "path": "/legal-advisor", "heading": "Legal Reviews", "caption": "Review the matter, its documents and human-authored outcome controls." }
+      ],
+      "boundary": "The Legal Advisor owns the recorded finding; Monergy does not generate legal advice.",
+      "closing": "Reviewed an assigned matter and its review history.",
+      "nonclaim": "No external filing, signature, court submission or AI legal advice is claimed."
+    },
+    {
+      "id": "operations-support",
+      "actorId": "A850",
+      "name": "Operations Support",
+      "filename": "09-operations-support.mp4",
+      "opening": "Safely reviewing processing tasks that need attention",
+      "routes": [
+        { "path": "/operations-support", "heading": "Tasks needing attention", "caption": "Inspect a task, its attempt history and available recovery actions.", "safeAction": "View details" }
+      ],
+      "boundary": "Customer financial information and professional decisions stay hidden.",
+      "closing": "Reviewed task status, history and safe recovery controls.",
+      "nonclaim": "Raw infrastructure diagnostics are intentionally outside this workspace."
+    },
+    {
+      "id": "platform-administrator",
+      "actorId": "A950",
+      "name": "Platform Administrator",
+      "filename": "10-platform-administrator.mp4",
+      "opening": "Understanding Monergy's overall readiness",
+      "platform": true,
+      "routes": [
+        { "path": "/platform", "heading": "System status", "caption": "Review system availability, release readiness and operational history.", "safeAction": "Add note" }
+      ],
+      "boundary": "Platform Administration does not enter organization or customer workspaces.",
+      "closing": "Reviewed system status, blockers and operational-note controls.",
+      "nonclaim": "LOCAL readiness is not Production or business acceptance."
+    }
+  ]
+}

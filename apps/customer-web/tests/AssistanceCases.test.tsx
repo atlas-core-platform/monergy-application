@@ -75,7 +75,7 @@ it('lets an eligible DSA accept exactly the visible version without exposing cus
   expect(await screen.findByText(/now assigned to you/)).toBeVisible();
   expect(write).toEqual({ operationId: 'b'.repeat(32), expectedVersion: 1 });
   expect(screen.getByText('Assigned to you')).toBeVisible();
-  expect(screen.getByText(/Durable test data/)).toBeVisible();
+  expect(screen.queryByText(/Durable test data/)).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Accept case' })).not.toBeInTheDocument();
   expect(screen.queryByText(/A100|C001|customer name|net worth/i)).not.toBeInTheDocument();
 });

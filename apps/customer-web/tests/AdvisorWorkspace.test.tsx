@@ -69,15 +69,15 @@ async function connect() {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it('enters only the verified Financial Advisor workspace, without displaying customer financial data', async () => {
   const requests = owner(); mount(); await connect();
-  expect(await screen.findByRole('heading', { name: 'Financial Advisor workspace' })).toBeVisible();
+  expect(await screen.findByRole('heading', { name: 'My Customers' })).toBeVisible();
   expect(screen.getAllByText('0').length).toBeGreaterThan(0);
-  expect(screen.getByText(/relationship does not grant financial access/)).toBeVisible();
+  expect(screen.getByText(/customer appears here only while your assignment/)).toBeVisible();
   expect(requests.mock.calls.some(([url]) => url.endsWith('/advisor/context'))).toBe(true);
   expect(requests.mock.calls.some(([url]) => url.endsWith('/v1/context'))).toBe(false);
 });
 it('does not expose an unconsented financial profile when no customers are authorized', async () => {
   const requests = owner(); mount(); await connect();
-  expect(await screen.findByText(/No customer reviews are authorized yet/)).toBeVisible();
+  expect(await screen.findByText(/No customers are currently assigned to you/)).toBeVisible();
   expect(requests.mock.calls.some(([url]) => url.includes('/financial-profile'))).toBe(false);
   expect(screen.queryByText('Financial information (read only)')).not.toBeInTheDocument();
 });
@@ -140,7 +140,7 @@ it('shows a read-only reviewed financial fact only after a consent-authorized cu
     return mock(url);
   });
   mount(); await connect();
-  await userEvent.click(await screen.findByRole('button', { name: 'Open customer workspace' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Open customer' }));
   expect(await screen.findByText('Reviewed income')).toBeVisible();
   expect(screen.getByText(/Source: Reviewed income document/)).toBeVisible();
   expect(screen.getAllByText('Verified Customer').length).toBeGreaterThan(0);
@@ -163,7 +163,7 @@ it('fails closed when the owner revokes financial access after listing the assig
     return fallback(url);
   });
   mount(); await connect();
-  await userEvent.click(await screen.findByRole('button', { name: 'Open customer workspace' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Open customer' }));
   await waitFor(() => { expect(requests.mock.calls.some(([url]) => url.endsWith('/advisor/customers/C001/financial-profile'))).toBe(true); });
   expect(screen.queryByText('Financial information (read only)')).not.toBeInTheDocument();
   expect(screen.queryByText('Reviewed income')).not.toBeInTheDocument();
@@ -203,12 +203,12 @@ it('records only governed advisor activity for a currently authorized assigned c
     return fallback(url, options);
   });
   mount(); await connect();
-  await userEvent.click(await screen.findByRole('button', { name: 'Open customer workspace' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Open customer' }));
   await userEvent.click(await screen.findByRole('checkbox', { name: 'Reviewed income' }));
   await userEvent.type(screen.getByLabelText('Advisory note'), 'Prepare affordability discussion');
   await userEvent.click(screen.getByRole('button', { name: 'Save advisory note' }));
-  expect(await screen.findByText('The source-backed advisory note was recorded.')).toBeVisible();
-  expect(screen.getByText('1 reviewed source reference retained')).toBeVisible();
+  expect(await screen.findByText('Advisory note saved.')).toBeVisible();
+  expect(screen.getByText('Linked to 1 reviewed item')).toBeVisible();
   expect(requests.mock.calls.filter(([url]) => url.endsWith('/advisor/customers/C001/notes'))).toHaveLength(1);
 });
 it('never displays an invalid owner customer label', async () => {
@@ -226,17 +226,17 @@ it('never displays an invalid owner customer label', async () => {
       : fallback(url);
   });
   mount(); await connect();
-  expect(await screen.findByText(/Authorized customer names could not be verified/)).toBeVisible();
+  expect(await screen.findByText(/could not load your assigned customers/)).toBeVisible();
   expect(screen.queryByText('Should not be visible')).not.toBeInTheDocument();
 });
 it('rejects a non-advisor without rendering a workspace', async () => {
   const requests = owner(403); mount(); await connect();
   await waitFor(() => { expect(requests.mock.calls.some(([url]) => url.endsWith('/revoke'))).toBe(true); });
-  expect(screen.queryByRole('heading', { name: 'Financial Advisor workspace' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'My Customers' })).not.toBeInTheDocument();
 });
 it('rejects a mismatched owner response before revealing the workspace', async () => {
   const requests = owner(200, true); mount(); await connect();
   await waitFor(() => { expect(requests.mock.calls.some(([url]) => url.endsWith('/revoke'))).toBe(true); });
-  expect(screen.queryByRole('heading', { name: 'Financial Advisor workspace' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'My Customers' })).not.toBeInTheDocument();
   expect(sessionMemory.current).toBeNull();
 });

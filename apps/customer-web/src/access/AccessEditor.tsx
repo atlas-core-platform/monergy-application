@@ -119,7 +119,7 @@ export function AccessEditor({
     area === 'members'
       ? 'user'
       : area === 'resource-grants'
-        ? 'resource access'
+        ? 'individual access'
         : area.slice(0, -1);
 
   useEffect(() => {
@@ -232,7 +232,7 @@ export function AccessEditor({
             items: [],
             error:
               failure instanceof AccessApiError && failure.code === 'RESOURCE_DIRECTORY_UNAVAILABLE'
-                ? 'This resource type does not yet have an owner-backed directory.'
+                ? 'These business records are not available right now. Try again later.'
                 : displayError(failure),
           });
         }
@@ -270,7 +270,7 @@ export function AccessEditor({
   const resourceName = (resourceId?: string) =>
     (resourceId ? resolvedResourceNames[resourceId] : undefined) ??
     resourceOptions.find((item) => item.resourceId === resourceId)?.displayName ??
-    (resourceId ? 'Restricted resource' : 'None');
+    (resourceId ? 'Restricted business record' : 'None');
 
   const save = async () => {
     if (!confirmation || recovery || busy) return;
@@ -373,9 +373,9 @@ export function AccessEditor({
     if (area === 'resource-grants')
       return [
         { label: 'Person', value: lookup(people, values.actorId) },
-        { label: 'Capability', value: capabilityName(values.capabilityId) },
+        { label: 'Allowed action', value: capabilityName(values.capabilityId) },
         {
-          label: 'Resource',
+          label: 'Business record',
           value: resourceName(values.resourceId),
           identity: values.resourceId ?? '',
         },
@@ -395,7 +395,7 @@ export function AccessEditor({
       ...(area === 'permissions'
         ? [
             {
-              label: 'Capabilities and scope',
+              label: 'Allowed actions and coverage',
               identity: list(
                 (values.grants ?? []).map((grant) => `${grant.capabilityId}:${grant.scope}`),
               ),
@@ -460,8 +460,8 @@ export function AccessEditor({
           children: (
             <>
               <p className="access-form-hint">
-                This describes the selected role’s configuration. Actual access is checked by each
-                service, including person status and customer assignments.
+                This describes what the selected role may do. A person's status and customer
+                assignments are checked each time they work.
               </p>
               {(area === 'roles'
                 ? (selectedPermissions ?? [])
@@ -481,7 +481,7 @@ export function AccessEditor({
                             {capabilityName(grant.capabilityId)} ·{' '}
                             {grant.scope === 'Tenant'
                               ? 'Organization-wide'
-                              : 'Specific resources (requires assignment)'}
+                              : 'Specific records (requires assignment)'}
                           </li>
                         ))}
                       </ul>
@@ -493,7 +493,7 @@ export function AccessEditor({
               )}
               {area === 'members' && (
                 <>
-                  <h4>Saved resource assignments</h4>
+                  <h4>Saved individual access</h4>
                   {resourceGrants.length ? (
                     <ul>
                       {resourceGrants.map((grant) => (
@@ -503,7 +503,7 @@ export function AccessEditor({
                       ))}
                     </ul>
                   ) : (
-                    <p>No individual resource assignments.</p>
+                    <p>No individual access has been added.</p>
                   )}
                 </>
               )}
@@ -535,7 +535,7 @@ export function AccessEditor({
             : record
               ? area === 'members'
                 ? 'Manage person'
-                : (record.label ?? 'Resource access')
+                : (record.label ?? 'Individual access')
               : `Create ${noun}`
         }
         open={open}
@@ -611,7 +611,7 @@ export function AccessEditor({
                 ? 'Reload before making another change'
                 : 'The result has not been confirmed'
             }
-            description="Your draft is shown below for reference. Reload reads the current records from the service before returning to the directory. Check the saved values before starting another change. This request will not be repeated."
+            description="Your draft is shown below for reference. Refresh the current information, check the saved values and then start another change. This change will not be submitted again automatically."
           />
         )}
         {confirmation && (
@@ -621,7 +621,7 @@ export function AccessEditor({
             </h2>
             <p>
               {confirmation.remove
-                ? 'The service will reject removal if another access configuration still depends on this item.'
+                ? 'Removal will be prevented if another access setting still depends on this item.'
                 : 'Check the details below. Saving applies this change immediately to your organization.'}
             </p>
             {record && (
@@ -649,7 +649,7 @@ export function AccessEditor({
                     {original?.businessRoleId !== confirmation.values?.businessRoleId && (
                       <p>
                         Changing the business role removes customer assignments and individual
-                        resource grants. Review and reassign any required resources after saving.
+                        access. Review and reassign anything the person still needs after saving.
                       </p>
                     )}
                     {!confirmation.values?.active && (
@@ -690,12 +690,16 @@ export function AccessEditor({
                 { key: 'person', label: 'Person', children: record.actorId },
                 {
                   key: 'capability',
-                  label: 'Capability',
+                  label: 'Allowed action',
                   children:
                     capabilities.find((item) => item.capabilityId === record.capabilityId)
                       ?.displayName ?? record.capabilityId,
                 },
-                { key: 'resource', label: 'Resource', children: resourceName(record.resourceId) },
+                {
+                  key: 'resource',
+                  label: 'Business record',
+                  children: resourceName(record.resourceId),
+                },
               ]}
             />
           ) : (
@@ -747,16 +751,16 @@ export function AccessEditor({
                 <Form.List name="grants">
                   {(fields, { add, remove }) => (
                     <>
-                      <h3 className="access-form-section">Capabilities</h3>
+                      <h3 className="access-form-section">Allowed actions</h3>
                       <p className="access-form-hint">
                         Organization-wide access applies within this organization. Record-specific
-                        access also requires an individual resource grant.
+                        access also requires the person to be given access to that specific record.
                       </p>
                       {fields.map((field) => (
                         <div className="access-grant-row" key={field.key}>
                           <Form.Item
                             name={[field.name, 'capabilityId']}
-                            label={`Capability ${String(field.name + 1)}`}
+                            label={`Allowed action ${String(field.name + 1)}`}
                             rules={[{ required: true }]}
                           >
                             <Select
@@ -792,7 +796,7 @@ export function AccessEditor({
                             onClick={() => {
                               remove(field.name);
                             }}
-                            aria-label={`Remove capability ${String(field.name + 1)}`}
+                            aria-label={`Remove allowed action ${String(field.name + 1)}`}
                           >
                             Remove
                           </Button>
@@ -804,7 +808,7 @@ export function AccessEditor({
                         }}
                         disabled={fields.length >= 1000}
                       >
-                        Add capability
+                        Add allowed action
                       </Button>
                     </>
                   )}
@@ -817,8 +821,6 @@ export function AccessEditor({
                     <dl className="access-identity">
                       <dt>Email address</dt>
                       <dd>{record?.normalizedEmail ?? 'Not available'}</dd>
-                      <dt>Person reference</dt>
-                      <dd>{record?.actorId}</dd>
                     </dl>
                     <p className="access-form-hint">Identity details are read-only here.</p>
                     {record?.status === 'PendingIdentity' && (
@@ -851,7 +853,7 @@ export function AccessEditor({
                     </Form.Item>
                     <p className="access-form-hint">
                       One business role per person. Changing it removes customer assignments and
-                      individual resource grants.
+                      individual access.
                     </p>
                     {configuredPermissions}
                   </section>
@@ -866,7 +868,7 @@ export function AccessEditor({
                     </Form.Item>
                     <p className="access-form-hint">
                       Allows administration of this organization. Business data still requires a
-                      business role and applicable resource grants.
+                      business role and any individual access they need.
                     </p>
                   </section>
                   <section className="access-editor-section" aria-labelledby="user-groups">
@@ -904,7 +906,7 @@ export function AccessEditor({
                         }))}
                     />
                   </Form.Item>
-                  <Form.Item name="capabilityId" label="Capability" rules={[{ required: true }]}>
+                  <Form.Item name="capabilityId" label="Allowed action" rules={[{ required: true }]}>
                     <Select
                       showSearch={{ optionFilterProp: 'label' }}
                       onChange={() => {
@@ -918,14 +920,14 @@ export function AccessEditor({
                         }))}
                     />
                   </Form.Item>
-                  <Form.Item name="resourceId" label="Resource" rules={[{ required: true }]}>
+                  <Form.Item name="resourceId" label="Business record" rules={[{ required: true }]}>
                     <Select
                       showSearch={{ optionFilterProp: 'label' }}
                       loading={resourceLookupLoading}
                       disabled={
                         !selectedCapability || resourceLookupLoading || Boolean(resourceLookupError)
                       }
-                      placeholder="Choose a business resource"
+                      placeholder="Choose a business record"
                       options={resourceOptions.map((resource) => ({
                         value: resource.resourceId,
                         label: resource.secondaryLabel
@@ -938,15 +940,14 @@ export function AccessEditor({
                     <Alert
                       type="warning"
                       showIcon
-                      title="Resource lookup is unavailable"
+                      title="Business records are unavailable"
                       description={resourceLookupError}
                       className="access-notice"
                     />
                   )}
                   <p className="access-form-hint">
-                    Choose the business resource by name. Monergy stores its immutable identifier
-                    automatically. The person’s role must already include this capability with
-                    resource-specific scope.
+                    Choose the business record by name. The person's role must already include this
+                    action for specific records.
                   </p>
                 </>
               )}

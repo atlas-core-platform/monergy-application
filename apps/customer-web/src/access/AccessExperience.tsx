@@ -50,9 +50,9 @@ const areas: { value: AccessArea; label: string; description: string }[] = [
   },
   {
     value: 'resource-grants',
-    label: 'Advanced resource grants',
+    label: 'Individual access',
     description:
-      'Manage exact record-level grants only for contracts that explicitly require them. Customer relationships are managed in Assigned customers.',
+      'Give a person access to a specific customer record when their role requires it. Customer relationships are managed in Assigned customers.',
   },
 ];
 
@@ -112,7 +112,7 @@ function AuthenticatedAccess({ path, embedded }: { path: string; embedded: boole
           showIcon
           className="access-notice"
           title="Review the interrupted onboarding request"
-          description="Check its recorded status before starting another request. Reconnecting does not repeat the operation."
+          description="Check its status before starting another request. Reconnecting will not submit it again."
           action={
             <Button
               onClick={() => {
@@ -303,7 +303,7 @@ function Administration({
           : area === 'imports'
             ? 'Import'
             : area === 'resource-grants'
-              ? 'Resource'
+              ? 'Business record'
               : 'Name',
       key: 'name',
       render: (_, record) => (
@@ -327,10 +327,10 @@ function Administration({
               {record.normalizedEmail ??
                 record.label ??
                 (record.resourceId
-                  ? (resourceNames[record.resourceId] ?? 'Restricted resource')
+                  ? (resourceNames[record.resourceId] ?? 'Restricted business record')
                   : record.id)}
             </strong>
-            <small>{record.code ?? (area === 'members' ? '' : (record.capabilityId ?? ''))}</small>
+            <small>{record.code ?? ''}</small>
           </span>
         </button>
       ),
@@ -389,12 +389,12 @@ function Administration({
               render: (_: unknown, record: AccessRecord) => (
                 <span className="access-secondary">
                   {area === 'permissions'
-                    ? `${String(record.grants?.length ?? 0)} capabilities`
+                    ? `${String(record.grants?.length ?? 0)} allowed actions`
                     : area === 'roles'
                       ? `${String(record.permissionIds?.length ?? 0)} permissions`
                       : area === 'groups'
                         ? `${String(record.memberCount ?? 0)} people`
-                        : record.actorId}
+                        : 'Individual access'}
                 </span>
               ),
             },
@@ -407,7 +407,7 @@ function Administration({
         <Tooltip title="Open details">
           <Button
             type="text"
-            aria-label={`Open ${record.normalizedEmail ?? record.label ?? (record.resourceId ? (resourceNames[record.resourceId] ?? 'restricted resource') : record.id) ?? 'details'}`}
+            aria-label={`Open ${record.normalizedEmail ?? record.label ?? (record.resourceId ? (resourceNames[record.resourceId] ?? 'restricted business record') : record.id) ?? 'details'}`}
             icon={<WorkspaceIcon name="arrow" size={15} />}
             iconPlacement="end"
             onClick={() => {
@@ -459,7 +459,7 @@ function Administration({
               ? 'Create person'
               : area === 'imports'
                 ? 'Import people'
-                : `Create ${area === 'resource-grants' ? 'resource access' : area.slice(0, -1)}`}
+                : `Create ${area === 'resource-grants' ? 'individual access' : area.slice(0, -1)}`}
           </Button>
         </Space>
       </header>
@@ -590,7 +590,7 @@ function Administration({
           <WorkspaceIcon name="shield" size={17} />
           <p>
             Organization Administrators manage access. Business permissions come from the person’s
-            assigned role and applicable resource grants.
+            assigned role and any individual access they have been given.
           </p>
         </div>
         {area === 'members' && (
@@ -631,7 +631,7 @@ function Administration({
             setPage({ ...first, items, nextCursor: null });
             setEditor(null);
             setNotice(
-              'Current records reloaded from the service. Check the saved values before making another change.',
+              'Current information refreshed. Check the saved values before making another change.',
             );
           }}
         />

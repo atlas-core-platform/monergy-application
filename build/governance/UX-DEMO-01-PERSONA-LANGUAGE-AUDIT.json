@@ -1,0 +1,387 @@
+{
+  "workstream": "UX-DEMO-01 — Persona Language & Demo Review",
+  "generatedAt": "2026-11-17T12:20:13.408Z",
+  "baseCommit": "a0a889e022996cc9c770a7a4484aad733f432d96",
+  "surfaces": [
+    {
+      "persona": "Shared entry and navigation",
+      "route": "all persona routes",
+      "file": "apps/customer-web/src/App.tsx"
+    },
+    {
+      "persona": "Shared entry and navigation",
+      "route": "all organization and product routes",
+      "file": "apps/customer-web/src/workspace/accessNavigation.tsx"
+    },
+    {
+      "persona": "Shared entry and navigation",
+      "route": "all persona routes",
+      "file": "apps/customer-web/src/access/WorkspaceEntry.tsx"
+    },
+    {
+      "persona": "Customer",
+      "route": "/",
+      "file": "apps/customer-web/src/workspace/WorkspaceHome.tsx"
+    },
+    {
+      "persona": "Organization Administrator",
+      "route": "/access",
+      "file": "apps/customer-web/src/access/AccessExperience.tsx"
+    },
+    {
+      "persona": "Organization Administrator",
+      "route": "/access",
+      "file": "apps/customer-web/src/access/AccessEditor.tsx"
+    },
+    {
+      "persona": "Organization Administrator / Operations Support",
+      "route": "/access/processing and /operations-support",
+      "file": "apps/customer-web/src/access/ProcessingStatus.tsx"
+    },
+    {
+      "persona": "Financial Advisor / Relationship Manager",
+      "route": "/advisor",
+      "file": "apps/customer-web/src/advisor/AdvisorWorkspace.tsx"
+    },
+    {
+      "persona": "DSA / Case Manager",
+      "route": "/dsa",
+      "file": "apps/customer-web/src/cases/DsaCaseWorkspace.tsx"
+    },
+    {
+      "persona": "Lender Professional",
+      "route": "/lender",
+      "file": "apps/customer-web/src/lender/LenderWorkspace.tsx"
+    },
+    {
+      "persona": "Financial Professional / Chartered Accountant",
+      "route": "/financial-professional",
+      "file": "apps/customer-web/src/financial-professional/FinancialProfessionalWorkspace.tsx"
+    },
+    {
+      "persona": "Property Valuer",
+      "route": "/property-valuer",
+      "file": "apps/customer-web/src/property-valuer/PropertyValuerWorkspace.tsx"
+    },
+    {
+      "persona": "Legal Advisor / Advocate",
+      "route": "/legal-advisor",
+      "file": "apps/customer-web/src/legal-advisor/LegalAdvisorWorkspace.tsx"
+    },
+    {
+      "persona": "Operations Support",
+      "route": "/operations-support",
+      "file": "apps/customer-web/src/operations-support/OperationsSupportWorkspace.tsx"
+    },
+    {
+      "persona": "Platform Administrator",
+      "route": "/platform",
+      "file": "apps/customer-web/src/platform-administration/PlatformAdministratorPortal.tsx"
+    },
+    {
+      "persona": "Shared copy and formatting",
+      "route": "all persona routes",
+      "file": "apps/customer-web/src/ux/personaCopy.ts"
+    }
+  ],
+  "counts": {
+    "sourceFiles": 94,
+    "userFacingSourceRowsReviewedBefore": 2843,
+    "userFacingSourceRowsReviewedAfter": 2873,
+    "changedOrRemovedSourceRows": 162,
+    "technicalTermMatchesBefore": 37,
+    "technicalTermMatchesAfter": 0,
+    "diagnosticMatchesAllowlistedAfter": 1
+  },
+  "bannedTerms": [
+    "tenant",
+    "actor",
+    "subject",
+    "capability",
+    "resource grant",
+    "policy version",
+    "subject version",
+    "customer version",
+    "consent version",
+    "authorization decision",
+    "access evaluation",
+    "owner service",
+    "service owner",
+    "service boundary",
+    "runtime",
+    "reference adapter",
+    "reference actor",
+    "persistence",
+    "postgresql",
+    "seaweedfs",
+    "database",
+    "schema",
+    "migration",
+    "endpoint",
+    "http",
+    "payload",
+    "json",
+    "correlation id",
+    "topology",
+    "dependency",
+    "container",
+    "docker",
+    "clamav",
+    "ocr pipeline",
+    "revision conflict",
+    "idempotent",
+    "operation receipt",
+    "source lock",
+    "source version",
+    "source identity",
+    "resource id",
+    "platform control plane",
+    "technical acceptance",
+    "data durability",
+    "failure code",
+    "job reference"
+  ],
+  "violationsBefore": [
+    {
+      "file": "apps/customer-web/src/access/AccessEditor.tsx",
+      "line": 376,
+      "term": "capability",
+      "excerpt": "Capability"
+    },
+    {
+      "file": "apps/customer-web/src/access/AccessEditor.tsx",
+      "line": 693,
+      "term": "capability",
+      "excerpt": "Capability"
+    },
+    {
+      "file": "apps/customer-web/src/access/AccessEditor.tsx",
+      "line": 759,
+      "term": "capability",
+      "excerpt": "Capability"
+    },
+    {
+      "file": "apps/customer-web/src/access/AccessEditor.tsx",
+      "line": 795,
+      "term": "capability",
+      "excerpt": "Remove capability"
+    },
+    {
+      "file": "apps/customer-web/src/access/AccessEditor.tsx",
+      "line": 907,
+      "term": "capability",
+      "excerpt": "Capability"
+    },
+    {
+      "file": "apps/customer-web/src/access/AccessRequests.tsx",
+      "line": 200,
+      "term": "tenant",
+      "excerpt": "Review bounded, tenant-grantable access requests from your organization."
+    },
+    {
+      "file": "apps/customer-web/src/access/AccessRequests.tsx",
+      "line": 208,
+      "term": "capability",
+      "excerpt": "Approval grants only the capability described on the request. It cannot assign a customer, replace customer consent, grant Platform Administrator access or provide administrator authority."
+    },
+    {
+      "file": "apps/customer-web/src/access/AuditLog.tsx",
+      "line": 31,
+      "term": "http",
+      "excerpt": "HTTP responses do not prove asynchronous business completion. Search a job reference to compare the recovery boundary with Job Management's recorded started, completed or failed event. A requested activity without its result remains unresolved. Legacy fields are shown as Unrecorded; IP/device collection is disabled."
+    },
+    {
+      "file": "apps/customer-web/src/access/AuditLog.tsx",
+      "line": 31,
+      "term": "job reference",
+      "excerpt": "HTTP responses do not prove asynchronous business completion. Search a job reference to compare the recovery boundary with Job Management's recorded started, completed or failed event. A requested activity without its result remains unresolved. Legacy fields are shown as Unrecorded; IP/device collection is disabled."
+    },
+    {
+      "file": "apps/customer-web/src/access/AuditLog.tsx",
+      "line": 33,
+      "term": "tenant",
+      "excerpt": "failed sign-in   recorded in the last   minutes. This tenant-wide signal does not identify a person, device or network address."
+    },
+    {
+      "file": "apps/customer-web/src/access/ImportDrawer.tsx",
+      "line": 932,
+      "term": "tenant",
+      "excerpt": "Monergy sends a short-lived verification code to the person’s tenant-owned email. No password or signed-in session is created."
+    },
+    {
+      "file": "apps/customer-web/src/access/ProcessingStatus.tsx",
+      "line": 99,
+      "term": "job reference",
+      "excerpt": "Find job reference"
+    },
+    {
+      "file": "apps/customer-web/src/access/ProcessingStatus.tsx",
+      "line": 99,
+      "term": "job reference",
+      "excerpt": "Job reference"
+    },
+    {
+      "file": "apps/customer-web/src/access/ProcessingStatus.tsx",
+      "line": 115,
+      "term": "job reference",
+      "excerpt": "Job reference"
+    },
+    {
+      "file": "apps/customer-web/src/access/ProcessingStatus.tsx",
+      "line": 115,
+      "term": "failure code",
+      "excerpt": "Failure code"
+    },
+    {
+      "file": "apps/customer-web/src/access/RequestAccess.tsx",
+      "line": 141,
+      "term": "capability",
+      "excerpt": "Restricted capability"
+    },
+    {
+      "file": "apps/customer-web/src/access/RequestAccess.tsx",
+      "line": 172,
+      "term": "capability",
+      "excerpt": "This capability needs organization access"
+    },
+    {
+      "file": "apps/customer-web/src/access/RequestAccess.tsx",
+      "line": 173,
+      "term": "capability",
+      "excerpt": "The capability remains visible, but its protected data is not loaded until access is fulfilled."
+    },
+    {
+      "file": "apps/customer-web/src/access/RequestAccess.tsx",
+      "line": 224,
+      "term": "capability",
+      "excerpt": "Request access to another capability"
+    },
+    {
+      "file": "apps/customer-web/src/advisor/AdvisorWorkspace.tsx",
+      "line": 329,
+      "term": "capability",
+      "excerpt": "No access was granted. You may submit a new request if the capability is still available."
+    },
+    {
+      "file": "apps/customer-web/src/advisor/AdvisorWorkspace.tsx",
+      "line": 336,
+      "term": "capability",
+      "excerpt": "The capability is visible, but an Organization Administrator cannot grant it in its current configuration."
+    },
+    {
+      "file": "apps/customer-web/src/financial-professional/FinancialProfessionalWorkspace.tsx",
+      "line": 59,
+      "term": "source version",
+      "excerpt": "The action was not confirmed. The assignment, source version, customer sharing or your role may have changed; refresh before retrying."
+    },
+    {
+      "file": "apps/customer-web/src/platform-administration/PlatformAdministratorPortal.tsx",
+      "line": 110,
+      "term": "platform control plane",
+      "excerpt": "Platform control plane"
+    },
+    {
+      "file": "apps/customer-web/src/platform-administration/PlatformAdministratorPortal.tsx",
+      "line": 114,
+      "term": "tenant",
+      "excerpt": "Never impersonate a tenant."
+    },
+    {
+      "file": "apps/customer-web/src/platform-administration/PlatformAdministratorPortal.tsx",
+      "line": 115,
+      "term": "tenant",
+      "excerpt": "Review service health and release blockers, then record bounded operational posture. Tenant access, customer records, Consent and professional decisions remain unavailable."
+    },
+    {
+      "file": "apps/customer-web/src/platform-administration/PlatformAdministratorPortal.tsx",
+      "line": 117,
+      "term": "platform control plane",
+      "excerpt": "Connect to the platform control plane"
+    },
+    {
+      "file": "apps/customer-web/src/platform-administration/PlatformAdministratorPortal.tsx",
+      "line": 125,
+      "term": "tenant",
+      "excerpt": "The key is cleared after use and is never a tenant credential."
+    },
+    {
+      "file": "apps/customer-web/src/platform-administration/PlatformAdministratorPortal.tsx",
+      "line": 136,
+      "term": "tenant",
+      "excerpt": "This workspace governs platform health and operational posture only. It cannot browse tenant data or assume tenant authority."
+    },
+    {
+      "file": "apps/customer-web/src/platform-administration/PlatformAdministratorPortal.tsx",
+      "line": 142,
+      "term": "tenant",
+      "excerpt": "No tenant membership, customer-data access, Consent authority or break-glass path is available in this workspace."
+    },
+    {
+      "file": "apps/customer-web/src/platform-administration/PlatformAdministratorPortal.tsx",
+      "line": 154,
+      "term": "tenant",
+      "excerpt": "This records an operational annotation. It does not restart a service, grant access or alter tenant data."
+    },
+    {
+      "file": "apps/customer-web/src/product/BankAccountRecordsExperience.tsx",
+      "line": 59,
+      "term": "capability",
+      "excerpt": "Request the bounded financial information capability. You can keep reviewing existing bank account records."
+    },
+    {
+      "file": "apps/customer-web/src/product/ConsentExperience.tsx",
+      "line": 167,
+      "term": "actor",
+      "excerpt": "This view covers up to 100 recent delegated customer-advice grants. Unexpired does not confirm effective access: current customer, actor, owner version, and permissions are checked separately when protected information is requested. Google Drive permission is managed in Connections."
+    },
+    {
+      "file": "apps/customer-web/src/product/CreditCardRecordsExperience.tsx",
+      "line": 59,
+      "term": "capability",
+      "excerpt": "Request the bounded financial information capability. You can keep reviewing existing credit card records."
+    },
+    {
+      "file": "apps/customer-web/src/product/FinancialProfileExperience.tsx",
+      "line": 219,
+      "term": "capability",
+      "excerpt": "Request the bounded Customer financial information capability from your Organization Administrator. You can continue reviewing information you already have."
+    },
+    {
+      "file": "apps/customer-web/src/product/ProductReportsExperience.tsx",
+      "line": 445,
+      "term": "operation receipt",
+      "excerpt": "Operation receipt"
+    },
+    {
+      "file": "apps/customer-web/src/property-valuer/PropertyValuerWorkspace.tsx",
+      "line": 82,
+      "term": "source version",
+      "excerpt": "·   · source version"
+    },
+    {
+      "file": "apps/customer-web/src/App.tsx",
+      "line": 425,
+      "term": "capability",
+      "excerpt": "Advisor work requires an active role, permitted capability, named customer assignment and current customer consent. Workspace entry does not grant financial access."
+    }
+  ],
+  "violationsAfter": [],
+  "diagnosticAllowlist": [
+    {
+      "file": "apps/customer-web/src/App.tsx",
+      "functionName": "ToolchainFoundation",
+      "route": "/foundation",
+      "reason": "Dedicated implementation/toolchain evidence surface; it is not linked from normal persona navigation."
+    }
+  ],
+  "allowlistedMatchesAfter": [
+    {
+      "file": "apps/customer-web/src/App.tsx",
+      "line": 95,
+      "term": "runtime",
+      "excerpt": "Runtime",
+      "reason": "Dedicated implementation/toolchain evidence surface; it is not linked from normal persona navigation.",
+      "route": "/foundation"
+    }
+  ]
+}

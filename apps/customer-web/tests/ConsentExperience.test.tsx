@@ -103,7 +103,7 @@ it('shows recorded permissions and expiry/revocation without claiming effective 
   expect(consent).toHaveBeenCalledWith('customer-001', expect.any(AbortSignal));
   expect(screen.queryByText('recipient-001')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /revoke/i })).not.toBeInTheDocument();
-  expect(screen.getByText(/Unexpired does not confirm effective access/i)).toBeVisible();
+  expect(screen.getByText(/A permission that has not expired may still be unavailable/i)).toBeVisible();
 });
 
 it('does not fabricate a zero state when consent owner is unavailable', async () => {

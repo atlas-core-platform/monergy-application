@@ -37,7 +37,7 @@ it('shows only consent-verified assigned review sources and the professional bou
   vi.spyOn(api, 'case').mockResolvedValue({ tenantId: 'T001', actorId: 'A600', items: [review()] });
   mount(api);
   expect((await screen.findAllByText('Financial review 001')).length).toBeGreaterThan(0);
-  expect(screen.getByText(/does not create tax, audit or statutory assurance/)).toBeVisible();
+  expect(screen.getByText(/Your recorded conclusion remains your professional responsibility/)).toBeVisible();
   expect(screen.getAllByText('Customer-reviewed financial profile').length).toBeGreaterThan(0);
   expect(screen.queryByText(/C001|net worth|tax return amount/i)).not.toBeInTheDocument();
 });

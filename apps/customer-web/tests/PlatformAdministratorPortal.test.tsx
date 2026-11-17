@@ -39,10 +39,10 @@ describe('Platform Administrator portal', () => {
     render(<PlatformAdministratorPortal />);
     const key = screen.getByLabelText('Platform Administrator key');
     await user.type(key, 'platform-key');
-    await user.click(screen.getByRole('button', { name: 'Connect platform workspace' }));
+    await user.click(screen.getByRole('button', { name: 'Open administration' }));
 
-    expect(await screen.findByRole('heading', { name: 'Platform health' })).toBeVisible();
-    expect(screen.getByText(/No tenant membership, customer-data access/)).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'System status' })).toBeVisible();
+    expect(screen.getByText(/cannot open organization or customer information/)).toBeVisible();
     expect(screen.queryByText('Organization Settings')).not.toBeInTheDocument();
     expect(screen.queryByText('Customer Assignments')).not.toBeInTheDocument();
     const contextCall = calls.find(call => call.url.endsWith('/context'));
@@ -64,9 +64,9 @@ describe('Platform Administrator portal', () => {
     const user = userEvent.setup();
     render(<PlatformAdministratorPortal />);
     await user.type(screen.getByLabelText('Platform Administrator key'), 'platform-key');
-    await user.click(screen.getByRole('button', { name: 'Connect platform workspace' }));
-    expect(await screen.findByText('PLATFORM_CONTEXT_INVALID')).toBeVisible();
-    expect(screen.queryByRole('heading', { name: 'Platform health' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Open administration' }));
+    expect(await screen.findByText('Your administrator access could not be confirmed. Sign in again.')).toBeVisible();
+    expect(screen.queryByRole('heading', { name: 'System status' })).not.toBeInTheDocument();
   });
 
   it('records only a bounded versioned operational posture', async () => {
@@ -92,11 +92,11 @@ describe('Platform Administrator portal', () => {
     const user = userEvent.setup();
     render(<PlatformAdministratorPortal />);
     await user.type(screen.getByLabelText('Platform Administrator key'), 'platform-key');
-    await user.click(screen.getByRole('button', { name: 'Connect platform workspace' }));
-    await user.click(await screen.findByRole('button', { name: 'Record posture' }));
+    await user.click(screen.getByRole('button', { name: 'Open administration' }));
+    await user.click(await screen.findByRole('button', { name: 'Add note' }));
     const dialog = within(await screen.findByRole('dialog'));
     await user.type(dialog.getByLabelText('Operational note'), 'Checking dependency.');
-    await user.click(dialog.getByRole('button', { name: 'Record posture' }));
+    await user.click(dialog.getByRole('button', { name: 'Save note' }));
 
     await waitFor(() => { expect(writes).toHaveLength(1); });
     expect(writes[0]).toMatchObject({

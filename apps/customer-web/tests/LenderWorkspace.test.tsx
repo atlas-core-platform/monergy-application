@@ -36,7 +36,7 @@ it('shows only assigned application references and no customer or underwriting c
   vi.spyOn(api, 'case').mockResolvedValue({ tenantId: 'T001', actorId: 'A500', items: [application()] });
   mount(api);
   expect((await screen.findAllByText('Lending application 001')).length).toBeGreaterThan(0);
-  expect(screen.getByText(/does not determine eligibility, pricing or creditworthiness/)).toBeVisible();
+  expect(screen.getByText(/does not decide eligibility, pricing or creditworthiness/)).toBeVisible();
   expect(screen.queryByText(/customer id|C001|net worth|credit score/i)).not.toBeInTheDocument();
 });
 

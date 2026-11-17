@@ -138,7 +138,7 @@ function StatusCard({ item, loading, busy, message, submit, onRefresh }: {
   onRefresh: () => Promise<void>;
 }) {
   return <Card className="access-request-card"
-    title={item?.targetLabel ?? 'Restricted capability'}
+    title={item?.targetLabel ?? 'Restricted feature'}
     extra={<Tag color={item?.hasAccess ? 'success' : item?.state === 'Submitted' ? 'processing' : 'warning'}>
       {item?.hasAccess ? 'Available' : item?.state === 'Submitted' ? 'Under review' : item?.state === 'Rejected' ? 'Rejected' : 'Restricted'}
     </Tag>}>
@@ -169,8 +169,8 @@ export function RequestAccessGate({ target, requiredCapabilities, children }: {
   const item = access.page?.items.find(value => value.target === target) ?? null;
   if (granted) return <>{children}</>;
   return <main className="access-page" aria-labelledby="restricted-capability-title">
-    <Title level={2} id="restricted-capability-title">This capability needs organization access</Title>
-    <Paragraph>The capability remains visible, but its protected data is not loaded until access is fulfilled.</Paragraph>
+    <Title level={2} id="restricted-capability-title">This feature needs organization approval</Title>
+    <Paragraph>You can see the feature, but its protected information will remain hidden until your access is approved.</Paragraph>
     <StatusCard item={item} loading={access.loading} busy={access.busy} message={access.message}
       submit={access.submit} onRefresh={access.load} />
   </main>;
@@ -221,7 +221,7 @@ export function RequestAccessOverview({ targets }: { targets: RequestTarget[] })
     <div className="workspace-section-heading">
       <div>
         <p className="workspace-eyebrow">AVAILABLE WITH APPROVAL</p>
-        <h2 id="request-access-overview-title">Request access to another capability</h2>
+        <h2 id="request-access-overview-title">Request access to another feature</h2>
       </div>
       <Text type="secondary">Your Organization Administrator reviews each bounded request.</Text>
     </div>

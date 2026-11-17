@@ -216,7 +216,7 @@ export default function FinancialProfileExperience() {
         target="customer.financial-information"
         requiredCapabilities={['financial-profile.profile.update']}
         title="Adding or changing financial information needs access"
-        description="Request the bounded Customer financial information capability from your Organization Administrator. You can continue reviewing information you already have." />}
+        description="Request permission to update financial information from your Organization Administrator. You can continue reviewing information you already have." />}
       {canRead && <nav className="product-financial-category-filter" aria-label="Financial goals navigation"><Button href="/net-worth">Net Worth</Button><Button type={activeCategory === 'GOAL' ? 'primary' : 'default'} onClick={() => { selectCategory(activeCategory === 'GOAL' ? '' : 'GOAL'); }}>{activeCategory === 'GOAL' ? 'Back to financial information' : 'Financial goals'}</Button></nav>}
       {activeCategory === 'GOAL' && api && canRead && <FinancialGoalsExperience
         key={['goal',product?.tenantId,product?.actorId,product?.customerId].join(':')} api={api} canRead={canRead}

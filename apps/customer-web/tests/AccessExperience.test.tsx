@@ -138,7 +138,7 @@ describe('tenant administration trust boundaries', () => {
       ]);
       expect(screen.getByRole('button', { name: 'Review change' })).toBeDisabled();
       await user.click(screen.getByRole('button', { name: 'Reload current records' }));
-      expect(await screen.findByText(/Current records reloaded from the service/)).toBeVisible();
+      expect(await screen.findByText(/Current information refreshed/)).toBeVisible();
       expect(writes).toHaveLength(1);
       expired = true;
       await user.click(screen.getByRole('button', { name: 'Refresh' }));
@@ -298,30 +298,30 @@ describe('tenant administration trust boundaries', () => {
 
       mount('/access/resources');
       const user = await connect();
-      await user.click(await screen.findByRole('button', { name: 'Create resource access' }));
+      await user.click(await screen.findByRole('button', { name: 'Create individual access' }));
       const editor = within(await screen.findByRole('dialog'));
       await user.click(editor.getByRole('combobox', { name: 'Person' }));
       await user.click(await screen.findByTitle('person@example.test'));
-      await user.click(editor.getByRole('combobox', { name: 'Capability' }));
+      await user.click(editor.getByRole('combobox', { name: 'Allowed action' }));
       await user.click(await screen.findByTitle('Read financial profile'));
-      await user.click(editor.getByRole('combobox', { name: 'Resource' }));
+      await user.click(editor.getByRole('combobox', { name: 'Business record' }));
       await user.click(await screen.findByTitle('Reference Customer A · Primary client'));
 
-      expect(editor.getByRole('combobox', { name: 'Resource' })).toHaveAttribute(
+      expect(editor.getByRole('combobox', { name: 'Business record' })).toHaveAttribute(
         'aria-expanded',
         'false',
       );
       expect(editor.queryByText('customer-a')).not.toBeInTheDocument();
 
       await user.click(editor.getByRole('button', { name: 'Review change' }));
-      const reviewTitle = await screen.findByText('Review new resource access');
+      const reviewTitle = await screen.findByText('Review new individual access');
       const reviewDialog = reviewTitle.closest<HTMLElement>('[role="dialog"]');
       if (!reviewDialog) throw new Error('Review title must belong to a dialog.');
       const review = within(reviewDialog);
       expect(review.getByText('Reference Customer A')).toBeVisible();
       expect(review.queryByText('customer-a')).not.toBeInTheDocument();
 
-      await user.click(review.getByRole('button', { name: 'Create resource access' }));
+      await user.click(review.getByRole('button', { name: 'Create individual access' }));
       expect(writes).toEqual([
         {
           expectedPolicyVersion: 7,

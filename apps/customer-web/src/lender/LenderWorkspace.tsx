@@ -5,6 +5,7 @@ import { WorkspaceSessionProvider } from '../access/WorkspaceSessionProvider';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import { lenderApplication, lenderApplicationPage, operationId } from './lenderApplicationModels';
 import type { LenderApplication } from './lenderApplicationModels';
+import { readableDate } from '../ux/personaCopy';
 
 const { Paragraph, Text, Title } = Typography;
 type Decision = 'Approved' | 'Declined' | 'More information required';
@@ -83,38 +84,37 @@ function Workspace() {
   async function recordDecision() {
     if (!current || reason.trim().length < 3) return;
     const recorded = await mutate('lender/applications/' + encodeURIComponent(current.applicationId) + '/decision',
-      { decision, reason: reason.trim() }, 'The lender-owned decision was recorded with its audit history.');
+      { decision, reason: reason.trim() }, 'Decision recorded.');
     if (recorded) setReason('');
   }
 
   return <main className="mx-auto w-full max-w-6xl p-6" aria-labelledby="lender-title">
-    <Title level={2} id="lender-title">Lender Professional workspace</Title>
-    <Paragraph>Review only applications explicitly assigned to you. Monergy presents submitted evidence; it does not determine eligibility, pricing or creditworthiness.</Paragraph>
+    <Title level={2} id="lender-title">Applications to Review</Title>
+    <Paragraph>Review applications assigned to you and record your own decision.</Paragraph>
     <Alert showIcon type="info" title="The decision remains yours"
-      description="Customer-reviewed information and calculations are supporting evidence only. Approval, decline and requests for more information are recorded as your lender-owned decision." />
-    <Card className="mt-4" title="Your current authority">
+      description="Customer-reviewed information and calculations are provided to support your review. Monergy does not decide eligibility, pricing or creditworthiness." />
+    <Card className="mt-4" title="Your work">
       <Descriptions column={1}>
         <Descriptions.Item label="Role">Lender Professional</Descriptions.Item>
         <Descriptions.Item label="Assigned applications">{scopedItems.length}</Descriptions.Item>
       </Descriptions>
     </Card>
-    <Card className="mt-4" title="Assigned applications"
+    <Card className="mt-4" title="Applications assigned to you"
       extra={<Button type="link" onClick={() => { void refresh(); }} disabled={loading || busy}>Refresh</Button>}>
       {loading && <Spin aria-label="Loading assigned applications" />}
       {notice && <Alert className="mb-4" showIcon
         type={notice.includes('was recorded') || notice.includes('was marked reviewed') ? 'success' : 'warning'} title={notice} />}
-      {!loading && scopedItems.length === 0 && <Empty description="No lending applications are assigned to you." />}
+      {!loading && scopedItems.length === 0 && <Empty description="You don't have any applications waiting for review." />}
       <List dataSource={scopedItems} renderItem={item => <List.Item
         actions={[<Button key="open" onClick={() => { setSelected(item.applicationId); }}>Open review</Button>]}>
         <List.Item.Meta title={item.applicationReference}
-          description={`Assigned ${new Date(item.assignedAt).toLocaleDateString()}`} />
+          description={`Assigned ${readableDate(item.assignedAt)}`} />
         <Tag color={item.state === 'Decided' ? 'success' : item.state === 'Under review' ? 'processing' : 'default'}>{item.state}</Tag>
       </List.Item>} />
     </Card>
 
-    {current && <Card className="mt-4" title={current.applicationReference}
-      extra={<Tag>{current.dataDurability}</Tag>}>
-      <Title level={4}>Required-document review</Title>
+    {current && <Card className="mt-4" title={current.applicationReference}>
+      <Title level={4}>Required documents</Title>
       <List dataSource={current.requiredDocuments} renderItem={document => <List.Item
         actions={!document.reviewed && document.present && current.state !== 'Decided'
           ? [<Button key="review" disabled={busy} onClick={() => { void mutate(

@@ -33,7 +33,7 @@ it('shows only assigned Evidence documents and the human-owned boundary', async 
   vi.spyOn(api, 'case').mockResolvedValue({ tenantId: 'T001', actorId: 'A800', items: [review()] });
   mount(api);
   expect((await screen.findAllByText('Family estate documents')).length).toBeGreaterThan(0);
-  expect(screen.getByText(/Identity, Consent and financial advice remain with their existing owners/)).toBeVisible();
+  expect(screen.getByText(/Monergy does not generate the legal outcome/)).toBeVisible();
   expect(screen.getByText('Assigned estate document')).toBeVisible();
   expect(screen.queryByText(/income|net worth|document contents/i)).not.toBeInTheDocument();
 });
@@ -49,7 +49,7 @@ it('posts only the assignment version and canonical document inspection action',
     return Promise.resolve({ tenantId: 'T001', actorId: 'A800', items: [review()] });
   });
   mount(api);
-  fireEvent.click(await screen.findByRole('button', { name: 'Record inspection' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Mark reviewed' }));
   await waitFor(() => {
     expect(write).toEqual({ operationId: '0a'.repeat(16), expectedVersion: 1 });
   });
@@ -67,8 +67,8 @@ it('shows append-only outcomes bound to exact document versions', async () => {
   vi.spyOn(api, 'case').mockResolvedValue({ tenantId: 'T001', actorId: 'A800', items: [review({
     state: 'Reviewed', version: 3, evidence: inspected, revisions: [revision] })] });
   mount(api);
-  expect(await screen.findByText(/Revision 1 · Action required/)).toBeVisible();
-  expect(screen.getByText(/1 exact document versions/)).toBeVisible();
+  expect(await screen.findByText('Action required')).toBeVisible();
+  expect(screen.getByText(/1 document reviewed/)).toBeVisible();
   expect(screen.getByRole('button', { name: 'Record revised outcome' })).toBeEnabled();
 });
 

@@ -442,7 +442,7 @@ export default function ProductReportsExperience() {
                               <Descriptions.Item label="Owner revision">
                                 {item.source.financialGoal.revision}
                               </Descriptions.Item>
-                              <Descriptions.Item label="Operation receipt">
+                              <Descriptions.Item label="Saved confirmation">
                                 {item.source.financialGoal.operationId}
                               </Descriptions.Item>
                               <Descriptions.Item label="Target date">

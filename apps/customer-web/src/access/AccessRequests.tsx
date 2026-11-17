@@ -197,7 +197,7 @@ export function AccessRequests({
       <div>
         <p className="workspace-eyebrow">ORGANIZATION · ACCESS</p>
         <Title level={1} id="access-requests-title">Access requests</Title>
-        <Paragraph>Review bounded, tenant-grantable access requests from your organization.</Paragraph>
+        <Paragraph>Review access requests submitted by people in your organization.</Paragraph>
       </div>
       <Button onClick={() => { setCurrent(null); setRevision(value => value + 1); }} disabled={Boolean(busy)}>
         Refresh
@@ -205,7 +205,7 @@ export function AccessRequests({
     </header>
     <Alert type="info" showIcon className="access-notice"
       title="Approval is deliberately bounded"
-      description="Approval grants only the capability described on the request. It cannot assign a customer, replace customer consent, grant Platform Administrator access or provide administrator authority." />
+      description="Approval grants only the permission described in the request. It cannot assign a customer, replace customer consent, grant Platform Administrator access or provide administrator authority." />
     {error && <Alert type="error" showIcon className="access-notice" title={error} />}
     {notice && <Alert type="success" showIcon className="access-notice" title={notice} />}
     <Card>

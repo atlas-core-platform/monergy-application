@@ -929,7 +929,7 @@ export function ImportDrawer({
                                         ? 'Send credential invitation?'
                                         : 'Resend credential invitation?'
                                     }
-                                    description="Monergy sends a short-lived verification code to the person’s tenant-owned email. No password or signed-in session is created."
+                                    description="Monergy sends a short-lived verification code to the person’s organization email. No password or signed-in session is created."
                                     okText={first ? 'Send invitation' : 'Resend invitation'}
                                     cancelText="Keep current status"
                                     okButtonProps={{

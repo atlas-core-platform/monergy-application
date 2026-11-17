@@ -6,6 +6,7 @@ import { WorkspaceEntry } from '../access/WorkspaceEntry';
 import { WorkspaceSessionProvider } from '../access/WorkspaceSessionProvider';
 import type { PropertyValuation } from './propertyValuationModels';
 import { operationId, propertyValuation, propertyValuationPage } from './propertyValuationModels';
+import { readableDate, readableMoney } from '../ux/personaCopy';
 
 const { Paragraph, Text, Title } = Typography;
 interface ValuationForm {
@@ -32,8 +33,8 @@ function Workspace() {
       if (!pending.signal.aborted) setItems(value.items);
     } catch (error) {
       if (!pending.signal.aborted) setFailure(error instanceof AccessApiError && error.status === 403
-        ? 'Your Property Valuer authority, assignment or customer sharing is no longer current.'
-        : 'Property valuation assignments are unavailable. Try again.');
+        ? 'You no longer have access to this property valuation.'
+        : 'We could not load your property valuations. Try again.');
     }
   }, [status, session, api, valuer]);
   useEffect(() => {
@@ -48,8 +49,8 @@ function Workspace() {
     if (!api) return false; setBusy(key); setFailure('');
     try { replace(await api.case<unknown>(path, 'POST', body)); return true; }
     catch (error) { setFailure(error instanceof AccessApiError && error.status === 409
-      ? 'The assignment, evidence or authority changed. Refresh before continuing.'
-      : 'The governed valuation action could not be recorded.'); return false; }
+      ? 'This valuation changed while you were working. Refresh to see the latest information.'
+      : 'We could not record the valuation. Try again.'); return false; }
     finally { setBusy(''); }
   };
   const record = async (values: ValuationForm) => {
@@ -63,23 +64,23 @@ function Workspace() {
   };
   const latest = useMemo(() => current?.revisions.at(-1) ?? null, [current]);
   if (!current) return <main className="mx-auto w-full max-w-6xl p-6" aria-labelledby="property-valuer-title">
-    <Title level={2} id="property-valuer-title">Property Valuer workspace</Title>
+    <Title level={2} id="property-valuer-title">Property Valuations</Title>
     <Alert type="info" title="Professional valuation remains separate" description="Customer-reported property values and Monergy calculations are not professional valuations. Only an explicitly assigned Property Valuer may record a conclusion here." />
-    {failure ? <Alert className="mt-4" type="error" title={failure} action={<Button onClick={() => void load()}>Retry</Button>} /> : <Empty className="mt-8" description="No property valuation is assigned to you." />}
+    {failure ? <Alert className="mt-4" type="error" title={failure} action={<Button onClick={() => void load()}>Try again</Button>} /> : <Empty className="mt-8" description="You don't have any property valuations waiting for you." />}
   </main>;
   return <main className="mx-auto w-full max-w-6xl p-6" aria-labelledby="property-valuer-title">
-    <Title level={2} id="property-valuer-title">Property Valuer workspace</Title>
-    <Alert type="info" title="Professional valuation remains separate" description="Customer-reported property values and Monergy calculations are supporting information only. This result is owned by the assigned Property Valuer and bound to exact source versions." />
+    <Title level={2} id="property-valuer-title">Property Valuations</Title>
+    <Alert type="info" title="Professional valuation remains separate" description="Customer-reported property values and Monergy calculations are supporting information only. The valuation you record is your professional conclusion." />
     {failure && <Alert className="mt-4" type="error" title={failure} action={<Button onClick={() => void load()}>Refresh</Button>} />}
     <Card className="mt-5" title={current.propertyLabel} extra={<Tag>{current.state}</Tag>}>
       <Paragraph><Text strong>Assigned property:</Text> {current.propertyReference}</Paragraph>
-      <Paragraph type="secondary">Assignment {current.valuationId} · version {String(current.version)} · {current.dataDurability}</Paragraph>
+      <Title level={4}>Supporting documents</Title>
       <List dataSource={current.evidence} renderItem={evidence => <List.Item actions={[evidence.inspected
         ? <Tag key="done" color="success">Inspected</Tag>
         : <Button key="inspect" loading={busy === evidence.code} onClick={() => void mutate(
             'property-valuer/valuations/' + encodeURIComponent(current.valuationId) + '/evidence/' + encodeURIComponent(evidence.code) + '/inspection',
-            { operationId: operationId(), expectedVersion: current.version }, evidence.code)}>Record inspection</Button>] }>
-        <List.Item.Meta title={evidence.label} description={`${evidence.owner} · ${evidence.reference} · source version ${String(evidence.currentVersion)}`} />
+            { operationId: operationId(), expectedVersion: current.version }, evidence.code)}>Mark reviewed</Button>] }>
+        <List.Item.Meta title={evidence.label} description="Included with this property" />
       </List.Item>} />
       <Form form={form} layout="vertical" className="mt-6" onFinish={(values: ValuationForm) => { void record(values); }}>
         <Space wrap align="start">
@@ -96,8 +97,8 @@ function Workspace() {
     </Card>
     <List className="mt-5" header={<Title level={3}>Valuation history</Title>} dataSource={[...current.revisions].reverse()}
       locale={{ emptyText: 'No professional valuation has been recorded.' }} renderItem={revision => <List.Item>
-        <List.Item.Meta title={`Revision ${String(revision.revision)} · ${revision.currency} ${revision.marketValue.toLocaleString()}`}
-          description={`${revision.effectiveDate} · ${revision.basis} · ${revision.findings} · ${String(revision.evidence.length)} exact evidence versions`} />
+        <List.Item.Meta title={`${readableMoney(revision.marketValue, revision.currency)} · ${readableDate(revision.effectiveDate)}`}
+          description={`${revision.basis} · ${revision.findings} · ${String(revision.evidence.length)} supporting document${revision.evidence.length === 1 ? '' : 's'} reviewed`} />
       </List.Item>} />
   </main>;
 }

@@ -55,21 +55,21 @@ export default function DsaCaseWorkspace() {
 
   return (
     <main className="mx-auto w-full max-w-5xl p-6" aria-labelledby="dsa-case-title">
-      <Title level={2} id="dsa-case-title">DSA case workspace</Title>
-      <Paragraph>Accept one submitted assistance case at a time using your current DSA / Case Manager authority.</Paragraph>
-      <Alert type="info" showIcon title="Acceptance is not financial access"
-        description="This queue contains no financial facts or documents. Customer data access, Consent, assignments, advice, underwriting and lender decisions remain separate." />
-      <Card className="mt-4" title="Assistance queue" extra={<Button onClick={() => { void refresh(); }} disabled={loading || busy !== null}>Refresh</Button>}>
+      <Title level={2} id="dsa-case-title">Cases</Title>
+      <Paragraph>Review submitted assistance cases and accept one when you are ready to take responsibility for it.</Paragraph>
+      <Alert type="info" showIcon title="Customer information stays protected"
+        description="Accepting a case does not give you access to the customer's financial information or documents." />
+      <Card className="mt-4" title="Cases waiting for you" extra={<Button onClick={() => { void refresh(); }} disabled={loading || busy !== null}>Refresh</Button>}>
         {notice && <Alert className="mb-4" showIcon type={notice.startsWith('The assistance case is') ? 'success' : 'warning'} title={notice} />}
         {loading ? <Spin aria-label="Loading assistance queue" /> : items.length === 0 ?
-          <Empty description="No assistance cases are waiting." /> :
+          <Empty description="You don't have any cases waiting for review." /> :
           <List dataSource={items} renderItem={item => <List.Item actions={item.state === 'Submitted' ? [
             <Button key="accept" type="primary" loading={busy === item.caseId} disabled={busy !== null}
               onClick={() => { void accept(item); }}>Accept case</Button>,
           ] : []}>
             <List.Item.Meta title={<Space><Text strong>{item.requestType}</Text>
               <Tag color={item.state === 'Accepted' ? 'success' : 'processing'}>{item.assignedToMe ? 'Assigned to you' : item.state}</Tag></Space>}
-              description={`Submitted ${displayDate(item.createdAt)} · Reference ${item.caseId} · ${item.dataDurability}`} />
+              description={`Submitted ${displayDate(item.createdAt)}`} />
           </List.Item>} />}
       </Card>
     </main>

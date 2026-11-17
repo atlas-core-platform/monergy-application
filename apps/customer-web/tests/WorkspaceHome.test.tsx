@@ -116,7 +116,7 @@ it('shows a source-connected Financial Passport without inventing financial scor
 
   mount(api);
 
-  expect(await screen.findByRole('heading', { name: 'Your source-connected snapshot' })).toBeVisible();
+  expect(await screen.findByRole('heading', { name: 'Your financial overview' })).toBeVisible();
   expect(screen.getByRole('link', { name: /Open Action Centre/ })).toHaveAttribute('href', '/actions');
   expect(screen.getByText('Trusted information')).toBeVisible();
   expect(screen.getByText('Income items')).toBeVisible();

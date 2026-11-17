@@ -51,7 +51,7 @@ it('keeps the protected feature unmounted and submits only target plus operation
       createdAt: '2026-10-28T12:00:00Z' }));
   });
   mount(request);
-  expect(await screen.findByRole('heading', { name: 'This capability needs organization access' })).toBeVisible();
+  expect(await screen.findByRole('heading', { name: 'This feature needs organization approval' })).toBeVisible();
   expect(screen.queryByText('Protected calculation result')).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: 'Request access' }));
   expect(await screen.findByText(/submitted to an Organization Administrator/)).toBeVisible();

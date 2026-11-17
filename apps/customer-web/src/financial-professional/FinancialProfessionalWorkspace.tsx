@@ -5,6 +5,7 @@ import { WorkspaceSessionProvider } from '../access/WorkspaceSessionProvider';
 import { useWorkspaceSession } from '../access/workspaceSession';
 import { financialProfessionalReview, financialProfessionalReviewPage, operationId } from './financialProfessionalModels';
 import type { FinancialProfessionalReview } from './financialProfessionalModels';
+import { readableDate, readableDateTime } from '../ux/personaCopy';
 
 const { Paragraph, Text, Title } = Typography;
 type Outcome = 'Certified with no exceptions' | 'Certified with exceptions' | 'Unable to certify';
@@ -34,7 +35,7 @@ function Workspace() {
         ? current : value.items[0]?.reviewId ?? null);
     } catch {
       setItems([]); setLoadedFor(session.tenantId + ':' + session.actorId); setSelected(null);
-      setNotice('Assigned reviews could not be verified. Confirm customer sharing, your assignment and current role before retrying.');
+      setNotice('We could not load your assigned reviews. Confirm that the customer is still sharing this information with you, then try again.');
     } finally { setLoading(false); }
   }, [api, session, professional]);
 
@@ -56,7 +57,7 @@ function Workspace() {
       setItems(values => values.map(value => value.reviewId === updated.reviewId ? updated : value));
       setNotice(success); return true;
     } catch {
-      setNotice('The action was not confirmed. The assignment, source version, customer sharing or your role may have changed; refresh before retrying.');
+      setNotice('We could not save that change. Your assignment or the shared information may have changed; refresh and try again.');
       return false;
     } finally { setBusy(false); }
   }
@@ -64,43 +65,43 @@ function Workspace() {
   async function addNote() {
     if (!current || note.trim().length < 3 || noteSources.length === 0) return;
     const recorded = await mutate('financial-professional/reviews/' + encodeURIComponent(current.reviewId) + '/notes',
-      { note: note.trim(), sourceCodes: noteSources }, 'Your source-linked professional note was recorded.');
+      { note: note.trim(), sourceCodes: noteSources }, 'Professional note recorded.');
     if (recorded) { setNote(''); setNoteSources([]); }
   }
 
   async function certify() {
     if (!current || rationale.trim().length < 3) return;
     const recorded = await mutate('financial-professional/reviews/' + encodeURIComponent(current.reviewId) + '/certification',
-      { outcome, rationale: rationale.trim() }, 'The signer-owned certification and source snapshot were recorded.');
+      { outcome, rationale: rationale.trim() }, 'Professional conclusion recorded.');
     if (recorded) setRationale('');
   }
 
   return <main className="mx-auto w-full max-w-6xl p-6" aria-labelledby="financial-professional-title">
-    <Title level={2} id="financial-professional-title">Chartered Accountant / Financial Professional workspace</Title>
-    <Paragraph>Review only financial information explicitly assigned to you and currently shared by the customer. Monergy records source versions and your professional conclusion; it does not create tax, audit or statutory assurance.</Paragraph>
+    <Title level={2} id="financial-professional-title">Financial Reviews</Title>
+    <Paragraph>Review financial information assigned to you and currently shared by the customer. Your recorded conclusion remains your professional responsibility.</Paragraph>
     <Alert showIcon type="info" title="Professional responsibility stays with the signer"
-      description="Customer-entered data, OCR output and AI assistance are supporting sources only. You must review every source and personally choose the certification outcome." />
-    <Card className="mt-4" title="Your current authority"><Descriptions column={1}>
+      description="Customer-provided information and extracted document details are supporting material only. Review every item and choose the outcome yourself." />
+    <Card className="mt-4" title="Your work"><Descriptions column={1}>
       <Descriptions.Item label="Role">Chartered Accountant / Financial Professional</Descriptions.Item>
-      <Descriptions.Item label="Consent-verified assignments">{scoped.length}</Descriptions.Item>
+      <Descriptions.Item label="Reviews assigned to you">{scoped.length}</Descriptions.Item>
     </Descriptions></Card>
     <Card className="mt-4" title="Assigned reviews" extra={<Button type="link" onClick={() => { void refresh(); }} disabled={loading || busy}>Refresh</Button>}>
       {loading && <Spin aria-label="Loading assigned financial reviews" />}
       {notice && <Alert className="mb-4" showIcon type={notice.includes('recorded') ? 'success' : 'warning'} title={notice} />}
-      {!loading && scoped.length === 0 && <Empty description="No consent-verified financial reviews are assigned to you." />}
+      {!loading && scoped.length === 0 && <Empty description="You don't have any financial reviews waiting for you." />}
       <List dataSource={scoped} renderItem={item => <List.Item actions={[<Button key="open" onClick={() => { setSelected(item.reviewId); }}>Open review</Button>]}>
-        <List.Item.Meta title={item.reviewReference} description={`Assigned ${new Date(item.assignedAt).toLocaleDateString()}`} />
+        <List.Item.Meta title={item.reviewReference} description={`Assigned ${readableDate(item.assignedAt)}`} />
         <Tag color={item.state === 'Certified' ? 'success' : item.state === 'Under review' ? 'processing' : 'default'}>{item.state}</Tag>
       </List.Item>} />
     </Card>
 
-    {current && <Card className="mt-4" title={current.reviewReference} extra={<Tag>{current.dataDurability}</Tag>}>
-      <Title level={4}>Assigned source record</Title>
+    {current && <Card className="mt-4" title={current.reviewReference}>
+      <Title level={4}>Information to review</Title>
       <List dataSource={current.sources} renderItem={source => <List.Item actions={!source.reviewed && !current.certification
         ? [<Button key="review" disabled={busy || source.assignedVersion !== source.currentVersion} onClick={() => { void mutate(
             'financial-professional/reviews/' + encodeURIComponent(current.reviewId) + '/sources/' + encodeURIComponent(source.code) + '/review',
             {}, `${source.label} was marked professionally reviewed.`); }}>Mark reviewed</Button>] : []}>
-        <List.Item.Meta title={source.label} description={`${source.owner} · ${source.reference} · version ${String(source.currentVersion)}`} />
+        <List.Item.Meta title={source.label} description="Included in this review" />
         <Tag color={source.assignedVersion !== source.currentVersion ? 'error' : source.reviewed ? 'success' : 'processing'}>
           {source.assignedVersion !== source.currentVersion ? 'Version changed' : source.reviewed ? 'Reviewed' : 'Ready'}
         </Tag>
@@ -108,19 +109,19 @@ function Workspace() {
 
       <Title level={4} className="mt-4">Professional notes</Title>
       {current.notes.length > 0 && <List dataSource={current.notes} renderItem={item => <List.Item>
-        <List.Item.Meta title={item.note} description={`Sources: ${item.sourceCodes.join(', ')} · ${new Date(item.recordedAt).toLocaleString()}`} />
+        <List.Item.Meta title={item.note} description={`Linked items: ${item.sourceCodes.join(', ')} · ${readableDateTime(item.recordedAt)}`} />
       </List.Item>} />}
       {!current.certification && <Form layout="vertical" onFinish={() => { void addNote(); }}>
-        <Form.Item label="Link note to sources" required><Checkbox.Group value={noteSources}
+        <Form.Item label="Link note to reviewed information" required><Checkbox.Group value={noteSources}
           options={current.sources.map(source => ({ label: source.label, value: source.code }))}
           onChange={values => { setNoteSources(values); }} /></Form.Item>
         <Form.Item label="Professional note" required><Input.TextArea aria-label="Professional note" value={note} rows={3} maxLength={2000}
           onChange={event => { setNote(event.target.value); }} /></Form.Item>
-        <Button htmlType="submit" disabled={busy || note.trim().length < 3 || noteSources.length === 0}>Record source-linked note</Button>
+        <Button htmlType="submit" disabled={busy || note.trim().length < 3 || noteSources.length === 0}>Record professional note</Button>
       </Form>}
 
       {current.certification ? <Alert className="mt-4" showIcon type="success" title={current.certification.outcome}
-        description={<><Text>{current.certification.rationale}</Text><br /><Text type="secondary">Signed by {current.certification.certifiedBy} on {new Date(current.certification.certifiedAt).toLocaleString()} with {current.certification.sources.length} immutable source snapshots.</Text></>} />
+        description={<><Text>{current.certification.rationale}</Text><br /><Text type="secondary">Recorded by {current.certification.certifiedBy} on {readableDateTime(current.certification.certifiedAt)} after reviewing {current.certification.sources.length} item{current.certification.sources.length === 1 ? '' : 's'}.</Text></>} />
       : <Form className="mt-4" layout="vertical" onFinish={() => { void certify(); }}>
         <Title level={4}>Record professional certification</Title>
         <Form.Item label="Outcome"><Radio.Group value={outcome} onChange={event => { setOutcome(event.target.value as Outcome); }}>
@@ -132,7 +133,7 @@ function Workspace() {
         <Button htmlType="submit" type="primary" loading={busy} disabled={busy || rationale.trim().length < 3 ||
           current.sources.some(source => !source.reviewed || source.assignedVersion !== source.currentVersion)}>Record certification</Button>
         {current.sources.some(source => !source.reviewed || source.assignedVersion !== source.currentVersion) &&
-          <Paragraph type="secondary" className="mt-2">Review every assigned source at its current recorded version before certifying.</Paragraph>}
+          <Paragraph type="secondary" className="mt-2">Review every assigned item before recording your conclusion.</Paragraph>}
       </Form>}
     </Card>}
   </main>;

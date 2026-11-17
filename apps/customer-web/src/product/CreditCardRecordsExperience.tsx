@@ -56,7 +56,7 @@ export default function CreditCardRecordsExperience({api,facts,canRead,canCreate
     </Space>
     <p>These are customer-reviewed records. Monergy does not independently verify the card or connect to the issuer. The outstanding balance comes from the exact reviewed source and its as-of date.</p>
     {!canCreate&&<RequestAccessAction target="customer.financial-information" requiredCapabilities={['financial-profile.profile.update']}
-      title="Adding or correcting a credit card needs access" description="Request the bounded financial information capability. You can keep reviewing existing credit card records."/>}
+      title="Adding or correcting a credit card needs access" description="Request permission to update financial information. You can keep reviewing existing credit card records."/>}
     {error&&<Alert type="error" title={error}/>} {loading&&<p role="status">Loading credit cards…</p>}
     {!loading&&items.length===0&&<p>No reviewed credit card records yet. Review a credit-card source figure in Documents, then add the card metadata here.</p>}
     {items.map(record=><Card key={record.creditCardRecordId} size="small" style={{marginBlock:12}}>

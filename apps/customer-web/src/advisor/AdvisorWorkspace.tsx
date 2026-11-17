@@ -176,7 +176,7 @@ export default function AdvisorWorkspace() {
         advisor.policyVersion, advisor.subjectVersion));
     }).catch(() => {
       if (!abort.signal.aborted)
-        setNotice('Authorized customer names could not be verified. Refresh to try again.');
+        setNotice('We could not load your assigned customers. Refresh to try again.');
     }).finally(() => {
       if (!abort.signal.aborted) setLoading(false);
     });
@@ -199,7 +199,7 @@ export default function AdvisorWorkspace() {
       })
       .catch(() => {
         if (!abort.signal.aborted)
-          setAccessNotice('Your current access request status could not be verified. Refresh before trying again.');
+          setAccessNotice('We could not check your request. Refresh before trying again.');
       })
       .finally(() => {
         if (!abort.signal.aborted) setAccessLoading(false);
@@ -232,7 +232,7 @@ export default function AdvisorWorkspace() {
       setReview(value);
       setEngagement(work);
     } catch {
-      setNotice('Financial information is unavailable or access has changed. Review the assignment and current consent.');
+      setNotice('We could not open this customer. Your assignment or the customer’s permission to share may have changed.');
     } finally {
       setLoading(false);
     }
@@ -249,7 +249,7 @@ export default function AdvisorWorkspace() {
       setAccess(accessRequest(value));
       setAccessNotice('Your request was submitted to an Organization Administrator.');
     } catch {
-      setAccessNotice('The request was not confirmed. Refresh its status before trying again.');
+      setAccessNotice('We could not confirm your request. Refresh before trying again.');
     } finally {
       setAccessBusy(false);
     }
@@ -266,7 +266,7 @@ export default function AdvisorWorkspace() {
       setActivityNotice(success);
       return true;
     } catch {
-      setActivityNotice('The update was not confirmed. Access or this workspace may have changed; refresh the customer before retrying.');
+      setActivityNotice('We could not save that change. Refresh the customer and try again.');
       return false;
     } finally { setActivityBusy(false); }
   }
@@ -274,7 +274,7 @@ export default function AdvisorWorkspace() {
   async function saveNote() {
     if (!note.trim() || selectedSources.length === 0) return;
     if (await mutateEngagement('notes', { note: note.trim(), sourceFactIds: selectedSources },
-      'The source-backed advisory note was recorded.')) {
+      'Advisory note saved.')) {
       setNote('');
       setSelectedSources([]);
     }
@@ -283,7 +283,7 @@ export default function AdvisorWorkspace() {
   async function recordCommunication() {
     if (!communication.trim()) return;
     if (await mutateEngagement('communications', { message: communication.trim() },
-      'The customer communication was recorded. No external message was sent.'))
+      'Customer communication recorded. No message was sent.'))
       setCommunication('');
   }
 
@@ -291,62 +291,62 @@ export default function AdvisorWorkspace() {
     if (!engagement) return;
     const stage = nextAdvisorStage(engagement.applicationStage);
     if (!stage) return;
-    await mutateEngagement('application-stage', { stage }, 'The application preparation stage was updated.');
+    await mutateEngagement('application-stage', { stage }, 'Application preparation updated.');
   }
 
   return (
     <main className="mx-auto w-full max-w-5xl p-6" aria-labelledby="advisor-title">
-      <Title level={2} id="advisor-title">Financial Advisor workspace</Title>
-      <Paragraph>Review customer information only with your organization's permission and the customer's current consent.</Paragraph>
-      <Card title="Your access">
+      <Title level={2} id="advisor-title">My Customers</Title>
+      <Paragraph>Work with customers assigned to you and view information they have agreed to share.</Paragraph>
+      <Card title="Your advisory work">
         <Descriptions column={1}>
           <Descriptions.Item label="Role">Financial Advisor / Relationship Manager</Descriptions.Item>
-          <Descriptions.Item label="Recorded client relationships">{advisor.recordedRelationshipCount}</Descriptions.Item>
-          <Descriptions.Item label="Currently authorized for review">{clients.length}</Descriptions.Item>
+          <Descriptions.Item label="Customer relationships">{advisor.recordedRelationshipCount}</Descriptions.Item>
+          <Descriptions.Item label="Customers available to review">{clients.length}</Descriptions.Item>
         </Descriptions>
         <Alert type="info" showIcon title="Customer information is protected"
-          description="A recorded relationship does not grant financial access. Both read permissions, a current assignment and customer consent are required for each review." />
+          description="A customer appears here only while your assignment and the customer's permission to share are current." />
       </Card>
 
-      <Card title="Assigned customer financial review" className="mt-4"
+      <Card title="Financial information access" className="mt-4"
         extra={<Tag color={access?.hasAccess ? 'success' : access?.state === 'Submitted' ? 'processing' : 'warning'}>
           {access?.hasAccess ? 'Available' : access?.state === 'Submitted' ? 'Submitted · Under review' :
             access?.state === 'Rejected' ? 'Rejected' : 'Restricted'}
         </Tag>}>
         <Paragraph>
-          Review financial information and its supporting documents for customers who are separately assigned to you and have current consent.
+          Ask your Organization Administrator for permission to review financial information for customers assigned to you.
         </Paragraph>
         {accessLoading && <Spin aria-label="Checking access request status" />}
         {accessNotice && <Alert type={access?.state === 'Submitted' ? 'success' : 'warning'} showIcon title={accessNotice} />}
         {!accessLoading && access?.hasAccess && <Alert type="success" showIcon
-          title="Financial review access is fulfilled"
-          description="Customer assignment, record access and current customer consent are still checked for every review." />}
+          title="Financial information is available"
+          description="Your assignment and the customer's permission to share are checked each time you open a review." />}
         {!accessLoading && access?.state === 'Submitted' && <Alert type="info" showIcon
           title="Your request is under review"
-          description="An Organization Administrator can approve or reject this bounded request. Submitting again will not create a duplicate." />}
+          description="An Organization Administrator can approve or reject it. You do not need to submit it again." />}
         {!accessLoading && access?.state === 'Rejected' && <Alert type="warning" showIcon
           title="The request was not approved"
-          description={access.decisionReason ?? 'No access was granted. You may submit a new request if the capability is still available.'} />}
+          description={access.decisionReason ?? 'Permission was not granted. You can submit a new request if this option is still available.'} />}
         {!accessLoading && access && !access.hasAccess && access.canRequest &&
           <Button type="primary" onClick={() => { void requestAccess(); }} loading={accessBusy} disabled={accessBusy}>
             Request access
           </Button>}
         {!accessLoading && access && !access.hasAccess && !access.canRequest && access.state === 'NotRequested' &&
-          <Alert type="info" showIcon title="This access cannot be requested right now"
-            description="The capability is visible, but an Organization Administrator cannot grant it in its current configuration." />}
+          <Alert type="info" showIcon title="This request is not available right now"
+            description="Ask your Organization Administrator to review your role and permissions." />}
       </Card>
 
-      <Card title="Assigned customer work queue" className="mt-4"
-        extra={<Button type="link" disabled={loading} onClick={() => { setRefresh(value => value + 1); }}>Refresh access</Button>}>
+      <Card title="Customers you advise" className="mt-4"
+        extra={<Button type="link" disabled={loading} onClick={() => { setRefresh(value => value + 1); }}>Refresh</Button>}>
         {loading && <Spin aria-label="Checking customer access" />}
         {notice && <Alert type="warning" showIcon title={notice} />}
-        {!loading && clients.length === 0 && <Empty description="No customer reviews are authorized yet. Your organization must assign the customer and approve read permissions, and the customer must grant consent." />}
-        <div role="list" aria-label="Authorized customers">
+        {!loading && clients.length === 0 && <Empty description="No customers are currently assigned to you with permission to share financial information." />}
+        <div role="list" aria-label="Customers you advise">
           {clients.map(customer => (
             <div key={customer.customerId} role="listitem"
               className="flex items-center justify-between gap-4 border-b border-solid border-border px-2 py-4 last:border-b-0">
               <Text strong>{customer.displayName}</Text>
-              <Button onClick={() => { void openReview(customer); }} disabled={loading}>Open customer workspace</Button>
+              <Button onClick={() => { void openReview(customer); }} disabled={loading}>Open customer</Button>
             </div>
           ))}
         </div>
@@ -377,9 +377,9 @@ export default function AdvisorWorkspace() {
       </Card>}
 
       {review && selection && engagement && <>
-        <Card title="Source-backed analysis preparation" className="mt-4"
-          extra={<Tag>{selectedSources.length} source{selectedSources.length === 1 ? '' : 's'} selected</Tag>}>
-          <Paragraph>Select one or more reviewed facts above, then record a bounded advisory note. Only source references—not copied financial values—are retained in the activity history.</Paragraph>
+        <Card title="Advisor notes" className="mt-4"
+          extra={<Tag>{selectedSources.length} item{selectedSources.length === 1 ? '' : 's'} selected</Tag>}>
+          <Paragraph>Select reviewed information above, then record your note. The note remains linked to the information you reviewed.</Paragraph>
           <Input.TextArea aria-label="Advisory note" value={note} maxLength={600} rows={3}
             onChange={event => { setNote(event.target.value); }}
             placeholder="Record the analysis preparation or customer follow-up needed." />
@@ -410,8 +410,7 @@ export default function AdvisorWorkspace() {
             <Alert type="success" showIcon title="Ready for separate submission" description="No lender decision has been made." />}
         </Card>
 
-        <Card title="Governed activity history" className="mt-4"
-          extra={<Tag>{engagement.dataDurability}</Tag>}>
+        <Card title="Activity history" className="mt-4">
           {activityNotice && <Alert className="mb-4" showIcon
             type={activityNotice.includes('not confirmed') ? 'warning' : 'success'} title={activityNotice} />}
           {engagement.activities.length === 0 ? <Empty description="No advisory activity has been recorded." /> :
@@ -422,7 +421,7 @@ export default function AdvisorWorkspace() {
                 {activity.body && <Text>{activity.body}</Text>}
                 {activity.applicationStage && <Text>{activity.applicationStage}</Text>}
                 {activity.sourceFactIds.length > 0 && <Text type="secondary">
-                  {activity.sourceFactIds.length} reviewed source reference{activity.sourceFactIds.length === 1 ? '' : 's'} retained
+                  Linked to {activity.sourceFactIds.length} reviewed item{activity.sourceFactIds.length === 1 ? '' : 's'}
                 </Text>}
                 <Text type="secondary">{date(activity.occurredAt)}</Text>
               </Space>

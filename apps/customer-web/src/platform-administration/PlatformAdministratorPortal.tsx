@@ -23,8 +23,8 @@ const request = async <T,>(path: string, session?: string, init?: RequestInit): 
     headers,
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => null) as { error?: string } | null;
-    throw new Error(body?.error ?? `Platform operation failed (${String(response.status)}).`);
+    await response.text().catch(() => '');
+    throw new Error('We could not complete that action right now. Please try again.');
   }
   return response.status === 204 ? undefined as T : await response.json() as T;
 };
@@ -50,7 +50,7 @@ export default function PlatformAdministratorPortal() {
     ]);
     if (verified.authority !== 'PlatformAdministrator' || verified.tenantAccess ||
         verified.customerDataAccess || verified.breakGlassAvailable || verified.productionAccepted)
-      throw new Error('PLATFORM_CONTEXT_INVALID');
+      throw new Error('Your administrator access could not be confirmed. Sign in again.');
     setContext(verified);
     setTopology(services);
     setGates(readiness.gates);
@@ -107,22 +107,22 @@ export default function PlatformAdministratorPortal() {
   if (!session || !context || !topology) return (
     <FoundationProvider appearance="midnight">
       <main className="access-entry">
-        <header className="access-public-header"><span className="access-wordmark">monergy</span><Tag>Platform control plane</Tag></header>
+        <header className="access-public-header"><span className="access-wordmark">monergy</span><Tag>Administration</Tag></header>
         <section className="access-public-body">
           <div className="access-public-intro">
             <p className="workspace-eyebrow">PLATFORM ADMINISTRATION</p>
-            <h1>Operate the platform.<br />Never impersonate a tenant.</h1>
-            <p>Review service health and release blockers, then record bounded operational posture. Tenant access, customer records, Consent and professional decisions remain unavailable.</p>
+            <h1>Understand Monergy.<br />Keep it ready.</h1>
+            <p>Review system status and release blockers, then record an operational note. Organization and customer information is not available here.</p>
           </div>
-          <Card className="access-connect-card" title="Connect to the platform control plane">
+          <Card className="access-connect-card" title="Open Monergy Administration">
             {error && <Alert type="error" showIcon title={error} className="access-notice" />}
             <Form form={form} layout="vertical" onFinish={(values) => { void signIn(values); }}>
               <Form.Item name="key" label="Platform Administrator key" rules={[{ required: true, message: 'Enter the platform key.' }]}>
                 <Input.Password autoComplete="off" disabled={busy} />
               </Form.Item>
-              <Button type="primary" block htmlType="submit" loading={busy}>Connect platform workspace</Button>
+              <Button type="primary" block htmlType="submit" loading={busy}>Open administration</Button>
             </Form>
-            <p className="access-connect-footnote">The key is cleared after use and is never a tenant credential.</p>
+            <p className="access-connect-footnote">The key is cleared after use and cannot be used to enter an organization's workspace.</p>
           </Card>
         </section>
       </main>
@@ -132,30 +132,29 @@ export default function PlatformAdministratorPortal() {
   const postureByService = new Map(topology.postures.map(item => [item.serviceId, item]));
   return (
     <FoundationProvider appearance="midnight">
-      <WorkspaceShell appearance="midnight" context="Platform Administrator" area="Control plane"
-        module={{ name: 'Platform Administration', homeHref: '/platform', guide: <p>This workspace governs platform health and operational posture only. It cannot browse tenant data or assume tenant authority.</p> }}
-        destinations={[{ id: 'platform', label: 'Platform health', icon: 'layers', href: '/platform' }]}
+      <WorkspaceShell appearance="midnight" context="Platform Administrator" area="Administration"
+        module={{ name: 'Monergy Administration', homeHref: '/platform', guide: <p>Review system status and operational notes. Customer and organization information is not available here.</p> }}
+        destinations={[{ id: 'platform', label: 'System status', icon: 'layers', href: '/platform' }]}
         active="platform" onNavigate={() => { return undefined; }}
         actions={<Button type="text" onClick={() => { void signOut(); }}>Sign out</Button>}>
         <main className="access-page">
-          <header className="access-page-header"><div><p className="workspace-eyebrow">PLATFORM CONTROL PLANE · {context.environment.toUpperCase()}</p><h1>Platform health</h1><p>Service availability, release blockers and governed operational posture.</p></div><Button onClick={() => { void load(session).catch((failure: unknown) => { setError(String(failure)); }); }}>Refresh</Button></header>
-          <Alert type="info" showIcon className="access-notice" title="Authority boundary" description="No tenant membership, customer-data access, Consent authority or break-glass path is available in this workspace." />
+          <header className="access-page-header"><div><p className="workspace-eyebrow">MONERGY ADMINISTRATION · {context.environment.toUpperCase()}</p><h1>System status</h1><p>Availability, release blockers and operational notes.</p></div><Button onClick={() => { void load(session).catch((failure: unknown) => { setError(failure instanceof Error ? failure.message : 'We could not refresh the system status.'); }); }}>Refresh</Button></header>
+          <Alert type="info" showIcon className="access-notice" title="Separate from customer work" description="This workspace cannot open organization or customer information, sign in as another person or change their access." />
           {error && <Alert type="error" showIcon title={error} className="access-notice" />}
           <Table<Service> rowKey="id" dataSource={topology.services} pagination={false} scroll={{ x: 820 }} columns={[
-            { title: 'Service', dataIndex: 'label' },
-            { title: 'Health', render: (_, row) => <Tag color={row.available ? 'success' : 'error'}>{row.available ? 'Running' : 'Unavailable'}</Tag> },
-            { title: 'Implemented boundary', dataIndex: 'implementation' },
-            { title: 'Operational posture', render: (_, row) => { const posture = postureByService.get(row.id); return posture ? <Space orientation="vertical" size={0}><Tag>{posture.posture}</Tag><Typography.Text type="secondary">{posture.note}</Typography.Text></Space> : <Tag>Normal</Tag>; } },
-            { title: 'Action', render: (_, row) => <Button size="small" onClick={() => { setSelected(row); postureForm.setFieldsValue({ posture: postureByService.get(row.id)?.posture ?? 'Normal', note: postureByService.get(row.id)?.note ?? '' }); }}>Record posture</Button> },
+            { title: 'Area', dataIndex: 'label' },
+            { title: 'Status', render: (_, row) => <Tag color={row.available ? 'success' : 'error'}>{row.available ? 'Available' : 'Needs attention'}</Tag> },
+            { title: 'Operational note', render: (_, row) => { const posture = postureByService.get(row.id); return posture ? <Space orientation="vertical" size={0}><Tag>{posture.posture}</Tag><Typography.Text type="secondary">{posture.note}</Typography.Text></Space> : <Tag>Normal</Tag>; } },
+            { title: 'Action', render: (_, row) => <Button size="small" onClick={() => { setSelected(row); postureForm.setFieldsValue({ posture: postureByService.get(row.id)?.posture ?? 'Normal', note: postureByService.get(row.id)?.note ?? '' }); }}>Add note</Button> },
           ]} />
-          <section className="access-service-list"><h2>Release readiness</h2>{gates.map(gate => <Card key={gate.id} size="small"><Tag color="warning">{gate.state}</Tag><strong>{gate.id}</strong><p>{gate.detail}</p></Card>)}</section>
-          <section className="access-operation-page"><h2>Operational history</h2>{receipts.length ? <Timeline items={receipts.map(item => ({ key: item.operationId, title: `${item.serviceId} · ${item.posture}`, content: <p>{item.note}<br /><small>{new Date(item.recordedAt).toLocaleString()} · {item.actorId} · revision {item.version}</small></p> }))} /> : <p>No platform posture changes have been recorded.</p>}</section>
-          <Modal open={selected !== null} title={`Record posture · ${selected?.label ?? ''}`} onCancel={() => { setSelected(null); }} footer={null} destroyOnHidden>
-            <p>This records an operational annotation. It does not restart a service, grant access or alter tenant data.</p>
+          <section className="access-service-list"><h2>Release readiness</h2>{gates.map(gate => <Card key={gate.id} size="small"><Tag color="warning">{gate.state}</Tag><p>{gate.detail}</p></Card>)}</section>
+          <section className="access-operation-page"><h2>Operational history</h2>{receipts.length ? <Timeline items={receipts.map(item => ({ key: item.operationId, title: `${topology.services.find(service => service.id === item.serviceId)?.label ?? 'Monergy area'} · ${item.posture}`, content: <p>{item.note}<br /><small>{new Date(item.recordedAt).toLocaleString()}</small></p> }))} /> : <p>No operational notes have been recorded.</p>}</section>
+          <Modal open={selected !== null} title={`Add operational note · ${selected?.label ?? ''}`} onCancel={() => { setSelected(null); }} footer={null} destroyOnHidden>
+            <p>This records an operational note. It does not restart anything, grant access or change customer information.</p>
             <Form form={postureForm} layout="vertical" onFinish={(values) => { void savePosture(values); }}>
-              <Form.Item name="posture" label="Posture" rules={[{ required: true }]}><Select options={['Normal', 'Investigating', 'Maintenance'].map(value => ({ value, label: value }))} /></Form.Item>
+              <Form.Item name="posture" label="Status" rules={[{ required: true }]}><Select options={['Normal', 'Investigating', 'Maintenance'].map(value => ({ value, label: value }))} /></Form.Item>
               <Form.Item name="note" label="Operational note" rules={[{ required: true, whitespace: true }, { max: 500 }]}><Input.TextArea rows={4} /></Form.Item>
-              <Button type="primary" htmlType="submit" loading={busy}>Record posture</Button>
+              <Button type="primary" htmlType="submit" loading={busy}>Save note</Button>
             </Form>
           </Modal>
         </main>

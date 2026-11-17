@@ -164,7 +164,7 @@ export default function ConsentExperience() {
         showIcon
         type="info"
         title="About these permissions"
-        description="This view covers up to 100 recent delegated customer-advice grants. Unexpired does not confirm effective access: current customer, actor, owner version, and permissions are checked separately when protected information is requested. Google Drive permission is managed in Connections."
+        description="This view covers up to 100 recent permissions for customer advice. A permission that has not expired may still be unavailable if the customer, recipient, assignment or their organization access has changed. Google Drive permission is managed in Connections."
       />
       <div className="product-drawer-actions">
         <Button

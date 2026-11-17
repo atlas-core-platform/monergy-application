@@ -387,8 +387,8 @@ function WorkspaceApplication() {
   const inDsa = path === '/dsa';
   const inOperationsSupport = path === '/operations-support';
   const advisorNavigation = [{id:'advisor-overview', label:'Overview', icon:'home' as const, href:'/advisor'}];
-  const dsaNavigation = [{id:'dsa-cases', label:'Assistance cases', icon:'changes' as const, href:'/dsa'}];
-  const operationsSupportNavigation = [{id:'operational-recovery', label:'Operational recovery', icon:'changes' as const, href:'/operations-support'}];
+  const dsaNavigation = [{id:'dsa-cases', label:'Cases', icon:'changes' as const, href:'/dsa'}];
+  const operationsSupportNavigation = [{id:'operational-recovery', label:'Tasks needing attention', icon:'changes' as const, href:'/operations-support'}];
   const navigation = inOperationsSupport ? operationsSupportNavigation : inDsa ? dsaNavigation : inAdvisor ? advisorNavigation : path==='/kyc/reviews' ? [{id:'kyc-reviews',label:'KYC reviews',icon:'shield' as const,href:'/kyc/reviews'}] : inAdministration ? accessDestinations : destinations;
   const current =
     navigation.find(
@@ -416,13 +416,13 @@ function WorkspaceApplication() {
       destinations={navigation}
       module={inOperationsSupport ? {
          name: 'Operations Support', homeHref: '/operations-support',
-         guide: <p>Operational recovery is limited to safe job metadata and eligible retry or cancellation actions. This authority cannot grant access, approve Consent or make professional decisions.</p>,
+         guide: <p>Review tasks that need attention and safely try again or cancel eligible work. Customer financial information and professional decisions are not shown here.</p>,
        } : inDsa ? {
-         name: 'DSA Case Workspace', homeHref: '/dsa',
-         guide: <p>Accepting an assistance case does not grant access to financial information. Customer data, assignments, Consent and lender decisions remain separately governed.</p>,
+         name: 'Cases', homeHref: '/dsa',
+         guide: <p>Accept a case when you are ready to take responsibility for it. Customer financial information remains separately protected.</p>,
        } : inAdvisor ? {
          name: 'Financial Advisor', homeHref: '/advisor',
-         guide: <p>Advisor work requires an active role, permitted capability, named customer assignment and current customer consent. Workspace entry does not grant financial access.</p>,
+         guide: <p>Customers appear here only while your role, assignment and their permission to share are current.</p>,
        } : inAdministration ? accessModule : productModule}
       onNavigate={(id) => {
         const href = navigation.find((item) => item.id === id)?.href;

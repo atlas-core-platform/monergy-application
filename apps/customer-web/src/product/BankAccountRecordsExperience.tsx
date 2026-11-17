@@ -56,7 +56,7 @@ export default function BankAccountRecordsExperience({api,facts,canRead,canCreat
     </Space>
     <p>These are customer-reviewed records. Monergy does not independently verify the account or connect to the bank. The balance comes from the exact reviewed source and its as-of date.</p>
     {!canCreate&&<RequestAccessAction target="customer.financial-information" requiredCapabilities={['financial-profile.profile.update']}
-      title="Adding or correcting a bank account needs access" description="Request the bounded financial information capability. You can keep reviewing existing bank account records."/>}
+      title="Adding or correcting a bank account needs access" description="Request permission to update financial information. You can keep reviewing existing bank account records."/>}
     {error&&<Alert type="error" title={error}/>} {loading&&<p role="status">Loading bank accounts…</p>}
     {!loading&&items.length===0&&<p>No reviewed bank account records yet. Review a bank-account source figure in Documents, then add the account metadata here.</p>}
     {items.map(record=><Card key={record.bankAccountRecordId} size="small" style={{marginBlock:12}}>

@@ -54,7 +54,7 @@ it('posts only the assignment version and canonical evidence inspection action',
     return Promise.resolve({ tenantId: 'T001', actorId: 'A700', items: [valuation()] });
   });
   mount(api);
-  const first = (await screen.findAllByRole('button', { name: 'Record inspection' }))[0];
+  const first = (await screen.findAllByRole('button', { name: 'Mark reviewed' }))[0];
   if (!first) throw new Error('Missing inspection action');
   fireEvent.click(first);
   await waitFor(() => { expect(write).toEqual({ operationId: '0a'.repeat(16), expectedVersion: 1 }); });
@@ -73,8 +73,8 @@ it('shows immutable revision history from exact evidence snapshots', async () =>
   vi.spyOn(api, 'case').mockResolvedValue({ tenantId: 'T001', actorId: 'A700', items: [valuation({
     state: 'Valued', version: 4, evidence: inspected, revisions: [revision] })] });
   mount(api);
-  expect(await screen.findByText(/Revision 1 · USD 425,000/)).toBeVisible();
-  expect(screen.getByText(/2 exact evidence versions/)).toBeVisible();
+  expect(await screen.findByText(/15 Nov 2026/)).toBeVisible();
+  expect(screen.getByText(/2 supporting documents reviewed/)).toBeVisible();
   expect(screen.getByRole('button', { name: 'Record revised valuation' })).toBeEnabled();
 });
 

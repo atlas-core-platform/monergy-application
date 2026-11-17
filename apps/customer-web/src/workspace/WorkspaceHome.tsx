@@ -30,17 +30,17 @@ const journeys: {
   },
   {
     title: 'Review current attention',
-    description: 'See bounded attention items from current Documents, trusted financial information and recent processing status.',
+    description: 'See documents, financial information and recent tasks that may need your attention.',
     href: '/actions',
     icon: 'changes',
     capability: 'financial-profile.profile.read',
     target: 'customer.financial-information',
     action: 'Open Action Centre',
   },
-  { title: 'Review monthly income and expenses', description: 'Review household totals, coverage and exact sources for a completed month.', href: '/monthly-cashflow', icon: 'reports', capability: 'financial-rules.calculation.execute', target: 'customer.calculations', action: 'Review income and expenses' },
+  { title: 'Review monthly income and expenses', description: 'Review household totals and the information used for a completed month.', href: '/monthly-cashflow', icon: 'reports', capability: 'financial-rules.calculation.execute', target: 'customer.calculations', action: 'Review income and expenses' },
   {
     title: 'Review net worth',
-    description: 'Review a complete dated inventory, calculate assets minus liabilities and follow saved sources.',
+    description: 'Review a complete dated inventory, calculate assets minus liabilities and see where each figure came from.',
     href: '/net-worth',
     icon: 'reports',
     capability: 'financial-rules.calculation.execute',
@@ -49,7 +49,7 @@ const journeys: {
   },
   {
     title: 'Review financial information',
-    description: 'See trusted Income, Expense, Loan, Asset, Investment, Insurance and Tax source information linked to its document.',
+    description: 'See the Income, Expense, Loan, Asset, Investment, Insurance and Tax information you reviewed, linked to its document.',
     href: '/finances',
     icon: 'reports',
     capability: 'financial-profile.profile.read',
@@ -58,7 +58,7 @@ const journeys: {
   },
   {
     title: 'Search your information',
-    description: 'Find authorized information and follow each result back to its source.',
+    description: 'Find information available to you and see where each result came from.',
     href: '/search',
     icon: 'search',
     capability: 'search.query.execute',
@@ -67,7 +67,7 @@ const journeys: {
   },
   {
     title: 'Create a basic financial summary',
-    description: 'Summarize selected reviewed monthly and net-worth results with exact calculation citations.',
+    description: 'Summarize selected monthly and net-worth results with links to the supporting calculations.',
     href: '/financial-qa?mode=summary',
     icon: 'reports',
     capability: 'ai-intelligence.analysis.execute',
@@ -175,10 +175,10 @@ export default function WorkspaceHome() {
       <div className="workspace-page-heading">
         <div>
           <p className="workspace-eyebrow">MY FINANCES</p>
-          <h1>Good {new Date().getUTCHours() < 12 ? 'morning' : 'to see you'}.</h1>
+          <h1>{new Date().getHours() < 12 ? 'Good morning.' : 'Welcome back.'}</h1>
           <p className="workspace-subtitle">
             {context?.customerName ?? 'Your Monergy workspace'} · Bring your financial information
-            together and keep every result connected to its source.
+            together and keep the supporting documents close at hand.
           </p>
         </div>
         <Tag className="product-environment">TEST ENVIRONMENT · TEMPORARY DATA</Tag>
@@ -189,9 +189,8 @@ export default function WorkspaceHome() {
           <span className="workspace-pill">YOUR NEXT BEST STEP</span>
           <h2 id="workspace-hero-title">Start with what you already have.</h2>
           <p>
-            Add a financial document. Monergy keeps the document and source details connected so
-            you can review extracted Income, Expense, Loan, Asset, Investment, Insurance or Tax source information before explicitly adding it to
-            your trusted financial information.
+            Add a financial document. Review the details Monergy finds, correct anything that needs
+            attention and choose what to add to your financial information.
           </p>
           {capabilities.has('evidence.document.upload') ? (
             <a className="workspace-primary-link" href="/evidence">
@@ -204,7 +203,7 @@ export default function WorkspaceHome() {
           )}
           <span className="workspace-hero-note">
             <WorkspaceIcon name="shield" size={14} />
-            Your identity, customer ownership and current access are checked by Monergy.
+            Your account and access are checked each time you open this workspace.
           </span>
         </div>
         <div className="workspace-hero-art" aria-hidden="true">
@@ -229,7 +228,7 @@ export default function WorkspaceHome() {
             </span>
             <div>
               <strong>Checked</strong>
-              <small>Version and integrity recorded</small>
+              <small>Ready for your review</small>
             </div>
           </div>
           <div className="workspace-art-chip chip-workspace">
@@ -251,7 +250,7 @@ export default function WorkspaceHome() {
           <div className="workspace-section-heading">
             <div>
               <p className="workspace-eyebrow">FINANCIAL PASSPORT</p>
-              <h2 id="workspace-passport-title">Your source-connected snapshot</h2>
+              <h2 id="workspace-passport-title">Your financial overview</h2>
             </div>
             <a href="/finances">View financial information</a>
           </div>
@@ -271,17 +270,17 @@ export default function WorkspaceHome() {
                 <article className="workspace-passport-card">
                   <span>Income items</span>
                   <strong>{canReadFinancial ? snapshot.income : '—'}</strong>
-                  <small>Source-connected Income records</small>
+                  <small>Income information you reviewed</small>
                 </article>
                 <article className="workspace-passport-card">
                   <span>Expense items</span>
                   <strong>{canReadFinancial ? snapshot.expenses : '—'}</strong>
-                  <small>Source-connected Expense records</small>
+                  <small>Expense information you reviewed</small>
                 </article>
                 <article className="workspace-passport-card">
                   <span>Loan information items</span>
                   <strong>{canReadFinancial ? snapshot.loans : '—'}</strong>
-                  <small>Source-connected Loan fact records, not an outstanding-debt total</small>
+                  <small>Loan figures from reviewed documents, not an outstanding-debt total</small>
                 </article>
                 <article className="workspace-passport-card">
                   <span>Documents</span>
@@ -435,8 +434,7 @@ export default function WorkspaceHome() {
             You are viewing {context?.customerName ?? 'your own financial workspace'}.
           </h2>
           <p>
-            Monergy resolves this customer from your verified identity. You do not choose or enter
-            an internal customer ID.
+            This workspace is linked to your signed-in account. Other customers' information is not available here.
           </p>
         </div>
         <div className="workspace-boundary-facts">
@@ -444,10 +442,7 @@ export default function WorkspaceHome() {
             <small>Environment</small>
             {context?.environment ?? 'Preview'}
           </span>
-          <span>
-            <small>Data</small>
-            {context?.dataDurability ?? 'Temporary'}
-          </span>
+          <span><small>Workspace</small>Private</span>
         </div>
       </section>
     </main>
