@@ -19,6 +19,7 @@ const people = [
   { actor: 'A600', email: 'a600@example.test', path: '/financial-professional' },
   { actor: 'A700', email: 'a700@example.test', path: '/property-valuer' },
   { actor: 'A800', email: 'a800@example.test', path: '/legal-advisor' },
+  { actor: 'A850', email: 'a850@example.test', path: '/operations-support' },
 ] as const;
 
 test.beforeAll(() => {
@@ -124,6 +125,14 @@ test('all ten personas use email and password and reach only their workspace', a
   await expect(page.getByText(/cannot open organization or customer information/)).toBeVisible();
 });
 
+test('A850 Operations Support signs out and signs in again with human credentials', async ({ page }) => {
+  const operationsSupport = people.find(person => person.actor === 'A850')!;
+  await activatePersona(page, tenantId, operationsSupport.email, operationsSupport.path);
+  await signInPersona(page, operationsSupport);
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await signInPersona(page, operationsSupport);
+});
+
 test('wrong password, wrong tenant and cross-authority credentials fail closed', async ({ request }) => {
   expect((await request.post('/identity-api/local/v1/persona-credentials/sign-in', {
     data: { tenantId, email: 'a300@example.test', password: 'Wrong!Password12345' },
@@ -142,18 +151,18 @@ test('wrong password, wrong tenant and cross-authority credentials fail closed',
 test('five failed password attempts lock the credential until protected recovery', async ({ page }) => {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const denied = await page.request.post('/identity-api/local/v1/persona-credentials/sign-in', {
-      data: { tenantId, email: 'a200@example.test', password: 'Wrong!Password12345' },
+      data: { tenantId, email: 'a850@example.test', password: 'Wrong!Password12345' },
     });
     expect(denied.status(), `failed sign-in ${attempt + 1}`).toBe(401);
   }
   const locked = await page.request.post('/identity-api/local/v1/persona-credentials/sign-in', {
-    data: { tenantId, email: 'a200@example.test', password },
+    data: { tenantId, email: 'a850@example.test', password },
   });
   expect(locked.status()).toBe(401);
 
-  await activatePersona(page, tenantId, 'a200@example.test', '/');
+  await activatePersona(page, tenantId, 'a850@example.test', '/operations-support');
   expect((await page.request.post('/identity-api/local/v1/persona-credentials/sign-in', {
-    data: { tenantId, email: 'a200@example.test', password },
+    data: { tenantId, email: 'a850@example.test', password },
   })).status()).toBe(200);
 });
 
