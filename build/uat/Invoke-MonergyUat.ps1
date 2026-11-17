@@ -463,7 +463,7 @@ if (-not [string]::IsNullOrWhiteSpace($AiModelConfigurationFile)) {
 if ($EnableOnboarding -and -not $onboarding) { throw 'This profile predates onboarding. Create a new named profile; existing keys and tenant data will not be rewritten.' }
 if ($Action -in @('Prepare','Start')) {
     $tokensChanged = $false
-    $requiredTokens = @('jobAuditEvent','financialAuditEvent','productAuditEvent')
+    $requiredTokens = @('jobAuditEvent','financialAuditEvent','productAuditEvent','platformIntegrationProtection','platformIntegrationRuntime')
     if ($EnableEmailAccess) { $requiredTokens += 'emailAccess' }
     if ($EnablePersonaTesterActivation) { $requiredTokens += @('personaTesterAccess','personaTesterChallenge') }
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
@@ -696,6 +696,12 @@ if ($Action -in @('Prepare','Start')) {
         if ($onboarding -and $service -eq 'integration-gateway') {
             $config.Monergy.AiModel=@{ Enabled='true'; InternalToken=$state.tokens.aiModelInternal; Tenants=$aiModelTenants }
         }
+        if ($onboarding -and $service -in @('customer-identity','integration-gateway')) {
+            $config.Monergy.GovernedProviders=@{
+                Enabled='true'; Url='http://127.0.0.1:4173/'
+                Token=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationRuntime))
+            }
+        }
         if ($onboarding -and $service -eq 'ai-intelligence') {
             $config.Monergy.AccessIntegration=@{ Enabled='true'; CustomerRelationships='true';
                 AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
@@ -732,7 +738,7 @@ if ($Action -in @('Prepare','Start')) {
         }
         Save-Json "delivery-$tenantId.json" $delivery
     }
-    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' }; PlatformAdministration=@{ AccessKey=$state.platformAuthority.token; TesterCredential=$state.platformAuthority.token; AdministratorEmail='a950.platform@example.test'; OperationsPath='/var/lib/monergy-onboarding/platform-operations.json'; CredentialsPath='/var/lib/monergy-onboarding/platform-credentials.json'; IntegrationsPath='/var/lib/monergy-onboarding/integration-configuration.json' } } }
+    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' }; PlatformAdministration=@{ AccessKey=$state.platformAuthority.token; TesterCredential=$state.platformAuthority.token; AdministratorEmail='a950.platform@example.test'; OperationsPath='/var/lib/monergy-onboarding/platform-operations.json'; CredentialsPath='/var/lib/monergy-onboarding/platform-credentials.json'; IntegrationsPath='/var/lib/monergy-onboarding/integration-configuration.json'; SecretsPath='/var/lib/monergy-onboarding/integration-secrets.json'; SecretProtectionKey=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationProtection)); RuntimeToken=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationRuntime)) } } }
     if ($onboarding) {
         $workspace.Monergy.AccessIntegration=@{
             Enabled='true'; CustomerRelationships='true'; AccessManagementUrl='http://127.0.0.1:5088/'

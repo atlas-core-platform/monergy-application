@@ -25,7 +25,7 @@ public interface ICustomerEmailAccessRepository
 
 public interface ICustomerEmailSender
 {
-    Task SendAsync(string email, string code, CancellationToken ct);
+    Task SendAsync(string tenant, string email, string code, CancellationToken ct);
 }
 
 // Only a configured owner-side secret can derive code verifiers and decrypt the

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Mail;
 using System.Security.Cryptography;
 using Monergy.Contracts;
+using Monergy.Platform;
 using Monergy.Services.CustomerIdentity.Application;
 
 namespace Monergy.Services.CustomerIdentity.Infrastructure;
@@ -25,10 +26,33 @@ public sealed record CustomerEmailDeliveryOptions(string Host, int Port, string 
     }
 }
 
-public sealed class SmtpCustomerEmailSender(CustomerEmailDeliveryOptions options) : ICustomerEmailSender
+public sealed class GovernedSmtpConfigurationOwner(
+    IGovernedProviderConfigurationReader governed, IConfiguration configuration)
 {
-    public async Task SendAsync(string email, string code, CancellationToken ct)
+    public async Task<CustomerEmailDeliveryOptions> ResolveAsync(string tenant, CancellationToken ct)
     {
+        var adopted = await governed.ReadAsync("email", tenant, ct).ConfigureAwait(false);
+        if (adopted is null)
+        {
+            if (configuration["Monergy:CustomerEmailAccess:Enabled"] != "true")
+                throw new InvalidOperationException("GOVERNED_PROVIDER_NOT_CONFIGURED");
+            return CustomerEmailDeliveryOptions.Read(configuration);
+        }
+        if (!Uri.TryCreate(adopted.Endpoint, UriKind.Absolute, out var endpoint) || endpoint.Scheme != "smtp" ||
+            Uri.CheckHostName(endpoint.Host) == UriHostNameType.Unknown || endpoint.Port is < 1 or > 65535 ||
+            string.IsNullOrWhiteSpace(adopted.ClientId) || adopted.ClientId.Length > 320 || adopted.ClientId.Any(char.IsControl) ||
+            string.IsNullOrEmpty(adopted.Secret))
+            throw new InvalidOperationException("GOVERNED_PROVIDER_CONFIGURATION_INVALID");
+        var from = CustomerEmailAccess.NormalizeEmail(adopted.CallbackUri);
+        return new(endpoint.Host, endpoint.Port, from, adopted.ClientId, adopted.Secret, [tenant]);
+    }
+}
+
+public sealed class SmtpCustomerEmailSender(GovernedSmtpConfigurationOwner configuration) : ICustomerEmailSender
+{
+    public async Task SendAsync(string tenant, string email, string code, CancellationToken ct)
+    {
+        var options = await configuration.ResolveAsync(tenant, ct).ConfigureAwait(false);
         using var message = new MailMessage(options.From, email)
         {
             Subject = "Your Monergy verification code",
@@ -66,7 +90,7 @@ public sealed class CustomerEmailDelivery(
             {
                 using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 deadline.CancelAfter(TimeSpan.FromSeconds(10));
-                await sender.SendAsync(pending.Email, protector.Unprotect(tenant, pending.ChallengeHash, pending.ProtectedCode), deadline.Token).ConfigureAwait(false);
+                await sender.SendAsync(tenant, pending.Email, protector.Unprotect(tenant, pending.ChallengeHash, pending.ProtectedCode), deadline.Token).ConfigureAwait(false);
                 sent = true;
             }
             catch (Exception failure) when (failure is SmtpException or CryptographicException or OperationCanceledException)

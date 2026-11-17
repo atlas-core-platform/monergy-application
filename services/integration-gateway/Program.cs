@@ -10,6 +10,7 @@ const string serviceName = "Integration Gateway Service";
 var builder = WebApplication.CreateBuilder(args);
 builder.AddMonergyPlatform(serviceName);
 builder.Services.AddHealthChecks();
+var governedProviders = builder.Services.AddGovernedProviderConfiguration(builder.Configuration);
 builder.AddConnectionOverview();
 builder.AddGoogleDrive();
 builder.AddQaModel();
@@ -25,6 +26,7 @@ app.MapConnectionOverview();
 app.MapGoogleDrive();
 app.MapQaModel();
 Monergy.Services.IntegrationGateway.OneDrive.DriveConnectionEndpoints.MapOneDrive(app);
+if (governedProviders) app.MapGovernedProviderReadiness();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
 app.MapHealthChecks("/health/ready");
 if (referenceAdapters)

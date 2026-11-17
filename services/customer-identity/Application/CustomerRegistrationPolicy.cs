@@ -1,7 +1,5 @@
-using System.Security.Cryptography;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.Options;
 using Monergy.Contracts;
+using Monergy.Platform;
 
 namespace Monergy.Services.CustomerIdentity.Application;
 
@@ -16,42 +14,25 @@ public sealed record PasswordRecoveryConfirmation(string TenantId, string Challe
 // Passwords are hashed with unique salts; no reversible credential is persisted.
 public sealed class CustomerPasswordPolicy
 {
-    private readonly PasswordHasher<string> hasher = new(Options.Create(new PasswordHasherOptions
-    {
-        CompatibilityMode = PasswordHasherCompatibilityMode.IdentityV3,
-        IterationCount = 600_000,
-    }));
-    private readonly string dummy;
-
-    public CustomerPasswordPolicy()
-    {
-        dummy = hasher.HashPassword("unavailable", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
-    }
+    private readonly StrongPasswordPolicy policy = new("customer");
 
     public static void Validate(string password)
     {
-        if (password is null || password.Length is < 15 or > 128 || password.Any(char.IsControl) ||
-            string.IsNullOrWhiteSpace(password))
+        if (!StrongPasswordPolicy.IsValid(password))
             throw new TenantAccessException("PASSWORD_REQUIREMENTS_NOT_MET", 400);
     }
 
     public string Hash(string password)
     {
         Validate(password);
-        return hasher.HashPassword("customer", password);
+        return policy.Hash(password);
     }
 
     public bool Verify(string? hash, string? password)
     {
         // Unknown accounts perform the same expensive verifier work. HTTP limits
         // and durable recipient counters remain required at the caller boundary.
-        if (password is null || password.Length > 128) return false;
-        try
-        {
-            var result = hasher.VerifyHashedPassword("customer", hash ?? dummy, password);
-            return hash is not null && result != PasswordVerificationResult.Failed;
-        }
-        catch (FormatException) { return false; }
+        return policy.Verify(hash, password);
     }
 }
 

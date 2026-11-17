@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.Text.Json;
+using Monergy.Platform;
 using Monergy.Platform.ControlPlane;
 using Xunit;
 
@@ -15,16 +18,22 @@ public sealed class PlatformOperationsTests
             await Assert.ThrowsAsync<InvalidOperationException>(() => store.IssueActivationAsync(
                 "a950.platform@example.test", "wrong", default));
             var activation = await store.IssueActivationAsync("a950.platform@example.test", new string('t', 64), default);
-            await store.ActivateAsync(activation.Ticket, "Platform!Password123", default);
-            var authentication = await store.AuthenticateAsync("a950.platform@example.test", "Platform!Password123", default);
+            const string acceptedPassword = "words without symbols";
+            await store.ActivateAsync(activation.Ticket, acceptedPassword, default);
+            var authentication = await store.AuthenticateAsync("a950.platform@example.test", acceptedPassword, default);
             Assert.Equal("A950", authentication.ActorId);
             Assert.Equal(1, authentication.CredentialVersion);
             var replay = await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 store.ActivateAsync(activation.Ticket, "Another!Password123", default));
             Assert.Equal("PLATFORM_ACTIVATION_TICKET_INVALID", replay.Message);
             var persisted = await File.ReadAllTextAsync(path);
-            Assert.DoesNotContain("Platform!Password123", persisted, StringComparison.Ordinal);
+            Assert.DoesNotContain(acceptedPassword, persisted, StringComparison.Ordinal);
             Assert.DoesNotContain(activation.Ticket, persisted, StringComparison.Ordinal);
+            using var document = JsonDocument.Parse(persisted);
+            var identityV3 = Convert.FromBase64String(document.RootElement.GetProperty("passwordHash").GetString()!);
+            Assert.Equal(0x01, identityV3[0]);
+            Assert.Equal(StrongPasswordPolicy.Iterations, BinaryPrimitives.ReadInt32BigEndian(identityV3.AsSpan(5, 4)));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => store.ActivateAsync("missing", new string(' ', 15), default));
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }
@@ -68,12 +77,13 @@ public sealed class PlatformOperationsTests
         {
             using var store = new FileIntegrationConfigurationStore(path, new FixedClock());
             var changed = await store.ChangeAsync(new(Guid.NewGuid().ToString("N"), 0, "email", true,
-                "Organization", "https://mail.example.test", "safe-client", null, null,
+                "Organization", "smtp://mail.example.test:2525", "safe-client", "sender@example.test", null,
                 new Dictionary<string, string> { ["tenantId"] = "T001" }, ["smtp-primary"], "Configured", "A950"), default);
             Assert.Equal(1, changed.Revision);
             var provider = Assert.Single(changed.Providers, item => item.Code == "email");
             Assert.Equal("T001", provider.Options["tenantId"]);
             Assert.Equal(["smtp-primary"], provider.SecretReferences);
+            Assert.Equal("Configuration complete — not yet tested", provider.Readiness);
             var succeeded = Assert.Single(await store.AuditAsync(default));
             Assert.Equal("Organization", succeeded.Scope);
             Assert.Equal("ConfigurationChanged", succeeded.Action);
@@ -82,7 +92,8 @@ public sealed class PlatformOperationsTests
             Assert.DoesNotContain("password", persisted, StringComparison.OrdinalIgnoreCase);
             var staleOperationId = Guid.NewGuid().ToString("N");
             var stale = await Assert.ThrowsAsync<InvalidOperationException>(() => store.ChangeAsync(new(
-                staleOperationId, 0, "ai", true, "Platform", null, null, null, "model", null,
+                staleOperationId, 0, "ai", true, "Platform", "https://model.example.test/v1", null, null, "model",
+                new Dictionary<string, string> { ["providerLabel"] = "LOCAL deterministic", ["notice"] = "LOCAL fixture" },
                 ["ai-primary"], "Configured", "A950"), default));
             Assert.Equal("INTEGRATION_CONFIGURATION_CONFLICT", stale.Message);
             var rejected = Assert.Single(await store.AuditAsync(default), item => item.OperationId == staleOperationId);
@@ -90,10 +101,37 @@ public sealed class PlatformOperationsTests
             Assert.Equal("ConfigurationChangeRejected", rejected.Action);
             Assert.Equal("Conflict", rejected.Result);
             var repeated = await Assert.ThrowsAsync<InvalidOperationException>(() => store.ChangeAsync(new(
-                staleOperationId, 0, "ai", true, "Platform", null, null, null, "model", null,
+                staleOperationId, 0, "ai", true, "Platform", "https://model.example.test/v1", null, null, "model",
+                new Dictionary<string, string> { ["providerLabel"] = "LOCAL deterministic", ["notice"] = "LOCAL fixture" },
                 ["ai-primary"], "Configured", "A950"), default));
             Assert.Equal("INTEGRATION_CONFIGURATION_CONFLICT", repeated.Message);
             Assert.Equal(2, (await store.AuditAsync(default)).Count);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task IntegrationSecretsAreEncryptedReplaceableResolvableAndClearable()
+    {
+        var path = TemporaryPath();
+        var key = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        try
+        {
+            using var store = new FileProtectedIntegrationSecretStore(path, key, new FixedClock());
+            var created = await store.SetAsync("provider:email:T001", "first-local-secret", "A950", default);
+            Assert.True(created.Configured);
+            Assert.Equal("first-local-secret", await store.ResolveAsync("provider:email:T001", default));
+            Assert.DoesNotContain("first-local-secret", await File.ReadAllTextAsync(path), StringComparison.Ordinal);
+            await store.SetAsync("provider:email:T001", "replacement-local-secret", "A950", default);
+            Assert.Equal("replacement-local-secret", await store.ResolveAsync("provider:email:T001", default));
+            Assert.DoesNotContain("replacement-local-secret", await File.ReadAllTextAsync(path), StringComparison.Ordinal);
+            using var wrongKey = new FileProtectedIntegrationSecretStore(path,
+                Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)));
+            var unresolved = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                wrongKey.ResolveAsync("provider:email:T001", default));
+            Assert.Equal("INTEGRATION_SECRET_UNRESOLVED", unresolved.Message);
+            await store.ClearAsync("provider:email:T001", "A950", default);
+            Assert.Null(await store.ResolveAsync("provider:email:T001", default));
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }

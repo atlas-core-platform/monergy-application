@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,7 +20,7 @@ const topology = {
   postures: [],
   services: [{ id: 'reporting', label: 'Reporting', implementation: 'Reports', available: true }],
 };
-const integrations = { revision: 0, providers: [{ code: 'email', displayName: 'Email delivery', category: 'Communication', enabled: false, scope: 'Platform', options: {}, secretReferences: [], subscriptionStatus: 'Not configured', readiness: 'Disabled', updatedAt: '1970-01-01T00:00:00Z' }] };
+const integrations = { revision: 0, providers: [{ code: 'email', displayName: 'Email delivery', category: 'Communication', enabled: false, scope: 'Platform', options: {}, secretConfigured: false, subscriptionStatus: 'Not configured', readiness: 'Not configured', updatedAt: '1970-01-01T00:00:00Z' }] };
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -39,7 +39,7 @@ describe('Platform Administrator portal', () => {
     }));
     const user = userEvent.setup();
     render(<PlatformAdministratorPortal />);
-    await user.type(screen.getByLabelText('Password'), 'Platform!Password123');
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Platform!Password123' } });
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
     expect(await screen.findByRole('heading', { name: 'System status' })).toBeVisible();
@@ -65,7 +65,7 @@ describe('Platform Administrator portal', () => {
     }));
     const user = userEvent.setup();
     render(<PlatformAdministratorPortal />);
-    await user.type(screen.getByLabelText('Password'), 'Platform!Password123');
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Platform!Password123' } });
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByText('Your administrator access could not be confirmed. Sign in again.')).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'System status' })).not.toBeInTheDocument();
@@ -94,7 +94,7 @@ describe('Platform Administrator portal', () => {
     }));
     const user = userEvent.setup();
     render(<PlatformAdministratorPortal />);
-    await user.type(screen.getByLabelText('Password'), 'Platform!Password123');
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Platform!Password123' } });
     await user.click(screen.getByRole('button', { name: 'Sign in' }));
     await user.click(await screen.findByRole('button', { name: 'Add note' }));
     const dialog = within(await screen.findByRole('dialog'));
@@ -110,7 +110,7 @@ describe('Platform Administrator portal', () => {
     expect((await screen.findAllByText('Checking dependency.')).length).toBeGreaterThanOrEqual(1);
   });
 
-  it('updates only non-secret provider metadata and secret reference names', async () => {
+  it('submits a provider secret once and never receives or repopulates it', async () => {
     const writes: Record<string, unknown>[] = [];
     vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
       if (url.endsWith('/sessions')) return Promise.resolve(json(session));
@@ -126,16 +126,18 @@ describe('Platform Administrator portal', () => {
       }
       throw new Error('Unexpected request: ' + url);
     }));
-    const user = userEvent.setup();
     render(<PlatformAdministratorPortal />);
-    await user.type(screen.getByLabelText('Password'), 'Platform!Password123');
-    await user.click(screen.getByRole('button', { name: 'Sign in' }));
-    await user.click(await screen.findByRole('button', { name: 'Configure' }));
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Platform!Password123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure' }));
     const dialog = within(await screen.findByRole('dialog'));
-    await user.type(dialog.getByLabelText('Secret reference names (comma separated)'), 'smtp-primary');
-    await user.click(dialog.getByRole('button', { name: 'Save configuration' }));
+    fireEvent.change(dialog.getByLabelText('Set or replace secret'), { target: { value: 'local-smtp-secret' } });
+    fireEvent.click(dialog.getByRole('button', { name: 'Save configuration' }));
     await waitFor(() => { expect(writes).toHaveLength(1); });
-    expect(writes[0]).toMatchObject({ expectedRevision: 0, secretReferences: ['smtp-primary'] });
-    expect(JSON.stringify(writes[0])).not.toMatch(/password|secretValue|credential/i);
+    expect(writes[0]).toMatchObject({ expectedRevision: 0, secretValue: 'local-smtp-secret', clearSecret: false });
+    expect(JSON.stringify(integrations)).not.toContain('local-smtp-secret');
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure' }));
+    expect(within(await screen.findByRole('dialog')).getByLabelText('Set or replace secret')).toHaveValue('');
   });
 });

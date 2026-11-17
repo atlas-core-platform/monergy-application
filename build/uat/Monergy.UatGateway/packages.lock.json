@@ -37,7 +37,10 @@
         }
       },
       "monergy.platform.controlplane": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "Monergy.Platform": "[1.0.0, )"
+        }
       },
       "OpenTelemetry.Exporter.OpenTelemetryProtocol": {
         "type": "CentralTransitive",

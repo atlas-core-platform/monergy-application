@@ -11,7 +11,7 @@ public sealed record PlatformCredentialEvent(string EventType, string Outcome, l
 public sealed class FilePlatformCredentialStore : IDisposable
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
-    private const int Iterations = 210_000;
+    private readonly StrongPasswordPolicy passwords = new("platform-administrator");
     private readonly string path;
     private readonly string administratorEmail;
     private readonly byte[] testerCredentialHash;
@@ -84,10 +84,7 @@ public sealed class FilePlatformCredentialStore : IDisposable
                 !CryptographicOperations.FixedTimeEquals(
                     Encoding.ASCII.GetBytes(state.ActivationTicketHash), Encoding.ASCII.GetBytes(supplied)))
                 throw new InvalidOperationException("PLATFORM_ACTIVATION_TICKET_INVALID");
-            var salt = RandomNumberGenerator.GetBytes(32);
-            state.PasswordSalt = Convert.ToBase64String(salt);
-            state.PasswordHash = Convert.ToBase64String(Rfc2898DeriveBytes.Pbkdf2(
-                password, salt, Iterations, HashAlgorithmName.SHA512, 64));
+            state.PasswordHash = passwords.Hash(password);
             state.Activated = true;
             state.CredentialVersion = checked(state.CredentialVersion + 1);
             state.FailedAttempts = 0;
@@ -108,8 +105,7 @@ public sealed class FilePlatformCredentialStore : IDisposable
             var now = clock.GetUtcNow();
             if (state.LockedUntil > now) throw new InvalidOperationException("PLATFORM_CREDENTIAL_LOCKED");
             var valid = state.Activated && string.Equals(email?.Trim(), administratorEmail, StringComparison.OrdinalIgnoreCase) &&
-                state.PasswordSalt is not null && state.PasswordHash is not null &&
-                Verify(password ?? string.Empty, state.PasswordSalt, state.PasswordHash);
+                state.PasswordHash is not null && passwords.Verify(state.PasswordHash, password);
             if (!valid)
             {
                 state.FailedAttempts++;
@@ -131,23 +127,9 @@ public sealed class FilePlatformCredentialStore : IDisposable
         finally { gate.Release(); }
     }
 
-    private static bool Verify(string password, string saltValue, string hashValue)
-    {
-        try
-        {
-            var salt = Convert.FromBase64String(saltValue);
-            var expected = Convert.FromBase64String(hashValue);
-            var actual = Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, HashAlgorithmName.SHA512, expected.Length);
-            return CryptographicOperations.FixedTimeEquals(expected, actual);
-        }
-        catch (FormatException) { return false; }
-    }
-
     private static void ValidatePassword(string password)
     {
-        if (password is null || password.Length is < 15 or > 128 ||
-            !password.Any(char.IsUpper) || !password.Any(char.IsLower) ||
-            !password.Any(char.IsDigit) || !password.Any(c => !char.IsLetterOrDigit(c)))
+        if (!StrongPasswordPolicy.IsValid(password))
             throw new InvalidOperationException("PLATFORM_PASSWORD_INVALID");
     }
 
@@ -173,7 +155,6 @@ public sealed class FilePlatformCredentialStore : IDisposable
         public string Email { get; init; } = string.Empty;
         public bool Activated { get; set; }
         public long CredentialVersion { get; set; }
-        public string? PasswordSalt { get; set; }
         public string? PasswordHash { get; set; }
         public int FailedAttempts { get; set; }
         public DateTimeOffset? LockedUntil { get; set; }
@@ -276,7 +257,8 @@ public sealed class FileIntegrationConfigurationStore : IDisposable
             var revision = checked(state.Revision + 1);
             var updatedAt = clock.GetUtcNow();
             var references = (change.SecretReferences ?? []).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
-            var readiness = !change.Enabled ? "Disabled" : references.Length == 0 ? "Needs secret reference" : "Configured for readiness check";
+            var readiness = Readiness(change.Code, change.Enabled, change.Scope, change.Endpoint, change.ClientId,
+                change.CallbackUri, change.Model, change.Options, references);
             state.Providers.RemoveAll(item => item.Code == change.Code);
             state.Providers.Add(new IntegrationProvider(change.Code, template.Name, template.Category, change.Enabled,
                 change.Scope, Null(change.Endpoint), Null(change.ClientId), Null(change.CallbackUri), Null(change.Model),
@@ -302,8 +284,33 @@ public sealed class FileIntegrationConfigurationStore : IDisposable
             change.SubscriptionStatus is not ("Not configured" or "Configured" or "Pending" or "Unavailable") ||
             !Safe(change.Endpoint, 500) || !Safe(change.ClientId, 200) || !Safe(change.CallbackUri, 500) || !Safe(change.Model, 200) ||
             (change.Options?.Count ?? 0) > 20 || (change.Options?.Any(item => !Identifier(item.Key, 80) || !Safe(item.Value, 500)) ?? false) ||
-            (change.SecretReferences?.Count ?? 0) > 10 || (change.SecretReferences?.Any(item => !Identifier(item, 160)) ?? false))
+            (change.SecretReferences?.Count ?? 0) > 1 || (change.SecretReferences?.Any(item => !Identifier(item, 160)) ?? false) ||
+            change.Scope == "Organization" &&
+                (!(change.Options?.TryGetValue("tenantId", out var tenant) ?? false) || tenant is not ("T001" or "T002")))
             throw new InvalidOperationException("INTEGRATION_CONFIGURATION_INVALID");
+    }
+
+    private static string Readiness(string code, bool enabled, string scope, string? endpoint, string? clientId,
+        string? callbackUri, string? model, IReadOnlyDictionary<string, string>? options, string[] references)
+    {
+        if (!enabled) return "Not configured";
+        var tenantBound = scope != "Organization" || options?.TryGetValue("tenantId", out var tenant) == true &&
+            tenant is "T001" or "T002";
+        var complete = code switch
+        {
+            "email" => tenantBound && Uri.TryCreate(endpoint, UriKind.Absolute, out var smtp) && smtp.Scheme == "smtp" &&
+                smtp.Port is > 0 and <= 65535 && !string.IsNullOrWhiteSpace(clientId) &&
+                Uri.TryCreate("mailto:" + callbackUri, UriKind.Absolute, out _),
+            "google-drive" or "onedrive" => tenantBound && !string.IsNullOrWhiteSpace(clientId) &&
+                Uri.TryCreate(callbackUri, UriKind.Absolute, out var callback) && callback.IsLoopback,
+            "ai" => tenantBound && Uri.TryCreate(endpoint, UriKind.Absolute, out var ai) && ai.Scheme == Uri.UriSchemeHttps &&
+                ai.UserInfo.Length == 0 && !string.IsNullOrWhiteSpace(model) &&
+                options?.TryGetValue("providerLabel", out var label) == true && !string.IsNullOrWhiteSpace(label) &&
+                options.TryGetValue("notice", out var notice) && !string.IsNullOrWhiteSpace(notice),
+            _ => tenantBound,
+        };
+        if (!complete) return "Configuration incomplete";
+        return references.Length == 0 ? "Secret missing/unresolved" : "Configuration complete — not yet tested";
     }
 
     private static bool Safe(string? value, int maximum) => value is null || value.Length <= maximum && value.All(c => !char.IsControl(c));
@@ -323,7 +330,7 @@ public sealed class FileIntegrationConfigurationStore : IDisposable
     {
         var current = Catalog.Select(template => state.Providers.SingleOrDefault(x => x.Code == template.Code) ??
             new IntegrationProvider(template.Code, template.Name, template.Category, false, "Platform", null, null, null, null,
-                new Dictionary<string, string>(), [], "Not configured", "Disabled", 0, "system", DateTimeOffset.UnixEpoch))
+                new Dictionary<string, string>(), [], "Not configured", "Not configured", 0, "system", DateTimeOffset.UnixEpoch))
             .ToArray();
         return new(state.Revision, current);
     }

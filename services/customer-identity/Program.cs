@@ -9,6 +9,8 @@ const string serviceName = "Customer & Identity Service";
 var builder = WebApplication.CreateBuilder(args);
 builder.AddMonergyPlatform(serviceName);
 builder.Services.AddHealthChecks();
+var governedProviders = builder.Services.AddGovernedProviderConfiguration(builder.Configuration);
+builder.Services.AddSingleton<Monergy.Services.CustomerIdentity.Infrastructure.GovernedSmtpConfigurationOwner>();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.PropertyNameCaseInsensitive = ContractJson.Options.PropertyNameCaseInsensitive;
@@ -56,6 +58,7 @@ if (referenceAdapters)
 }
 
 var app = builder.Build();
+if (governedProviders) app.MapGovernedSmtpReadiness();
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = static _ => false });
 app.MapHealthChecks("/health/ready");
 if (referenceAdapters)

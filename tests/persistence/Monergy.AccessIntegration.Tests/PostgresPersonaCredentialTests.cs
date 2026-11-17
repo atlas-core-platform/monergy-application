@@ -907,7 +907,7 @@ public sealed class PostgresPersonaCredentialTests
     {
         public bool Fail { get; set; }
         public int Calls { get; private set; }
-        public Task SendAsync(string email, string code, CancellationToken ct)
+        public Task SendAsync(string tenant, string email, string code, CancellationToken ct)
         {
             Calls++;
             if (Fail) throw new SmtpException("Controlled physical test failure.");
@@ -922,7 +922,7 @@ public sealed class PostgresPersonaCredentialTests
         public TaskCompletionSource Release { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public async Task SendAsync(string email, string code, CancellationToken ct)
+        public async Task SendAsync(string tenant, string email, string code, CancellationToken ct)
         {
             Entered.TrySetResult();
             await Release.Task.WaitAsync(ct);

@@ -12,7 +12,7 @@ public sealed record DriveRevision(long Version);
 public sealed record DriveBeginResult(string AuthorizationUrl);
 
 public sealed class DriveConnectionApplication(DriveConnectionStore store, IDriveOwners owners,
-    IOneDriveProvider provider, IConfiguration configuration)
+    IOneDriveProvider provider, IConfiguration configuration, IGovernedProviderConfigurationReader? governed = null)
 {
     public async Task<DriveView> StatusAsync(HttpContext http)
     {
@@ -20,12 +20,13 @@ public sealed class DriveConnectionApplication(DriveConnectionStore store, IDriv
         return await store.ExecuteAsync(async records =>
         {
             var connection = Find(records, customer);
-            if (connection is null) return View(customer, null, Config(customer.Session.TenantId) is null ? "Not configured" : "Configured");
+            if (connection is null) return View(customer, null,
+                await ConfigAsync(customer.Session.TenantId, http.RequestAborted) is null ? "Not configured" : "Configured");
             RequireOwner(connection, customer);
             var status = connection.Status;
             if (status is not ("Disconnected" or "Disconnected; Microsoft revocation unconfirmed"))
             {
-                if (Config(connection.TenantId)?.Revision != connection.ConfigurationRevision) status = "Needs attention";
+                if ((await ConfigAsync(connection.TenantId, http.RequestAborted))?.Revision != connection.ConfigurationRevision) status = "Needs attention";
                 else if (connection.PendingUntil < DateTimeOffset.UtcNow && connection.Tokens is null) status = "Permission expired";
                 else if (!Allowed(await owners.ConsentAsync(http, connection, null, null), connection)) status = "Permission expired";
                 else if (connection.Tokens is not null)
@@ -50,7 +51,7 @@ public sealed class DriveConnectionApplication(DriveConnectionStore store, IDriv
         var customer = await owners.AuthorizeAsync(http);
         return await store.ExecuteAsync(async records =>
         {
-            var config = Config(customer.Session.TenantId) ?? throw new TenantBoundaryException("DRIVE_NOT_CONFIGURED", 409);
+            var config = await ConfigAsync(customer.Session.TenantId, http.RequestAborted) ?? throw new TenantBoundaryException("DRIVE_NOT_CONFIGURED", 409);
             var previous = Find(records, customer);
             if (previous is not null && !previous.Status.StartsWith("Disconnected", StringComparison.Ordinal))
                 throw new TenantBoundaryException("DRIVE_DISCONNECT_FIRST", 409);
@@ -210,7 +211,7 @@ public sealed class DriveConnectionApplication(DriveConnectionStore store, IDriv
     private async Task<DriveConfiguration> CurrentAsync(HttpContext http, DriveConnection connection, bool requireTokens = true)
     {
         var current = await owners.AuthorizeAsync(http); RequireOwner(connection, current);
-        var config = Config(connection.TenantId);
+        var config = await ConfigAsync(connection.TenantId, http.RequestAborted);
         if (config is null || config.Revision != connection.ConfigurationRevision) throw new TenantBoundaryException("DRIVE_CONFIGURATION_CHANGED", 409);
         if (!Allowed(await owners.ConsentAsync(http, connection, null, null), connection)) throw new TenantBoundaryException("DRIVE_PERMISSION_REQUIRED", 403);
         if (requireTokens)
@@ -228,8 +229,26 @@ public sealed class DriveConnectionApplication(DriveConnectionStore store, IDriv
         var folder = await provider.FileAsync(connection.Tokens!, connection.FolderId, ct);
         if (folder.Trashed || folder.MimeType != OneDriveProvider.FolderType) throw new TenantBoundaryException("DRIVE_FOLDER_UNAVAILABLE", 409);
     }
-    private DriveConfiguration? Config(string tenant)
+    public async Task<string> ReadinessAsync(string tenant, CancellationToken ct)
     {
+        var config = await ConfigAsync(tenant, ct).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("GOVERNED_PROVIDER_NOT_CONFIGURED");
+        return config.Revision;
+    }
+    private async Task<DriveConfiguration?> ConfigAsync(string tenant, CancellationToken ct)
+    {
+        if (governed is not null)
+        {
+            var adopted = await governed.ReadAsync("onedrive", tenant, ct).ConfigureAwait(false);
+            if (adopted is not null)
+            {
+                var governedConfig = new DriveConfiguration(adopted.ClientId ?? "", adopted.Secret, adopted.CallbackUri ?? "");
+                governedConfig.Validate();
+                return governedConfig;
+            }
+        }
+        // Explicit compatibility boundary: the legacy file/environment source is
+        // used only until this tenant adopts governed configuration.
         var section = configuration.GetSection("Monergy:OneDrive:Tenants:" + tenant);
         if (section["Enabled"] != "true") return null;
         var result = new DriveConfiguration(section["ClientId"] ?? "", section["ClientSecret"] ?? "", section["RedirectUri"] ?? "");

@@ -281,7 +281,7 @@ public sealed class CustomerEmailAccessTests
     {
         public List<(string Email, string Code)> Messages { get; } = [];
         public bool Fail { get; set; }
-        public Task SendAsync(string email, string code, CancellationToken ct) { if (Fail) throw new SmtpException("Controlled test failure"); Messages.Add((email, code)); return Task.CompletedTask; }
+        public Task SendAsync(string tenant, string email, string code, CancellationToken ct) { if (Fail) throw new SmtpException("Controlled test failure"); Messages.Add((email, code)); return Task.CompletedTask; }
     }
     private sealed class Membership : ITenantMembershipClient
     {

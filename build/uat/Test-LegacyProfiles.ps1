@@ -56,7 +56,7 @@ foreach ($expected in @('T001/A100','T001/A300','T001/A400','T002/A100','T002/A3
  if ($expected -notin $global:memberWrites) { throw "Retained profile did not repair $expected" }
 }
 $memberWriteCount=@($global:memberWrites).Count
-if (-not (Test-Path (Join-Path (Split-Path $path) 'reference-members-v3-initialized'))) { throw 'Revised membership marker missing' }
+if (-not (Test-Path (Join-Path (Split-Path $path) 'reference-members-v6-initialized'))) { throw 'Current membership marker missing' }
 & $scriptPath -Action Start
 if (@($global:memberWrites).Count -ne $memberWriteCount) { throw 'Revised membership replay replaced operator state' }
 if ((Get-Content $path -Raw) -ne $bytes) { throw 'Profile changed during revised membership replay' }

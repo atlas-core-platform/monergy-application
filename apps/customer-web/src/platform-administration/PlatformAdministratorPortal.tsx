@@ -11,7 +11,7 @@ interface ServicePosture { serviceId: string; posture: Posture; note: string; ch
 interface Gate { id: string; state: string; detail: string }
 interface Receipt { operationId: string; serviceId: string; posture: Posture; note: string; actorId: string; recordedAt: string; version: number }
 interface Topology { services: Service[]; operationsRevision: number; postures: ServicePosture[] }
-interface IntegrationProvider { code: string; displayName: string; category: string; enabled: boolean; scope: 'Platform' | 'Organization'; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; options: Record<string, string>; secretReferences: string[]; subscriptionStatus: string; readiness: string; updatedAt: string }
+interface IntegrationProvider { code: string; displayName: string; category: string; enabled: boolean; scope: 'Platform' | 'Organization'; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; options: Record<string, string>; secretConfigured: boolean; secretUpdatedAt?: string; subscriptionStatus: string; readiness: string; updatedAt: string }
 interface Integrations { revision: number; providers: IntegrationProvider[] }
 
 const request = async <T,>(path: string, session?: string, init?: RequestInit): Promise<T> => {
@@ -44,7 +44,7 @@ export default function PlatformAdministratorPortal() {
   const [selectedProvider, setSelectedProvider] = useState<IntegrationProvider | null>(null);
   const [form] = Form.useForm<{ email: string; password: string }>();
   const [activationForm] = Form.useForm<{ password: string; confirm: string }>();
-  const [integrationForm] = Form.useForm<{ enabled: boolean; scope: 'Platform' | 'Organization'; tenantId?: string; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; secretReferences?: string; subscriptionStatus: string }>();
+  const [integrationForm] = Form.useForm<{ enabled: boolean; scope: 'Platform' | 'Organization'; tenantId?: string; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; providerLabel?: string; notice?: string; secretValue?: string; clearSecret: boolean; subscriptionStatus: string }>();
   const [postureForm] = Form.useForm<{ posture: Posture; note: string }>();
 
   const load = useCallback(async (current: PlatformSession) => {
@@ -127,7 +127,7 @@ export default function PlatformAdministratorPortal() {
     finally { setBusy(false); }
   };
 
-  const saveProvider = async (values: { enabled: boolean; scope: 'Platform' | 'Organization'; tenantId?: string; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; secretReferences?: string; subscriptionStatus: string }) => {
+  const saveProvider = async (values: { enabled: boolean; scope: 'Platform' | 'Organization'; tenantId?: string; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; providerLabel?: string; notice?: string; secretValue?: string; clearSecret: boolean; subscriptionStatus: string }) => {
     if (!session || !integrations || !selectedProvider) return;
     setBusy(true); setError('');
     try {
@@ -137,8 +137,12 @@ export default function PlatformAdministratorPortal() {
           enabled: values.enabled, scope: values.scope, endpoint: values.endpoint?.trim() ?? null,
           clientId: values.clientId?.trim() ?? null, callbackUri: values.callbackUri?.trim() ?? null,
           model: values.model?.trim() ?? null,
-          options: values.scope === 'Organization' && values.tenantId ? { tenantId: values.tenantId.trim() } : {},
-          secretReferences: values.secretReferences?.split(',').map(value => value.trim()).filter(Boolean) ?? [],
+          options: {
+            ...(values.scope === 'Organization' && values.tenantId ? { tenantId: values.tenantId.trim() } : {}),
+            ...(selectedProvider.code === 'ai' && values.providerLabel?.trim() ? { providerLabel: values.providerLabel.trim() } : {}),
+            ...(selectedProvider.code === 'ai' && values.notice?.trim() ? { notice: values.notice.trim() } : {}),
+          },
+          secretValue: values.secretValue ?? null, clearSecret: values.clearSecret,
           subscriptionStatus: values.subscriptionStatus,
         }),
       });
@@ -194,13 +198,13 @@ export default function PlatformAdministratorPortal() {
             { title: 'Action', render: (_, row) => <Button size="small" onClick={() => { setSelected(row); postureForm.setFieldsValue({ posture: postureByService.get(row.id)?.posture ?? 'Normal', note: postureByService.get(row.id)?.note ?? '' }); }}>Add note</Button> },
           ]} />
           <section className="access-service-list"><h2>Release readiness</h2>{gates.map(gate => <Card key={gate.id} size="small"><Tag color="warning">{gate.state}</Tag><p>{gate.detail}</p></Card>)}</section>
-          <section className="access-operation-page"><h2>Integrations &amp; Providers</h2><p>Configure non-secret provider metadata and protected secret-reference names. Readiness does not establish provider entitlement, legal approval or Production acceptance.</p>
+          <section className="access-operation-page"><h2>Integrations &amp; Providers</h2><p>Configure provider metadata and one-way protected credentials. Ready means the actual LOCAL owner resolved and validated this configuration; it does not establish provider entitlement, legal approval or Production acceptance.</p>
             <Table<IntegrationProvider> rowKey="code" dataSource={integrations?.providers ?? []} pagination={false} columns={[
               { title: 'Provider', render: (_, row) => <><strong>{row.displayName}</strong><br /><Typography.Text type="secondary">{row.category}</Typography.Text></> },
               { title: 'Scope', dataIndex: 'scope' },
-              { title: 'Readiness', render: (_, row) => <Tag color={row.enabled && row.readiness.startsWith('Configured') ? 'success' : 'default'}>{row.readiness}</Tag> },
-              { title: 'Secret references', render: (_, row) => row.secretReferences.length ? row.secretReferences.join(', ') : 'None' },
-              { title: 'Action', render: (_, row) => <Button size="small" onClick={() => { setSelectedProvider(row); integrationForm.setFieldsValue({ enabled: row.enabled, scope: row.scope, tenantId: row.options.tenantId, endpoint: row.endpoint, clientId: row.clientId, callbackUri: row.callbackUri, model: row.model, secretReferences: row.secretReferences.join(', '), subscriptionStatus: row.subscriptionStatus }); }}>Configure</Button> },
+              { title: 'Readiness', render: (_, row) => <Tag color={row.readiness === 'Ready' ? 'success' : row.readiness === 'Needs attention' ? 'error' : 'warning'}>{row.readiness}</Tag> },
+              { title: 'Credential', render: (_, row) => row.secretConfigured ? 'Secret configured' : 'Not configured' },
+              { title: 'Action', render: (_, row) => <Button size="small" onClick={() => { setSelectedProvider(row); integrationForm.setFieldsValue({ enabled: row.enabled, scope: row.scope, tenantId: row.options.tenantId, endpoint: row.endpoint, clientId: row.clientId, callbackUri: row.callbackUri, model: row.model, providerLabel: row.options.providerLabel, notice: row.options.notice, secretValue: undefined, clearSecret: false, subscriptionStatus: row.subscriptionStatus }); }}>Configure</Button> },
             ]} />
           </section>
           <section className="access-operation-page"><h2>Operational history</h2>{receipts.length ? <Timeline items={receipts.map(item => ({ key: item.operationId, title: `${topology.services.find(service => service.id === item.serviceId)?.label ?? 'Monergy area'} · ${item.posture}`, content: <p>{item.note}<br /><small>{new Date(item.recordedAt).toLocaleString()}</small></p> }))} /> : <p>No operational notes have been recorded.</p>}</section>
@@ -213,14 +217,16 @@ export default function PlatformAdministratorPortal() {
             </Form>
           </Modal>
           <Modal open={selectedProvider !== null} title={`Configure ${selectedProvider?.displayName ?? ''}`} onCancel={() => { setSelectedProvider(null); }} footer={null} destroyOnHidden>
-            <Alert type="info" showIcon title="Secrets stay outside responses and audit" description="Enter reference names only. Secret values remain in the protected runtime store and are never returned to this browser." />
+            <Alert type="info" showIcon title="Secrets are one-way" description="Set or replace the provider credential here. It is encrypted by the retained LOCAL profile key, is never returned to this browser and will not be repopulated after save." />
             <Form form={integrationForm} layout="vertical" onFinish={(values) => { void saveProvider(values); }}>
               <Form.Item name="enabled" label="Enabled" valuePropName="checked"><Switch /></Form.Item>
               <Form.Item name="scope" label="Scope" rules={[{ required: true }]}><Select options={['Platform', 'Organization'].map(value => ({ value, label: value }))} /></Form.Item>
-              <Form.Item name="tenantId" label="Organization identifier (organization scope only)"><Input /></Form.Item>
+              <Form.Item name="tenantId" label="Organization identifier (organization scope only)" dependencies={['scope']} rules={[({ getFieldValue }) => ({ validator(_, value) { return getFieldValue('scope') !== 'Organization' || value === 'T001' || value === 'T002' ? Promise.resolve() : Promise.reject(new Error('Choose T001 or T002 for organization scope.')); } })]}><Input /></Form.Item>
               <Form.Item name="endpoint" label="Endpoint"><Input /></Form.Item><Form.Item name="clientId" label="Safe client identifier"><Input /></Form.Item>
               <Form.Item name="callbackUri" label="Callback URL"><Input /></Form.Item><Form.Item name="model" label="Model"><Input /></Form.Item>
-              <Form.Item name="secretReferences" label="Secret reference names (comma separated)"><Input autoComplete="off" /></Form.Item>
+              {selectedProvider?.code === 'ai' && <><Form.Item name="providerLabel" label="Provider label"><Input /></Form.Item><Form.Item name="notice" label="Customer notice"><Input.TextArea rows={3} /></Form.Item></>}
+              <Form.Item name="secretValue" label="Set or replace secret"><Input.Password autoComplete="new-password" /></Form.Item>
+              <Form.Item name="clearSecret" label="Clear stored secret" valuePropName="checked"><Switch /></Form.Item>
               <Form.Item name="subscriptionStatus" label="Subscription status" rules={[{ required: true }]}><Select options={['Not configured', 'Configured', 'Pending', 'Unavailable'].map(value => ({ value, label: value }))} /></Form.Item>
               <Button type="primary" htmlType="submit" loading={busy}>Save configuration</Button>
             </Form>

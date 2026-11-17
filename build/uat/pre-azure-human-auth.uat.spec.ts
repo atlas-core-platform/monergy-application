@@ -112,6 +112,16 @@ test('separate A950 credential owner activates once without creating a tenant id
   expect(replay.status()).toBe(401);
 });
 
+test('compact tenant persona smoke keeps administrator, customer and advisor routing separate', async ({ page }) => {
+  const smokePeople = people.filter(person => ['A900', 'A100', 'A300'].includes(person.actor));
+  for (const person of smokePeople) {
+    await activatePersona(page, tenantId, person.email, person.path);
+    await signInPersona(page, person);
+    await page.getByRole('button', { name: 'Sign out' }).click();
+  }
+  await activatePersona(page, 'T002', 'a900@example.test', '/access');
+});
+
 test('all ten personas use email and password and reach only their workspace', async ({ page }) => {
   for (const person of people) {
     await signInPersona(page, person);
@@ -166,7 +176,40 @@ test('five failed password attempts lock the credential until protected recovery
   })).status()).toBe(200);
 });
 
-test('platform provider metadata is versioned, audited and secret values are never returned', async ({ page }) => {
+test('platform lockout and credential-version recovery revoke old sessions and allow normal relogin', async ({ request }) => {
+  const signedIn = await request.post('/platform-api/local/v1/sessions', { data: { email: platformEmail, password } });
+  expect(signedIn.status()).toBe(200);
+  const old = await signedIn.json() as { session: string };
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    expect((await request.post('/platform-api/local/v1/sessions', {
+      data: { email: platformEmail, password: 'incorrect platform password' },
+    })).status()).toBe(401);
+  }
+  expect((await request.post('/platform-api/local/v1/sessions', {
+    data: { email: platformEmail, password },
+  })).status()).toBe(423);
+  const issued = await request.post('/platform-api/local/v1/credentials/tester/welcome-link', {
+    headers: { 'X-Monergy-Platform-Tester': platformTester }, data: { email: platformEmail },
+  });
+  expect(issued.status()).toBe(200);
+  const welcomePath = (await issued.json() as { welcomePath: string }).welcomePath;
+  const ticket = new URL(welcomePath, 'http://local.test').searchParams.get('ticket');
+  expect((await request.post('/platform-api/local/v1/credentials/activation/confirm', {
+    data: { ticket, password },
+  })).status()).toBe(204);
+  expect((await request.get('/platform-api/local/v1/context', {
+    headers: { 'X-Monergy-Platform-Session': old.session },
+  })).status()).toBe(401);
+  const recovered = await request.post('/platform-api/local/v1/sessions', { data: { email: platformEmail, password } });
+  expect(recovered.status()).toBe(200);
+  const current = await recovered.json() as { session: string };
+  expect((await request.delete('/platform-api/local/v1/sessions/current', {
+    headers: { 'X-Monergy-Platform-Session': current.session },
+  })).status()).toBe(204);
+  expect((await request.post('/platform-api/local/v1/sessions', { data: { email: platformEmail, password } })).status()).toBe(200);
+});
+
+test('governed provider secrets are one-way and all four runtime owners report truthful readiness', async ({ page }) => {
   await page.goto('/platform');
   await page.getByLabel('Email').fill(platformEmail);
   await page.getByLabel('Password').fill(password);
@@ -175,24 +218,57 @@ test('platform provider metadata is versioned, audited and secret values are nev
   const platform = await (await response).json() as { session: string };
   const headers = { 'X-Monergy-Platform-Session': platform.session };
   const before = await (await page.request.get('/platform-api/local/v1/integrations', { headers })).json() as { revision: number };
-  const change = { operationId: randomUUID().replaceAll('-', ''), expectedRevision: before.revision, enabled: true,
-    scope: 'Organization', endpoint: 'https://smtp.example.test', clientId: 'local-mail', callbackUri: null,
-    model: null, options: { tenantId }, secretReferences: ['smtp-primary'], subscriptionStatus: 'Configured' };
-  expect((await page.request.put('/platform-api/local/v1/integrations/email', { headers, data: change })).status()).toBe(200);
+  let revision = before.revision;
+  const secrets = {
+    email: 'smtp-secret-not-for-responses', google: 'google-secret-not-for-responses',
+    onedrive: 'onedrive-secret-not-for-responses', ai: 'ai-secret-not-for-responses',
+  };
+  const acceptedOperationIds: string[] = [];
+  const configure = async (code: string, data: Record<string, unknown>) => {
+    const operationId = randomUUID().replaceAll('-', '');
+    const result = await page.request.put('/platform-api/local/v1/integrations/' + code, { headers, data: {
+      operationId, expectedRevision: revision, enabled: true,
+      scope: 'Organization', subscriptionStatus: 'Configured', clearSecret: false, ...data,
+    } });
+    expect(result.status(), code).toBe(200);
+    revision = (await result.json() as { revision: number }).revision;
+    acceptedOperationIds.push(operationId);
+  };
+  await configure('email', { endpoint: 'smtp://mail.local.test:2525', clientId: 'local-mail-user',
+    callbackUri: 'sender@example.test', model: null, options: { tenantId }, secretValue: secrets.email });
+  await configure('email', { endpoint: 'smtp://mail.local.test:2525', clientId: 'local-mail-user',
+    callbackUri: 'sender@example.test', model: null, options: { tenantId }, secretValue: 'smtp-replacement-not-for-responses' });
+  await configure('google-drive', { endpoint: null, clientId: 'local-google-client',
+    callbackUri: 'http://127.0.0.1:4322/connections-api/local/v1/google-drive/callback', model: null,
+    options: { tenantId }, secretValue: secrets.google });
+  await configure('onedrive', { endpoint: null, clientId: 'local-onedrive-client',
+    callbackUri: 'http://127.0.0.1:4322/connections-api/local/v1/onedrive/callback', model: null,
+    options: { tenantId }, secretValue: secrets.onedrive });
+  await configure('ai', { endpoint: 'https://model.local.example.test/v1/chat/completions', clientId: null,
+    callbackUri: null, model: 'local-deterministic', options: { tenantId, providerLabel: 'LOCAL deterministic fixture',
+      notice: 'LOCAL deterministic contract; not a Production provider approval.' }, secretValue: secrets.ai });
   const staleOperationId = randomUUID().replaceAll('-', '');
   expect((await page.request.put('/platform-api/local/v1/integrations/ai', {
-    headers, data: { ...change, operationId: staleOperationId, expectedRevision: before.revision },
+    headers, data: { operationId: staleOperationId, expectedRevision: before.revision, enabled: true,
+      scope: 'Organization', endpoint: 'https://model.local.example.test/v1/chat/completions', clientId: null,
+      callbackUri: null, model: 'local-deterministic', options: { tenantId, providerLabel: 'LOCAL fixture', notice: 'LOCAL only' },
+      secretValue: 'stale-secret-must-not-persist', clearSecret: false, subscriptionStatus: 'Configured' },
   })).status()).toBe(409);
   const configuration = await page.request.get('/platform-api/local/v1/integrations', { headers });
   const body = await configuration.text();
-  expect(body).toContain('smtp-primary');
-  expect(body).not.toMatch(/password|provider-secret-value|authorization/i);
+  expect(body).toContain('secretConfigured');
+  expect(body.match(/"readiness":"Ready"/g)).toHaveLength(4);
+  for (const secret of [...Object.values(secrets), 'smtp-replacement-not-for-responses', 'stale-secret-must-not-persist'])
+    expect(body).not.toContain(secret);
+  expect(body).not.toMatch(/secretReferences|password|authorization/i);
   const audit = await (await page.request.get('/platform-api/local/v1/audit', { headers })).text();
-  expect(audit).toContain(change.operationId);
+  expect(audit).toContain(acceptedOperationIds.at(-1)!);
   expect(audit).toContain(staleOperationId);
   expect(audit).toContain('ConfigurationChangeRejected');
   expect(audit).toContain('Conflict');
   expect(audit).toContain('Organization');
+  for (const secret of [...Object.values(secrets), 'smtp-replacement-not-for-responses', 'stale-secret-must-not-persist'])
+    expect(audit).not.toContain(secret);
   expect(audit).not.toMatch(/passwordHash|provider-secret-value|authorizationHeader|activationTicket|testerCredential/i);
   const browserStorage = await page.evaluate(() => JSON.stringify({
     local: Object.fromEntries(Object.entries(localStorage)),
@@ -202,7 +278,7 @@ test('platform provider metadata is versioned, audited and secret values are nev
   expect(browserStorage).not.toContain(platformTester);
   await page.getByRole('button', { name: 'Refresh' }).click();
   await expect(page.getByText('Email delivery')).toBeVisible();
-  await expect(page.getByText('Configured for readiness check')).toBeVisible();
+  expect(await page.getByText('Ready').count()).toBeGreaterThanOrEqual(4);
 });
 
 test('Organization Administrator sees only its connected-service projection', async ({ page, request }) => {

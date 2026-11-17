@@ -24,7 +24,7 @@ public sealed class CustomerRegistrationDelivery(PostgresTenantSessions sessions
             try
             {
                 using var deadline=CancellationTokenSource.CreateLinkedTokenSource(ct);deadline.CancelAfter(TimeSpan.FromSeconds(10));
-                await sender.SendAsync(row.Email,protector.Unprotect(tenant+":"+row.Purpose,row.Hash,row.Code),deadline.Token);sent=true;
+                await sender.SendAsync(tenant,row.Email,protector.Unprotect(tenant+":"+row.Purpose,row.Hash,row.Code),deadline.Token);sent=true;
             }
             catch(Exception e)when(e is SmtpException or CryptographicException or OperationCanceledException){if(ct.IsCancellationRequested)throw;}
             await using var tx=await db.BeginTransactionAsync(ct).ConfigureAwait(false);
