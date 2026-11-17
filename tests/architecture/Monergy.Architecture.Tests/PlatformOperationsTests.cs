@@ -6,6 +6,54 @@ namespace Monergy.Architecture.Tests;
 public sealed class PlatformOperationsTests
 {
     [Fact]
+    public async Task PlatformCredentialActivationIsProtectedSingleUseAndVersioned()
+    {
+        var path = TemporaryPath();
+        try
+        {
+            using var store = new FilePlatformCredentialStore(path, "a950.platform@example.test", new string('t', 64), new FixedClock());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => store.IssueActivationAsync(
+                "a950.platform@example.test", "wrong", default));
+            var activation = await store.IssueActivationAsync("a950.platform@example.test", new string('t', 64), default);
+            await store.ActivateAsync(activation.Ticket, "Platform!Password123", default);
+            var authentication = await store.AuthenticateAsync("a950.platform@example.test", "Platform!Password123", default);
+            Assert.Equal("A950", authentication.ActorId);
+            Assert.Equal(1, authentication.CredentialVersion);
+            var replay = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                store.ActivateAsync(activation.Ticket, "Another!Password123", default));
+            Assert.Equal("PLATFORM_ACTIVATION_TICKET_INVALID", replay.Message);
+            var persisted = await File.ReadAllTextAsync(path);
+            Assert.DoesNotContain("Platform!Password123", persisted, StringComparison.Ordinal);
+            Assert.DoesNotContain(activation.Ticket, persisted, StringComparison.Ordinal);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
+    public async Task IntegrationConfigurationIsVersionedTenantScopedAndContainsReferencesOnly()
+    {
+        var path = TemporaryPath();
+        try
+        {
+            using var store = new FileIntegrationConfigurationStore(path, new FixedClock());
+            var changed = await store.ChangeAsync(new(Guid.NewGuid().ToString("N"), 0, "email", true,
+                "Organization", "https://mail.example.test", "safe-client", null, null,
+                new Dictionary<string, string> { ["tenantId"] = "T001" }, ["smtp-primary"], "Configured", "A950"), default);
+            Assert.Equal(1, changed.Revision);
+            var provider = Assert.Single(changed.Providers, item => item.Code == "email");
+            Assert.Equal("T001", provider.Options["tenantId"]);
+            Assert.Equal(["smtp-primary"], provider.SecretReferences);
+            var persisted = await File.ReadAllTextAsync(path);
+            Assert.DoesNotContain("password", persisted, StringComparison.OrdinalIgnoreCase);
+            var stale = await Assert.ThrowsAsync<InvalidOperationException>(() => store.ChangeAsync(new(
+                Guid.NewGuid().ToString("N"), 0, "ai", true, "Platform", null, null, null, "model", null,
+                ["ai-primary"], "Configured", "A950"), default));
+            Assert.Equal("INTEGRATION_CONFIGURATION_CONFLICT", stale.Message);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
     public async Task PostureChangesAreVersionedIdempotentAndAuditable()
     {
         var path = TemporaryPath();

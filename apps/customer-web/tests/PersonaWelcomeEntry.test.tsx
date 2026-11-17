@@ -54,6 +54,23 @@ it('shows a safe message when a ticket is expired or replayed', async () => {
   expect(screen.queryByRole('link', { name: 'Continue to sign in' })).not.toBeInTheDocument();
 });
 
+it('uses the protected recovery owner without exposing the replacement password', async () => {
+  const request = mount();
+  window.location.hash = 'tenant=T001&ticket=' + 'b'.repeat(64) + '&return=%2Fadvisor&mode=recovery';
+  await waitFor(() => expect(screen.getByText(/Choose a new password/)).toBeVisible());
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText('Password (15–128 characters)'), password);
+  await user.type(screen.getByLabelText('Confirm password'), password);
+  await user.click(screen.getByRole('button', { name: 'Set password' }));
+  await waitFor(() => { expect(request).toHaveBeenCalled(); });
+  const call = request.mock.calls.at(-1);
+  expect(call?.[0]).toBe('/identity-api/local/v1/persona-credentials/tester/recovery/confirm');
+  expect(JSON.parse(typeof call?.[1]?.body === 'string' ? call[1].body : '')).toEqual({
+    tenantId: 'T001', ticket: 'b'.repeat(64), newPassword: password,
+  });
+  expect(window.location.hash).toBe('');
+});
+
 it('consumes and clears a later welcome link opened in the same tab', async () => {
   mount();
   window.location.hash = 'tenant=T002&ticket=' + 'b'.repeat(64) + '&return=%2Faccess';

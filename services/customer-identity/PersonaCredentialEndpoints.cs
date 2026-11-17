@@ -97,8 +97,18 @@ public static class PersonaCredentialEndpoints
                     return Task.FromResult<object>(Results.StatusCode(403));
                 return owner.CreateWelcomeLinkAsync(r, h.RequestAborted);
             });
+            routes.MapPost("/tester/recovery-link", (PersonaTesterWelcomeRequest r,
+                PersonaTesterActivation owner, PersonaTesterActivationOptions options, HttpContext h) =>
+            {
+                if (!h.Request.Headers.TryGetValue("X-Monergy-Tester-Activation", out var supplied) ||
+                    supplied.Count != 1 || !options.Authorize(supplied.ToString()))
+                    return Task.FromResult<object>(Results.StatusCode(403));
+                return owner.CreateRecoveryLinkAsync(r, h.RequestAborted);
+            });
             routes.MapPost("/tester/activation/confirm", (PersonaTesterActivationConfirm r,
                 PersonaTesterActivation owner, HttpContext h) => owner.ActivateAsync(r, h.RequestAborted));
+            routes.MapPost("/tester/recovery/confirm", (PersonaTesterRecoveryConfirm r,
+                PersonaTesterActivation owner, HttpContext h) => owner.RecoverAsync(r, h.RequestAborted));
         }
     }
 }

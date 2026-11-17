@@ -291,7 +291,9 @@ static string? Route(string path, string method)
                 "/identity-api/local/v1/persona-credentials/recovery/request" or
                 "/identity-api/local/v1/persona-credentials/recovery/confirm" or
                 "/identity-api/local/v1/persona-credentials/tester/welcome-link" or
-                "/identity-api/local/v1/persona-credentials/tester/activation/confirm" && method == "POST")
+                "/identity-api/local/v1/persona-credentials/tester/recovery-link" or
+                "/identity-api/local/v1/persona-credentials/tester/activation/confirm" or
+                "/identity-api/local/v1/persona-credentials/tester/recovery/confirm" && method == "POST")
         return "http://127.0.0.1:5101" + path[13..];
     if (path == "/identity-api/local/v1/me/workspace-setup" && method == "GET")
         return "http://127.0.0.1:5101" + path[13..];
@@ -350,7 +352,8 @@ static async Task ProxyAsync(HttpContext http, HttpClient client, Uri target)
         if (value.Count > 1 || value.ToString().Length > 256) throw new TenantBoundaryException("INVALID_HEADER", 400);
         if (value.Count == 1) request.Headers.Add(name, value.ToString());
     }
-    if (http.Request.Path == "/identity-api/local/v1/persona-credentials/tester/welcome-link")
+    if (http.Request.Path == "/identity-api/local/v1/persona-credentials/tester/welcome-link" ||
+        http.Request.Path == "/identity-api/local/v1/persona-credentials/tester/recovery-link")
     {
         var value = http.Request.Headers["X-Monergy-Tester-Activation"];
         if (value.Count > 1 || value.ToString().Length > 256)

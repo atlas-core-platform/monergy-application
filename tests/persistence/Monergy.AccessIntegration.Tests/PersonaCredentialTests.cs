@@ -94,6 +94,28 @@ public sealed class PersonaCredentialTests
     }
 
     [Fact]
+    public async Task ProtectedTesterRecoveryChangesPasswordRevokesVersionAndIsSingleUse()
+    {
+        var fixture = new Fixture();
+        var owner = new PersonaTesterActivation(fixture.Repository, fixture.Protector,
+            fixture.Passwords, TimeProvider.System);
+        var created = await owner.CreateRecoveryLinkAsync(
+            new("T001", "a300@example.test", "/advisor", new string('c', 32)), default);
+        var path = Assert.IsType<string>(created.GetType().GetProperty("welcomePath")!.GetValue(created));
+        Assert.EndsWith("&mode=recovery", path, StringComparison.Ordinal);
+        var ticket = path.Split("ticket=", StringSplitOptions.None)[1].Split('&')[0];
+
+        var recovered = await owner.RecoverAsync(
+            new("T001", ticket, "a replacement password 2026!"), default);
+        Assert.Equal(true, recovered.GetType().GetProperty("recovered")!.GetValue(recovered));
+        Assert.True(fixture.Passwords.Verify(fixture.Repository.Identity!.PasswordHash,
+            "a replacement password 2026!"));
+        Assert.Equal(2, fixture.Repository.Identity.CredentialVersion);
+        await Assert.ThrowsAsync<TenantAccessException>(() => owner.RecoverAsync(
+            new("T001", ticket, "another replacement password 2026!"), default));
+    }
+
+    [Fact]
     public async Task TesterWelcomeRetryReusesSameSecretDerivedTicketAndExpiry()
     {
         var fixture = new Fixture();
@@ -230,6 +252,13 @@ public sealed class PersonaCredentialTests
             Queued = challenge;
             return Task.FromResult(testerExpiresAt);
         }
+        public Task<DateTimeOffset?> QueueTesterRecoveryAsync(
+            string tenant, RegistrationCode challenge, CancellationToken ct)
+        {
+            if (tenant != "T001" || Identity is null) return Task.FromResult<DateTimeOffset?>(null);
+            Queued = challenge;
+            return Task.FromResult<DateTimeOffset?>(challenge.RequestedAt.AddMinutes(5));
+        }
         public Task<string?> ActivateAsync(string tenant, string hash, string verifier, string passwordHash, CancellationToken ct)
         {
             if (Queued is null || Queued.ChallengeHash != hash || Queued.CodeHash != verifier || tenant != "T001")
@@ -252,6 +281,7 @@ public sealed class PersonaCredentialTests
             if (Queued?.ChallengeHash != hash || Queued.CodeHash != verifier || tenant != "T001")
                 return Task.FromResult(false);
             Identity = Identity! with { PasswordHash = newHash, CredentialVersion = Identity!.CredentialVersion + 1 };
+            Queued = null;
             return Task.FromResult(true);
         }
     }

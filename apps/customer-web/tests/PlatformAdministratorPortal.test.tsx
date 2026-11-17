@@ -20,6 +20,7 @@ const topology = {
   postures: [],
   services: [{ id: 'reporting', label: 'Reporting', implementation: 'Reports', available: true }],
 };
+const integrations = { revision: 0, providers: [{ code: 'email', displayName: 'Email delivery', category: 'Communication', enabled: false, scope: 'Platform', options: {}, secretReferences: [], subscriptionStatus: 'Not configured', readiness: 'Disabled', updatedAt: '1970-01-01T00:00:00Z' }] };
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -33,13 +34,13 @@ describe('Platform Administrator portal', () => {
       if (url.endsWith('/topology')) return Promise.resolve(json(topology));
       if (url.endsWith('/readiness')) return Promise.resolve(json({ gates: [] }));
       if (url.endsWith('/audit')) return Promise.resolve(json({ items: [] }));
+      if (url.endsWith('/integrations')) return Promise.resolve(json(integrations));
       throw new Error('Unexpected request: ' + url);
     }));
     const user = userEvent.setup();
     render(<PlatformAdministratorPortal />);
-    const key = screen.getByLabelText('Platform Administrator key');
-    await user.type(key, 'platform-key');
-    await user.click(screen.getByRole('button', { name: 'Open administration' }));
+    await user.type(screen.getByLabelText('Password'), 'Platform!Password123');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
 
     expect(await screen.findByRole('heading', { name: 'System status' })).toBeVisible();
     expect(screen.getByText(/cannot open organization or customer information/)).toBeVisible();
@@ -59,12 +60,13 @@ describe('Platform Administrator portal', () => {
       if (url.endsWith('/topology')) return Promise.resolve(json(topology));
       if (url.endsWith('/readiness')) return Promise.resolve(json({ gates: [] }));
       if (url.endsWith('/audit')) return Promise.resolve(json({ items: [] }));
+      if (url.endsWith('/integrations')) return Promise.resolve(json(integrations));
       throw new Error('Unexpected request: ' + url);
     }));
     const user = userEvent.setup();
     render(<PlatformAdministratorPortal />);
-    await user.type(screen.getByLabelText('Platform Administrator key'), 'platform-key');
-    await user.click(screen.getByRole('button', { name: 'Open administration' }));
+    await user.type(screen.getByLabelText('Password'), 'Platform!Password123');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByText('Your administrator access could not be confirmed. Sign in again.')).toBeVisible();
     expect(screen.queryByRole('heading', { name: 'System status' })).not.toBeInTheDocument();
   });
@@ -81,6 +83,7 @@ describe('Platform Administrator portal', () => {
       } : topology));
       if (url.endsWith('/readiness')) return Promise.resolve(json({ gates: [] }));
       if (url.endsWith('/audit')) return Promise.resolve(json({ items: changed ? [{ operationId: 'a'.repeat(32), serviceId: 'reporting', posture: 'Normal', note: 'Checking dependency.', actorId: 'A950', recordedAt: '2026-11-16T12:00:00Z', version: 1 }] : [] }));
+      if (url.endsWith('/integrations')) return Promise.resolve(json(integrations));
       if (url.includes('/posture')) {
         if (typeof options?.body !== 'string') throw new Error('Expected a JSON request body.');
         writes.push(JSON.parse(options.body));
@@ -91,8 +94,8 @@ describe('Platform Administrator portal', () => {
     }));
     const user = userEvent.setup();
     render(<PlatformAdministratorPortal />);
-    await user.type(screen.getByLabelText('Platform Administrator key'), 'platform-key');
-    await user.click(screen.getByRole('button', { name: 'Open administration' }));
+    await user.type(screen.getByLabelText('Password'), 'Platform!Password123');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
     await user.click(await screen.findByRole('button', { name: 'Add note' }));
     const dialog = within(await screen.findByRole('dialog'));
     await user.type(dialog.getByLabelText('Operational note'), 'Checking dependency.');
@@ -105,5 +108,34 @@ describe('Platform Administrator portal', () => {
     expect(writes[0]).not.toHaveProperty('tenantId');
     expect(writes[0]).not.toHaveProperty('permission');
     expect((await screen.findAllByText('Checking dependency.')).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('updates only non-secret provider metadata and secret reference names', async () => {
+    const writes: Record<string, unknown>[] = [];
+    vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith('/sessions')) return Promise.resolve(json(session));
+      if (url.endsWith('/context')) return Promise.resolve(json(context));
+      if (url.endsWith('/topology')) return Promise.resolve(json(topology));
+      if (url.endsWith('/readiness')) return Promise.resolve(json({ gates: [] }));
+      if (url.endsWith('/audit')) return Promise.resolve(json({ items: [] }));
+      if (url.endsWith('/integrations')) return Promise.resolve(json(integrations));
+      if (url.endsWith('/integrations/email')) {
+        if (typeof options?.body !== 'string') throw new Error('Expected provider JSON.');
+        writes.push(JSON.parse(options.body) as Record<string, unknown>);
+        return Promise.resolve(json({ ...integrations, revision: 1 }));
+      }
+      throw new Error('Unexpected request: ' + url);
+    }));
+    const user = userEvent.setup();
+    render(<PlatformAdministratorPortal />);
+    await user.type(screen.getByLabelText('Password'), 'Platform!Password123');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    await user.click(await screen.findByRole('button', { name: 'Configure' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    await user.type(dialog.getByLabelText('Secret reference names (comma separated)'), 'smtp-primary');
+    await user.click(dialog.getByRole('button', { name: 'Save configuration' }));
+    await waitFor(() => { expect(writes).toHaveLength(1); });
+    expect(writes[0]).toMatchObject({ expectedRevision: 0, secretReferences: ['smtp-primary'] });
+    expect(JSON.stringify(writes[0])).not.toMatch(/password|secretValue|credential/i);
   });
 });

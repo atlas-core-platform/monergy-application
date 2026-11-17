@@ -273,6 +273,57 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
         return Utc(written.ExpiresAt);
     }
 
+    public async Task<DateTimeOffset?> QueueTesterRecoveryAsync(
+        string tenant, RegistrationCode challenge, CancellationToken ct)
+    {
+        await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
+        await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
+        await db.ExecuteAsync(new CommandDefinition("""
+            SELECT pg_advisory_xact_lock(hashtextextended(@Email, 705905));
+            """, new { challenge.Email }, tx, cancellationToken: ct)).ConfigureAwait(false);
+
+        var replay = await db.QuerySingleOrDefaultAsync<TesterQueue>(new CommandDefinition("""
+            SELECT expires_at AS ExpiresAt
+            FROM customer_identity.registration_challenges
+            WHERE purpose='persona-recovery' AND email=@Email
+              AND challenge_hash=@ChallengeHash AND delivered AND NOT consumed
+              AND expires_at>clock_timestamp()
+            FOR UPDATE;
+            """, challenge, tx, cancellationToken: ct)).ConfigureAwait(false);
+        if (replay is not null)
+        {
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return Utc(replay.ExpiresAt);
+        }
+
+        var written = await db.QuerySingleOrDefaultAsync<TesterQueue>(new CommandDefinition("""
+            INSERT INTO customer_identity.registration_challenges AS c
+              (purpose,email,challenge_hash,code_hash,protected_code,requested_at,expires_at,
+               window_at,requests,delivered)
+            SELECT @Purpose,@Email,@ChallengeHash,@CodeHash,NULL,@RequestedAt,
+                   @RequestedAt+interval '5 minutes',@RequestedAt,1,true
+            WHERE @Purpose='persona-recovery' AND EXISTS (
+              SELECT 1 FROM customer_identity.tenant_principals p
+              JOIN customer_identity.persona_credentials pc ON pc.actor_id=p.actor_id
+              WHERE p.normalized_email=@Email
+                AND NOT EXISTS (
+                  SELECT 1 FROM customer_identity.registered_credentials r WHERE r.actor_id=p.actor_id)
+            )
+            ON CONFLICT(purpose,email) DO UPDATE
+            SET challenge_hash=EXCLUDED.challenge_hash,code_hash=EXCLUDED.code_hash,
+                protected_code=NULL,requested_at=EXCLUDED.requested_at,
+                expires_at=EXCLUDED.expires_at,
+                window_at=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN @RequestedAt ELSE c.window_at END,
+                requests=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN 1 ELSE c.requests+1 END,
+                attempts=0,consumed=false,delivered=true,delivery_attempt=0,lease_until=NULL
+            WHERE c.requested_at<=@RequestedAt-interval '1 minute'
+              AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5)
+            RETURNING c.expires_at AS ExpiresAt;
+            """, challenge, tx, cancellationToken: ct)).ConfigureAwait(false);
+        await tx.CommitAsync(ct).ConfigureAwait(false);
+        return written is null ? null : Utc(written.ExpiresAt);
+    }
+
     private static async Task<string?> ConsumeAsync(NpgsqlConnection db, NpgsqlTransaction tx,
         string purpose, string hash, string verifier, CancellationToken ct)
     {

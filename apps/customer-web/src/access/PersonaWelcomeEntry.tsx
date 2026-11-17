@@ -4,6 +4,7 @@ import { useLayoutEffect, useState } from 'react';
 interface Invitation {
   tenantId: string;
   ticket: string;
+  mode: 'activation' | 'recovery';
   returnPath: '/' | '/access' | '/advisor' | '/dsa' | '/lender' | '/financial-professional' | '/property-valuer' | '/legal-advisor' | '/operations-support';
 }
 interface Values { password: string; confirmation: string }
@@ -13,10 +14,11 @@ function readInvitation(): Invitation | null {
   const tenantId = values.get('tenant') ?? '';
   const ticket = values.get('ticket') ?? '';
   const returnPath = values.get('return') ?? '';
+  const mode = values.get('mode') === 'recovery' ? 'recovery' : 'activation';
   if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(tenantId) ||
       !/^[0-9a-f]{64}$/.test(ticket) ||
       !['/', '/access', '/advisor', '/dsa', '/lender', '/financial-professional', '/property-valuer', '/legal-advisor', '/operations-support'].includes(returnPath)) return null;
-  return { tenantId, ticket, returnPath: returnPath as Invitation['returnPath'] };
+  return { tenantId, ticket, mode, returnPath: returnPath as Invitation['returnPath'] };
 }
 
 export function PersonaWelcomeEntry() {
@@ -44,13 +46,15 @@ export function PersonaWelcomeEntry() {
     setPending(true);
     setMessage('');
     try {
-      const response = await fetch('/identity-api/local/v1/persona-credentials/tester/activation/confirm', {
+      const response = await fetch(invitation.mode === 'recovery'
+        ? '/identity-api/local/v1/persona-credentials/tester/recovery/confirm'
+        : '/identity-api/local/v1/persona-credentials/tester/activation/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tenantId: invitation.tenantId,
           ticket: invitation.ticket,
-          password: values.password,
+          [invitation.mode === 'recovery' ? 'newPassword' : 'password']: values.password,
         }),
         cache: 'no-store',
         redirect: 'error',
@@ -81,7 +85,9 @@ export function PersonaWelcomeEntry() {
           title="Your password is set. Sign in normally to verify your current role and workspace access." />
         <Button type="primary" href={destination}>Continue to sign in</Button>
       </> : invitation && <Form<Values> layout="vertical" onFinish={(values) => { void activate(values); }}>
-        <p>Your organization is <strong>{invitation.tenantId}</strong>. Choose your own password; your administrator cannot see it or sign in for you.</p>
+        <p>Your organization is <strong>{invitation.tenantId}</strong>. {invitation.mode === 'recovery'
+          ? 'Choose a new password. This ends your previous sessions; your administrator cannot see the password or sign in for you.'
+          : 'Choose your own password; your administrator cannot see it or sign in for you.'}</p>
         <Form.Item name="password" label="Password (15–128 characters)"
           rules={[{ required: true }, { min: 15, max: 128 }]}>
           <Input.Password autoComplete="new-password" maxLength={128} disabled={pending} />

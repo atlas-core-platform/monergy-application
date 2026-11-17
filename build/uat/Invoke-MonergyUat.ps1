@@ -483,9 +483,9 @@ if ($Action -eq 'Credentials') {
     if ($Actor -eq 'A950') {
         if ($null -eq $state.PSObject.Properties['platformAuthority'] -or
             $state.platformAuthority.actorId -ne 'A950' -or [string]::IsNullOrWhiteSpace([string]$state.platformAuthority.token)) {
-            throw 'The selected profile has no valid Platform Administrator key.'
+            throw 'The selected profile has no valid protected Platform tester authorization.'
         }
-        Write-Host 'Local UAT only | Platform authority | Actor A950 | Persona Platform Administrator'
+        Write-Host 'Local UAT only | protected Platform activation authorization | Actor A950 | not a login credential'
         Write-Output $state.platformAuthority.token
         return
     }
@@ -732,7 +732,7 @@ if ($Action -in @('Prepare','Start')) {
         }
         Save-Json "delivery-$tenantId.json" $delivery
     }
-    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' }; PlatformAdministration=@{ AccessKey=$state.platformAuthority.token; OperationsPath='/var/lib/monergy-onboarding/platform-operations.json' } } }
+    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' }; PlatformAdministration=@{ AccessKey=$state.platformAuthority.token; TesterCredential=$state.platformAuthority.token; AdministratorEmail='a950.platform@example.test'; OperationsPath='/var/lib/monergy-onboarding/platform-operations.json'; CredentialsPath='/var/lib/monergy-onboarding/platform-credentials.json'; IntegrationsPath='/var/lib/monergy-onboarding/integration-configuration.json' } } }
     if ($onboarding) {
         $workspace.Monergy.AccessIntegration=@{
             Enabled='true'; CustomerRelationships='true'; AccessManagementUrl='http://127.0.0.1:5088/'
@@ -1063,7 +1063,7 @@ Write-Host "Local access administration is ready: $url/access"
 Write-Host 'Administration, identities, sessions and access audit persist across Stop/Start.'
 Write-Host 'Business reference data is illustrative and may reset. Production readiness remains blocked.'
 Write-Host "Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A900"
-Write-Host "Show the Platform Administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Actor A950"
+Write-Host "Show the protected Platform tester authorization: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Actor A950"
 if ($onboarding) { Write-Host "Show the customer key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A100" }
 if ($onboarding) { Write-Host "Show the DSA / Case Manager key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A400" }
 if ($onboarding) { Write-Host "Show the Lender Professional key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A500" }
@@ -1072,6 +1072,19 @@ if ($onboarding) { Write-Host "Show the Property Valuer key: ./build/uat/Invoke-
 if ($onboarding) { Write-Host "Show the Legal Advisor key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A800" }
 if ($onboarding) { Write-Host "Show the Operations Support key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A850" }
 if ($Action -eq 'Welcome') {
+    if ($Actor -eq 'A950') {
+        $request = @{ email='a950.platform@example.test' } | ConvertTo-Json -Compress
+        $headers = @{ 'X-Monergy-Platform-Tester'=[string]$state.platformAuthority.token }
+        $welcome = Invoke-RestMethod "$url/platform-api/local/v1/credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
+        if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/platform\?ticket=[0-9a-f]{64}$') {
+            throw 'The Platform credential owner did not return a valid protected welcome path.'
+        }
+        $target = $url + $welcome.welcomePath
+        if ($windows) { Start-Process $target }
+        else { & xdg-open $target | Out-Null }
+        Write-Host 'Opened the single-use Platform Administrator welcome page. The tester authorization and activation ticket were not printed.'
+        return
+    }
     foreach ($name in @('personaTesterAccess','personaTesterChallenge')) {
         if ($null -eq $state.tokens.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$state.tokens.$name)) {
             throw 'This profile does not contain protected tester activation credentials.'

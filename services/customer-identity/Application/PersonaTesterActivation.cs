@@ -5,6 +5,7 @@ namespace Monergy.Services.CustomerIdentity.Application;
 
 public sealed record PersonaTesterWelcomeRequest(string TenantId, string Email, string ReturnPath, string RequestId);
 public sealed record PersonaTesterActivationConfirm(string TenantId, string Ticket, string Password);
+public sealed record PersonaTesterRecoveryConfirm(string TenantId, string Ticket, string NewPassword);
 
 public sealed class PersonaTesterActivationOptions
 {
@@ -51,11 +52,7 @@ public sealed class PersonaTesterActivation(
     {
         TenantAccessProtocol.Identifier(request.TenantId, 64);
         var email = CustomerEmailAccess.NormalizeEmail(request.Email);
-        if (!ReturnPaths.Contains(request.ReturnPath))
-            throw new TenantAccessException("WELCOME_DESTINATION_INVALID", 400);
-        if (request.RequestId is null || request.RequestId.Length != 32 ||
-            request.RequestId.Any(static value => !char.IsAsciiHexDigitLower(value)))
-            throw new TenantAccessException("WELCOME_REQUEST_ID_INVALID", 400);
+        ValidateRequest(request);
         // The request ID is not a bearer secret. It is combined with the
         // owner-side key, tenant and recipient to derive a stable retry ticket
         // without storing the raw ticket or reply in PostgreSQL.
@@ -73,6 +70,25 @@ public sealed class PersonaTesterActivation(
         return new { welcomePath = path, expiresAt = expiresAt.Value };
     }
 
+    public async Task<object> CreateRecoveryLinkAsync(PersonaTesterWelcomeRequest request, CancellationToken ct)
+    {
+        TenantAccessProtocol.Identifier(request.TenantId, 64);
+        var email = CustomerEmailAccess.NormalizeEmail(request.Email);
+        ValidateRequest(request);
+        var ticket = protector.DeriveTesterTicket(request.TenantId, email, "recovery\n" + request.RequestId);
+        var hash = CustomerEmailCodeProtector.ChallengeHash(ticket);
+        var now = clock.GetUtcNow();
+        var expiresAt = await repository.QueueTesterRecoveryAsync(request.TenantId, new(
+            "persona-recovery", email, hash,
+            protector.Verifier(request.TenantId + ":persona-recovery", ticket, ticket),
+            [], now), ct).ConfigureAwait(false);
+        if (expiresAt is null)
+            throw new TenantAccessException("RECOVERY_LINK_NOT_AVAILABLE", 409);
+        var path = "/welcome#tenant=" + Uri.EscapeDataString(request.TenantId) +
+            "&ticket=" + ticket + "&return=" + Uri.EscapeDataString(request.ReturnPath) + "&mode=recovery";
+        return new { welcomePath = path, expiresAt = expiresAt.Value };
+    }
+
     public async Task<object> ActivateAsync(PersonaTesterActivationConfirm request, CancellationToken ct)
     {
         TenantAccessProtocol.Identifier(request.TenantId, 64);
@@ -85,5 +101,28 @@ public sealed class PersonaTesterActivation(
             passwordHash, ct).ConfigureAwait(false);
         if (actor is null) throw new TenantAccessException("WELCOME_LINK_INVALID", 401);
         return new { activated = true };
+    }
+
+    public async Task<object> RecoverAsync(PersonaTesterRecoveryConfirm request, CancellationToken ct)
+    {
+        TenantAccessProtocol.Identifier(request.TenantId, 64);
+        if (request.Ticket.Length != 64 || request.Ticket.Any(static value => !Uri.IsHexDigit(value)))
+            throw new TenantAccessException("RECOVERY_LINK_INVALID", 401);
+        var passwordHash = passwords.Hash(request.NewPassword);
+        var recovered = await repository.RecoverAsync(request.TenantId,
+            CustomerEmailCodeProtector.ChallengeHash(request.Ticket),
+            protector.Verifier(request.TenantId + ":persona-recovery", request.Ticket, request.Ticket),
+            passwordHash, ct).ConfigureAwait(false);
+        if (!recovered) throw new TenantAccessException("RECOVERY_LINK_INVALID", 401);
+        return new { recovered = true };
+    }
+
+    private static void ValidateRequest(PersonaTesterWelcomeRequest request)
+    {
+        if (!ReturnPaths.Contains(request.ReturnPath))
+            throw new TenantAccessException("WELCOME_DESTINATION_INVALID", 400);
+        if (request.RequestId is null || request.RequestId.Length != 32 ||
+            request.RequestId.Any(static value => !char.IsAsciiHexDigitLower(value)))
+            throw new TenantAccessException("WELCOME_REQUEST_ID_INVALID", 400);
     }
 }

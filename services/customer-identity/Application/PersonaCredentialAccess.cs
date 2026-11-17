@@ -16,6 +16,7 @@ public interface IPersonaCredentialRepository
 {
     Task QueueAsync(string tenant, RegistrationCode challenge, CancellationToken ct);
     Task<DateTimeOffset?> QueueTesterAsync(string tenant, RegistrationCode challenge, CancellationToken ct);
+    Task<DateTimeOffset?> QueueTesterRecoveryAsync(string tenant, RegistrationCode challenge, CancellationToken ct);
     Task<string?> ActivateAsync(string tenant, string hash, string verifier, string passwordHash, CancellationToken ct);
     Task<PersonaCredentialIdentity?> ReadAsync(string tenant, string email, CancellationToken ct);
     Task<bool> RecordAttemptAsync(PersonaCredentialIdentity identity, bool valid, CancellationToken ct);
