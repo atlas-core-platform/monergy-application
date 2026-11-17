@@ -239,9 +239,11 @@ public sealed class DriveConnectionApplication(DriveConnectionStore store, IDriv
     {
         if (governed is not null)
         {
-            var adopted = await governed.ReadAsync("onedrive", tenant, ct).ConfigureAwait(false);
-            if (adopted is not null)
+            var decision = await governed.ReadAsync("onedrive", tenant, ct).ConfigureAwait(false);
+            if (!decision.LegacyFallbackAllowed)
             {
+                var adopted = decision.Configuration ??
+                    throw new InvalidOperationException("GOVERNED_PROVIDER_NOT_AVAILABLE");
                 var governedConfig = new DriveConfiguration(adopted.ClientId ?? "", adopted.Secret, adopted.CallbackUri ?? "");
                 governedConfig.Validate();
                 return governedConfig;

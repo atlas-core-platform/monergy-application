@@ -1,4 +1,6 @@
 using System.Buffers.Binary;
+using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Monergy.Platform;
 using Monergy.Platform.ControlPlane;
@@ -137,6 +139,27 @@ public sealed class PlatformOperationsTests
     }
 
     [Fact]
+    public async Task GovernedProviderClientAllowsLegacyOnlyForExplicitNeverAdoptedEnvelope()
+    {
+        const string token = "runtime-token-longer-than-thirty-two-characters";
+        using var neverAdopted = Client(HttpStatusCode.OK, GovernedProviderConfigurationDecision.NeverAdopted(), token);
+        var legacy = await neverAdopted.ReadAsync("email", "T001", default);
+        Assert.True(legacy.LegacyFallbackAllowed);
+        Assert.Equal(GovernedProviderAdoptionStates.NeverAdopted, legacy.State);
+
+        using var disabled = Client(HttpStatusCode.OK, GovernedProviderConfigurationDecision.Unavailable(
+            GovernedProviderAdoptionStates.Disabled), token);
+        var adopted = await disabled.ReadAsync("email", "T001", default);
+        Assert.False(adopted.LegacyFallbackAllowed);
+        Assert.Null(adopted.Configuration);
+
+        using var ambiguous404 = Client(HttpStatusCode.NotFound, null, token);
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            ambiguous404.ReadAsync("email", "T001", default));
+        Assert.Equal("GOVERNED_PROVIDER_CONFIGURATION_UNAVAILABLE", failure.Message);
+    }
+
+    [Fact]
     public async Task PostureChangesAreVersionedIdempotentAndAuditable()
     {
         var path = TemporaryPath();
@@ -210,6 +233,19 @@ public sealed class PlatformOperationsTests
 
     private static string TemporaryPath() =>
         Path.Combine(Path.GetTempPath(), "monergy-platform-operations-" + Guid.NewGuid().ToString("N") + ".json");
+
+    private static GovernedProviderConfigurationClient Client(HttpStatusCode status,
+        GovernedProviderConfigurationDecision? body, string token)
+    {
+        var http = new HttpClient(new ResponseHandler(status, body)) { BaseAddress = new Uri("http://127.0.0.1:4173/") };
+        return new GovernedProviderConfigurationClient(http, token);
+    }
+
+    private sealed class ResponseHandler(HttpStatusCode status, GovernedProviderConfigurationDecision? body) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(status) { Content = body is null ? null : JsonContent.Create(body) });
+    }
 
     private sealed class FixedClock : TimeProvider
     {

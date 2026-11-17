@@ -199,16 +199,32 @@ internal static class PlatformAdministrationEndpoints
         {
             if (!AuthorizedRuntime(http, runtime.Token)) return Results.StatusCode(403);
             var snapshot = await integrations.ReadAsync(http.RequestAborted).ConfigureAwait(false);
-            var provider = snapshot.Providers.SingleOrDefault(item => item.Code == code && item.Enabled &&
-                (item.Scope == "Platform" || item.Scope == "Organization" &&
-                    item.Options.TryGetValue("tenantId", out var binding) && binding == tenant));
-            if (provider is null || provider.SecretReferences.Count != 1) return Results.NotFound();
-            var secret = await secrets.ResolveAsync(provider.SecretReferences[0], http.RequestAborted).ConfigureAwait(false);
-            if (secret is null) return Results.NotFound();
+            var provider = snapshot.Providers.SingleOrDefault(item => item.Code == code);
+            if (provider is null) return Results.NotFound();
             http.Response.Headers.CacheControl = "no-store";
-            return Results.Ok(new GovernedProviderRuntimeConfiguration(provider.Code, provider.Scope,
+            if (provider.Revision == 0) return Results.Ok(GovernedProviderConfigurationDecision.NeverAdopted());
+            if (provider.Scope == "Organization" &&
+                (!provider.Options.TryGetValue("tenantId", out var binding) || binding != tenant))
+                return Results.Ok(GovernedProviderConfigurationDecision.Unavailable(
+                    GovernedProviderAdoptionStates.OrganizationMismatch));
+            if (!provider.Enabled) return Results.Ok(GovernedProviderConfigurationDecision.Unavailable(
+                GovernedProviderAdoptionStates.Disabled));
+            if (provider.Readiness == "Configuration incomplete")
+                return Results.Ok(GovernedProviderConfigurationDecision.Unavailable(
+                    GovernedProviderAdoptionStates.ConfigurationIncomplete));
+            if (provider.SecretReferences.Count != 1)
+                return Results.Ok(GovernedProviderConfigurationDecision.Unavailable(
+                    GovernedProviderAdoptionStates.SecretUnavailable));
+            string? secret;
+            try { secret = await secrets.ResolveAsync(provider.SecretReferences[0], http.RequestAborted).ConfigureAwait(false); }
+            catch (InvalidOperationException)
+            { return Results.Ok(GovernedProviderConfigurationDecision.Unavailable(
+                GovernedProviderAdoptionStates.SecretUnavailable)); }
+            if (secret is null) return Results.Ok(GovernedProviderConfigurationDecision.Unavailable(
+                GovernedProviderAdoptionStates.SecretUnavailable));
+            return Results.Ok(GovernedProviderConfigurationDecision.Ready(new GovernedProviderRuntimeConfiguration(provider.Code, provider.Scope,
                 provider.Scope == "Organization" ? tenant : null, provider.Enabled, provider.Revision,
-                provider.Endpoint, provider.ClientId, provider.CallbackUri, provider.Model, provider.Options, secret));
+                provider.Endpoint, provider.ClientId, provider.CallbackUri, provider.Model, provider.Options, secret)));
         });
         app.MapGet("/uat-api/v1/connected-services", async (HttpContext http, TenantAccessClient access,
             FileIntegrationConfigurationStore integrations) =>
@@ -255,8 +271,18 @@ internal static class PlatformAdministrationEndpoints
                 ? await secrets.MetadataAsync(provider.SecretReferences[0], ct).ConfigureAwait(false)
                 : new ProtectedSecretMetadata(string.Empty, false, null, null);
             var readiness = provider.Readiness;
-            if (provider.Enabled && metadata.Configured && readiness == "Configuration complete — not yet tested")
-                readiness = await OwnerReadinessAsync(provider, runtime.Token, client, ct).ConfigureAwait(false);
+            if (provider.Enabled && readiness == "Configuration complete — not yet tested")
+            {
+                var resolved = false;
+                if (metadata.Configured)
+                {
+                    try { resolved = await secrets.ResolveAsync(provider.SecretReferences[0], ct).ConfigureAwait(false) is not null; }
+                    catch (InvalidOperationException) { }
+                }
+                readiness = resolved
+                    ? await OwnerReadinessAsync(provider, runtime.Token, client, ct).ConfigureAwait(false)
+                    : "Secret missing/unresolved";
+            }
             views.Add(new(provider.Code, provider.DisplayName, provider.Category, provider.Enabled, provider.Scope,
                 provider.Endpoint, provider.ClientId, provider.CallbackUri, provider.Model, provider.Options,
                 metadata.Configured, metadata.UpdatedAt, provider.SubscriptionStatus, readiness,

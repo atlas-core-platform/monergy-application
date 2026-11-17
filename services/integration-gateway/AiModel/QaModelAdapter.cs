@@ -24,9 +24,11 @@ public sealed class QaModelAdapter(IConfiguration configuration, HttpClient clie
     {
         if (governed is not null)
         {
-            var adopted = await governed.ReadAsync("ai", tenant, ct).ConfigureAwait(false);
-            if (adopted is not null)
+            var decision = await governed.ReadAsync("ai", tenant, ct).ConfigureAwait(false);
+            if (!decision.LegacyFallbackAllowed)
             {
+                var adopted = decision.Configuration ??
+                    throw new InvalidOperationException("GOVERNED_PROVIDER_NOT_AVAILABLE");
                 var adoptedLabel = adopted.Options.TryGetValue("providerLabel", out var providerLabel) ? providerLabel : "";
                 var adoptedNotice = adopted.Options.TryGetValue("notice", out var providerNotice) ? providerNotice : "";
                 if (!Valid(adopted.Endpoint, adopted.Model, adopted.Secret, adoptedLabel, adoptedNotice, out var adoptedEndpoint))

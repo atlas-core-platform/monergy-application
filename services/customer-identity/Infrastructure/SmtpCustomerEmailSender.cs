@@ -31,13 +31,15 @@ public sealed class GovernedSmtpConfigurationOwner(
 {
     public async Task<CustomerEmailDeliveryOptions> ResolveAsync(string tenant, CancellationToken ct)
     {
-        var adopted = await governed.ReadAsync("email", tenant, ct).ConfigureAwait(false);
-        if (adopted is null)
+        var decision = await governed.ReadAsync("email", tenant, ct).ConfigureAwait(false);
+        if (decision.LegacyFallbackAllowed)
         {
             if (configuration["Monergy:CustomerEmailAccess:Enabled"] != "true")
                 throw new InvalidOperationException("GOVERNED_PROVIDER_NOT_CONFIGURED");
             return CustomerEmailDeliveryOptions.Read(configuration);
         }
+        var adopted = decision.Configuration ??
+            throw new InvalidOperationException("GOVERNED_PROVIDER_NOT_AVAILABLE");
         if (!Uri.TryCreate(adopted.Endpoint, UriKind.Absolute, out var endpoint) || endpoint.Scheme != "smtp" ||
             Uri.CheckHostName(endpoint.Host) == UriHostNameType.Unknown || endpoint.Port is < 1 or > 65535 ||
             string.IsNullOrWhiteSpace(adopted.ClientId) || adopted.ClientId.Length > 320 || adopted.ClientId.Any(char.IsControl) ||

@@ -223,30 +223,61 @@ test('governed provider secrets are one-way and all four runtime owners report t
     email: 'smtp-secret-not-for-responses', google: 'google-secret-not-for-responses',
     onedrive: 'onedrive-secret-not-for-responses', ai: 'ai-secret-not-for-responses',
   };
+  const providerData: Record<string, Record<string, unknown>> = {
+    email: { endpoint: 'smtp://mail.local.test:2525', clientId: 'local-mail-user',
+      callbackUri: 'sender@example.test', model: null, options: { tenantId } },
+    'google-drive': { endpoint: null, clientId: 'local-google-client',
+      callbackUri: 'http://127.0.0.1:4322/connections-api/local/v1/google-drive/callback', model: null,
+      options: { tenantId } },
+    onedrive: { endpoint: null, clientId: 'local-onedrive-client',
+      callbackUri: 'http://127.0.0.1:4322/connections-api/local/v1/onedrive/callback', model: null,
+      options: { tenantId } },
+    ai: { endpoint: 'https://model.local.example.test/v1/chat/completions', clientId: null,
+      callbackUri: null, model: 'local-deterministic', options: { tenantId,
+        providerLabel: 'LOCAL deterministic fixture',
+        notice: 'LOCAL deterministic contract; not a Production provider approval.' } },
+  };
   const acceptedOperationIds: string[] = [];
   const configure = async (code: string, data: Record<string, unknown>) => {
     const operationId = randomUUID().replaceAll('-', '');
     const result = await page.request.put('/platform-api/local/v1/integrations/' + code, { headers, data: {
       operationId, expectedRevision: revision, enabled: true,
-      scope: 'Organization', subscriptionStatus: 'Configured', clearSecret: false, ...data,
+      scope: 'Organization', subscriptionStatus: 'Configured', secretValue: null, clearSecret: false, ...data,
     } });
-    expect(result.status(), code).toBe(200);
-    revision = (await result.json() as { revision: number }).revision;
+    const responseBody = await result.text();
+    let safeError = '';
+    try {
+      const problem = JSON.parse(responseBody) as { error?: string; title?: string };
+      safeError = problem.error ?? problem.title ?? '';
+    } catch { /* Never print an unstructured response that could contain diagnostics. */ }
+    expect(result.status(), safeError ? `${code}: ${safeError}` : code).toBe(200);
+    const snapshot = JSON.parse(responseBody) as { revision: number; providers: {
+      code: string; readiness: string; secretConfigured: boolean;
+    }[] };
+    revision = snapshot.revision;
     acceptedOperationIds.push(operationId);
+    return snapshot.providers.find(provider => provider.code === code)!;
   };
-  await configure('email', { endpoint: 'smtp://mail.local.test:2525', clientId: 'local-mail-user',
-    callbackUri: 'sender@example.test', model: null, options: { tenantId }, secretValue: secrets.email });
-  await configure('email', { endpoint: 'smtp://mail.local.test:2525', clientId: 'local-mail-user',
-    callbackUri: 'sender@example.test', model: null, options: { tenantId }, secretValue: 'smtp-replacement-not-for-responses' });
-  await configure('google-drive', { endpoint: null, clientId: 'local-google-client',
-    callbackUri: 'http://127.0.0.1:4322/connections-api/local/v1/google-drive/callback', model: null,
-    options: { tenantId }, secretValue: secrets.google });
-  await configure('onedrive', { endpoint: null, clientId: 'local-onedrive-client',
-    callbackUri: 'http://127.0.0.1:4322/connections-api/local/v1/onedrive/callback', model: null,
-    options: { tenantId }, secretValue: secrets.onedrive });
-  await configure('ai', { endpoint: 'https://model.local.example.test/v1/chat/completions', clientId: null,
-    callbackUri: null, model: 'local-deterministic', options: { tenantId, providerLabel: 'LOCAL deterministic fixture',
-      notice: 'LOCAL deterministic contract; not a Production provider approval.' }, secretValue: secrets.ai });
+  await configure('email', { ...providerData.email, secretValue: secrets.email });
+  await configure('email', { ...providerData.email, secretValue: 'smtp-replacement-not-for-responses' });
+  await configure('google-drive', { ...providerData['google-drive'], secretValue: secrets.google });
+  await configure('onedrive', { ...providerData.onedrive, secretValue: secrets.onedrive });
+  await configure('ai', { ...providerData.ai, secretValue: secrets.ai });
+
+  const repairedSecrets: string[] = [];
+  for (const code of ['email', 'google-drive', 'onedrive', 'ai']) {
+    const disabled = await configure(code, { ...providerData[code], enabled: false });
+    expect(disabled.readiness, code + ' disabled').toBe('Not configured');
+    const reenabled = await configure(code, { ...providerData[code] });
+    expect(reenabled.readiness, code + ' re-enabled').toBe('Ready');
+    const cleared = await configure(code, { ...providerData[code], clearSecret: true });
+    expect(cleared.secretConfigured, code + ' cleared secret').toBe(false);
+    expect(cleared.readiness, code + ' cleared secret').toBe('Secret missing/unresolved');
+    const repairedSecret = code + '-repaired-secret-not-for-responses';
+    repairedSecrets.push(repairedSecret);
+    const repaired = await configure(code, { ...providerData[code], secretValue: repairedSecret });
+    expect(repaired.readiness, code + ' repaired').toBe('Ready');
+  }
   const staleOperationId = randomUUID().replaceAll('-', '');
   expect((await page.request.put('/platform-api/local/v1/integrations/ai', {
     headers, data: { operationId: staleOperationId, expectedRevision: before.revision, enabled: true,
@@ -258,7 +289,8 @@ test('governed provider secrets are one-way and all four runtime owners report t
   const body = await configuration.text();
   expect(body).toContain('secretConfigured');
   expect(body.match(/"readiness":"Ready"/g)).toHaveLength(4);
-  for (const secret of [...Object.values(secrets), 'smtp-replacement-not-for-responses', 'stale-secret-must-not-persist'])
+  for (const secret of [...Object.values(secrets), ...repairedSecrets,
+    'smtp-replacement-not-for-responses', 'stale-secret-must-not-persist'])
     expect(body).not.toContain(secret);
   expect(body).not.toMatch(/secretReferences|password|authorization/i);
   const audit = await (await page.request.get('/platform-api/local/v1/audit', { headers })).text();
@@ -267,7 +299,8 @@ test('governed provider secrets are one-way and all four runtime owners report t
   expect(audit).toContain('ConfigurationChangeRejected');
   expect(audit).toContain('Conflict');
   expect(audit).toContain('Organization');
-  for (const secret of [...Object.values(secrets), 'smtp-replacement-not-for-responses', 'stale-secret-must-not-persist'])
+  for (const secret of [...Object.values(secrets), ...repairedSecrets,
+    'smtp-replacement-not-for-responses', 'stale-secret-must-not-persist'])
     expect(audit).not.toContain(secret);
   expect(audit).not.toMatch(/passwordHash|provider-secret-value|authorizationHeader|activationTicket|testerCredential/i);
   const browserStorage = await page.evaluate(() => JSON.stringify({
