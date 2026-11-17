@@ -74,12 +74,26 @@ public sealed class PlatformOperationsTests
             var provider = Assert.Single(changed.Providers, item => item.Code == "email");
             Assert.Equal("T001", provider.Options["tenantId"]);
             Assert.Equal(["smtp-primary"], provider.SecretReferences);
+            var succeeded = Assert.Single(await store.AuditAsync(default));
+            Assert.Equal("Organization", succeeded.Scope);
+            Assert.Equal("ConfigurationChanged", succeeded.Action);
+            Assert.Equal("Succeeded", succeeded.Result);
             var persisted = await File.ReadAllTextAsync(path);
             Assert.DoesNotContain("password", persisted, StringComparison.OrdinalIgnoreCase);
+            var staleOperationId = Guid.NewGuid().ToString("N");
             var stale = await Assert.ThrowsAsync<InvalidOperationException>(() => store.ChangeAsync(new(
-                Guid.NewGuid().ToString("N"), 0, "ai", true, "Platform", null, null, null, "model", null,
+                staleOperationId, 0, "ai", true, "Platform", null, null, null, "model", null,
                 ["ai-primary"], "Configured", "A950"), default));
             Assert.Equal("INTEGRATION_CONFIGURATION_CONFLICT", stale.Message);
+            var rejected = Assert.Single(await store.AuditAsync(default), item => item.OperationId == staleOperationId);
+            Assert.Equal("Platform", rejected.Scope);
+            Assert.Equal("ConfigurationChangeRejected", rejected.Action);
+            Assert.Equal("Conflict", rejected.Result);
+            var repeated = await Assert.ThrowsAsync<InvalidOperationException>(() => store.ChangeAsync(new(
+                staleOperationId, 0, "ai", true, "Platform", null, null, null, "model", null,
+                ["ai-primary"], "Configured", "A950"), default));
+            Assert.Equal("INTEGRATION_CONFIGURATION_CONFLICT", repeated.Message);
+            Assert.Equal(2, (await store.AuditAsync(default)).Count);
         }
         finally { if (File.Exists(path)) File.Delete(path); }
     }

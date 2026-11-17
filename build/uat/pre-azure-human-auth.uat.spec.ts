@@ -179,8 +179,9 @@ test('platform provider metadata is versioned, audited and secret values are nev
     scope: 'Organization', endpoint: 'https://smtp.example.test', clientId: 'local-mail', callbackUri: null,
     model: null, options: { tenantId }, secretReferences: ['smtp-primary'], subscriptionStatus: 'Configured' };
   expect((await page.request.put('/platform-api/local/v1/integrations/email', { headers, data: change })).status()).toBe(200);
+  const staleOperationId = randomUUID().replaceAll('-', '');
   expect((await page.request.put('/platform-api/local/v1/integrations/ai', {
-    headers, data: { ...change, operationId: randomUUID().replaceAll('-', ''), expectedRevision: before.revision },
+    headers, data: { ...change, operationId: staleOperationId, expectedRevision: before.revision },
   })).status()).toBe(409);
   const configuration = await page.request.get('/platform-api/local/v1/integrations', { headers });
   const body = await configuration.text();
@@ -188,6 +189,10 @@ test('platform provider metadata is versioned, audited and secret values are nev
   expect(body).not.toMatch(/password|provider-secret-value|authorization/i);
   const audit = await (await page.request.get('/platform-api/local/v1/audit', { headers })).text();
   expect(audit).toContain(change.operationId);
+  expect(audit).toContain(staleOperationId);
+  expect(audit).toContain('ConfigurationChangeRejected');
+  expect(audit).toContain('Conflict');
+  expect(audit).toContain('Organization');
   expect(audit).not.toMatch(/passwordHash|provider-secret-value|authorizationHeader|activationTicket|testerCredential/i);
   const browserStorage = await page.evaluate(() => JSON.stringify({
     local: Object.fromEntries(Object.entries(localStorage)),

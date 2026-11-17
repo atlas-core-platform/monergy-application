@@ -198,7 +198,15 @@ public sealed record IntegrationProviderChange(
     IReadOnlyDictionary<string, string>? Options, IReadOnlyList<string>? SecretReferences,
     string SubscriptionStatus, string ActorId);
 public sealed record IntegrationAuditReceipt(
-    string OperationId, string ProviderCode, long Revision, string ActorId, DateTimeOffset RecordedAt);
+    string OperationId, string ProviderCode, long Revision, string ActorId, DateTimeOffset RecordedAt)
+{
+    // Initial LOCAL receipts predate these explicit governance fields. The
+    // defaults preserve their successful meaning when a retained profile is
+    // read after upgrade without rewriting historical evidence.
+    public string Scope { get; init; } = "Platform";
+    public string Action { get; init; } = "ConfigurationChanged";
+    public string Result { get; init; } = "Succeeded";
+}
 
 public sealed class FileIntegrationConfigurationStore : IDisposable
 {
@@ -247,10 +255,23 @@ public sealed class FileIntegrationConfigurationStore : IDisposable
             var replay = state.Receipts.SingleOrDefault(item => item.OperationId == change.OperationId);
             if (replay is not null)
             {
-                if (replay.ProviderCode != change.Code) throw new InvalidOperationException("INTEGRATION_OPERATION_REPLAY_CONFLICT");
+                if (replay.ProviderCode != change.Code || replay.Scope != change.Scope || replay.ActorId != change.ActorId)
+                    throw new InvalidOperationException("INTEGRATION_OPERATION_REPLAY_CONFLICT");
+                if (replay.Result == "Conflict")
+                    throw new InvalidOperationException("INTEGRATION_CONFIGURATION_CONFLICT");
                 return Snapshot(state);
             }
-            if (state.Revision != change.ExpectedRevision) throw new InvalidOperationException("INTEGRATION_CONFIGURATION_CONFLICT");
+            if (state.Revision != change.ExpectedRevision)
+            {
+                state.Receipts.Add(new(change.OperationId, change.Code, state.Revision, change.ActorId, clock.GetUtcNow())
+                {
+                    Scope = change.Scope,
+                    Action = "ConfigurationChangeRejected",
+                    Result = "Conflict"
+                });
+                await AtomicJson.SaveAsync(path, state, Json, cancellationToken).ConfigureAwait(false);
+                throw new InvalidOperationException("INTEGRATION_CONFIGURATION_CONFLICT");
+            }
             var template = Catalog.Single(item => item.Code == change.Code);
             var revision = checked(state.Revision + 1);
             var updatedAt = clock.GetUtcNow();
@@ -262,7 +283,12 @@ public sealed class FileIntegrationConfigurationStore : IDisposable
                 new Dictionary<string, string>(change.Options ?? new Dictionary<string, string>(), StringComparer.Ordinal),
                 references, change.SubscriptionStatus, readiness, revision, change.ActorId, updatedAt));
             state.Revision = revision;
-            state.Receipts.Add(new(change.OperationId, change.Code, revision, change.ActorId, updatedAt));
+            state.Receipts.Add(new(change.OperationId, change.Code, revision, change.ActorId, updatedAt)
+            {
+                Scope = change.Scope,
+                Action = "ConfigurationChanged",
+                Result = "Succeeded"
+            });
             await AtomicJson.SaveAsync(path, state, Json, cancellationToken).ConfigureAwait(false);
             return Snapshot(state);
         }
