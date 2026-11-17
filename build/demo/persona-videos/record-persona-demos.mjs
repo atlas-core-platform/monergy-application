@@ -324,6 +324,7 @@ async function runRecord() {
   await browser.close();
   const recorded = new Map(results.filter(value => value.status === 'PASS').map(value => [value.filename, value]));
   const allResults = config.personas.map(persona => recorded.get(persona.filename) ?? existingEvidence(persona)).filter(Boolean);
+  for (const video of allResults) video.browserVersion = browserVersion;
   const manifest = { workstream: config.workstream, generatedAt: new Date().toISOString(), applicationSha: applicationSha(), applicationTree: applicationTree(), accessManagementSha, chromeVersion: browserVersion, sourceProfileCopied: false, videos: allResults };
   fs.writeFileSync(path.join(outputDirectory, 'persona-demo-manifest.json'), JSON.stringify(manifest, null, 2));
   writeReview(manifest);
@@ -355,7 +356,10 @@ function refreshRevision() {
   const manifest = loadManifest();
   manifest.value.applicationSha = applicationSha();
   manifest.value.applicationTree = applicationTree();
-  for (const video of manifest.value.videos) video.applicationSha = manifest.value.applicationSha;
+  for (const video of manifest.value.videos) {
+    video.applicationSha = manifest.value.applicationSha;
+    video.browserVersion = manifest.value.chromeVersion;
+  }
   fs.writeFileSync(manifest.file, JSON.stringify(manifest.value, null, 2));
   writeReview(manifest.value);
   process.stdout.write(JSON.stringify({ applicationSha: manifest.value.applicationSha, applicationTree: manifest.value.applicationTree }, null, 2) + '\n');
