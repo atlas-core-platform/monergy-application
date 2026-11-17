@@ -30,6 +30,37 @@ public sealed class PlatformOperationsTests
     }
 
     [Fact]
+    public async Task PlatformCredentialLocksAfterFiveFailuresAndDoesNotAcceptTheCorrectPasswordWhileLocked()
+    {
+        var path = TemporaryPath();
+        try
+        {
+            using var store = new FilePlatformCredentialStore(
+                path, "a950.platform@example.test", new string('t', 64), new FixedClock());
+            var activation = await store.IssueActivationAsync(
+                "a950.platform@example.test", new string('t', 64), default);
+            await store.ActivateAsync(activation.Ticket, "Platform!Password123", default);
+
+            for (var attempt = 0; attempt < 5; attempt++)
+            {
+                var denied = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    store.AuthenticateAsync("a950.platform@example.test", "Wrong!Password12345", default));
+                Assert.Equal("PLATFORM_CREDENTIAL_INVALID", denied.Message);
+            }
+
+            var locked = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                store.AuthenticateAsync("a950.platform@example.test", "Platform!Password123", default));
+            Assert.Equal("PLATFORM_CREDENTIAL_LOCKED", locked.Message);
+            var status = await store.StatusAsync(default);
+            Assert.Equal(DateTimeOffset.Parse(
+                "2026-11-16T12:15:00Z", global::System.Globalization.CultureInfo.InvariantCulture), status.LockedUntil);
+            Assert.Contains(await store.AuditAsync(default), item =>
+                item.EventType == "PasswordSignIn" && item.Outcome == "Locked");
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
     public async Task IntegrationConfigurationIsVersionedTenantScopedAndContainsReferencesOnly()
     {
         var path = TemporaryPath();

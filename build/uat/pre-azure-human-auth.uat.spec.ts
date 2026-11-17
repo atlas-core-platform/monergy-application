@@ -35,12 +35,19 @@ async function activatePersona(page: Page, tenant: string, email: string, path: 
     headers: { 'X-Monergy-Tester-Activation': personaTester },
     data: { tenantId: tenant, email, returnPath: path, requestId: randomUUID().replaceAll('-', '') },
   });
-  const link = issued.status() === 409
-    ? await page.request.post('/identity-api/local/v1/persona-credentials/tester/recovery-link', {
-      headers: { 'X-Monergy-Tester-Activation': personaTester },
-      data: { tenantId: tenant, email, returnPath: path, requestId: randomUUID().replaceAll('-', '') },
-    })
-    : issued;
+  let link = issued;
+  if (issued.status() === 409) {
+    const requestId = randomUUID().replaceAll('-', '');
+    for (let retry = 0; retry < 65; retry += 1) {
+      link = await page.request.post('/identity-api/local/v1/persona-credentials/tester/recovery-link', {
+        headers: { 'X-Monergy-Tester-Activation': personaTester },
+        data: { tenantId: tenant, email, returnPath: path, requestId },
+      });
+      if (link.status() === 200) break;
+      expect(link.status()).toBe(409);
+      await page.waitForTimeout(1000);
+    }
+  }
   expect(link.status()).toBe(200);
   const value = await link.json() as { welcomePath: string };
   await page.goto(value.welcomePath);
@@ -132,6 +139,24 @@ test('wrong password, wrong tenant and cross-authority credentials fail closed',
   })).status()).toBe(401);
 });
 
+test('five failed password attempts lock the credential until protected recovery', async ({ page }) => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const denied = await page.request.post('/identity-api/local/v1/persona-credentials/sign-in', {
+      data: { tenantId, email: 'a200@example.test', password: 'Wrong!Password12345' },
+    });
+    expect(denied.status(), `failed sign-in ${attempt + 1}`).toBe(401);
+  }
+  const locked = await page.request.post('/identity-api/local/v1/persona-credentials/sign-in', {
+    data: { tenantId, email: 'a200@example.test', password },
+  });
+  expect(locked.status()).toBe(401);
+
+  await activatePersona(page, tenantId, 'a200@example.test', '/');
+  expect((await page.request.post('/identity-api/local/v1/persona-credentials/sign-in', {
+    data: { tenantId, email: 'a200@example.test', password },
+  })).status()).toBe(200);
+});
+
 test('platform provider metadata is versioned, audited and secret values are never returned', async ({ page }) => {
   await page.goto('/platform');
   await page.getByLabel('Email').fill(platformEmail);
@@ -220,4 +245,73 @@ test('revoked tenant session cannot read Connected Services', async ({ request }
     'X-Monergy-Tenant': tenantId, 'X-Monergy-Session': session.authenticationContextId,
   } });
   expect(denied.status()).toBe(401);
+});
+
+test('disabled membership and removed role deny current credentials, then restoration recovers authority', async ({ request }) => {
+  const administrator = await personaSession(request, tenantId, 'a900@example.test');
+  const headers = {
+    'X-Monergy-Tenant': tenantId,
+    'X-Monergy-Session': administrator.authenticationContextId,
+  };
+  const readMember = async () => {
+    const response = await request.get('/access-api/v1/administration/members?limit=100', { headers });
+    expect(response.status()).toBe(200);
+    const body = await response.json() as {
+      policyVersion: number;
+      items: { actorId: string; businessRoleId: string | null; active: boolean; tenantAdmin: boolean }[];
+    };
+    const member = body.items.find(value => value.actorId === 'A300');
+    expect(member).toBeTruthy();
+    return { body, member: member! };
+  };
+  const original = (await readMember()).member;
+  const update = async (active: boolean, businessRoleId: string | null) => {
+    const current = await readMember();
+    const response = await request.put('/access-api/v1/administration/members/A300', {
+      headers,
+      data: {
+        expectedPolicyVersion: current.body.policyVersion,
+        businessRoleId,
+        active,
+        tenantAdmin: false,
+      },
+    });
+    expect(response.status()).toBe(200);
+  };
+
+  try {
+    await update(false, original.businessRoleId);
+    const disabled = await request.post('/identity-api/local/v1/persona-credentials/sign-in', {
+      data: { tenantId, email: 'a300@example.test', password },
+    });
+    expect([401, 403]).toContain(disabled.status());
+
+    await update(true, null);
+    const roleless = await request.post('/identity-api/local/v1/persona-credentials/sign-in', {
+      data: { tenantId, email: 'a300@example.test', password },
+    });
+    if (roleless.status() === 200) {
+      const session = await roleless.json() as { authenticationContextId: string };
+      const advisor = await request.get('/access-api/v1/advisor/context', {
+        headers: {
+          'X-Monergy-Tenant': tenantId,
+          'X-Monergy-Session': session.authenticationContextId,
+        },
+      });
+      expect(advisor.status()).toBe(403);
+    } else {
+      expect([401, 403]).toContain(roleless.status());
+    }
+  } finally {
+    await update(true, original.businessRoleId);
+  }
+
+  const restored = await personaSession(request, tenantId, 'a300@example.test');
+  const advisor = await request.get('/access-api/v1/advisor/context', {
+    headers: {
+      'X-Monergy-Tenant': tenantId,
+      'X-Monergy-Session': restored.authenticationContextId,
+    },
+  });
+  expect(advisor.status()).toBe(200);
 });
