@@ -13,9 +13,9 @@ interface Receipt { operationId: string; serviceId: string; posture: Posture; no
 interface Topology { services: Service[]; operationsRevision: number; postures: ServicePosture[] }
 interface IntegrationProvider { code: string; displayName: string; category: string; enabled: boolean; scope: 'Platform' | 'Organization'; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; options: Record<string, string>; secretConfigured: boolean; secretUpdatedAt?: string; subscriptionStatus: string; readiness: string; updatedAt: string }
 interface Integrations { revision: number; providers: IntegrationProvider[] }
-interface Organization { organizationCode: string; organizationName: string; displayName: string; country: string; timeZone: string; initialAdministrator: string; status: 'Requested' | 'Provisioning' | 'ProvisioningFailed' | 'ReadyForAdmin' | 'Active'; created: string; updated: string; readiness: string; attention?: string; completedSteps: number[] }
+interface Organization { organizationCode: string; organizationId: string; organizationName: string; displayName: string; tenantSlug: string; hostname: string; tenantUrl: string; endpointStatus: string; country: string; timeZone: string; initialAdministrator: string; status: 'Requested' | 'Provisioning' | 'ProvisioningFailed' | 'ReadyForAdmin' | 'Active'; created: string; updated: string; readiness: string; attention?: string; completedSteps: number[] }
 interface Organizations { items: Organization[] }
-interface WelcomeReceipt { welcomePath: string; expiresAt: string }
+interface WelcomeReceipt { welcomeUrl: string; expiresAt: string }
 
 const request = async <T,>(path: string, session?: string, init?: RequestInit): Promise<T> => {
   const headers = new Headers(init?.headers);
@@ -52,7 +52,7 @@ export default function PlatformAdministratorPortal() {
   const [activationForm] = Form.useForm<{ password: string; confirm: string }>();
   const [integrationForm] = Form.useForm<{ enabled: boolean; scope: 'Platform' | 'Organization'; tenantId?: string; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; providerLabel?: string; notice?: string; secretValue?: string; clearSecret: boolean; subscriptionStatus: string }>();
   const [postureForm] = Form.useForm<{ posture: Posture; note: string }>();
-  const [organizationForm] = Form.useForm<{ organizationName: string; displayName: string; country: string; timeZone: string; initialAdministratorEmail: string; placement: 'Shared' }>();
+  const [organizationForm] = Form.useForm<{ organizationName: string; displayName: string; tenantSlug?: string; country: string; timeZone: string; initialAdministratorEmail: string; placement: 'Shared' }>();
 
   const load = useCallback(async (current: PlatformSession) => {
     const [verified, services, readiness, history, providerConfiguration, organizationDirectory] = await Promise.all([
@@ -104,7 +104,7 @@ export default function PlatformAdministratorPortal() {
       await request('/platform-api/local/v1/credentials/activation/confirm', undefined, {
         method: 'POST', body: JSON.stringify({ ticket, password }),
       });
-      window.history.replaceState(null, '', '/platform');
+      window.history.replaceState(null, '', '/');
       activationForm.resetFields();
       setError('Password created. Sign in to open Monergy Administration.');
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Account activation failed.'); }
@@ -160,7 +160,7 @@ export default function PlatformAdministratorPortal() {
     finally { setBusy(false); }
   };
 
-  const submitOrganization = async (values: { organizationName: string; displayName: string; country: string; timeZone: string; initialAdministratorEmail: string; placement: 'Shared' }) => {
+  const submitOrganization = async (values: { organizationName: string; displayName: string; tenantSlug?: string; country: string; timeZone: string; initialAdministratorEmail: string; placement: 'Shared' }) => {
     if (!session) return;
     setBusy(true); setError('');
     try {
@@ -168,6 +168,7 @@ export default function PlatformAdministratorPortal() {
         method: 'POST', body: JSON.stringify({
           requestId: crypto.randomUUID().replaceAll('-', ''),
           organizationName: values.organizationName.trim(), displayName: values.displayName.trim(),
+          tenantSlug: values.tenantSlug?.trim() ?? null,
           country: values.country, timeZone: values.timeZone,
           initialAdministratorEmail: values.initialAdministratorEmail.trim().toLowerCase(), placement: values.placement,
         }),
@@ -183,10 +184,11 @@ export default function PlatformAdministratorPortal() {
     try {
       const receipt = await request<WelcomeReceipt>('/platform-api/local/v1/organizations/' +
         encodeURIComponent(organization.organizationCode) + '/administrator-welcome', session.session, { method: 'POST' });
-      if (!receipt.welcomePath.startsWith('/welcome#')) throw new Error('The administrator setup page was not valid.');
-      const separator = receipt.welcomePath.includes('?') ? '&' : '&';
-      window.location.assign(receipt.welcomePath + separator + 'organization=' +
-        encodeURIComponent(organization.organizationName) + '&email=' + encodeURIComponent(organization.initialAdministrator));
+      const welcome = new URL(receipt.welcomeUrl);
+      if (welcome.hostname !== organization.hostname || welcome.pathname !== '/welcome' ||
+          welcome.protocol !== window.location.protocol || welcome.port !== window.location.port)
+        throw new Error('The administrator setup page was not valid.');
+      window.location.assign(welcome);
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'The administrator setup page is unavailable.'); }
     finally { setBusy(false); }
   };
@@ -226,7 +228,7 @@ export default function PlatformAdministratorPortal() {
     <FoundationProvider appearance="midnight">
       <WorkspaceShell appearance="midnight" context="Platform Administrator" area="Administration"
         module={{ name: 'Monergy Administration', homeHref: '/platform', guide: <p>Review system status and operational notes. Customer and organization information is not available here.</p> }}
-        destinations={[{ id: 'platform', label: 'System status', icon: 'layers', href: '/platform' }, { id: 'organizations', label: 'Organizations', icon: 'users', href: '/platform' }]}
+        destinations={[{ id: 'platform', label: 'System status', icon: 'layers', href: '/' }, { id: 'organizations', label: 'Organizations', icon: 'users', href: '/' }]}
         active={active} onNavigate={(id) => { if (id === 'platform' || id === 'organizations') setActive(id); }}
         actions={<Button type="text" onClick={() => { void signOut(); }}>Sign out</Button>}>
         <main className="access-page">
@@ -235,14 +237,19 @@ export default function PlatformAdministratorPortal() {
             <Alert type="info" showIcon className="access-notice" title="Platform authority stays separate" description="You can provision an organization and invite its first administrator. You cannot set their password, enter Organization Settings, impersonate them or open customer information." />
             {error && <Alert type="error" showIcon title={error} className="access-notice" />}
             <Table<Organization> rowKey="organizationCode" dataSource={organizations} pagination={false} scroll={{ x: 1050 }} columns={[
-              { title: 'Organization', render: (_, row) => <><strong>{row.organizationName}</strong><br /><Typography.Text type="secondary">Organization code: {row.organizationCode}</Typography.Text></> },
+              { title: 'Organization', render: (_, row) => <><strong>{row.organizationName}</strong><br /><Typography.Text type="secondary">Organization code: {row.organizationCode}</Typography.Text><br /><a href={row.tenantUrl}>{row.hostname}</a></> },
               { title: 'Location', render: (_, row) => <>{row.country}<br /><Typography.Text type="secondary">{row.timeZone}</Typography.Text></> },
               { title: 'Initial administrator', dataIndex: 'initialAdministrator' },
               { title: 'Created', render: (_, row) => new Date(row.created).toLocaleString() },
               { title: 'Status', render: (_, row) => <Space orientation="vertical" size={0}><Tag color={row.status === 'Active' ? 'success' : row.status === 'ProvisioningFailed' ? 'error' : row.status === 'ReadyForAdmin' ? 'processing' : 'warning'}>{row.status === 'ReadyForAdmin' ? 'Ready for Administrator' : row.status}</Tag><Typography.Text type="secondary">{row.status === 'ReadyForAdmin' ? 'Waiting for the Organization Administrator to complete setup' : row.readiness}</Typography.Text>{row.attention && <Typography.Text type="danger">Needs attention</Typography.Text>}</Space> },
               { title: 'Action', render: (_, row) => row.status === 'ReadyForAdmin' ? <Button size="small" type="primary" loading={busy} onClick={() => { void openAdministratorSetup(row); }}>Open administrator setup page</Button> : row.status === 'ProvisioningFailed' ? <Button size="small" loading={busy} onClick={() => { void request('/platform-api/local/v1/organizations/' + encodeURIComponent(row.organizationCode) + '/resume', session.session, { method: 'POST' }).then(() => load(session)).catch((failure: unknown) => { setError(failure instanceof Error ? failure.message : 'Provisioning could not resume.'); }); }}>Try again</Button> : null },
             ]} />
-            <section className="access-operation-page"><h2>Provisioning stages{onboardingOrganization ? ` · ${onboardingOrganization.organizationName}` : ''}</h2><Steps orientation="vertical" size="small" items={['Preparing organization', 'Creating secure data stores', 'Applying required setup', 'Creating the first administrator', 'Setting up organization access', 'Checking readiness'].map((title, index) => ({ title, status: onboardingOrganization?.completedSteps.includes(index + 1) ? 'finish' : 'wait' }))} /></section>
+            <section className="access-operation-page"><h2>Provisioning stages{onboardingOrganization ? ` · ${onboardingOrganization.organizationName}` : ''}</h2><Steps orientation="vertical" size="small" items={[
+              { title: 'Preparing organization', step: 1 }, { title: 'Registering organization address', step: 7 },
+              { title: 'Creating secure data stores', step: 2 }, { title: 'Applying required setup', step: 3 },
+              { title: 'Creating the first administrator', step: 4 }, { title: 'Setting up organization access', step: 5 },
+              { title: 'Checking readiness', step: 6 },
+            ].map(item => ({ title: item.title, status: onboardingOrganization?.completedSteps.includes(item.step) ? 'finish' : 'wait' }))} /></section>
           </> : <>
           <header className="access-page-header"><div><p className="workspace-eyebrow">MONERGY ADMINISTRATION · {context.environment.toUpperCase()}</p><h1>System status</h1><p>Availability, release blockers and operational notes.</p></div><Button onClick={() => { void load(session).catch((failure: unknown) => { setError(failure instanceof Error ? failure.message : 'We could not refresh the system status.'); }); }}>Refresh</Button></header>
           <Alert type="info" showIcon className="access-notice" title="Separate from customer work" description="This workspace cannot open organization or customer information, sign in as another person or change their access." />
@@ -270,6 +277,18 @@ export default function PlatformAdministratorPortal() {
             <Form form={organizationForm} layout="vertical" onFinish={(values) => { void submitOrganization(values); }}>
               <Form.Item name="organizationName" label="Organization name" rules={[{ required: true, whitespace: true }, { max: 200 }]}><Input /></Form.Item>
               <Form.Item name="displayName" label="Display name" rules={[{ required: true, whitespace: true }, { max: 200 }]}><Input /></Form.Item>
+              <Form.Item label="Organization URL name (optional)" htmlFor="tenantSlug" extra="Lowercase letters, numbers and hyphens. If omitted, Monergy derives it from the display name.">
+                <Space.Compact block>
+                  <Form.Item name="tenantSlug" noStyle rules={[{ validator: (_, value: unknown) => {
+                    if (value === undefined || value === '') return Promise.resolve();
+                    if (typeof value === 'string' && value.length >= 3 && value.length <= 48 &&
+                        !value.startsWith('-') && !value.endsWith('-') && /^[a-z0-9-]+$/u.test(value))
+                      return Promise.resolve();
+                    return Promise.reject(new Error('Use 3–48 lowercase letters, numbers or hyphens, without a leading or trailing hyphen.'));
+                  } }]}><Input maxLength={48} /></Form.Item>
+                  <Input value=".localhost" disabled aria-label="Organization address suffix" style={{ width: 120 }} />
+                </Space.Compact>
+              </Form.Item>
               <Form.Item name="country" label="Country" rules={[{ required: true }, { len: 2 }]}><Select options={[{ value: 'IN', label: 'India' }, { value: 'US', label: 'United States' }, { value: 'GB', label: 'United Kingdom' }]} /></Form.Item>
               <Form.Item name="timeZone" label="Time zone" rules={[{ required: true }]}><Select options={[{ value: 'Asia/Calcutta', label: 'India Standard Time' }, { value: 'UTC', label: 'UTC' }, { value: 'America/New_York', label: 'Eastern Time' }]} /></Form.Item>
               <Form.Item name="initialAdministratorEmail" label="Initial Organization Administrator email" rules={[{ required: true }, { type: 'email' }, { max: 320 }]}><Input autoComplete="off" /></Form.Item>

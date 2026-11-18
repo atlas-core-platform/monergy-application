@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { registrationRequest } from './registrationApi';
 interface Publication { revision: string; documents: { kind: string; version: string; title: string; body: string; sha256: string }[] }
 interface Challenge { challengeId: string; expiresAt: string; retryAfterSeconds: number }
-interface Values { tenantId: string; email: string; password: string; displayName: string; code: string; terms: boolean; privacy: boolean; consent: boolean }
-export function CustomerRegistrationEntry({ busy, onSignIn, onCancel }: { busy: boolean; onSignIn: (tenant: string, email: string, password: string) => Promise<void>; onCancel: () => void }) {
+interface Values { email: string; password: string; displayName: string; code: string; terms: boolean; privacy: boolean; consent: boolean }
+export function CustomerRegistrationEntry({ busy, tenantId, onSignIn, onCancel }: { busy: boolean; tenantId: string; onSignIn: (tenant: string, email: string, password: string) => Promise<void>; onCancel: () => void }) {
  const [form] = Form.useForm<Values>(); const [mode, setMode] = useState<'login' | 'register' | 'recover'>('login');
  const [challenge, setChallenge] = useState<(Challenge & { tenant: string; email: string }) | null>(null);
  const [publication, setPublication] = useState<Publication | null>(null); const [pending, setPending] = useState(false); const [message, setMessage] = useState('');
@@ -14,9 +14,9 @@ export function CustomerRegistrationEntry({ busy, onSignIn, onCancel }: { busy: 
  async function submit(v: Values) {
   const id = ++epoch.current; request.current?.abort(); const controller = new AbortController(); request.current = controller; setPending(true); setMessage('');
   try {
-   if (mode === 'login') { form.setFieldValue('password', ''); await onSignIn(v.tenantId.trim(), v.email.trim(), v.password); return; }
+   if (mode === 'login') { form.setFieldValue('password', ''); await onSignIn(tenantId, v.email.trim(), v.password); return; }
    if (!challenge) {
-    const tenant = v.tenantId.trim(), email = v.email.trim(); let terms: Publication | null = null;
+    const tenant = tenantId, email = v.email.trim(); let terms: Publication | null = null;
     if (mode === 'register') {
      terms = await registrationRequest<Publication>('/agreements?tenantId=' + encodeURIComponent(tenant), undefined, controller.signal);
      if (!/^[a-f0-9]{64}$/.test(terms.revision) || terms.documents.length !== 3 || new Set(terms.documents.map(d => d.kind)).size !== 3 || !terms.documents.every(d => ['TERMS', 'PRIVACY', 'CONSENT'].includes(d.kind) && d.title && d.body)) throw new Error('Invalid publication');
@@ -42,9 +42,9 @@ export function CustomerRegistrationEntry({ busy, onSignIn, onCancel }: { busy: 
   finally { if (id === epoch.current) setPending(false); }
  }
  return <><h2>{mode === 'login' ? 'Sign in with email' : mode === 'register' ? 'Create your account' : 'Reset your password'}</h2>{message && <Alert title={message} type="info" />}
- <Form form={form} layout="vertical" initialValues={{ tenantId: 'T001' }} onFinish={v => { void submit(v); }}>
- {!challenge && <><Form.Item name="tenantId" label="Organization" rules={[{ required: true }, { pattern: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/, message: 'Enter a valid organization identifier.' }]}><Input autoComplete="organization" maxLength={64} disabled={busy || pending} /></Form.Item><Form.Item name="email" label="Email" rules={[{ required: true }, { type: 'email' }]}><Input type="email" autoComplete="email" maxLength={320} disabled={busy || pending} /></Form.Item></>}
- {challenge && <><p>{challenge.email} · {challenge.tenant}</p><Form.Item name="code" label="Verification code" rules={[{ required: true }, { pattern: /^\d{6}$/ }]}><Input autoComplete="one-time-code" inputMode="numeric" maxLength={6} disabled={busy || pending} /></Form.Item></>}
+ <Form form={form} layout="vertical" onFinish={v => { void submit(v); }}>
+ {!challenge && <Form.Item name="email" label="Email" rules={[{ required: true }, { type: 'email' }]}><Input type="email" autoComplete="email" maxLength={320} disabled={busy || pending} /></Form.Item>}
+ {challenge && <><p>{challenge.email}</p><Form.Item name="code" label="Verification code" rules={[{ required: true }, { pattern: /^\d{6}$/ }]}><Input autoComplete="one-time-code" inputMode="numeric" maxLength={6} disabled={busy || pending} /></Form.Item></>}
  {challenge && mode === 'register' && <Form.Item name="displayName" label="Your name" rules={[{ required: true }]}><Input maxLength={120} disabled={busy || pending} /></Form.Item>}
  {(mode === 'login' || challenge) && <Form.Item name="password" label={mode === 'login' ? 'Password' : 'Create a password (15–128 characters)'} rules={[{ required: true }, ...(mode === 'login' ? [] : [{ min: 15, max: 128 }])]}><Input.Password autoComplete={mode === 'login' ? 'current-password' : 'new-password'} maxLength={128} disabled={busy || pending} /></Form.Item>}
  {publication && mode === 'register' && <>{publication.documents.map(d => <details key={d.kind}><summary>{d.title} · {d.version}</summary><p style={{ whiteSpace: 'pre-wrap' }}>{d.body}</p></details>)}{(['terms', 'privacy', 'consent'] as const).map((n, i) => <Form.Item key={n} name={n} valuePropName="checked" rules={[{ validator: (_, value: unknown) => value === true ? Promise.resolve() : Promise.reject(new Error('Review and accept to continue.')) }]}><Checkbox disabled={pending}>{['I accept the terms.', 'I acknowledge the privacy policy.', 'I consent to the stated data processing.'][i]}</Checkbox></Form.Item>)}</>}

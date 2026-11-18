@@ -25,7 +25,9 @@ public sealed class FileTenantSetup(string path) : ITenantSetupReadiness
         TenantSetupSubmission request, TimeProvider clock, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(tenant); ArgumentNullException.ThrowIfNull(request); ArgumentNullException.ThrowIfNull(clock);
-        if (tenant.State is not (TenantLifecycleState.ReadyForAdmin or TenantLifecycleState.Active) || tenant.Receipts.Count != 6)
+        if (tenant.State is not (TenantLifecycleState.ReadyForAdmin or TenantLifecycleState.Active) ||
+            tenant.Receipts.Count != TenantProvisioningPlan.Count ||
+            tenant.Endpoint?.Status != TenantEndpointStatus.Registered)
             throw new InvalidOperationException("TENANT_NOT_READY_FOR_SETUP");
         if (!Identifier(trustedActor) || !Identifier(request.RequestId) || request.ExpectedPolicyVersion < 1 ||
             !request.OrganizationReviewed || !request.AccessReviewed)

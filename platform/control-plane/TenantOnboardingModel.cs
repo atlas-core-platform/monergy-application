@@ -26,7 +26,51 @@ public enum TenantProvisioningStep
     InitialAdministratorIdentityProvisioned = 4,
     AccessManagementBootstrapped = 5,
     MandatoryReadinessValidated = 6,
+    // Kept out of the historic numeric sequence so persisted PRE-AZURE-02
+    // receipts retain their original identities during the schema upgrade.
+    TenantEndpointRegistered = 7,
 }
+
+public static class TenantProvisioningPlan
+{
+    public static IReadOnlyList<TenantProvisioningStep> RequiredSteps { get; } =
+    [
+        TenantProvisioningStep.PlacementResolved,
+        TenantProvisioningStep.TenantEndpointRegistered,
+        TenantProvisioningStep.ServiceDatabasesProvisioned,
+        TenantProvisioningStep.ServiceMigrationsApplied,
+        TenantProvisioningStep.InitialAdministratorIdentityProvisioned,
+        TenantProvisioningStep.AccessManagementBootstrapped,
+        TenantProvisioningStep.MandatoryReadinessValidated,
+    ];
+
+    public static int Count => RequiredSteps.Count;
+}
+
+public enum TenantEndpointStatus
+{
+    Reserved,
+    Registered,
+    Disabled,
+}
+
+public sealed record TenantEndpointRegistration(
+    string TenantId,
+    string OrganizationId,
+    string TenantSlug,
+    string Hostname,
+    string EnvironmentReference,
+    string DeploymentReference,
+    TenantPlacementMode DeploymentMode,
+    TenantEndpointStatus Status,
+    bool IsPrimary,
+    DateTimeOffset RegisteredAt);
+
+public sealed record TenantEndpointResolution(
+    string TenantId,
+    string OrganizationId,
+    string DisplayName,
+    TenantEndpointRegistration Endpoint);
 
 public sealed record TenantOnboardingRequest(
     string RequestId,
@@ -36,7 +80,8 @@ public sealed record TenantOnboardingRequest(
     string TimeZone,
     string Environment,
     string InitialAdministratorEmail,
-    TenantPlacementMode PlacementMode);
+    TenantPlacementMode PlacementMode,
+    string? TenantSlug = null);
 
 public sealed record TenantProvisioningReceipt(
     TenantProvisioningStep Step,
@@ -63,6 +108,8 @@ public sealed record TenantRegistryRecord(
 {
     public bool HasCompleted(TenantProvisioningStep step) => Receipts.Any(receipt => receipt.Step == step);
     public string? SetupReceiptReference { get; init; }
+    public string OrganizationId { get; init; } = string.Empty;
+    public TenantEndpointRegistration? Endpoint { get; init; }
 }
 
 // Supplied by a server-side setup owner after current tenant/session/admin checks;

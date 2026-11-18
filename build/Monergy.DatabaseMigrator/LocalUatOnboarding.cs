@@ -208,12 +208,13 @@ internal static partial class LocalUatBootstrap
         var bindings = new Dictionary<string, string>(StringComparer.Ordinal)
         { [profile.InstanceId + ":T001"] = "T001", [profile.InstanceId + ":T002"] = "T002" };
         using var registry = new FileTenantRegistry(Path.Combine(OnboardingFolder, "registry.json"), bindings);
-        var operations = Enum.GetValues<TenantProvisioningStep>().Select(step => new LocalOwnerVerification(step, profile, cluster));
+        var operations = TenantProvisioningPlan.RequiredSteps.Select(step => new LocalOwnerVerification(step, profile, cluster));
         var orchestrator = new TenantOnboardingOrchestrator(registry, operations, TimeProvider.System);
         foreach (var tenant in new[] { "T001", "T002" })
         {
             await orchestrator.RequestAsync(new(profile.InstanceId + ":" + tenant, "Monergy local workspace " + tenant,
-                "Local workspace " + tenant, "US", "UTC", "LOCAL", "a900@example.test", TenantPlacementMode.Shared)).ConfigureAwait(false);
+                "Local workspace " + tenant, "US", "UTC", "LOCAL", "a900@example.test", TenantPlacementMode.Shared,
+                tenant.ToLowerInvariant())).ConfigureAwait(false);
             var record = await orchestrator.StartOrResumeAsync(tenant).ConfigureAwait(false);
             if (record.State is not (TenantLifecycleState.ReadyForAdmin or TenantLifecycleState.Active))
                 throw new InvalidOperationException("Local tenant owner verification failed.");

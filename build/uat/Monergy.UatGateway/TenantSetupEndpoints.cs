@@ -23,9 +23,16 @@ public static class TenantSetupEndpoints
 
     public static void AddTenantSetup(this WebApplicationBuilder builder)
     {
-        if (!builder.Configuration.GetValue<bool>("Monergy:Onboarding:Enabled")) return;
+        var environment = builder.Configuration["Monergy:ExecutionZone"] ?? "LOCAL";
+        var staticEndpoints = new Dictionary<string, TenantEndpointResolution>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["t001.localhost"] = StaticEndpoint("T001", "Reference organization", "t001", environment),
+            ["t002.localhost"] = StaticEndpoint("T002", "Reference organization 2", "t002", environment),
+        };
         builder.Services.AddSingleton<ITenantRegistry>(_ => new FileTenantRegistry(
-            TenantAccessIntegration.Required(builder.Configuration, "Monergy:Onboarding:RegistryPath")));
+            TenantAccessIntegration.Required(builder.Configuration, "Monergy:Onboarding:RegistryPath"),
+            staticEndpoints: staticEndpoints));
+        if (!builder.Configuration.GetValue<bool>("Monergy:Onboarding:Enabled")) return;
         builder.Services.AddSingleton(_ => new FileTenantSetup(
             TenantAccessIntegration.Required(builder.Configuration, "Monergy:Onboarding:SetupPath")));
         builder.Services.AddSingleton(_ => new FileTenantLifecycleAudit(
@@ -36,9 +43,19 @@ public static class TenantSetupEndpoints
             "Monergy:TenantProvisioning:Token");
         builder.Services.AddSingleton(new TenantProvisioningOwnerClient(new Uri(provisioningUrl), provisioningToken));
         builder.Services.AddSingleton(provider => new TenantOnboardingOrchestrator(provider.GetRequiredService<ITenantRegistry>(),
-            Enum.GetValues<TenantProvisioningStep>().Select(step => new ProtectedProvisioningOperation(
-                step, provider.GetRequiredService<TenantProvisioningOwnerClient>())), TimeProvider.System,
+            TenantProvisioningPlan.RequiredSteps.Select(step => step == TenantProvisioningStep.TenantEndpointRegistered
+                ? (ITenantProvisioningOperation)new EndpointRegistrationOperation()
+                : new ProtectedProvisioningOperation(step, provider.GetRequiredService<TenantProvisioningOwnerClient>())), TimeProvider.System,
             provider.GetRequiredService<FileTenantSetup>()));
+    }
+
+    private static TenantEndpointResolution StaticEndpoint(string tenantId, string displayName, string slug, string environment)
+    {
+        var organizationId = "org-" + tenantId.ToLowerInvariant();
+        var endpoint = new TenantEndpointRegistration(tenantId, organizationId, slug, slug + ".localhost",
+            environment, environment + "-shared", TenantPlacementMode.Shared,
+            TenantEndpointStatus.Registered, true, DateTimeOffset.UnixEpoch);
+        return new TenantEndpointResolution(tenantId, organizationId, displayName, endpoint);
     }
 
     public static void MapTenantSetup(this WebApplication app)
@@ -152,6 +169,23 @@ public static class TenantSetupEndpoints
         public TenantProvisioningStep ProvisioningStep => step;
         public Task<TenantProvisioningResult> ExecuteAsync(TenantRegistryRecord tenant, string operationId,
             CancellationToken cancellationToken) => owner.ExecuteAsync(tenant, step, operationId, cancellationToken);
+    }
+
+    private sealed class EndpointRegistrationOperation : ITenantProvisioningOperation
+    {
+        public TenantProvisioningStep ProvisioningStep => TenantProvisioningStep.TenantEndpointRegistered;
+
+        public Task<TenantProvisioningResult> ExecuteAsync(TenantRegistryRecord tenant, string operationId,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (tenant.Endpoint is null || tenant.Endpoint.TenantId != tenant.TenantId ||
+                tenant.Endpoint.OrganizationId != tenant.OrganizationId ||
+                tenant.Endpoint.Status is not TenantEndpointStatus.Reserved)
+                return Task.FromResult(TenantProvisioningResult.Failure("TENANT_ENDPOINT_INVALID"));
+            return Task.FromResult(TenantProvisioningResult.Success(
+                "endpoint:" + tenant.Endpoint.EnvironmentReference + ":" + tenant.Endpoint.Hostname));
+        }
     }
 }
 

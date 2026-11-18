@@ -1,10 +1,12 @@
 using Monergy.Platform.ControlPlane;
+using System.Text.Json;
 using Xunit;
 
 namespace Monergy.Architecture.Tests;
 
 public sealed class TenantControlPlaneTests
 {
+    private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
     [Fact]
     public async Task LifecycleAuditIsRetainedIdempotentAndHasNoSecretPayloadChannel()
     {
@@ -67,7 +69,7 @@ public sealed class TenantControlPlaneTests
         {
             var clock = new FixedClock();
             var registry = new FileTenantRegistry(path);
-            var operations = Enum.GetValues<TenantProvisioningStep>()
+            var operations = TenantProvisioningPlan.RequiredSteps
                 .Select(step => new StubOperation(step,
                     step == TenantProvisioningStep.AccessManagementBootstrapped))
                 .ToArray();
@@ -77,19 +79,21 @@ public sealed class TenantControlPlaneTests
             var failed = await orchestrator.StartOrResumeAsync(tenant.TenantId);
             Assert.Equal(TenantLifecycleState.ProvisioningFailed, failed.State);
             Assert.Equal("REFERENCE_FAILURE", failed.LastFailureCode);
-            Assert.Equal(4, failed.Receipts.Count);
+            Assert.Equal(5, failed.Receipts.Count);
+            Assert.Equal(TenantEndpointStatus.Registered, failed.Endpoint?.Status);
+            Assert.Contains(failed.Receipts, receipt => receipt.Step == TenantProvisioningStep.TenantEndpointRegistered);
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
                 orchestrator.ActivateAsync(tenant.TenantId));
 
             var ready = await orchestrator.StartOrResumeAsync(tenant.TenantId);
             Assert.Equal(TenantLifecycleState.ReadyForAdmin, ready.State);
-            Assert.Equal(6, ready.Receipts.Count);
-            Assert.Equal(6, ready.Receipts.Select(receipt => receipt.Step).Distinct().Count());
+            Assert.Equal(TenantProvisioningPlan.Count, ready.Receipts.Count);
+            Assert.Equal(TenantProvisioningPlan.Count, ready.Receipts.Select(receipt => receipt.Step).Distinct().Count());
 
-            foreach (var operation in operations.Take(4))
+            foreach (var operation in operations.Take(5))
                 Assert.Equal(1, operation.Attempts);
-            Assert.Equal(2, operations[4].Attempts);
-            Assert.Equal(1, operations[5].Attempts);
+            Assert.Equal(2, operations[5].Attempts);
+            Assert.Equal(1, operations[6].Attempts);
 
             var active = await orchestrator.ActivateAsync(tenant.TenantId);
             Assert.Equal(TenantLifecycleState.Active, active.State);
@@ -97,7 +101,7 @@ public sealed class TenantControlPlaneTests
 
             var replay = await orchestrator.StartOrResumeAsync(tenant.TenantId);
             Assert.Equal(TenantLifecycleState.Active, replay.State);
-            Assert.All(operations.Take(4), operation => Assert.Equal(1, operation.Attempts));
+            Assert.All(operations.Take(5), operation => Assert.Equal(1, operation.Attempts));
         }
         finally
         {
@@ -112,7 +116,7 @@ public sealed class TenantControlPlaneTests
         try
         {
             var registry = new FileTenantRegistry(path);
-            var operations = Enum.GetValues<TenantProvisioningStep>().Select(step => new StubOperation(step, false)).ToArray();
+            var operations = TenantProvisioningPlan.RequiredSteps.Select(step => new StubOperation(step, false)).ToArray();
             var orchestrator = new TenantOnboardingOrchestrator(registry, operations, new FixedClock());
             var tenant = await orchestrator.RequestAsync(Request());
             await orchestrator.StartOrResumeAsync(tenant.TenantId);
@@ -137,7 +141,7 @@ public sealed class TenantControlPlaneTests
                 tenant with { State = TenantLifecycleState.Active, SetupReceiptReference = "fake" }, tenant.ConfigurationVersion, default));
             await Assert.ThrowsAsync<InvalidOperationException>(() => registry.ReplaceAsync(
                 tenant with { State = TenantLifecycleState.Provisioning, InitialAdministratorEmail = "replacement@example.test" }, tenant.ConfigurationVersion, default));
-            var operations = Enum.GetValues<TenantProvisioningStep>().Select(step => new StubOperation(step, false)).ToArray();
+            var operations = TenantProvisioningPlan.RequiredSteps.Select(step => new StubOperation(step, false)).ToArray();
             var ready = await new TenantOnboardingOrchestrator(registry, operations, new FixedClock()).StartOrResumeAsync(tenant.TenantId);
             await Assert.ThrowsAsync<InvalidOperationException>(() => registry.ReplaceAsync(
                 ready with { Receipts = ready.Receipts.Skip(1).ToArray() }, ready.ConfigurationVersion, default));
@@ -157,7 +161,7 @@ public sealed class TenantControlPlaneTests
         try
         {
             var tasks = Enumerable.Range(0, 12).Select(i => new FileTenantRegistry(path).CreateOrGetAsync(
-                Request() with { RequestId = "request-" + i }, new FixedClock(), default));
+                Request() with { RequestId = "request-" + i, TenantSlug = "example-" + i }, new FixedClock(), default));
             var tenants = await Task.WhenAll(tasks);
             Assert.Equal(12, tenants.Select(tenant => tenant.TenantId).Distinct().Count());
             foreach (var tenant in tenants)
@@ -169,6 +173,95 @@ public sealed class TenantControlPlaneTests
             Assert.Equal("TENANT_CONFIGURATION_CONFLICT", error.Message);
         }
         finally { File.Delete(path); File.Delete(path + ".lock"); }
+    }
+
+    [Fact]
+    public async Task EndpointRegistrationIsStableResolvableAndEnvironmentUnique()
+    {
+        var path = TemporaryRegistry();
+        try
+        {
+            var staticEndpoint = new TenantEndpointRegistration("T001", "org-t001", "t001", "t001.localhost",
+                "uat", "uat-shared", TenantPlacementMode.Shared, TenantEndpointStatus.Registered, true, DateTimeOffset.UnixEpoch);
+            using var registry = new FileTenantRegistry(path, staticEndpoints:
+                new Dictionary<string, TenantEndpointResolution>(StringComparer.OrdinalIgnoreCase)
+                { ["t001.localhost"] = new("T001", "org-t001", "Reference tenant", staticEndpoint) });
+            var request = Request() with { TenantSlug = "example-finance" };
+            var tenant = await registry.CreateOrGetAsync(request, new FixedClock(), default);
+            var replay = await registry.CreateOrGetAsync(request, new FixedClock(), default);
+            Assert.Equal(tenant.Endpoint, replay.Endpoint);
+            Assert.Equal("example-finance.localhost", tenant.Endpoint?.Hostname);
+            Assert.Equal(TenantEndpointStatus.Reserved, tenant.Endpoint?.Status);
+
+            var operations = TenantProvisioningPlan.RequiredSteps.Select(step => new StubOperation(step, false));
+            var ready = await new TenantOnboardingOrchestrator(registry, operations, new FixedClock())
+                .StartOrResumeAsync(tenant.TenantId);
+            var resolved = await registry.ResolveEndpointAsync("example-finance.localhost", "uat", default);
+            Assert.Equal(ready.TenantId, resolved?.TenantId);
+            Assert.Equal(ready.OrganizationId, resolved?.OrganizationId);
+            Assert.Equal(TenantEndpointStatus.Registered, resolved?.Endpoint.Status);
+            Assert.Equal("T001", (await registry.ResolveEndpointAsync("T001.LOCALHOST", "uat", default))?.TenantId);
+            Assert.Null(await registry.ResolveEndpointAsync("unknown.localhost", "uat", default));
+
+            var conflict = await Assert.ThrowsAsync<InvalidOperationException>(() => registry.CreateOrGetAsync(
+                request with { RequestId = "another-request", OrganizationName = "Another", TenantSlug = "example-finance" },
+                new FixedClock(), default));
+            Assert.Equal("TENANT_ENDPOINT_CONFLICT", conflict.Message);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); if (File.Exists(path + ".lock")) File.Delete(path + ".lock"); }
+    }
+
+    [Theory]
+    [InlineData("platform", "TENANT_SLUG_RESERVED")]
+    [InlineData("UPPERCASE", "INVALID_TENANT_SLUG")]
+    [InlineData("has spaces", "INVALID_TENANT_SLUG")]
+    [InlineData("-leading", "INVALID_TENANT_SLUG")]
+    public async Task UnsafeOrReservedSlugsFailClosed(string slug, string expected)
+    {
+        var path = TemporaryRegistry();
+        try
+        {
+            using var registry = new FileTenantRegistry(path);
+            var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => registry.CreateOrGetAsync(
+                Request() with { TenantSlug = slug }, new FixedClock(), default));
+            Assert.Equal(expected, failure.Message);
+        }
+        finally { if (File.Exists(path)) File.Delete(path); if (File.Exists(path + ".lock")) File.Delete(path + ".lock"); }
+    }
+
+    [Fact]
+    public async Task VersionOneRegistryUpgradeAddsOnlyDeterministicEndpointReceipt()
+    {
+        var path = TemporaryRegistry();
+        try
+        {
+            var now = new FixedClock().GetUtcNow();
+            var receipts = Enumerable.Range(1, 6).Select(value => new
+            {
+                step = value, operationId = $"tenant-legacy:{value:D2}", evidenceReference = "legacy:" + value,
+                completedAt = now,
+            });
+            await File.WriteAllTextAsync(path, JsonSerializer.Serialize(new
+            {
+                schemaVersion = 1,
+                tenants = new[] { new
+                {
+                    tenantId = "tenant-legacy", requestId = "legacy-request", organizationName = "Legacy Finance",
+                    displayName = "Legacy Finance", countryCode = "IN", timeZone = "Asia/Kolkata", environment = "uat",
+                    initialAdministratorEmail = "admin@example.test", placementMode = 0, state = 2,
+                    configurationVersion = 9, receipts, lastFailureCode = (string?)null, createdAt = now, updatedAt = now,
+                } },
+            }, WebJson));
+            using var registry = new FileTenantRegistry(path);
+            var upgraded = await registry.GetAsync("tenant-legacy", default);
+            Assert.NotNull(upgraded);
+            Assert.Equal(TenantProvisioningPlan.Count, upgraded.Receipts.Count);
+            Assert.Equal(TenantProvisioningPlan.RequiredSteps, upgraded.Receipts.Select(item => item.Step));
+            Assert.Equal("tenant-legacy:07", upgraded.Receipts[1].OperationId);
+            Assert.Equal(TenantEndpointStatus.Registered, upgraded.Endpoint?.Status);
+            Assert.Equal(2, JsonDocument.Parse(await File.ReadAllTextAsync(path)).RootElement.GetProperty("schemaVersion").GetInt32());
+        }
+        finally { if (File.Exists(path)) File.Delete(path); if (File.Exists(path + ".lock")) File.Delete(path + ".lock"); }
     }
 
     private sealed class SetupReadiness(string? overrideTenant = null) : ITenantSetupReadiness

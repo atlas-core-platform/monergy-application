@@ -22,12 +22,22 @@ const member = {
 };
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
-const mount = (path = '/access/users') =>
-  render(
+const mount = (path = '/access/users') => {
+  const owner = globalThis.fetch;
+  vi.stubGlobal('fetch', (url: RequestInfo | URL, options?: RequestInit) => {
+    const value = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+    if (value.endsWith('/entry-api/local/v1/context'))
+      return Promise.resolve(json({ kind: 'tenant', tenantId: 'T001', displayName: 'Reference organization' }));
+    if (value.includes('context') && !value.endsWith('/administration/context'))
+      return Promise.resolve(json({ error: 'DENIED' }, 403));
+    return owner(url, options);
+  });
+  return render(
     <FoundationProvider>
       <AccessExperience path={path} />
     </FoundationProvider>,
   );
+};
 async function connect() {
   const user = userEvent.setup();
   fireEvent.change(await screen.findByLabelText('Local access key'), {
@@ -70,7 +80,7 @@ describe('tenant administration trust boundaries', () => {
         : ownerFetch(url, options));
     mount();
     await connect();
-    expect(await screen.findByText('Organization Administrator access is required.')).toBeVisible();
+    expect(await screen.findByText('This identity has no workspace available for this organization.')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Import people' })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Local access key')).toHaveValue('');
   });

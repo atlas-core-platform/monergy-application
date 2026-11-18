@@ -4,14 +4,15 @@ import { useEffect, useRef, useState } from 'react';
 // This is a deliberately separate LOCAL/UAT tester action, not a public
 // email-ownership lookup. A trusted operator supplies a protected tester
 // capability locally; it is not persisted, logged, or passed in a URL.
-interface Values { tenantId: string; email: string; testerSecret: string }
+interface Values { email: string; testerSecret: string }
 interface Receipt { welcomePath: string; expiresAt: string }
 const validDestination = (value: string) => value.startsWith('/welcome#tenant=') &&
   !value.includes('://') && !value.includes('\\') && value.length < 512;
 
 export function PersonaTesterWelcomeRequestEntry({
-  returnPath, onBack,
+  tenantId, returnPath, onBack,
 }: {
+  tenantId: string;
   returnPath: '/' | '/access' | '/advisor' | '/dsa' | '/lender' | '/financial-professional' | '/property-valuer' | '/legal-advisor' | '/operations-support';
   onBack: () => void;
 }) {
@@ -33,7 +34,6 @@ export function PersonaTesterWelcomeRequestEntry({
     setError('');
     setWelcome(null);
     const secret = values.testerSecret;
-    const tenantId = values.tenantId.trim();
     const email = values.email.trim();
     const fingerprint = tenantId + '\n' + email.toLowerCase() + '\n' + returnPath;
     if (request.current?.fingerprint !== fingerprint)
@@ -86,12 +86,8 @@ export function PersonaTesterWelcomeRequestEntry({
         request.current = null;
         setWelcome(null);
       }}>Request another link</Button>
-    </> : <Form<Values> form={form} layout="vertical" initialValues={{ tenantId: 'T001' }}
+    </> : <Form<Values> form={form} layout="vertical"
       onFinish={values => { void requestWelcome(values); }}>
-      <Form.Item name="tenantId" label="Organization"
-        rules={[{ required: true }, { pattern: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/ }]}>
-        <Input autoComplete="organization" maxLength={64} disabled={pending} />
-      </Form.Item>
       <Form.Item name="email" label="Your invited email address"
         rules={[{ required: true }, { type: 'email' }]}>
         <Input type="email" autoComplete="email" maxLength={320} disabled={pending} />

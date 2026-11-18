@@ -28,12 +28,25 @@ function RestrictedFeature() {
   </>;
 }
 function mountRestricted() {
+  installEntryContext();
   return render(<FoundationProvider appearance="midnight"><WorkspaceSessionProvider area="product">
     <WorkspaceEntry area="product"><RestrictedFeature /></WorkspaceEntry>
   </WorkspaceSessionProvider></FoundationProvider>);
 }
 function mount() {
+  installEntryContext();
   return render(<FoundationProvider appearance="midnight"><WorkspaceSessionProvider area="product"><WorkspaceEntry area="product"><Private /></WorkspaceEntry></WorkspaceSessionProvider></FoundationProvider>);
+}
+function installEntryContext() {
+  const owner = globalThis.fetch;
+  vi.stubGlobal('fetch', (url: RequestInfo | URL, options?: RequestInit) => {
+    const value = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+    if (value.endsWith('/entry-api/local/v1/context'))
+      return Promise.resolve(json({ kind: 'tenant', tenantId: 'T001', displayName: 'Reference organization' }));
+    if (value.includes('context') && !value.endsWith('/product-api/v1/context'))
+      return Promise.resolve(json({ error: 'DENIED' }, 403));
+    return owner(url, options);
+  });
 }
 function owner(signInStatus = 200, contextStatus = 200) {
   const fetch = vi.fn((url: string, options?: RequestInit) => {
@@ -65,7 +78,7 @@ it('defaults to configured password sign-in and verifies the owner before openin
 });
 it.each([401, 429, 503])('keeps a rejected %s password private and displays the correct recovery guidance', async status => {
   owner(status); mount(); await signIn();
-  expect(await screen.findByText(status === 401 ? /Check your organization, email and password/ : status === 429 ? /Too many attempts/ : /Workspace verification could not be completed/)).toBeVisible();
+  expect(await screen.findByText(status === 401 ? /Check your email and password/ : status === 429 ? /Too many attempts/ : /Workspace verification could not be completed/)).toBeVisible();
   expect(screen.getByLabelText('Password')).toHaveValue(''); expect(screen.queryByText('Private customer information')).not.toBeInTheDocument();
   expect(screen.queryByText(/verification code is invalid/)).not.toBeInTheDocument(); expect(screen.queryByText(/private owner detail/)).not.toBeInTheDocument();
 });

@@ -5,7 +5,7 @@ import { PersonaTesterWelcomeRequestEntry } from './PersonaTesterWelcomeRequestE
 
 type Mode = 'login' | 'activate' | 'recover';
 interface Values {
-  tenantId: string; email: string; password: string; code: string;
+  email: string; password: string; code: string;
 }
 interface Challenge {
   challengeId: string; expiresAt: string;
@@ -23,9 +23,11 @@ async function personaRequest<T>(path: string, body: object, signal: AbortSignal
 }
 
 export function PersonaCredentialEntry({
-  busy, onSignIn, onCancel, activationMode = 'email', returnPath = '/',
+  busy, tenantId, organizationName, onSignIn, onCancel, activationMode = 'email', returnPath = '/',
 }: {
   busy: boolean;
+  tenantId: string;
+  organizationName: string;
   onSignIn: (tenant: string, email: string, password: string) => Promise<void>;
   onCancel: () => void;
   activationMode?: 'email' | 'tester-link';
@@ -40,7 +42,6 @@ export function PersonaCredentialEntry({
   const request = useRef<AbortController | null>(null);
   const epoch = useRef(0);
   const signInContext = new URLSearchParams(window.location.search);
-  const organization = signInContext.get('organization') ?? 'T001';
   const invitedEmail = signInContext.get('email') ?? undefined;
   useEffect(() => () => {
     epoch.current++;
@@ -67,11 +68,10 @@ export function PersonaCredentialEntry({
     try {
       if (mode === 'login') {
         form.setFieldValue('password', '');
-        await onSignIn(values.tenantId.trim(), values.email.trim(), values.password);
+        await onSignIn(tenantId, values.email.trim(), values.password);
         return;
       }
       if (!challenge) {
-        const tenantId = values.tenantId.trim();
         const email = values.email.trim();
         const response = await personaRequest<{ challengeId: string; expiresAt: string }>(
           mode === 'activate' ? '/activation/request' : '/recovery/request',
@@ -118,7 +118,7 @@ export function PersonaCredentialEntry({
   }
 
   if (activationMode === 'tester-link' && testerWelcome)
-    return <PersonaTesterWelcomeRequestEntry returnPath={returnPath}
+    return <PersonaTesterWelcomeRequestEntry tenantId={tenantId} returnPath={returnPath}
       onBack={() => { setTesterWelcome(false); }} />;
 
   return <>
@@ -132,22 +132,17 @@ export function PersonaCredentialEntry({
       onClick={() => { setTesterWelcome(true); }}>
       Activate your invited account (LOCAL/UAT)
     </Button>}
-    <Form form={form} layout="vertical" initialValues={{ tenantId: organization, email: invitedEmail }}
+    <p>{organizationName}</p>
+    <Form form={form} layout="vertical" initialValues={{ email: invitedEmail }}
       onFinish={(values) => { void submit(values); }}>
       {!challenge && <>
-        <Form.Item label="Organization" name="tenantId" rules={[
-          { required: true },
-          { pattern: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/, message: 'Enter a valid organization.' },
-        ]}>
-          <Input autoComplete="organization" maxLength={64} disabled={busy || pending} />
-        </Form.Item>
         <Form.Item label="Email address" name="email"
           rules={[{ required: true }, { type: 'email' }]}>
           <Input type="email" autoComplete="email" maxLength={320} disabled={busy || pending} />
         </Form.Item>
       </>}
       {challenge && <>
-        <p>{challenge.email} · {challenge.tenantId}</p>
+        <p>{challenge.email}</p>
         <Form.Item name="code" label="Six-digit verification code" rules={[
           { required: true }, { pattern: /^\d{6}$/, message: 'Enter the six-digit email code.' },
         ]}>

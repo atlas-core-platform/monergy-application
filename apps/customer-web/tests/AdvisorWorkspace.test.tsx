@@ -35,6 +35,15 @@ const engagement = (overrides: Record<string, unknown> = {}) => ({
   activities: [], dataDurability: 'Durable test data', ...overrides,
 });
 function mount() {
+  const owner = globalThis.fetch;
+  vi.stubGlobal('fetch', (url: RequestInfo | URL, options?: RequestInit) => {
+    const value = typeof url === 'string' ? url : url instanceof URL ? url.href : url.url;
+    if (value.endsWith('/entry-api/local/v1/context'))
+      return Promise.resolve(json({ kind: 'tenant', tenantId: 'T001', displayName: 'Reference organization' }));
+    if (value.includes('context') && !value.endsWith('/advisor/context'))
+      return Promise.resolve(json({ error: 'DENIED' }, 403));
+    return owner(url, options);
+  });
   return render(
     <FoundationProvider appearance="midnight">
       <WorkspaceSessionProvider area="advisor">

@@ -17,8 +17,9 @@ export function WorkspaceEntry({
   children: ReactNode;
   area?: PersonaArea;
 }) {
-  const { status, session, message, connect, connectEmail, connectPassword, connectPersonaPassword, retry, cancel } = useWorkspaceSession();
-  const [form] = Form.useForm<{ tenantId: string; key: string }>();
+  const { status, session, message, workspaces = [], connect, connectEmail, connectPassword, connectPersonaPassword, selectWorkspace, retry, cancel } = useWorkspaceSession();
+  const [form] = Form.useForm<{ key: string }>();
+  const [entry, setEntry] = useState<{ tenantId: string; displayName: string } | null>(null);
   const [emailAvailable, setEmailAvailable] = useState(false);
   const [method, setMethod] = useState<'auto' | 'password' | 'persona' | 'email' | 'local'>('auto');
   const [registrationAvailable, setRegistrationAvailable] = useState<boolean | null>(null);
@@ -33,7 +34,18 @@ export function WorkspaceEntry({
       personaAvailable !== true && registrationAvailable === true);
   const emailEntry = method === 'email';
   const loadingMethods = method === 'auto' &&
-    (personaAvailable === null || area === 'product' && registrationAvailable === null);
+    (entry === null || personaAvailable === null || area === 'product' && registrationAvailable === null);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/entry-api/local/v1/context', { cache: 'no-store', redirect: 'error', signal: controller.signal })
+      .then(async response => {
+        const value = response.ok ? await response.json() as { kind?: unknown; tenantId?: unknown; displayName?: unknown } : null;
+        if (!controller.signal.aborted && value?.kind === 'tenant' && typeof value.tenantId === 'string' &&
+            typeof value.displayName === 'string')
+          setEntry({ tenantId: value.tenantId, displayName: value.displayName });
+      }).catch(() => undefined);
+    return () => { controller.abort(); };
+  }, []);
   useEffect(() => {
     if (!connectPersonaPassword) return;
     const controller = new AbortController();
@@ -99,7 +111,8 @@ export function WorkspaceEntry({
             <WorkspaceIcon name="shield" size={20} />
           </span>
           <h2 id="access-connect-title">Connect to your workspace</h2>
-          {!loadingMethods && !registrationEntry && !personaEntry && !emailEntry && <p>Enter the organization and local key provided by your administrator.</p>}
+          {entry && <p><strong>{entry.displayName}</strong></p>}
+          {!loadingMethods && !registrationEntry && !personaEntry && !emailEntry && <p>Enter the local key provided by your administrator.</p>}
           {message && (
             <Alert
               showIcon
@@ -108,7 +121,15 @@ export function WorkspaceEntry({
               className="access-notice"
             />
           )}
-          {status === 'disconnected' ? (
+          {status === 'choosing' && session ? (
+            <section aria-labelledby="workspace-chooser-title">
+              <h3 id="workspace-chooser-title">Choose workspace</h3>
+              <p>Only workspaces currently authorized for this identity are shown.</p>
+              {workspaces.map(workspace => <Button key={workspace.area} block type="primary"
+                onClick={() => { void selectWorkspace?.(workspace.area); }}>{workspace.label}</Button>)}
+              <Button block type="text" onClick={cancel}>Sign out</Button>
+            </section>
+          ) : status === 'disconnected' ? (
             <>
               <p>
                 {copy.workspaceName} is paused. Sign in again to continue.
@@ -133,44 +154,25 @@ export function WorkspaceEntry({
                 Use a local test key
               </Button>
             </>
-          ) : registrationEntry && connectPassword ? (
-            <CustomerRegistrationEntry busy={busy} onSignIn={connectPassword} onCancel={() => { cancel(); setMethod('local'); }} />
-          ) : personaEntry && connectPersonaPassword ? (
-            <PersonaCredentialEntry busy={busy} onSignIn={connectPersonaPassword}
+          ) : registrationEntry && connectPassword && entry ? (
+            <CustomerRegistrationEntry busy={busy} tenantId={entry.tenantId} onSignIn={connectPassword} onCancel={() => { cancel(); setMethod('local'); }} />
+          ) : personaEntry && connectPersonaPassword && entry ? (
+            <PersonaCredentialEntry busy={busy} tenantId={entry.tenantId} organizationName={entry.displayName} onSignIn={connectPersonaPassword}
               activationMode={personaActivation}
               returnPath={area === 'administration' ? '/access' : area === 'advisor' ? '/advisor' : area === 'dsa' ? '/dsa' : area === 'lender' ? '/lender' : area === 'financial-professional' ? '/financial-professional' : area === 'property-valuer' ? '/property-valuer' : area === 'legal-advisor' ? '/legal-advisor' : area === 'operations-support' ? '/operations-support' : '/'}
               onCancel={() => { cancel(); setMethod('local'); }} />
-          ) : emailEntry && connectEmail ? (
-            <CustomerEmailEntry busy={busy} onVerify={connectEmail} onCancel={() => { cancel(); setMethod('local'); }} />
+          ) : emailEntry && connectEmail && entry ? (
+            <CustomerEmailEntry busy={busy} tenantId={entry.tenantId} onVerify={connectEmail} onCancel={() => { cancel(); setMethod('local'); }} />
           ) : (
             <Form
               form={form}
               layout="vertical"
-              initialValues={{ tenantId: 'T001' }}
               onFinish={(values) => {
                 const key = values.key.trim();
                 form.setFieldValue('key', '');
-                void connect(values.tenantId.trim(), key);
+                if (entry) void connect(entry.tenantId, key);
               }}
             >
-              <Form.Item
-                name="tenantId"
-                label="Organization"
-                extra={
-                  area === 'administration'
-                    ? 'The organization you want to administer.'
-                    : 'The organization for the financial workspace you want to open.'
-                }
-                rules={[
-                  { required: true, message: 'Enter your organization.' },
-                  {
-                    pattern: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/,
-                    message: 'Enter a valid organization identifier.',
-                  },
-                ]}
-              >
-                <Input autoComplete="organization" disabled={busy} />
-              </Form.Item>
               <Form.Item
                 name="key"
                 label="Local access key"

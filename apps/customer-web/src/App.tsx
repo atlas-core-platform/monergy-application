@@ -282,35 +282,38 @@ function RouteContent() {
 }
 
 export function App() {
+  if (window.location.hostname === 'platform.localhost')
+    return <Suspense fallback={<main aria-busy="true">Loading Platform Administration…</main>}><PlatformAdministratorPortal /></Suspense>;
   if (window.location.pathname === '/welcome')
     return <FoundationProvider appearance="midnight"><PersonaWelcomeEntry /></FoundationProvider>;
   if (window.location.pathname === '/platform' || window.location.pathname === '/operations')
     return <Suspense fallback={<main aria-busy="true">Loading Platform Administration…</main>}><PlatformAdministratorPortal /></Suspense>;
   const area = workspaceAreaForPath(window.location.pathname);
   return (
-    <WorkspaceSessionProvider area={area} key={area}>
+    <WorkspaceSessionProvider area={area}>
       <WorkspaceApplication />
     </WorkspaceSessionProvider>
   );
 }
 
 function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
-  const { session, authorization, signOut } = useWorkspaceSession();
+  const { session, authorization, workspaces = [], selectWorkspace, signOut } = useWorkspaceSession();
   const product = authorization?.area === 'product' ? authorization.context : null;
+  const active = workspaces.find(workspace => workspace.area === authorization?.area);
   return (
     <WorkspaceShell
       {...props}
-      context={product?.customerName ?? (authorization?.area === 'advisor' ? 'Financial Advisor' : authorization?.area === 'dsa' ? 'DSA / Case Manager' : authorization?.area === 'operations-support' ? 'Operations Support' : session ? 'Organization Settings' : undefined)}
+      context={product?.customerName ?? active?.label}
       actions={
         session ? (
-          <Button
-            type="text"
-            onClick={() => {
-              void signOut();
-            }}
-          >
-            Sign out
-          </Button>
+          <Space wrap>
+            {workspaces.length > 1 && <><span>Current workspace: {active?.label}</span>
+              {workspaces.filter(workspace => workspace.area !== authorization?.area).map(workspace =>
+                <Button key={workspace.area} type="link" onClick={() => { void selectWorkspace?.(workspace.area); }}>
+                  Switch to {workspace.label}
+                </Button>)}</>}
+            <Button type="text" onClick={() => { void signOut(); }}>Sign out</Button>
+          </Space>
         ) : undefined
       }
     />
@@ -336,13 +339,6 @@ function WorkspaceApplication() {
       const link = event.target instanceof Element ? event.target.closest('a') : null;
       if (!link || link.target || link.hasAttribute('download')) return;
       const url = new URL(link.href);
-      // Crossing into/out of the Advisor security area must remount the
-      // WorkspaceSessionProvider; a client-side history push would retain
-      // the previous area's verified authorization until a full reload.
-      const securityArea = (value: string) => value === '/advisor' ? 'advisor' : value === '/dsa' ? 'dsa' : value === '/operations-support' ? 'operations-support' : 'default';
-      if (url.origin === window.location.origin &&
-          securityArea(window.location.pathname) !== securityArea(url.pathname))
-        return;
       if (
         url.origin !== window.location.origin ||
         !(
@@ -386,10 +382,16 @@ function WorkspaceApplication() {
   const inAdvisor = path === '/advisor';
   const inDsa = path === '/dsa';
   const inOperationsSupport = path === '/operations-support';
+  const activeArea = workspaceAreaForPath(path);
   const advisorNavigation = [{id:'advisor-overview', label:'Overview', icon:'home' as const, href:'/advisor'}];
   const dsaNavigation = [{id:'dsa-cases', label:'Cases', icon:'changes' as const, href:'/dsa'}];
   const operationsSupportNavigation = [{id:'operational-recovery', label:'Tasks needing attention', icon:'changes' as const, href:'/operations-support'}];
-  const navigation = inOperationsSupport ? operationsSupportNavigation : inDsa ? dsaNavigation : inAdvisor ? advisorNavigation : path==='/kyc/reviews' ? [{id:'kyc-reviews',label:'KYC reviews',icon:'shield' as const,href:'/kyc/reviews'}] : inAdministration ? accessDestinations : destinations;
+  const roleNavigation = activeArea === 'lender' ? [{id:'lender',label:'Lender Workspace',icon:'home' as const,href:'/lender'}]
+    : activeArea === 'financial-professional' ? [{id:'financial-professional',label:'Financial Professional',icon:'home' as const,href:'/financial-professional'}]
+    : activeArea === 'property-valuer' ? [{id:'property-valuer',label:'Property Valuer',icon:'home' as const,href:'/property-valuer'}]
+    : activeArea === 'legal-advisor' ? [{id:'legal-advisor',label:'Legal Advisor',icon:'home' as const,href:'/legal-advisor'}]
+    : null;
+  const navigation = roleNavigation ?? (inOperationsSupport ? operationsSupportNavigation : inDsa ? dsaNavigation : inAdvisor ? advisorNavigation : path==='/kyc/reviews' ? [{id:'kyc-reviews',label:'KYC reviews',icon:'shield' as const,href:'/kyc/reviews'}] : inAdministration ? accessDestinations : destinations);
   const current =
     navigation.find(
       (destination) =>
@@ -407,6 +409,16 @@ function WorkspaceApplication() {
     document.documentElement.dataset.monergyTheme = 'midnight';
   }, []);
   const setup = authorization?.area === 'product' ? authorization.context.setup : undefined;
+  useEffect(() => {
+    if (!authorization) return;
+    const requested = workspaceAreaForPath(path);
+    if (requested !== authorization.area) {
+      const target = authorization.area === 'product' ? '/' : authorization.area === 'administration' ? '/access' :
+        authorization.area === 'kyc-review' ? '/kyc/reviews' : '/' + authorization.area;
+      window.history.replaceState(null, '', target);
+      queueMicrotask(() => { window.dispatchEvent(new PopStateEvent('popstate')); });
+    }
+  }, [authorization, path]);
   const needsSetup = !inAdministration && setup?.required && !setup.ready;
   const shell = needsSetup ? (
     <Suspense fallback={<main aria-busy="true" className="access-loading">Loading account setup…</main>}><CustomerWorkspaceSetupExperience key={JSON.stringify([session?.tenantId, session?.actorId, session?.authenticationContextId, session?.subjectVersion, setup.customerId])} /></Suspense>
@@ -423,7 +435,8 @@ function WorkspaceApplication() {
        } : inAdvisor ? {
          name: 'Financial Advisor', homeHref: '/advisor',
          guide: <p>Customers appear here only while your role, assignment and their permission to share are current.</p>,
-       } : inAdministration ? accessModule : productModule}
+       } : roleNavigation?.[0] ? { name: roleNavigation[0].label, homeHref: roleNavigation[0].href,
+         guide: <p>Only work assigned to your current professional role is available here.</p> } : inAdministration ? accessModule : productModule}
       onNavigate={(id) => {
         const href = navigation.find((item) => item.id === id)?.href;
         if (!href) return;
@@ -444,7 +457,7 @@ function WorkspaceApplication() {
   return (
     <FoundationProvider appearance="midnight">
       {gated ? (
-        <WorkspaceEntry area={inOperationsSupport ? 'operations-support' : inDsa ? 'dsa' : inAdvisor ? 'advisor' : path==='/kyc/reviews'?'kyc-review':inAdministration ? 'administration' : 'product'}>
+        <WorkspaceEntry area={activeArea}>
           {inAdministration ? (
             <Suspense
               fallback={

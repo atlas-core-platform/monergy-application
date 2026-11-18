@@ -51,10 +51,12 @@ app.Use(async (http, next) =>
     { http.Response.StatusCode = 403; return; }
     await GatewayExceptionBoundary.InvokeAsync(http, next).ConfigureAwait(false);
 });
+app.UseTrustedEntryRouting();
 app.UseProductAudit();
 app.UseStaticFiles();
 app.UseRouting();
 app.MapTenantSetup();
+app.MapEntryContext();
 app.MapProductWorkspace();
 app.MapProductDocumentVault();
 app.MapProductFinancialProfile();
@@ -365,7 +367,7 @@ static async Task ProxyAsync(HttpContext http, HttpClient client, Uri target)
         if (http.Request.ContentType?.Split(';')[0] != "application/json") throw new TenantBoundaryException("JSON_REQUIRED", 415);
         using var buffer = new MemoryStream();
         await http.Request.Body.CopyToAsync(buffer, http.RequestAborted).ConfigureAwait(false);
-        request.Content = new ByteArrayContent(buffer.ToArray());
+        request.Content = new ByteArrayContent(TenantEntryRouting.ReplaceTopLevelTenantId(http, buffer.ToArray()));
         request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
     }
     using var response = await client.SendAsync(request, http.RequestAborted).ConfigureAwait(false);

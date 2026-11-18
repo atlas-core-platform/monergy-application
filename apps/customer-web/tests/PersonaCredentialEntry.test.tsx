@@ -7,6 +7,7 @@ import { PersonaCredentialEntry } from '../src/access/PersonaCredentialEntry';
 const password = 'a secure test password 2026';
 function renderEntry(onSignIn = vi.fn(() => Promise.resolve())) {
   render(<FoundationProvider appearance="midnight"><PersonaCredentialEntry
+    tenantId="T001" organizationName="Reference organization"
     busy={false} onSignIn={onSignIn} onCancel={() => undefined} /></FoundationProvider>);
   return onSignIn;
 }
@@ -29,6 +30,8 @@ it('submits email/password without asking for an actor ID or LOCAL access key', 
     expect(login).toHaveBeenCalledWith('T001', 'a300@example.test', password);
   });
   expect(screen.queryByLabelText('Local access key')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Organization')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/persona|role/i)).not.toBeInTheDocument();
 });
 
 it('activates a pre-provisioned account through a purpose-bound email challenge without issuing a session', async () => {

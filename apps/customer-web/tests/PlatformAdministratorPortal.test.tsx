@@ -30,10 +30,12 @@ describe('Platform Administrator portal', () => {
     const writes: Record<string, unknown>[] = [];
     const organization = {
       organizationCode: 'tenant-02a', organizationName: 'Northwind Advisory',
-      displayName: 'Northwind', country: 'IN', timeZone: 'Asia/Calcutta',
+      organizationId: 'org-northwind', displayName: 'Northwind', tenantSlug: 'northwind',
+      hostname: 'northwind.localhost', tenantUrl: 'http://northwind.localhost:4338', endpointStatus: 'Registered',
+      country: 'IN', timeZone: 'Asia/Calcutta',
       initialAdministrator: 'admin@northwind.example.test', status: 'ReadyForAdmin',
       created: '2026-11-18T10:00:00Z', updated: '2026-11-18T10:01:00Z',
-      readiness: 'Ready for first administrator', completedSteps: [1, 2, 3, 4, 5, 6],
+      readiness: 'Ready for first administrator', completedSteps: [1, 7, 2, 3, 4, 5, 6],
     };
     vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
       if (url.endsWith('/sessions')) return Promise.resolve(json(session));
@@ -64,6 +66,8 @@ describe('Platform Administrator portal', () => {
       { target: { value: 'Northwind Advisory' } });
     fireEvent.change(dialog.getByLabelText('Display name'),
       { target: { value: 'Northwind' } });
+    fireEvent.change(dialog.getByLabelText('Organization URL name (optional)'),
+      { target: { value: 'northwind' } });
     fireEvent.change(dialog.getByLabelText('Initial Organization Administrator email'),
       { target: { value: 'admin@northwind.example.test' } });
     expect(dialog.queryByLabelText(/password/i)).toBeNull();
@@ -72,7 +76,8 @@ describe('Platform Administrator portal', () => {
     expect(writes).toHaveLength(1);
     expect(writes[0]).toMatchObject({ organizationName: 'Northwind Advisory',
       displayName: 'Northwind', initialAdministratorEmail: 'admin@northwind.example.test',
-      placement: 'Shared' });
+      tenantSlug: 'northwind', placement: 'Shared' });
+    expect(screen.getByRole('link', { name: 'northwind.localhost' })).toHaveAttribute('href', 'http://northwind.localhost:4338');
     expect(JSON.stringify(writes[0])).not.toMatch(/password|tester|secret/i);
   });
 
@@ -80,6 +85,8 @@ describe('Platform Administrator portal', () => {
     const calls: { url: string; options?: RequestInit }[] = [];
     vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
       calls.push({ url, options });
+      if (url.endsWith('/sessions/current') && options?.method === 'DELETE')
+        return Promise.resolve(json({ revoked: true }));
       if (url.endsWith('/sessions')) return Promise.resolve(json(session));
       if (url.endsWith('/context')) return Promise.resolve(json(context));
       if (url.endsWith('/topology')) return Promise.resolve(json(topology));
@@ -103,6 +110,12 @@ describe('Platform Administrator portal', () => {
     expect(headers.get('X-Monergy-Platform-Session')).toBe('platform-session');
     expect(headers.has('X-Monergy-Tenant')).toBe(false);
     expect(headers.has('X-Monergy-Session')).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    expect(await screen.findByText('Open Monergy Administration', { exact: true })).toBeVisible();
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Platform!Password123' } });
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('heading', { name: 'System status' })).toBeVisible();
+    expect(calls.filter(call => call.url.endsWith('/sessions'))).toHaveLength(2);
   });
 
   it('fails closed when the server reports tenant or break-glass authority', async () => {

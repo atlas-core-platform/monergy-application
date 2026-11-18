@@ -6,24 +6,59 @@ import { registrationRequest } from './registrationApi';
 import { confirmCustomerEmailCode } from './customerEmailApi';
 import { Context, productContextMemory, sessionMemory } from './workspaceSession';
 import type {
+  AuthorizedWorkspace,
   ProductWorkspaceContext,
+  WorkspaceArea,
   WorkspaceAuthorization,
   WorkspaceSessionState,
 } from './workspaceSession';
 
-type WorkspaceArea = 'administration' | 'product' | 'kyc-review' | 'advisor' | 'dsa' | 'lender' | 'financial-professional' | 'property-valuer' | 'legal-advisor' | 'operations-support';
 type Snapshot = Pick<
   WorkspaceSessionState,
-  'status' | 'session' | 'api' | 'authorization' | 'message' | 'recovery'
+  'status' | 'session' | 'api' | 'authorization' | 'message' | 'recovery' | 'workspaces'
 >;
-const empty: Snapshot = {
+type CompleteSnapshot = Snapshot & { workspaces: AuthorizedWorkspace[] };
+const empty: CompleteSnapshot = {
   status: 'public',
   session: null,
   api: null,
   authorization: null,
   message: '',
   recovery: null,
+  workspaces: [],
 };
+const workspaceCatalog: readonly Omit<AuthorizedWorkspace, 'authorization'>[] = [
+  { area: 'product', label: 'Customer Financial Workspace', href: '/' },
+  { area: 'administration', label: 'Organization Settings', href: '/access' },
+  { area: 'advisor', label: 'Financial Advisor', href: '/advisor' },
+  { area: 'dsa', label: 'DSA / Case Manager', href: '/dsa' },
+  { area: 'lender', label: 'Lender Workspace', href: '/lender' },
+  { area: 'financial-professional', label: 'Financial Professional', href: '/financial-professional' },
+  { area: 'property-valuer', label: 'Property Valuer', href: '/property-valuer' },
+  { area: 'legal-advisor', label: 'Legal Advisor', href: '/legal-advisor' },
+  { area: 'operations-support', label: 'Operations Support', href: '/operations-support' },
+  { area: 'kyc-review', label: 'KYC Review', href: '/kyc/reviews' },
+];
+
+function navigateToWorkspace(area: WorkspaceArea) {
+  const target = workspaceCatalog.find(item => item.area === area);
+  if (!target || window.location.pathname === target.href) return;
+  window.history.replaceState(null, '', target.href);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+async function discoverWorkspaces(current: TenantSession, signal: AbortSignal): Promise<AuthorizedWorkspace[]> {
+  const discovered: AuthorizedWorkspace[] = [];
+  for (const workspace of workspaceCatalog) {
+    try {
+      discovered.push({ ...workspace, authorization: await verify(current, workspace.area, signal) });
+    } catch (failure) {
+      if (failure instanceof AccessApiError && failure.status === 403) continue;
+      throw failure;
+    }
+  }
+  return discovered;
+}
 const identifier = (value: unknown, maximum: number): value is string =>
   typeof value === 'string' &&
   value.length <= maximum &&
@@ -239,7 +274,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     [stop],
   );
   const publish = useCallback(
-    (current: TenantSession, authorization: WorkspaceAuthorization, id: number) => {
+    (current: TenantSession, authorization: WorkspaceAuthorization, workspaces: AuthorizedWorkspace[], id: number) => {
       if (!mounted.current || id !== epoch.current) return;
       const controller = new AbortController();
       request.current = controller;
@@ -279,7 +314,9 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
         authorization,
         message: '',
         recovery: recovery.current,
+        workspaces,
       });
+      navigateToWorkspace(authorization.area);
     },
     [leave],
   );
@@ -297,8 +334,16 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
           throw new AccessApiError(503, 'SESSION_RESPONSE_INVALID');
         if (id !== epoch.current || !mounted.current) return;
         setState({ ...empty, status: 'verifying' });
-        const authorization = await verify(issued, area, controller.signal);
-        publish(issued, authorization, id);
+        const workspaces = await discoverWorkspaces(issued, controller.signal);
+        const onlyWorkspace = workspaces.at(0);
+        if (!onlyWorkspace) throw new AccessApiError(403, 'NO_AUTHORIZED_WORKSPACE');
+        if (workspaces.length > 1) {
+          candidate.current = issued;
+          sessionMemory.current = issued;
+          setState({ ...empty, status: 'choosing', session: issued, workspaces });
+        } else {
+          publish(issued, onlyWorkspace.authorization, workspaces, id);
+        }
       } catch (failure) {
         if (id !== epoch.current || !mounted.current) return;
         candidate.current = null;
@@ -306,15 +351,13 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
           ...empty,
           message:
             failure instanceof AccessApiError && failure.status === 403
-              ? area === 'administration'
-                ? 'Organization Administrator access is required.'
-                : area === 'kyc-review' ? 'Current named KYC reviewer assignment is required.' : area === 'advisor' ? 'An active Financial Advisor / Relationship Manager role is required.' : area === 'dsa' ? 'An active DSA / Case Manager role is required.' : area === 'lender' ? 'An active Lender Professional role is required.' : area === 'financial-professional' ? 'An active Chartered Accountant / Financial Professional role is required.' : area === 'property-valuer' ? 'An active Property Valuer role is required.' : area === 'legal-advisor' ? 'An active Legal Advisor / Advocate role is required.' : area === 'operations-support' ? 'An active Operations Support recovery permission is required.' : 'A customer workspace and product role are required.'
+              ? 'This identity has no workspace available for this organization.'
               : failure instanceof AccessApiError && failure.status === 401
                 ? method === 'password'
-                  ? 'Unable to sign in. Check your organization, email and password, or use Forgot password.'
+                  ? 'Unable to sign in. Check your email and password, or use Forgot password.'
                   : method === 'email'
                   ? 'The verification code is invalid, expired or already used. Request a new code if needed.'
-                  : 'Unable to connect. Check your organization and local access key, then try again.'
+                  : 'Unable to connect. Check your local access key, then try again.'
                 : failure instanceof AccessApiError && failure.status === 429
                   ? 'Too many attempts. Wait a minute before trying again.'
                 : 'Workspace verification could not be completed. Check the connection and try again.',
@@ -329,7 +372,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
           void new AccessApi(issued).endSession().catch(() => undefined);
       }
     },
-    [stop, publish, area],
+    [stop, publish],
   );
   const connect = useCallback((tenant: string, key: string) =>
     connectUsing(tenant, (signal) => establishSession(tenant, key, signal)), [connectUsing]);
@@ -346,6 +389,26 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     }, 'password'), [connectUsing]);
   const connectEmail = useCallback((tenant: string, challengeId: string, code: string) =>
     connectUsing(tenant, (signal) => confirmCustomerEmailCode(tenant, challengeId, code, signal), 'email'), [connectUsing]);
+  const selectWorkspace = useCallback(async (selected: WorkspaceArea) => {
+    const current = candidate.current;
+    const workspace = state.workspaces?.find(item => item.area === selected);
+    if (!current || !workspace || !validSession(current, current.tenantId))
+      throw new AccessApiError(403, 'WORKSPACE_NOT_AUTHORIZED');
+    const id = epoch.current;
+    const controller = request.current ?? new AbortController();
+    request.current = controller;
+    setState(previous => ({ ...previous, status: 'verifying', message: '' }));
+    try {
+      const authorization = await verify(current, selected, controller.signal);
+      publish(current, authorization, state.workspaces ?? [], id);
+    } catch (failure) {
+      if (mounted.current && id === epoch.current)
+        setState(previous => ({ ...previous, status: 'choosing', authorization: null,
+          message: failure instanceof AccessApiError && failure.status === 403
+            ? 'That workspace is no longer authorized.' : 'Workspace verification could not be completed.' }));
+      throw failure;
+    }
+  }, [publish, state.workspaces]);
   const refreshContext = useCallback(async () => {
     const current = candidate.current;
     const signal = request.current?.signal;
@@ -353,7 +416,8 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     if (!current || !signal || !validSession(current, current.tenantId))
       throw new AccessApiError(401, 'SESSION_EXPIRED');
     try {
-      const authorization = await verify(current, area, signal);
+      const activeArea = state.authorization?.area ?? area;
+      const authorization = await verify(current, activeArea, signal);
       if (id !== epoch.current || !mounted.current) throw new AccessApiError(401, 'SESSION_CHANGED');
       productContextMemory.current = authorization.area === 'product' ? authorization.context : null;
       setState(previous => ({ ...previous, authorization }));
@@ -362,7 +426,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
         leave('Your workspace could not be verified. Reconnect before continuing.', failure instanceof AccessApiError && failure.status === 503);
       throw failure;
     }
-  }, [area, leave]);
+  }, [area, leave, state.authorization?.area]);
   const retry = useCallback(async () => {
     const current = candidate.current;
     if (!current || !validSession(current, current.tenantId)) {
@@ -374,8 +438,9 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     request.current = controller;
     setState({ ...empty, status: 'verifying' });
     try {
-      const authorization = await verify(current, area, controller.signal);
-      publish(current, authorization, id);
+      const activeArea = state.authorization?.area ?? area;
+      const authorization = await verify(current, activeArea, controller.signal);
+      publish(current, authorization, state.workspaces ?? [], id);
     } catch (failure) {
       if (id !== epoch.current || !mounted.current) return;
       const denied = failure instanceof AccessApiError && [401, 403].includes(failure.status);
@@ -386,7 +451,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
         !denied,
       );
     }
-  }, [stop, leave, publish, area]);
+  }, [stop, leave, publish, area, state.authorization?.area, state.workspaces]);
   const signOut = useCallback(async () => {
     const current = candidate.current;
     leave('');
@@ -454,7 +519,7 @@ function SessionOwner({ children, area }: { children: ReactNode; area: Workspace
     };
   }, [state.session, leave, retry]);
   return (
-    <Context.Provider value={{ ...state, connect, connectEmail, connectPassword, connectPersonaPassword, refreshContext, retry, signOut, cancel }}>
+    <Context.Provider value={{ ...state, connect, connectEmail, connectPassword, connectPersonaPassword, refreshContext, selectWorkspace, retry, signOut, cancel }}>
       {children}
     </Context.Provider>
   );

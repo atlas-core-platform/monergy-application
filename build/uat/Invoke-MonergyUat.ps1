@@ -709,7 +709,7 @@ if ($Action -in @('Prepare','Start')) {
         }
         if ($onboarding -and $service -in @('customer-identity','integration-gateway')) {
             $config.Monergy.GovernedProviders=@{
-                Enabled='true'; Url='http://127.0.0.1:4173/'
+                Enabled='true'; Url="http://platform.localhost:$($state.port)/"
                 Token=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationRuntime))
             }
         }
@@ -749,10 +749,12 @@ if ($Action -in @('Prepare','Start')) {
         }
         Save-Json "delivery-$tenantId.json" $delivery
     }
-    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json'; LifecycleAuditPath='/var/lib/monergy-onboarding/tenant-lifecycle-audit.json' }; PlatformAdministration=@{ AccessKey=$state.platformAuthority.token; TesterCredential=$state.platformAuthority.token; AdministratorEmail='a950.platform@example.test'; OperationsPath='/var/lib/monergy-onboarding/platform-operations.json'; CredentialsPath='/var/lib/monergy-onboarding/platform-credentials.json'; IntegrationsPath='/var/lib/monergy-onboarding/integration-configuration.json'; SecretsPath='/var/lib/monergy-onboarding/integration-secrets.json'; SecretProtectionKey=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationProtection)); RuntimeToken=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationRuntime)) } } }
+    $workspace = @{ AllowedHosts='*.localhost;localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json'; LifecycleAuditPath='/var/lib/monergy-onboarding/tenant-lifecycle-audit.json' }; PlatformAdministration=@{ AccessKey=$state.platformAuthority.token; TesterCredential=$state.platformAuthority.token; AdministratorEmail='a950.platform@example.test'; OperationsPath='/var/lib/monergy-onboarding/platform-operations.json'; CredentialsPath='/var/lib/monergy-onboarding/platform-credentials.json'; IntegrationsPath='/var/lib/monergy-onboarding/integration-configuration.json'; SecretsPath='/var/lib/monergy-onboarding/integration-secrets.json'; SecretProtectionKey=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationProtection)); RuntimeToken=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationRuntime)) } } }
     if ($onboarding) {
         $workspace.Monergy.TenantProvisioning=@{ Url='http://127.0.0.1:5121/'; Token=$state.tokens.tenantProvisioning }
-        $workspace.Monergy.PlatformAdministration.PersonaTesterCredential=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess))
+        if ($EnablePersonaTesterActivation) {
+            $workspace.Monergy.PlatformAdministration.PersonaTesterCredential=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess))
+        }
         $workspace.Monergy.PlatformAdministration.CustomerIdentityUrl='http://127.0.0.1:5101/'
         $workspace.Monergy.PlatformAdministration.IdentityOwnerToken=$state.tokens.provisioning
         $workspace.Monergy.AccessIntegration=@{
@@ -819,6 +821,7 @@ if (-not $ready) { Compose @('ps','--all'); throw 'UAT readiness timed out. Insp
 $memberBootstrapMarker = Join-Path $folder 'reference-members-v6-initialized'
 if ($Action -eq 'Start' -and -not (Test-Path $memberBootstrapMarker)) {
     foreach ($tenantId in @('T001','T002')) {
+        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
@@ -846,6 +849,7 @@ if ($Action -eq 'Start' -and -not (Test-Path $memberBootstrapMarker)) {
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-case-policy-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
+        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
@@ -877,6 +881,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-advisor-policy-2-7-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
+        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
@@ -907,6 +912,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-lender-policy-2-8-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
+        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
@@ -946,6 +952,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-financial-professional-policy-2-9-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
+        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
@@ -985,6 +992,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-property-valuer-policy-2-10-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
+        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
@@ -1024,6 +1032,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-legal-advisor-policy-2-11-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
+        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
@@ -1063,6 +1072,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-operations-support-policy-2-12-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
+        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
         $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
@@ -1100,8 +1110,11 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
     Save-Text 'p3-operations-support-policy-2-12-initialized' $state.instanceId
     Protect-Files
 }
-Write-Host "Local customer workspace is ready: $url/"
-Write-Host "Local access administration is ready: $url/access"
+$tenantUrl = "http://t001.localhost:$($state.port)"
+$platformUrl = "http://platform.localhost:$($state.port)"
+Write-Host "Local T001 customer workspace is ready: $tenantUrl/"
+Write-Host "Local T001 access administration is ready: $tenantUrl/access"
+Write-Host "Local Platform Administration is ready: $platformUrl/"
 Write-Host 'Administration, identities, sessions and access audit persist across Stop/Start.'
 Write-Host 'Business reference data is illustrative and may reset. Production readiness remains blocked.'
 Write-Host "Show the administrator key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A900"
@@ -1117,11 +1130,11 @@ if ($Action -eq 'Welcome') {
     if ($Actor -eq 'A950') {
         $request = @{ email='a950.platform@example.test' } | ConvertTo-Json -Compress
         $headers = @{ 'X-Monergy-Platform-Tester'=[string]$state.platformAuthority.token }
-        $welcome = Invoke-RestMethod "$url/platform-api/local/v1/credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
+        $welcome = Invoke-RestMethod "$platformUrl/platform-api/local/v1/credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
         if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/platform\?ticket=[0-9a-f]{64}$') {
             throw 'The Platform credential owner did not return a valid protected welcome path.'
         }
-        $target = $url + $welcome.welcomePath
+        $target = $platformUrl + $welcome.welcomePath
         if ($windows) { Start-Process $target }
         else { & xdg-open $target | Out-Null }
         Write-Host 'Opened the single-use Platform Administrator welcome page. The tester authorization and activation ticket were not printed.'
@@ -1136,11 +1149,12 @@ if ($Action -eq 'Welcome') {
     $returnPath = switch ($Actor) { 'A900' { '/access' } 'A300' { '/advisor' } 'A400' { '/dsa' } 'A500' { '/lender' } 'A600' { '/financial-professional' } 'A700' { '/property-valuer' } 'A800' { '/legal-advisor' } 'A850' { '/operations-support' } default { '/' } }
     $request = @{ tenantId=$Tenant; email=$email; returnPath=$returnPath; requestId=[guid]::NewGuid().ToString('N') } | ConvertTo-Json -Compress
     $headers = @{ 'X-Monergy-Tester-Activation'=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess)) }
-    $welcome = Invoke-RestMethod "$url/identity-api/local/v1/persona-credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
+    $tenantUrl = "http://$($Tenant.ToLowerInvariant()).localhost:$($state.port)"
+    $welcome = Invoke-RestMethod "$tenantUrl/identity-api/local/v1/persona-credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
     if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/welcome#tenant=[A-Za-z0-9_.:-]+&ticket=[0-9a-f]{64}&return=%2F') {
         throw 'The identity owner did not return a valid protected welcome path.'
     }
-    $target = $url + $welcome.welcomePath
+    $target = $tenantUrl + $welcome.welcomePath
     if ($windows) { Start-Process $target }
     else { & xdg-open $target | Out-Null }
     Write-Host "Opened a single-use five-minute welcome page for $Tenant/$Actor. The activation credential was not printed."

@@ -10,7 +10,7 @@ internal sealed record PlatformActivationRequest(string Email);
 internal sealed record PlatformActivationConfirmation(string Ticket, string Password);
 internal sealed record PlatformPostureRequest(string OperationId, long ExpectedVersion, string Posture, string Note);
 internal sealed record OrganizationCreateRequest(string RequestId, string OrganizationName, string DisplayName,
-    string Country, string TimeZone, string InitialAdministratorEmail, string Placement);
+    string Country, string TimeZone, string InitialAdministratorEmail, string Placement, string? TenantSlug = null);
 internal sealed record IntegrationChangeRequest(string OperationId, long ExpectedRevision, bool Enabled, string Scope,
     string? Endpoint, string? ClientId, string? CallbackUri, string? Model,
     IReadOnlyDictionary<string, string>? Options, string? SecretValue, bool ClearSecret, string SubscriptionStatus);
@@ -171,11 +171,16 @@ internal static class PlatformAdministrationEndpoints
                     country = tenant.CountryCode,
                     tenant.TimeZone,
                     initialAdministrator = tenant.InitialAdministratorEmail,
+                    tenant.OrganizationId,
+                    tenantSlug = tenant.Endpoint?.TenantSlug,
+                    hostname = tenant.Endpoint?.Hostname,
+                    tenantUrl = TenantUrl(http, tenant.Endpoint?.Hostname),
+                    endpointStatus = tenant.Endpoint?.Status.ToString(),
                     status = tenant.State.ToString(),
                     created = tenant.CreatedAt,
                     updated = tenant.UpdatedAt,
-                    readiness = tenant.Receipts.Count == 6 ? "Provisioning complete" :
-                        $"{tenant.Receipts.Count} of 6 setup stages complete",
+                    readiness = tenant.Receipts.Count == TenantProvisioningPlan.Count ? "Provisioning complete" :
+                        $"{tenant.Receipts.Count} of {TenantProvisioningPlan.Count} setup stages complete",
                     attention = tenant.State == TenantLifecycleState.ProvisioningFailed ? tenant.LastFailureCode : null,
                     completedSteps = tenant.Receipts.Select(receipt => (int)receipt.Step).ToArray(),
                 })
@@ -192,13 +197,15 @@ internal static class PlatformAdministrationEndpoints
             {
                 var tenant = await orchestrator.RequestAsync(new(request.RequestId, request.OrganizationName,
                     request.DisplayName, request.Country, request.TimeZone, "LOCAL",
-                    request.InitialAdministratorEmail, TenantPlacementMode.Shared), http.RequestAborted).ConfigureAwait(false);
+                    request.InitialAdministratorEmail, TenantPlacementMode.Shared, request.TenantSlug), http.RequestAborted).ConfigureAwait(false);
                 await lifecycleAudit.AppendAsync(tenant.TenantId + ":OrganizationRequested:1",
                     tenant.TenantId, "A950", "OrganizationRequested", "Succeeded", 1,
                     tenant.CreatedAt, http.RequestAborted).ConfigureAwait(false);
                 tenant = await orchestrator.StartOrResumeAsync(tenant.TenantId, http.RequestAborted).ConfigureAwait(false);
                 await AuditProvisioningAsync(tenant, lifecycleAudit, http.RequestAborted).ConfigureAwait(false);
                 return Results.Ok(new { organizationCode = tenant.TenantId, status = tenant.State.ToString(),
+                    tenant.OrganizationId, tenantSlug = tenant.Endpoint?.TenantSlug, hostname = tenant.Endpoint?.Hostname,
+                    tenantUrl = TenantUrl(http, tenant.Endpoint?.Hostname), endpointStatus = tenant.Endpoint?.Status.ToString(),
                     completedSteps = tenant.Receipts.Select(receipt => (int)receipt.Step).ToArray(), tenant.LastFailureCode });
             }
             catch (InvalidOperationException failure)
@@ -216,9 +223,10 @@ internal static class PlatformAdministrationEndpoints
             var tenant = await registry.GetAsync(organizationCode, http.RequestAborted).ConfigureAwait(false);
             if (tenant is null) return Results.NotFound(new { error = "ORGANIZATION_NOT_FOUND" });
             if (tenant.State is not (TenantLifecycleState.ReadyForAdmin or TenantLifecycleState.Active) ||
-                tenant.Receipts.Count != 6)
+                tenant.Receipts.Count != TenantProvisioningPlan.Count || tenant.Endpoint?.Status != TenantEndpointStatus.Registered)
                 return Results.Conflict(new { error = "ORGANIZATION_NOT_READY_FOR_ADMINISTRATOR" });
-            var issued = await welcome.IssueAsync(tenant, http.RequestAborted).ConfigureAwait(false);
+            var issued = await welcome.IssueAsync(tenant, PublicOrigin(http, tenant.Endpoint.Hostname),
+                http.RequestAborted).ConfigureAwait(false);
             await AuditInvitationAsync(tenant.TenantId, "A950", tenant.ConfigurationVersion,
                 lifecycleAudit, http.RequestAborted).ConfigureAwait(false);
             return Results.Ok(issued);
@@ -245,8 +253,11 @@ internal static class PlatformAdministrationEndpoints
             var administrator = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
             if (!TenantAccessClient.Identifier(actorId, 128))
                 return Results.BadRequest(new { error = "IDENTITY_INVALID" });
+            var entry = TrustedEntryContext.RequireTenant(http);
+            if (entry.TenantId != administrator.TenantId)
+                throw new TenantBoundaryException("TENANT_SESSION_HOST_MISMATCH", 403);
             var issued = await welcome.IssueAsync(
-                administrator.TenantId, actorId, http.RequestAborted).ConfigureAwait(false);
+                administrator.TenantId, actorId, PublicOrigin(http, entry.Hostname), http.RequestAborted).ConfigureAwait(false);
             await AuditInvitationAsync(administrator.TenantId, administrator.ActorId,
                 administrator.PolicyVersion, lifecycleAudit, http.RequestAborted).ConfigureAwait(false);
             return Results.Ok(issued);
@@ -456,11 +467,17 @@ internal static class PlatformAdministrationEndpoints
                 tenant.LastFailureCode ?? "Failed", tenant.ConfigurationVersion, tenant.UpdatedAt, ct)
                 .ConfigureAwait(false);
         if (tenant.State is TenantLifecycleState.ReadyForAdmin or TenantLifecycleState.Active &&
-            tenant.Receipts.Count == 6)
-            await audit.AppendAsync(tenant.TenantId + ":ReadyForAdministrator:9", tenant.TenantId,
-                "platform-control-plane", "ReadyForAdministrator", "Succeeded", 9,
+            tenant.Receipts.Count == TenantProvisioningPlan.Count)
+            await audit.AppendAsync(tenant.TenantId + ":ReadyForAdministrator:10", tenant.TenantId,
+                "platform-control-plane", "ReadyForAdministrator", "Succeeded", 10,
                 tenant.Receipts[^1].CompletedAt, ct).ConfigureAwait(false);
     }
+
+    private static string? TenantUrl(HttpContext http, string? hostname) =>
+        string.IsNullOrWhiteSpace(hostname) ? null : PublicOrigin(http, hostname).GetLeftPart(UriPartial.Authority);
+
+    private static Uri PublicOrigin(HttpContext http, string hostname) =>
+        new UriBuilder(http.Request.Scheme, hostname, http.Request.Host.Port ?? -1).Uri;
 
     private static Task AuditInvitationAsync(string tenantId, string actorId, long revision,
         FileTenantLifecycleAudit audit, CancellationToken ct) => audit.AppendAsync(
@@ -498,15 +515,18 @@ internal sealed class LocalAdministratorWelcomeIssuer : IDisposable
         this.identityOwnerToken = identityOwnerToken;
     }
 
-    public async Task<object> IssueAsync(TenantRegistryRecord tenant, CancellationToken ct)
+    public async Task<object> IssueAsync(TenantRegistryRecord tenant, Uri publicOrigin, CancellationToken ct)
     {
         var identity = await ResolveIdentityAsync(tenant.TenantId, tenant.InitialAdministratorEmail, ct)
             .ConfigureAwait(false);
+        if (tenant.Endpoint is not { Status: TenantEndpointStatus.Registered } endpoint ||
+            publicOrigin.Host != endpoint.Hostname)
+            throw new TenantBoundaryException("TENANT_ENDPOINT_INVALID", 409);
         return await IssueAsync(tenant.TenantId, identity.ActorId,
-            tenant.OrganizationName, identity.NormalizedEmail, ct).ConfigureAwait(false);
+            tenant.OrganizationName, identity.NormalizedEmail, publicOrigin, ct).ConfigureAwait(false);
     }
 
-    public async Task<object> IssueAsync(string tenantId, string actorId, CancellationToken ct)
+    public async Task<object> IssueAsync(string tenantId, string actorId, Uri publicOrigin, CancellationToken ct)
     {
         if (!TenantAccessClient.Identifier(tenantId, 64) || !TenantAccessClient.Identifier(actorId, 128))
             throw new TenantBoundaryException("IDENTITY_INVALID", 400);
@@ -524,7 +544,7 @@ internal sealed class LocalAdministratorWelcomeIssuer : IDisposable
         if (identity.TenantId != tenantId || identity.ActorId != actorId ||
             string.IsNullOrWhiteSpace(identity.NormalizedEmail) || identity.NormalizedEmail.Length > 254)
             throw new TenantBoundaryException("IDENTITY_OWNER_RESPONSE_INVALID", 503);
-        return await IssueAsync(tenantId, actorId, null, identity.NormalizedEmail, ct).ConfigureAwait(false);
+        return await IssueAsync(tenantId, actorId, null, identity.NormalizedEmail, publicOrigin, ct).ConfigureAwait(false);
     }
 
     private async Task<ProvisionedIdentity> ResolveIdentityAsync(string tenantId, string email, CancellationToken ct)
@@ -548,7 +568,7 @@ internal sealed class LocalAdministratorWelcomeIssuer : IDisposable
     }
 
     private async Task<object> IssueAsync(string tenantId, string actorId, string? organizationName,
-        string email, CancellationToken ct)
+        string email, Uri publicOrigin, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post,
             new Uri(owner, "local/v1/persona-credentials/tester/welcome-link"));
@@ -568,7 +588,10 @@ internal sealed class LocalAdministratorWelcomeIssuer : IDisposable
         if (!receipt.WelcomePath.StartsWith("/welcome#tenant=" + Uri.EscapeDataString(tenantId) + "&ticket=",
                 StringComparison.Ordinal) || receipt.ExpiresAt <= DateTimeOffset.UtcNow)
             throw new TenantBoundaryException("ADMINISTRATOR_WELCOME_INVALID", 503);
-        return new { receipt.WelcomePath, receipt.ExpiresAt, organizationName, organizationCode = tenantId,
+        if (publicOrigin.Scheme is not ("http" or "https") || !publicOrigin.Host.EndsWith(".localhost", StringComparison.Ordinal))
+            throw new TenantBoundaryException("TENANT_ENDPOINT_INVALID", 409);
+        var welcomeUrl = new Uri(publicOrigin, receipt.WelcomePath).AbsoluteUri;
+        return new { receipt.WelcomePath, welcomeUrl, receipt.ExpiresAt, organizationName, organizationCode = tenantId,
             email, actorId };
     }
 

@@ -9,6 +9,7 @@ const json = (body: unknown, status = 200) =>
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const mount = () => render(<FoundationProvider appearance="midnight">
   <PersonaCredentialEntry activationMode="tester-link" returnPath="/advisor"
+    tenantId="T001" organizationName="Reference organization"
     busy={false} onSignIn={() => Promise.resolve()} onCancel={() => undefined} />
 </FoundationProvider>);
 

@@ -17,6 +17,14 @@ export interface ProductWorkspaceContext {
   productionAccepted: boolean;
   setup?: CustomerWorkspaceSetup;
 }
+export type WorkspaceArea = 'administration' | 'product' | 'kyc-review' | 'advisor' | 'dsa' |
+  'lender' | 'financial-professional' | 'property-valuer' | 'legal-advisor' | 'operations-support';
+export interface AuthorizedWorkspace {
+  area: WorkspaceArea;
+  label: string;
+  href: string;
+  authorization: WorkspaceAuthorization;
+}
 export type WorkspaceAuthorization =
   | { area: 'kyc-review'; authority: 'KycReviewer' }
   | { area: 'administration'; authority: 'TenantAdmin'; policyVersion: number }
@@ -29,17 +37,19 @@ export type WorkspaceAuthorization =
   | { area: 'operations-support'; authority: 'OperationsSupport'; policyVersion: number; subjectVersion: number }
   | { area: 'product'; context: ProductWorkspaceContext };
 export interface WorkspaceSessionState {
-  status: 'public' | 'connecting' | 'verifying' | 'authorized' | 'disconnected';
+  status: 'public' | 'connecting' | 'verifying' | 'choosing' | 'authorized' | 'disconnected';
   session: TenantSession | null;
   api: AccessApi | null;
   authorization: WorkspaceAuthorization | null;
   message: string;
   recovery: { tenantId: string; actorId: string; operationId: string } | null;
+  workspaces?: AuthorizedWorkspace[];
   connect: (tenantId: string, key: string) => Promise<void>;
   connectPassword?: (tenantId: string, email: string, password: string) => Promise<void>;
   connectPersonaPassword?: (tenantId: string, email: string, password: string) => Promise<void>;
   connectEmail?: (tenantId: string, challengeId: string, code: string) => Promise<void>;
   refreshContext?: () => Promise<void>;
+  selectWorkspace?: (area: WorkspaceArea) => Promise<void>;
   retry: () => Promise<void>;
   signOut: () => Promise<void>;
   cancel: () => void;

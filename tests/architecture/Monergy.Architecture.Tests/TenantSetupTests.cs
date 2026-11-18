@@ -72,8 +72,9 @@ public sealed class TenantSetupTests
 
     private static TenantRegistryRecord Ready(string tenant) => new(tenant, "request-" + tenant, "Local organization", "Local", "US", "UTC", "LOCAL",
         "a900@example.test", TenantPlacementMode.Shared, TenantLifecycleState.ReadyForAdmin, 8,
-        Enum.GetValues<TenantProvisioningStep>().Select(step => new TenantProvisioningReceipt(step, $"{tenant}:{(int)step:D2}", "test-only:" + step, DateTimeOffset.UtcNow)).ToArray(),
-        null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        TenantProvisioningPlan.RequiredSteps.Select(step => new TenantProvisioningReceipt(step, $"{tenant}:{(int)step:D2}", "test-only:" + step, DateTimeOffset.UtcNow)).ToArray(),
+        null, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow)
+        { OrganizationId = "org-" + tenant, Endpoint = new(tenant, "org-" + tenant, tenant.ToLowerInvariant(), tenant.ToLowerInvariant() + ".localhost", "LOCAL", "LOCAL-shared", TenantPlacementMode.Shared, TenantEndpointStatus.Registered, true, DateTimeOffset.UtcNow) };
     private static string TemporaryFolder()
     {
         var folder = Path.Combine(Path.GetTempPath(), "monergy-setup-" + Guid.NewGuid().ToString("N"));

@@ -13,15 +13,17 @@ const challenge = () => ({ challengeId: 'a'.repeat(64), expiresAt: new Date(Date
 const session = () => ({ tenantId: 'T001', actorId: 'A100', authenticationContextId: 'verified-session', subjectVersion: 2, expiresAt: new Date(Date.now() + 1_800_000).toISOString() });
 const product = { tenantId: 'T001', actorId: 'A100', customerId: 'C001', customerName: 'Current Customer', capabilities: ['financial-profile.profile.read'], environment: 'Test environment', dataDurability: 'Temporary data', productionAccepted: false };
 const mount = (onVerify = vi.fn().mockResolvedValue(undefined), onCancel = vi.fn()) => {
-  const view = render(<FoundationProvider appearance="midnight"><CustomerEmailEntry busy={false} onVerify={onVerify} onCancel={onCancel} /></FoundationProvider>);
+  const view = render(<FoundationProvider appearance="midnight"><CustomerEmailEntry busy={false} tenantId="T001" onVerify={onVerify} onCancel={onCancel} /></FoundationProvider>);
   return { ...view, onVerify, onCancel };
 };
 function mockOwner(confirmStatus = 200) {
   const fetch = vi.fn((url: string) => {
+    if (url.endsWith('/entry-api/local/v1/context')) return Promise.resolve(json({ kind: 'tenant', tenantId: 'T001', displayName: 'Reference organization' }));
     if (url.endsWith('/customer-email-access')) return Promise.resolve(json({ enabled: true }));
     if (url.endsWith('/request')) return Promise.resolve(json(challenge()));
     if (url.endsWith('/confirm')) return Promise.resolve(json(confirmStatus === 200 ? session() : { error: 'EMAIL_CODE_INVALID' }, confirmStatus));
     if (url.endsWith('/v1/context')) return Promise.resolve(json(product));
+    if (url.includes('context')) return Promise.resolve(json({ error: 'DENIED' }, 403));
     if (url.endsWith('/revoke')) return Promise.resolve(json(true));
     return Promise.resolve(json({}, 404));
   });
@@ -119,9 +121,12 @@ it('revokes a session returned after cancellation and never reveals the private 
   const fetch = mockOwner();
   let resolve: (value: Response) => void = () => undefined;
   fetch.mockImplementation((url: string) => {
+    if (url.endsWith('/entry-api/local/v1/context')) return Promise.resolve(json({ kind: 'tenant', tenantId: 'T001', displayName: 'Reference organization' }));
     if (url.endsWith('/confirm')) return new Promise<Response>(r => { resolve = r; });
     if (url.endsWith('/customer-email-access')) return Promise.resolve(json({ enabled: true }));
     if (url.endsWith('/request')) return Promise.resolve(json(challenge()));
+    if (url.endsWith('/v1/context')) return Promise.resolve(json(product));
+    if (url.includes('context')) return Promise.resolve(json({ error: 'DENIED' }, 403));
     return Promise.resolve(json(true));
   });
   workspace();

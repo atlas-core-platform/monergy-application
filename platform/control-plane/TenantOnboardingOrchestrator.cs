@@ -12,16 +12,6 @@ public interface ITenantProvisioningOperation
 
 public sealed class TenantOnboardingOrchestrator
 {
-    private static readonly TenantProvisioningStep[] RequiredSteps =
-    [
-        TenantProvisioningStep.PlacementResolved,
-        TenantProvisioningStep.ServiceDatabasesProvisioned,
-        TenantProvisioningStep.ServiceMigrationsApplied,
-        TenantProvisioningStep.InitialAdministratorIdentityProvisioned,
-        TenantProvisioningStep.AccessManagementBootstrapped,
-        TenantProvisioningStep.MandatoryReadinessValidated,
-    ];
-
     private readonly ITenantRegistry registry;
     private readonly Dictionary<TenantProvisioningStep, ITenantProvisioningOperation> operations;
     private readonly TimeProvider clock;
@@ -38,9 +28,9 @@ public sealed class TenantOnboardingOrchestrator
         this.setupReadiness = setupReadiness;
 
         var supplied = operations?.ToArray() ?? throw new ArgumentNullException(nameof(operations));
-        if (supplied.Length != RequiredSteps.Length ||
+        if (supplied.Length != TenantProvisioningPlan.Count ||
             supplied.Select(item => item.ProvisioningStep).Distinct().Count() != supplied.Length ||
-            RequiredSteps.Any(step => supplied.All(item => item.ProvisioningStep != step)))
+            TenantProvisioningPlan.RequiredSteps.Any(step => supplied.All(item => item.ProvisioningStep != step)))
             throw new InvalidOperationException("TENANT_PROVISIONING_OPERATIONS_INCOMPLETE");
 
         this.operations = supplied.ToDictionary(item => item.ProvisioningStep);
@@ -78,7 +68,7 @@ public sealed class TenantOnboardingOrchestrator
                 cancellationToken).ConfigureAwait(false);
         }
 
-        foreach (var step in RequiredSteps)
+        foreach (var step in TenantProvisioningPlan.RequiredSteps)
         {
             if (tenant.HasCompleted(step)) continue;
 
@@ -121,13 +111,20 @@ public sealed class TenantOnboardingOrchestrator
                 tenant with
                 {
                     Receipts = tenant.Receipts.Concat([receipt]).ToArray(),
+                    Endpoint = step == TenantProvisioningStep.TenantEndpointRegistered
+                        ? tenant.Endpoint! with
+                        {
+                            Status = TenantEndpointStatus.Registered,
+                            RegisteredAt = receipt.CompletedAt,
+                        }
+                        : tenant.Endpoint,
                     UpdatedAt = clock.GetUtcNow(),
                 },
                 tenant.ConfigurationVersion,
                 cancellationToken).ConfigureAwait(false);
         }
 
-        if (RequiredSteps.Any(step => !tenant.HasCompleted(step)))
+        if (TenantProvisioningPlan.RequiredSteps.Any(step => !tenant.HasCompleted(step)))
             throw new InvalidOperationException("TENANT_READINESS_INCOMPLETE");
 
         return await registry.ReplaceAsync(
@@ -149,7 +146,7 @@ public sealed class TenantOnboardingOrchestrator
             ?? throw new InvalidOperationException("TENANT_NOT_FOUND");
         if (tenant.State == TenantLifecycleState.Active) return tenant;
         if (tenant.State != TenantLifecycleState.ReadyForAdmin ||
-            RequiredSteps.Any(step => !tenant.HasCompleted(step)))
+            TenantProvisioningPlan.RequiredSteps.Any(step => !tenant.HasCompleted(step)))
             throw new InvalidOperationException("TENANT_NOT_READY_FOR_ACTIVATION");
 
         var setup = setupReadiness is null ? null :

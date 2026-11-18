@@ -1,5 +1,5 @@
 import { Alert, Button, Card, Form, Input, Typography } from 'antd';
-import { useLayoutEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 
 interface Invitation {
   tenantId: string;
@@ -35,7 +35,9 @@ function readInvitation(): Invitation | null {
 export function PersonaWelcomeEntry() {
   const [invitation, setInvitation] = useState(readInvitation);
   const [destination, setDestination] = useState<Invitation['returnPath'] | null>(null);
-  const [signInContext, setSignInContext] = useState<{ tenantId: string; organization?: string; email?: string } | null>(null);
+  const [signInContext, setSignInContext] = useState<{ email?: string } | null>(null);
+  const [entry, setEntry] = useState<{ tenantId: string; displayName: string } | null>(null);
+  const [entryChecked, setEntryChecked] = useState(false);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
   // A fragment is not sent to the server; clear it before the browser paints
@@ -53,9 +55,19 @@ export function PersonaWelcomeEntry() {
     window.addEventListener('hashchange', consumeNextLink);
     return () => { window.removeEventListener('hashchange', consumeNextLink); };
   }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/entry-api/local/v1/context', { cache: 'no-store', redirect: 'error', signal: controller.signal })
+      .then(async response => {
+        const value = response.ok ? await response.json() as { kind?: unknown; tenantId?: unknown; displayName?: unknown } : null;
+        if (!controller.signal.aborted && value?.kind === 'tenant' && typeof value.tenantId === 'string' && typeof value.displayName === 'string')
+          setEntry({ tenantId: value.tenantId, displayName: value.displayName });
+      }).catch(() => undefined).finally(() => { if (!controller.signal.aborted) setEntryChecked(true); });
+    return () => { controller.abort(); };
+  }, []);
 
   async function activate(values: Values) {
-    if (!invitation || pending) return;
+    if (invitation?.tenantId !== entry?.tenantId || invitation === null || entry === null || pending) return;
     setPending(true);
     setMessage('');
     try {
@@ -79,7 +91,7 @@ export function PersonaWelcomeEntry() {
         return;
       }
       setDestination(invitation.returnPath);
-      setSignInContext({ tenantId: invitation.tenantId, organization: invitation.organization, email: invitation.email });
+      setSignInContext({ email: invitation.email });
       setInvitation(null);
     } catch {
       setMessage('Account activation is temporarily unavailable. Try again or ask your administrator for help.');
@@ -91,16 +103,18 @@ export function PersonaWelcomeEntry() {
   return <main className="access-page">
     <Card className="access-connect-card">
       <Typography.Title level={1}>Welcome to Monergy</Typography.Title>
-      {!invitation && !destination && <Alert showIcon type="error"
+      {!entryChecked && <p role="status">Checking the organization address…</p>}
+      {entryChecked && (!entry || invitation && invitation.tenantId !== entry.tenantId) && !destination && <Alert showIcon type="error"
+        title="This welcome link belongs to a different organization address. Ask your administrator for a new link." />}
+      {entryChecked && entry && !invitation && !destination && <Alert showIcon type="error"
         title="This welcome link is invalid or incomplete. Ask your administrator to create a new link." />}
       {message && <Alert showIcon type="error" title={message} />}
       {destination ? <>
         <Alert showIcon type="success"
           title="Your account is ready. Continue to sign in." />
-        <Button type="primary" href={destination + '?organization=' + encodeURIComponent(signInContext?.tenantId ?? '') +
-          (signInContext?.email ? '&email=' + encodeURIComponent(signInContext.email) : '')}>Continue to sign in</Button>
-      </> : invitation && <Form<Values> layout="vertical" onFinish={(values) => { void activate(values); }}>
-        <p>Your organization is <strong>{invitation.organization ?? invitation.tenantId}</strong>{invitation.email ? <> and this invitation is for <strong>{invitation.email}</strong></> : null}. {invitation.mode === 'recovery'
+        <Button type="primary" href={destination + (signInContext?.email ? '?email=' + encodeURIComponent(signInContext.email) : '')}>Continue to sign in</Button>
+      </> : invitation !== null && entry !== null && invitation.tenantId === entry.tenantId && <Form<Values> layout="vertical" onFinish={(values) => { void activate(values); }}>
+        <p>Your organization is <strong>{entry.displayName}</strong>{invitation.email ? <> and this invitation is for <strong>{invitation.email}</strong></> : null}. {invitation.mode === 'recovery'
           ? 'Choose a new password. This ends your previous sessions; your administrator cannot see the password or sign in for you.'
           : 'Choose your own password; your administrator cannot see it or sign in for you.'}</p>
         <Form.Item name="password" label="Password (15–128 characters)"

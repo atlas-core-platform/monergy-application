@@ -14,9 +14,11 @@ afterEach(() => {
 });
 
 function mount(status = 200) {
-  const request = vi.fn<(url: string, options?: RequestInit) => Promise<Response>>(() => Promise.resolve(new Response(
-    JSON.stringify(status === 200 ? { activated: true } : { error: 'WELCOME_LINK_INVALID' }),
-    { status, headers: { 'Content-Type': 'application/json' } },
+  const request = vi.fn<(url: string, options?: RequestInit) => Promise<Response>>((url) => Promise.resolve(new Response(
+    JSON.stringify(url.endsWith('/entry-api/local/v1/context')
+      ? { kind: 'tenant', tenantId: 'T001', displayName: 'Reference organization' }
+      : status === 200 ? { activated: true } : { error: 'WELCOME_LINK_INVALID' }),
+    { status: url.endsWith('/entry-api/local/v1/context') ? 200 : status, headers: { 'Content-Type': 'application/json' } },
   )));
   vi.stubGlobal('fetch', request);
   window.history.replaceState(null, '',
@@ -30,16 +32,16 @@ it('clears the ticket from the URL, sets a password, and requires a separate nor
   expect(window.location.pathname).toBe('/welcome');
   expect(window.location.hash).toBe('');
   const user = userEvent.setup();
-  await user.type(screen.getByLabelText('Password (15–128 characters)'), password);
+  await user.type(await screen.findByLabelText('Password (15–128 characters)'), password);
   await user.type(screen.getByLabelText('Confirm password'), password);
   await user.click(screen.getByRole('button', { name: 'Set password' }));
   expect(await screen.findByText('Your account is ready. Continue to sign in.')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Continue to sign in' })).toHaveAttribute(
     'href',
-    '/advisor?organization=T001',
+    '/advisor',
   );
-  expect(request).toHaveBeenCalledTimes(1);
-  const options = request.mock.calls[0]?.[1];
+  expect(request).toHaveBeenCalledTimes(2);
+  const options = request.mock.calls[1]?.[1];
   expect(JSON.parse(typeof options?.body === 'string' ? options.body : '')).toEqual({
     tenantId: 'T001', ticket: 'a'.repeat(64), password,
   });
@@ -48,7 +50,7 @@ it('clears the ticket from the URL, sets a password, and requires a separate nor
 it('shows a safe message when a ticket is expired or replayed', async () => {
   mount(401);
   const user = userEvent.setup();
-  await user.type(screen.getByLabelText('Password (15–128 characters)'), password);
+  await user.type(await screen.findByLabelText('Password (15–128 characters)'), password);
   await user.type(screen.getByLabelText('Confirm password'), password);
   await user.click(screen.getByRole('button', { name: 'Set password' }));
   await waitFor(() => {
@@ -74,11 +76,11 @@ it('uses the protected recovery owner without exposing the replacement password'
   expect(window.location.hash).toBe('');
 });
 
-it('consumes and clears a later welcome link opened in the same tab', async () => {
+it('rejects a later welcome link for a different hostname tenant in the same tab', async () => {
   mount();
   window.location.hash = 'tenant=T002&ticket=' + 'b'.repeat(64) + '&return=%2Faccess';
   await waitFor(() => {
     expect(window.location.hash).toBe('');
-    expect(screen.getByText(/Your organization is/)).toHaveTextContent('T002');
+    expect(screen.getByText(/different organization address/)).toBeVisible();
   });
 });
