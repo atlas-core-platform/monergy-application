@@ -469,7 +469,8 @@ if ($Action -in @('Prepare','Start')) {
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
-        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','reportJobControl','recipientLabel','googleDriveProtection','oneDriveProtection','aiModelInternal','financialQaProtection')
+        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','reportJobControl','recipientLabel','googleDriveProtection','oneDriveProtection','aiModelInternal','financialQaProtection',
+            'tenantProvisioning','tenantBindingProtection','tenantBindingAccessManagement','tenantBindingCustomerIdentity','tenantBindingAudit','tenantBindingConsent','tenantBindingApplicationCase')
     }
     foreach ($name in $requiredTokens) {
         if ($null -eq $state.tokens.PSObject.Properties[$name]) {
@@ -522,6 +523,7 @@ if ($Action -in @('Prepare','Start')) {
     $am = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; AccessManagement=@{ Adapter='postgres-reference'; TrustedContext='customer-identity-reference'; CustomerIdentityUrl='http://127.0.0.1:5101/'; CustomerIdentityToken=$state.tokens.context; IdentityProvisioningToken=$state.tokens.provisioning; MembershipToken=$state.tokens.membership; TenantDatabases=@{} } } }
     foreach ($db in $state.databases | Where-Object service -eq 'am') { $am.Monergy.AccessManagement.TenantDatabases[$db.tenant] = Connection $db 'runtime' }
     if ($onboarding) {
+        $am.Monergy.DynamicTenantBindings=@{ Enabled='true'; Url='http://127.0.0.1:5121/'; Tokens=@{ 'access-management'=$state.tokens.tenantBindingAccessManagement } }
         $am.Monergy.AccessManagement.CustomerRelationships=$true
         $am.Monergy.AccessManagement.CustomerContextToken=$state.tokens.customerContext
         $am.Monergy.AccessManagement.ConsentUrl='http://127.0.0.1:5110/'
@@ -532,6 +534,15 @@ if ($Action -in @('Prepare','Start')) {
     foreach ($service in $ports.Keys) {
         $config = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; TenantBoundary=@{ Enabled='true'; ProbeUrl="http://127.0.0.1:$($ports[$service])/"; CustomerTenants=@{ 'reference-customer'='T001'; 'other-customer'='T002'; C001='T001'; C002='T002' } } } }
         if ($onboarding) { $config.Monergy.TenantBoundary.CustomerRelationships='true' }
+        if ($onboarding -and $service -in @('customer-identity','audit','consent','application-case')) {
+            $bindingToken = switch ($service) {
+                'customer-identity' { $state.tokens.tenantBindingCustomerIdentity }
+                'audit' { $state.tokens.tenantBindingAudit }
+                'consent' { $state.tokens.tenantBindingConsent }
+                'application-case' { $state.tokens.tenantBindingApplicationCase }
+            }
+            $config.Monergy.DynamicTenantBindings=@{ Enabled='true'; Url='http://127.0.0.1:5121/'; Tokens=@{ $service=$bindingToken } }
+        }
         if ($service -in @('customer-identity','audit') -or ($onboarding -and $service -eq 'consent')) {
             $integration = @{ Enabled='true'; AccessManagementUrl='http://127.0.0.1:5088/' }
             if ($onboarding -and $service -in @('customer-identity','consent')) {
@@ -738,8 +749,12 @@ if ($Action -in @('Prepare','Start')) {
         }
         Save-Json "delivery-$tenantId.json" $delivery
     }
-    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json' }; PlatformAdministration=@{ AccessKey=$state.platformAuthority.token; TesterCredential=$state.platformAuthority.token; AdministratorEmail='a950.platform@example.test'; OperationsPath='/var/lib/monergy-onboarding/platform-operations.json'; CredentialsPath='/var/lib/monergy-onboarding/platform-credentials.json'; IntegrationsPath='/var/lib/monergy-onboarding/integration-configuration.json'; SecretsPath='/var/lib/monergy-onboarding/integration-secrets.json'; SecretProtectionKey=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationProtection)); RuntimeToken=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationRuntime)) } } }
+    $workspace = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; Onboarding=@{ Enabled=$onboarding; RegistryPath='/var/lib/monergy-onboarding/registry.json'; SetupPath='/var/lib/monergy-onboarding/setup.json'; LifecycleAuditPath='/var/lib/monergy-onboarding/tenant-lifecycle-audit.json' }; PlatformAdministration=@{ AccessKey=$state.platformAuthority.token; TesterCredential=$state.platformAuthority.token; AdministratorEmail='a950.platform@example.test'; OperationsPath='/var/lib/monergy-onboarding/platform-operations.json'; CredentialsPath='/var/lib/monergy-onboarding/platform-credentials.json'; IntegrationsPath='/var/lib/monergy-onboarding/integration-configuration.json'; SecretsPath='/var/lib/monergy-onboarding/integration-secrets.json'; SecretProtectionKey=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationProtection)); RuntimeToken=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationRuntime)) } } }
     if ($onboarding) {
+        $workspace.Monergy.TenantProvisioning=@{ Url='http://127.0.0.1:5121/'; Token=$state.tokens.tenantProvisioning }
+        $workspace.Monergy.PlatformAdministration.PersonaTesterCredential=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess))
+        $workspace.Monergy.PlatformAdministration.CustomerIdentityUrl='http://127.0.0.1:5101/'
+        $workspace.Monergy.PlatformAdministration.IdentityOwnerToken=$state.tokens.provisioning
         $workspace.Monergy.AccessIntegration=@{
             Enabled='true'; CustomerRelationships='true'; AccessManagementUrl='http://127.0.0.1:5088/'
             CustomerIdentityUrl='http://127.0.0.1:5101/'; CustomerContextToken=$state.tokens.customerContext
@@ -756,6 +771,27 @@ if ($Action -in @('Prepare','Start')) {
         }
     }
     Save-Json 'workspace.json' $workspace
+    if ($onboarding) {
+        $owner = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{
+            ExecutionZone='LOCAL'; TenantProvisioning=@{
+                Token=$state.tokens.tenantProvisioning
+                ClusterConnection="Host=postgres;Database=postgres;Username=postgres;Password=$($state.postgresPassword);Timeout=10;Include Error Detail=false"
+                StatePath='/var/lib/monergy-onboarding/tenant-provisioning-state.json'
+                BindingSecretsPath='/var/lib/monergy-onboarding/tenant-binding-secrets.json'
+                BindingProtectionKey=(Convert-HexToBase64 ([string]$state.tokens.tenantBindingProtection))
+                CustomerIdentityUrl='http://127.0.0.1:5101/'
+                CustomerIdentityToken=$state.tokens.provisioning
+                BindingTokens=@{
+                    'access-management'=$state.tokens.tenantBindingAccessManagement
+                    'customer-identity'=$state.tokens.tenantBindingCustomerIdentity
+                    audit=$state.tokens.tenantBindingAudit
+                    consent=$state.tokens.tenantBindingConsent
+                    'application-case'=$state.tokens.tenantBindingApplicationCase
+                }
+            }
+        } }
+        Save-Json 'tenant-provisioning.json' $owner
+    }
     $runtimeUid = if ($windows) { '1654' } else { (& id -u).Trim() }
     $path = $folder.Replace('\','/')
     Save-Text 'compose.env' "UAT_CONFIG_ROOT='$path'`nUAT_PORT=$($state.port)`nUAT_UID=$runtimeUid`n"

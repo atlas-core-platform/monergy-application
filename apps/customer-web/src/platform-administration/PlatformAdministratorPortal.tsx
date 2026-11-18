@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Form, Input, Modal, Select, Space, Switch, Table, Tag, Timeline, Typography } from 'antd';
+import { Alert, Button, Card, Form, Input, Modal, Select, Space, Steps, Switch, Table, Tag, Timeline, Typography } from 'antd';
 import { useCallback, useEffect, useState } from 'react';
 import { FoundationProvider, WorkspaceShell } from '@monergy/ui-foundation';
 import '../access/access.css';
@@ -13,6 +13,9 @@ interface Receipt { operationId: string; serviceId: string; posture: Posture; no
 interface Topology { services: Service[]; operationsRevision: number; postures: ServicePosture[] }
 interface IntegrationProvider { code: string; displayName: string; category: string; enabled: boolean; scope: 'Platform' | 'Organization'; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; options: Record<string, string>; secretConfigured: boolean; secretUpdatedAt?: string; subscriptionStatus: string; readiness: string; updatedAt: string }
 interface Integrations { revision: number; providers: IntegrationProvider[] }
+interface Organization { organizationCode: string; organizationName: string; displayName: string; country: string; timeZone: string; initialAdministrator: string; status: 'Requested' | 'Provisioning' | 'ProvisioningFailed' | 'ReadyForAdmin' | 'Active'; created: string; updated: string; readiness: string; attention?: string; completedSteps: number[] }
+interface Organizations { items: Organization[] }
+interface WelcomeReceipt { welcomePath: string; expiresAt: string }
 
 const request = async <T,>(path: string, session?: string, init?: RequestInit): Promise<T> => {
   const headers = new Headers(init?.headers);
@@ -38,6 +41,9 @@ export default function PlatformAdministratorPortal() {
   const [gates, setGates] = useState<Gate[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [integrations, setIntegrations] = useState<Integrations | null>(null);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [active, setActive] = useState<'platform' | 'organizations'>('platform');
+  const [createOrganization, setCreateOrganization] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Service | null>(null);
@@ -46,14 +52,16 @@ export default function PlatformAdministratorPortal() {
   const [activationForm] = Form.useForm<{ password: string; confirm: string }>();
   const [integrationForm] = Form.useForm<{ enabled: boolean; scope: 'Platform' | 'Organization'; tenantId?: string; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; providerLabel?: string; notice?: string; secretValue?: string; clearSecret: boolean; subscriptionStatus: string }>();
   const [postureForm] = Form.useForm<{ posture: Posture; note: string }>();
+  const [organizationForm] = Form.useForm<{ organizationName: string; displayName: string; country: string; timeZone: string; initialAdministratorEmail: string; placement: 'Shared' }>();
 
   const load = useCallback(async (current: PlatformSession) => {
-    const [verified, services, readiness, history, providerConfiguration] = await Promise.all([
+    const [verified, services, readiness, history, providerConfiguration, organizationDirectory] = await Promise.all([
       request<PlatformContext>('/platform-api/local/v1/context', current.session),
       request<Topology>('/platform-api/local/v1/topology', current.session),
       request<{ gates: Gate[] }>('/platform-api/local/v1/readiness', current.session),
       request<{ items: Receipt[] }>('/platform-api/local/v1/audit', current.session),
       request<Integrations>('/platform-api/local/v1/integrations', current.session),
+      request<Organizations>('/platform-api/local/v1/organizations', current.session),
     ]);
     if (verified.authority !== 'PlatformAdministrator' || verified.tenantAccess ||
         verified.customerDataAccess || verified.breakGlassAvailable || verified.productionAccepted)
@@ -63,6 +71,7 @@ export default function PlatformAdministratorPortal() {
     setGates(readiness.gates);
     setReceipts(history.items);
     setIntegrations(providerConfiguration);
+    setOrganizations(organizationDirectory.items);
   }, []);
 
   useEffect(() => {
@@ -151,6 +160,37 @@ export default function PlatformAdministratorPortal() {
     finally { setBusy(false); }
   };
 
+  const submitOrganization = async (values: { organizationName: string; displayName: string; country: string; timeZone: string; initialAdministratorEmail: string; placement: 'Shared' }) => {
+    if (!session) return;
+    setBusy(true); setError('');
+    try {
+      await request('/platform-api/local/v1/organizations', session.session, {
+        method: 'POST', body: JSON.stringify({
+          requestId: crypto.randomUUID().replaceAll('-', ''),
+          organizationName: values.organizationName.trim(), displayName: values.displayName.trim(),
+          country: values.country, timeZone: values.timeZone,
+          initialAdministratorEmail: values.initialAdministratorEmail.trim().toLowerCase(), placement: values.placement,
+        }),
+      });
+      await load(session); setCreateOrganization(false); organizationForm.resetFields(); setActive('organizations');
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'The organization could not be created.'); }
+    finally { setBusy(false); }
+  };
+
+  const openAdministratorSetup = async (organization: Organization) => {
+    if (!session) return;
+    setBusy(true); setError('');
+    try {
+      const receipt = await request<WelcomeReceipt>('/platform-api/local/v1/organizations/' +
+        encodeURIComponent(organization.organizationCode) + '/administrator-welcome', session.session, { method: 'POST' });
+      if (!receipt.welcomePath.startsWith('/welcome#')) throw new Error('The administrator setup page was not valid.');
+      const separator = receipt.welcomePath.includes('?') ? '&' : '&';
+      window.location.assign(receipt.welcomePath + separator + 'organization=' +
+        encodeURIComponent(organization.organizationName) + '&email=' + encodeURIComponent(organization.initialAdministrator));
+    } catch (failure) { setError(failure instanceof Error ? failure.message : 'The administrator setup page is unavailable.'); }
+    finally { setBusy(false); }
+  };
+
   if (!session || !context || !topology) return (
     <FoundationProvider appearance="midnight">
       <main className="access-entry">
@@ -180,14 +220,30 @@ export default function PlatformAdministratorPortal() {
   );
 
   const postureByService = new Map(topology.postures.map(item => [item.serviceId, item]));
+  const onboardingOrganization =
+    organizations.find((item) => item.status !== 'Active') ?? organizations[0];
   return (
     <FoundationProvider appearance="midnight">
       <WorkspaceShell appearance="midnight" context="Platform Administrator" area="Administration"
         module={{ name: 'Monergy Administration', homeHref: '/platform', guide: <p>Review system status and operational notes. Customer and organization information is not available here.</p> }}
-        destinations={[{ id: 'platform', label: 'System status', icon: 'layers', href: '/platform' }]}
-        active="platform" onNavigate={() => { return undefined; }}
+        destinations={[{ id: 'platform', label: 'System status', icon: 'layers', href: '/platform' }, { id: 'organizations', label: 'Organizations', icon: 'users', href: '/platform' }]}
+        active={active} onNavigate={(id) => { if (id === 'platform' || id === 'organizations') setActive(id); }}
         actions={<Button type="text" onClick={() => { void signOut(); }}>Sign out</Button>}>
         <main className="access-page">
+          {active === 'organizations' ? <>
+            <header className="access-page-header"><div><p className="workspace-eyebrow">MONERGY ADMINISTRATION · {context.environment.toUpperCase()}</p><h1>Organizations</h1><p>Create an organization, follow secure provisioning and hand account setup to its first administrator.</p></div><Space><Button onClick={() => { void load(session).catch((failure: unknown) => { setError(failure instanceof Error ? failure.message : 'We could not refresh organizations.'); }); }}>Refresh</Button><Button type="primary" onClick={() => { setCreateOrganization(true); organizationForm.setFieldsValue({ country: 'IN', timeZone: 'Asia/Calcutta', placement: 'Shared' }); }}>Create organization</Button></Space></header>
+            <Alert type="info" showIcon className="access-notice" title="Platform authority stays separate" description="You can provision an organization and invite its first administrator. You cannot set their password, enter Organization Settings, impersonate them or open customer information." />
+            {error && <Alert type="error" showIcon title={error} className="access-notice" />}
+            <Table<Organization> rowKey="organizationCode" dataSource={organizations} pagination={false} scroll={{ x: 1050 }} columns={[
+              { title: 'Organization', render: (_, row) => <><strong>{row.organizationName}</strong><br /><Typography.Text type="secondary">Organization code: {row.organizationCode}</Typography.Text></> },
+              { title: 'Location', render: (_, row) => <>{row.country}<br /><Typography.Text type="secondary">{row.timeZone}</Typography.Text></> },
+              { title: 'Initial administrator', dataIndex: 'initialAdministrator' },
+              { title: 'Created', render: (_, row) => new Date(row.created).toLocaleString() },
+              { title: 'Status', render: (_, row) => <Space orientation="vertical" size={0}><Tag color={row.status === 'Active' ? 'success' : row.status === 'ProvisioningFailed' ? 'error' : row.status === 'ReadyForAdmin' ? 'processing' : 'warning'}>{row.status === 'ReadyForAdmin' ? 'Ready for Administrator' : row.status}</Tag><Typography.Text type="secondary">{row.status === 'ReadyForAdmin' ? 'Waiting for the Organization Administrator to complete setup' : row.readiness}</Typography.Text>{row.attention && <Typography.Text type="danger">Needs attention</Typography.Text>}</Space> },
+              { title: 'Action', render: (_, row) => row.status === 'ReadyForAdmin' ? <Button size="small" type="primary" loading={busy} onClick={() => { void openAdministratorSetup(row); }}>Open administrator setup page</Button> : row.status === 'ProvisioningFailed' ? <Button size="small" loading={busy} onClick={() => { void request('/platform-api/local/v1/organizations/' + encodeURIComponent(row.organizationCode) + '/resume', session.session, { method: 'POST' }).then(() => load(session)).catch((failure: unknown) => { setError(failure instanceof Error ? failure.message : 'Provisioning could not resume.'); }); }}>Try again</Button> : null },
+            ]} />
+            <section className="access-operation-page"><h2>Provisioning stages{onboardingOrganization ? ` · ${onboardingOrganization.organizationName}` : ''}</h2><Steps orientation="vertical" size="small" items={['Preparing organization', 'Creating secure data stores', 'Applying required setup', 'Creating the first administrator', 'Setting up organization access', 'Checking readiness'].map((title, index) => ({ title, status: onboardingOrganization?.completedSteps.includes(index + 1) ? 'finish' : 'wait' }))} /></section>
+          </> : <>
           <header className="access-page-header"><div><p className="workspace-eyebrow">MONERGY ADMINISTRATION · {context.environment.toUpperCase()}</p><h1>System status</h1><p>Availability, release blockers and operational notes.</p></div><Button onClick={() => { void load(session).catch((failure: unknown) => { setError(failure instanceof Error ? failure.message : 'We could not refresh the system status.'); }); }}>Refresh</Button></header>
           <Alert type="info" showIcon className="access-notice" title="Separate from customer work" description="This workspace cannot open organization or customer information, sign in as another person or change their access." />
           {error && <Alert type="error" showIcon title={error} className="access-notice" />}
@@ -208,6 +264,19 @@ export default function PlatformAdministratorPortal() {
             ]} />
           </section>
           <section className="access-operation-page"><h2>Operational history</h2>{receipts.length ? <Timeline items={receipts.map(item => ({ key: item.operationId, title: `${topology.services.find(service => service.id === item.serviceId)?.label ?? 'Monergy area'} · ${item.posture}`, content: <p>{item.note}<br /><small>{new Date(item.recordedAt).toLocaleString()}</small></p> }))} /> : <p>No operational notes have been recorded.</p>}</section>
+          </>}
+          <Modal open={createOrganization} title="Create organization" onCancel={() => { setCreateOrganization(false); }} footer={null} destroyOnHidden>
+            <Alert type="info" showIcon title="The administrator creates their own password" description="Monergy will prepare the organization and its first administrator. You cannot set or see their password, sign in for them or grant yourself access." />
+            <Form form={organizationForm} layout="vertical" onFinish={(values) => { void submitOrganization(values); }}>
+              <Form.Item name="organizationName" label="Organization name" rules={[{ required: true, whitespace: true }, { max: 200 }]}><Input /></Form.Item>
+              <Form.Item name="displayName" label="Display name" rules={[{ required: true, whitespace: true }, { max: 200 }]}><Input /></Form.Item>
+              <Form.Item name="country" label="Country" rules={[{ required: true }, { len: 2 }]}><Select options={[{ value: 'IN', label: 'India' }, { value: 'US', label: 'United States' }, { value: 'GB', label: 'United Kingdom' }]} /></Form.Item>
+              <Form.Item name="timeZone" label="Time zone" rules={[{ required: true }]}><Select options={[{ value: 'Asia/Calcutta', label: 'India Standard Time' }, { value: 'UTC', label: 'UTC' }, { value: 'America/New_York', label: 'Eastern Time' }]} /></Form.Item>
+              <Form.Item name="initialAdministratorEmail" label="Initial Organization Administrator email" rules={[{ required: true }, { type: 'email' }, { max: 320 }]}><Input autoComplete="off" /></Form.Item>
+              <Form.Item name="placement" label="Placement" rules={[{ required: true }]}><Select options={[{ value: 'Shared', label: 'Shared' }, { value: 'Dedicated', label: 'Dedicated — coming later', disabled: true }]} /></Form.Item>
+              <Button type="primary" htmlType="submit" loading={busy}>Create organization</Button>
+            </Form>
+          </Modal>
           <Modal open={selected !== null} title={`Add operational note · ${selected?.label ?? ''}`} onCancel={() => { setSelected(null); }} footer={null} destroyOnHidden>
             <p>This records an operational note. It does not restart anything, grant access or change customer information.</p>
             <Form form={postureForm} layout="vertical" onFinish={(values) => { void savePosture(values); }}>

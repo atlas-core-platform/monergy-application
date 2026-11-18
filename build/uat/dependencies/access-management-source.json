@@ -4,10 +4,10 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "60b58be8f15aaac30194117ecfce057b22f2bec3",
-  "sourceTree": "ab825555e1345732016dc3abc40665fdf302bf03",
-  "verificationStatus": "P3_10_PHYSICAL_REMEDIATION_CANDIDATE",
-  "candidatePullRequest": 30,
+  "commit": "85cb70159a1a8f700c2e15d191fb8097651c4b78",
+  "sourceTree": "ab5482549fbc8a27a5b6eaa583687906e80cbe4b",
+  "verificationStatus": "PRE_AZURE_02_CANDIDATE",
+  "candidatePullRequest": null,
   "files": [
     {
       "path": "build/prepare-ci-databases.sh",
@@ -123,7 +123,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/Program.cs",
-      "gitBlobSha": "53bad40f3cc2ee881cb6d2cbd8dab69c866c1061"
+      "gitBlobSha": "a6db003fad7e1d42e2aab069084c16bf0d61de3e"
     },
     {
       "path": "src/Monergy.AccessManagement/ReferenceAdapters.cs",
@@ -135,7 +135,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/TenantConnections.cs",
-      "gitBlobSha": "fb703b6103cb9d611ce03cda9f9796eee01953dc"
+      "gitBlobSha": "65854bd23581c444f078c0eb2214414f470b881a"
     },
     {
       "path": "tools/Monergy.AccessManagement.DeliveryReference/fixture.sql",
@@ -199,7 +199,7 @@
     },
     {
       "path": "tools/Monergy.AccessManagement.Migrations/Program.cs",
-      "gitBlobSha": "5b5996a560da99106e418029eb71a11c42f29597"
+      "gitBlobSha": "9f0eebc9209512271a2e9709ef2f9376395931be"
     }
   ]
 }

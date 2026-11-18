@@ -329,6 +329,23 @@ export class AccessApi {
       },
     );
   }
+  createLocalWelcome<T>(actorId: string, signal?: AbortSignal): Promise<T> {
+    if (!/^[A-Za-z0-9_.:-]{1,128}$/.test(actorId))
+      return Promise.reject(new AccessApiError(400, 'INVALID_ACTOR_ID'));
+    return this.guarded<T>(
+      '/uat-api/v1/administration/people/' + encodeURIComponent(actorId) + '/welcome',
+      {
+        method: 'POST',
+        signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Monergy-Tenant': this.session.tenantId,
+          'X-Monergy-Session': this.session.authenticationContextId,
+        },
+        body: '{}',
+      },
+    );
+  }
   product<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
     return this.guarded<T>('/product-api/' + path, {
       method,

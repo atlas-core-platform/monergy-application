@@ -55,6 +55,13 @@ interface InvitationDeliveryResult {
   actorId: string;
   state: string;
 }
+interface LocalWelcomeResult {
+  actorId: string;
+  email: string;
+  organizationCode: string;
+  welcomePath: string;
+  expiresAt: string;
+}
 const template = 'email,role_code,group_codes\nperson@example.test,,\n';
 
 export function ImportDrawer({
@@ -110,6 +117,37 @@ export function ImportDrawer({
     } catch (failure) {
       setInvitationError(
         'Invitation delivery could not be requested. Refresh status before trying again.',
+      );
+      if (failure instanceof AccessApiError && [401, 403].includes(failure.status))
+        onExpired(failure);
+    } finally {
+      invitationActionInFlight.current = false;
+      setInvitationActionActor(null);
+    }
+  };
+  const openLocalWelcome = async (item: InvitationStatus) => {
+    if (invitationActionInFlight.current) return;
+    invitationActionInFlight.current = true;
+    setInvitationActionActor(item.actorId);
+    setInvitationError('');
+    setInvitationNotice('');
+    try {
+      const receipt = await api.createLocalWelcome<LocalWelcomeResult>(item.actorId);
+      if (
+        receipt.actorId !== item.actorId ||
+        receipt.email !== item.email ||
+        !receipt.welcomePath.startsWith('/welcome#')
+      )
+        throw new AccessApiError(503, 'WELCOME_LINK_RESPONSE_INVALID');
+      const context =
+        '&organization=' +
+        encodeURIComponent(receipt.organizationCode) +
+        '&email=' +
+        encodeURIComponent(receipt.email);
+      window.location.assign(receipt.welcomePath + context);
+    } catch (failure) {
+      setInvitationError(
+        'The protected LOCAL welcome link could not be created. Refresh status before trying again.',
       );
       if (failure instanceof AccessApiError && [401, 403].includes(failure.status))
         onExpired(failure);
@@ -897,28 +935,43 @@ export function ImportDrawer({
                                 return <span className="access-form-hint">Delivery requested</span>;
                               if (item.state === 'Pending')
                                 return (
-                                  <Popconfirm
-                                    title="Cancel credential invitation?"
-                                    description="This revokes only the pending credential invitation. Organization membership and assigned access remain active."
-                                    okText="Cancel invitation"
-                                    cancelText="Keep invitation"
-                                    okButtonProps={{
-                                      danger: true,
-                                      loading: invitationActionActor === item.actorId,
-                                    }}
-                                    onConfirm={() => {
-                                      void cancelInvitation(item);
-                                    }}
-                                  >
-                                    <Button
-                                      danger
-                                      size="small"
-                                      aria-label={`Cancel invitation for ${item.email}`}
-                                      disabled={invitationBusy || invitationActionActor !== null}
+                                  <Space wrap>
+                                    {!invitationDeliveryEnabled && (
+                                      <Button
+                                        size="small"
+                                        aria-label={`Open protected LOCAL welcome for ${item.email}`}
+                                        disabled={invitationBusy || invitationActionActor !== null}
+                                        loading={invitationActionActor === item.actorId}
+                                        onClick={() => {
+                                          void openLocalWelcome(item);
+                                        }}
+                                      >
+                                        Open LOCAL welcome
+                                      </Button>
+                                    )}
+                                    <Popconfirm
+                                      title="Cancel credential invitation?"
+                                      description="This revokes only the pending credential invitation. Organization membership and assigned access remain active."
+                                      okText="Cancel invitation"
+                                      cancelText="Keep invitation"
+                                      okButtonProps={{
+                                        danger: true,
+                                        loading: invitationActionActor === item.actorId,
+                                      }}
+                                      onConfirm={() => {
+                                        void cancelInvitation(item);
+                                      }}
                                     >
-                                      Cancel invitation
-                                    </Button>
-                                  </Popconfirm>
+                                      <Button
+                                        danger
+                                        size="small"
+                                        aria-label={`Cancel invitation for ${item.email}`}
+                                        disabled={invitationBusy || invitationActionActor !== null}
+                                      >
+                                        Cancel invitation
+                                      </Button>
+                                    </Popconfirm>
+                                  </Space>
                                 );
                               if (invitationDeliveryEnabled && item.state !== 'Completed') {
                                 const first = item.state === 'Not sent';
@@ -972,7 +1025,7 @@ export function ImportDrawer({
                   description={
                     <div>
                       <p>Organization access is ready. No password or signed-in session has been created for this person.</p>
-                      <p>In the LOCAL/UAT test environment, the invited person opens Monergy, identifies their own account, and uses the protected tester welcome flow to set their password. In higher environments, they follow their own verified email invitation.</p>
+                      <p>In the LOCAL/UAT test environment, an authenticated Organization Administrator can open the protected LOCAL welcome for the invited person without seeing any tester authorization. In higher environments, the person follows their own verified email invitation.</p>
                       <p>Do not use your administrator session to activate the person’s account. Sign-in and workspace authorization remain separate.</p>
                     </div>
                   }

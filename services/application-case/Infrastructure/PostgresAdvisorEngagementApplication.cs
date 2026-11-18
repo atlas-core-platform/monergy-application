@@ -10,29 +10,14 @@ public sealed class PostgresAdvisorEngagementApplication : IAdvisorEngagementApp
 {
     private const string Durability = "Durable test data";
     private readonly TimeProvider clock;
-    private readonly Dictionary<string, NpgsqlDataSource> sources = new(StringComparer.Ordinal);
+    private readonly ProtectedTenantDatabaseConnections connections;
 
     public PostgresAdvisorEngagementApplication(IConfiguration configuration, TimeProvider clock)
     {
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
         this.clock = clock;
-        foreach (var binding in configuration
-            .GetSection("Monergy:Persistence:ApplicationCase:RuntimeConnections").GetChildren())
-        {
-            if (!TenantAccessClient.Identifier(binding.Key, 64) || string.IsNullOrWhiteSpace(binding.Value))
-                throw new InvalidOperationException("Invalid Application & Case tenant binding.");
-            var options = new NpgsqlConnectionStringBuilder(binding.Value)
-            {
-                IncludeErrorDetail = false,
-                NoResetOnClose = false,
-                Timeout = 5,
-                CommandTimeout = 15,
-                MaxPoolSize = 20,
-            };
-            sources.Add(binding.Key, NpgsqlDataSource.Create(options.ConnectionString));
-        }
-        if (sources.Count == 0)
-            throw new InvalidOperationException("Application & Case database bindings are required.");
+        connections = new(configuration, "application-case",
+            "Monergy:Persistence:ApplicationCase:RuntimeConnections");
     }
 
     public async Task<AdvisorEngagementView> ReadAsync(AdvisorEngagementContext context, CancellationToken ct)
@@ -206,11 +191,10 @@ public sealed class PostgresAdvisorEngagementApplication : IAdvisorEngagementApp
 
     private async Task<NpgsqlConnection> OpenAsync(string tenant, CancellationToken ct)
     {
-        if (!sources.TryGetValue(tenant, out var source))
-            throw new ApplicationCaseException("CASE_TENANT_UNAVAILABLE", 503);
         NpgsqlConnection connection;
-        try { connection = await source.OpenConnectionAsync(ct).ConfigureAwait(false); }
-        catch (NpgsqlException) { throw new ApplicationCaseException("CASE_TENANT_UNAVAILABLE", 503); }
+        try { connection = await connections.OpenAsync(tenant, ct).ConfigureAwait(false); }
+        catch (Exception failure) when (failure is NpgsqlException or TenantBoundaryException)
+        { throw new ApplicationCaseException("CASE_TENANT_UNAVAILABLE", 503); }
         try
         {
             var valid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
@@ -245,7 +229,7 @@ public sealed class PostgresAdvisorEngagementApplication : IAdvisorEngagementApp
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var source in sources.Values) await source.DisposeAsync().ConfigureAwait(false);
+        await connections.DisposeAsync().ConfigureAwait(false);
     }
 
     private sealed record EngagementRow(string TenantId, string AdvisorActorId, string CustomerId,

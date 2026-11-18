@@ -6,7 +6,7 @@ using Monergy.AccessManagement;
 using Npgsql;
 
 if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") != "Development" ||
-    Environment.GetEnvironmentVariable("MONERGY_AM_REFERENCE_PROVISIONING") != "1" || args.Length != 2)
+    Environment.GetEnvironmentVariable("MONERGY_AM_REFERENCE_PROVISIONING") != "1" || args.Length is not (2 or 3))
 {
     Console.Error.WriteLine("Reference provisioning requires Development, MONERGY_AM_REFERENCE_PROVISIONING=1, and tenant-id initial-admin-actor arguments.");
     return 1;
@@ -18,7 +18,20 @@ AccessInput.Identifier(tenantId, 64);
 AccessInput.Identifier(actorId);
 var catalog = new CapabilityCatalog();
 DefaultAccessPack.Validate(catalog);
-var identity = await new ReferenceTenantIdentityDirectory().FindAsync(tenantId, actorId, default);
+VerifiedTenantIdentity? identity;
+if (args.Length == 3)
+{
+    var normalizedEmail = args[2].Trim().ToLowerInvariant();
+    if (Environment.GetEnvironmentVariable("MONERGY_AM_CONTROL_PLANE_PROVISIONING") != "1" ||
+        normalizedEmail.Length is < 3 or > 320 || !normalizedEmail.Contains('@') ||
+        normalizedEmail.Any(char.IsWhiteSpace))
+    {
+        Console.Error.WriteLine("A verified control-plane identity receipt is required.");
+        return 1;
+    }
+    identity = new(tenantId, actorId, normalizedEmail);
+}
+else identity = await new ReferenceTenantIdentityDirectory().FindAsync(tenantId, actorId, default);
 if (identity is null)
 {
     Console.Error.WriteLine("A verified reference identity is required.");

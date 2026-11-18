@@ -39,6 +39,9 @@ export function PersonaCredentialEntry({
   const [message, setMessage] = useState('');
   const request = useRef<AbortController | null>(null);
   const epoch = useRef(0);
+  const signInContext = new URLSearchParams(window.location.search);
+  const organization = signInContext.get('organization') ?? 'T001';
+  const invitedEmail = signInContext.get('email') ?? undefined;
   useEffect(() => () => {
     epoch.current++;
     request.current?.abort();
@@ -129,7 +132,7 @@ export function PersonaCredentialEntry({
       onClick={() => { setTesterWelcome(true); }}>
       Activate your invited account (LOCAL/UAT)
     </Button>}
-    <Form form={form} layout="vertical" initialValues={{ tenantId: 'T001' }}
+    <Form form={form} layout="vertical" initialValues={{ tenantId: organization, email: invitedEmail }}
       onFinish={(values) => { void submit(values); }}>
       {!challenge && <>
         <Form.Item label="Organization" name="tenantId" rules={[

@@ -25,6 +25,57 @@ const integrations = { revision: 0, providers: [{ code: 'email', displayName: 'E
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Platform Administrator portal', () => {
+  it('creates an organization through the platform session without collecting an administrator password', async () => {
+    let created = false;
+    const writes: Record<string, unknown>[] = [];
+    const organization = {
+      organizationCode: 'tenant-02a', organizationName: 'Northwind Advisory',
+      displayName: 'Northwind', country: 'IN', timeZone: 'Asia/Calcutta',
+      initialAdministrator: 'admin@northwind.example.test', status: 'ReadyForAdmin',
+      created: '2026-11-18T10:00:00Z', updated: '2026-11-18T10:01:00Z',
+      readiness: 'Ready for first administrator', completedSteps: [1, 2, 3, 4, 5, 6],
+    };
+    vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith('/sessions')) return Promise.resolve(json(session));
+      if (url.endsWith('/context')) return Promise.resolve(json(context));
+      if (url.endsWith('/topology')) return Promise.resolve(json(topology));
+      if (url.endsWith('/readiness')) return Promise.resolve(json({ gates: [] }));
+      if (url.endsWith('/audit')) return Promise.resolve(json({ items: [] }));
+      if (url.endsWith('/integrations')) return Promise.resolve(json(integrations));
+      if (url.endsWith('/organizations') && options?.method === 'POST') {
+        if (typeof options.body !== 'string') throw new Error('Expected organization JSON.');
+        writes.push(JSON.parse(options.body) as Record<string, unknown>);
+        created = true;
+        return Promise.resolve(json({ organizationCode: organization.organizationCode,
+          status: organization.status, completedSteps: organization.completedSteps }));
+      }
+      if (url.endsWith('/organizations'))
+        return Promise.resolve(json({ items: created ? [organization] : [] }));
+      throw new Error('Unexpected request: ' + url);
+    }));
+    render(<PlatformAdministratorPortal />);
+    fireEvent.change(screen.getByLabelText('Password'),
+      { target: { value: 'Platform!Password123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    fireEvent.click(await screen.findByText('Organizations', { selector: 'span' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create organization' }));
+    const dialog = within(await screen.findByRole('dialog'));
+    fireEvent.change(dialog.getByLabelText('Organization name'),
+      { target: { value: 'Northwind Advisory' } });
+    fireEvent.change(dialog.getByLabelText('Display name'),
+      { target: { value: 'Northwind' } });
+    fireEvent.change(dialog.getByLabelText('Initial Organization Administrator email'),
+      { target: { value: 'admin@northwind.example.test' } });
+    expect(dialog.queryByLabelText(/password/i)).toBeNull();
+    fireEvent.click(dialog.getByRole('button', { name: 'Create organization' }));
+    expect(await screen.findByText(/Organization code: tenant-02a/)).toBeVisible();
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ organizationName: 'Northwind Advisory',
+      displayName: 'Northwind', initialAdministratorEmail: 'admin@northwind.example.test',
+      placement: 'Shared' });
+    expect(JSON.stringify(writes[0])).not.toMatch(/password|tester|secret/i);
+  });
+
   it('uses a separate platform session and exposes no tenant or customer authority', async () => {
     const calls: { url: string; options?: RequestInit }[] = [];
     vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
@@ -35,6 +86,7 @@ describe('Platform Administrator portal', () => {
       if (url.endsWith('/readiness')) return Promise.resolve(json({ gates: [] }));
       if (url.endsWith('/audit')) return Promise.resolve(json({ items: [] }));
       if (url.endsWith('/integrations')) return Promise.resolve(json(integrations));
+      if (url.endsWith('/organizations')) return Promise.resolve(json({ items: [] }));
       throw new Error('Unexpected request: ' + url);
     }));
     const user = userEvent.setup();
@@ -61,6 +113,7 @@ describe('Platform Administrator portal', () => {
       if (url.endsWith('/readiness')) return Promise.resolve(json({ gates: [] }));
       if (url.endsWith('/audit')) return Promise.resolve(json({ items: [] }));
       if (url.endsWith('/integrations')) return Promise.resolve(json(integrations));
+      if (url.endsWith('/organizations')) return Promise.resolve(json({ items: [] }));
       throw new Error('Unexpected request: ' + url);
     }));
     const user = userEvent.setup();
@@ -84,6 +137,7 @@ describe('Platform Administrator portal', () => {
       if (url.endsWith('/readiness')) return Promise.resolve(json({ gates: [] }));
       if (url.endsWith('/audit')) return Promise.resolve(json({ items: changed ? [{ operationId: 'a'.repeat(32), serviceId: 'reporting', posture: 'Normal', note: 'Checking dependency.', actorId: 'A950', recordedAt: '2026-11-16T12:00:00Z', version: 1 }] : [] }));
       if (url.endsWith('/integrations')) return Promise.resolve(json(integrations));
+      if (url.endsWith('/organizations')) return Promise.resolve(json({ items: [] }));
       if (url.includes('/posture')) {
         if (typeof options?.body !== 'string') throw new Error('Expected a JSON request body.');
         writes.push(JSON.parse(options.body));
@@ -119,6 +173,7 @@ describe('Platform Administrator portal', () => {
       if (url.endsWith('/readiness')) return Promise.resolve(json({ gates: [] }));
       if (url.endsWith('/audit')) return Promise.resolve(json({ items: [] }));
       if (url.endsWith('/integrations')) return Promise.resolve(json(integrations));
+      if (url.endsWith('/organizations')) return Promise.resolve(json({ items: [] }));
       if (url.endsWith('/integrations/email')) {
         if (typeof options?.body !== 'string') throw new Error('Expected provider JSON.');
         writes.push(JSON.parse(options.body) as Record<string, unknown>);

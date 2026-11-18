@@ -13,29 +13,14 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
     private const string RequestType = "Financial assistance";
     private const string Durability = "Durable test data";
     private readonly TimeProvider clock;
-    private readonly Dictionary<string, NpgsqlDataSource> sources = new(StringComparer.Ordinal);
+    private readonly ProtectedTenantDatabaseConnections connections;
 
     public PostgresAssistanceCaseApplication(IConfiguration configuration, TimeProvider clock)
     {
         PhysicalPersistenceGuard.EnsureAllowed(configuration);
         this.clock = clock;
-        foreach (var binding in configuration
-            .GetSection("Monergy:Persistence:ApplicationCase:RuntimeConnections").GetChildren())
-        {
-            if (!TenantAccessClient.Identifier(binding.Key, 64) || string.IsNullOrWhiteSpace(binding.Value))
-                throw new InvalidOperationException("Invalid Application & Case tenant binding.");
-            var options = new NpgsqlConnectionStringBuilder(binding.Value)
-            {
-                IncludeErrorDetail = false,
-                NoResetOnClose = false,
-                Timeout = 5,
-                CommandTimeout = 15,
-                MaxPoolSize = 20,
-            };
-            sources.Add(binding.Key, NpgsqlDataSource.Create(options.ConnectionString));
-        }
-        if (sources.Count == 0)
-            throw new InvalidOperationException("Application & Case database bindings are required.");
+        connections = new(configuration, "application-case",
+            "Monergy:Persistence:ApplicationCase:RuntimeConnections");
     }
 
     public async Task<AssistanceCaseView> CreateAsync(
@@ -194,7 +179,7 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
     {
         try
         {
-            foreach (var tenant in sources.Keys)
+            foreach (var tenant in connections.ConfiguredTenants)
             {
                 await using var connection = await OpenAsync(tenant, cancellationToken).ConfigureAwait(false);
             }
@@ -212,9 +197,10 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
 
     private async Task<NpgsqlConnection> OpenAsync(string tenant, CancellationToken ct)
     {
-        if (!sources.TryGetValue(tenant, out var source))
-            throw new ApplicationCaseException("CASE_TENANT_UNAVAILABLE", 503);
-        var connection = await source.OpenConnectionAsync(ct).ConfigureAwait(false);
+        NpgsqlConnection connection;
+        try { connection = await connections.OpenAsync(tenant, ct).ConfigureAwait(false); }
+        catch (Exception failure) when (failure is NpgsqlException or TenantBoundaryException)
+        { throw new ApplicationCaseException("CASE_TENANT_UNAVAILABLE", 503); }
         try
         {
             var valid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
@@ -346,7 +332,7 @@ public sealed class PostgresAssistanceCaseApplication : IAssistanceCaseApplicati
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var source in sources.Values) await source.DisposeAsync().ConfigureAwait(false);
+        await connections.DisposeAsync().ConfigureAwait(false);
     }
 
     private sealed record CaseRow(string CaseId, string TenantId, string CustomerId,

@@ -12,6 +12,8 @@ public interface ITenantRegistry
 
     Task<TenantRegistryRecord?> GetAsync(string tenantId, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<TenantRegistryRecord>> ListAsync(CancellationToken cancellationToken);
+
     Task<TenantRegistryRecord> ReplaceAsync(
         TenantRegistryRecord record,
         long expectedConfigurationVersion,
@@ -108,6 +110,18 @@ public sealed class FileTenantRegistry : ITenantRegistry, IDisposable
         {
             gate.Release();
         }
+    }
+
+    public async Task<IReadOnlyList<TenantRegistryRecord>> ListAsync(CancellationToken cancellationToken)
+    {
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await using var lease = await AcquireFileLeaseAsync(cancellationToken).ConfigureAwait(false);
+            var state = await ReadAsync(cancellationToken).ConfigureAwait(false);
+            return state.Tenants.OrderByDescending(item => item.CreatedAt).ToArray();
+        }
+        finally { gate.Release(); }
     }
 
     public async Task<TenantRegistryRecord> ReplaceAsync(

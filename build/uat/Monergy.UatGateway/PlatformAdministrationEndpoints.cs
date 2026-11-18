@@ -9,6 +9,8 @@ internal sealed record PlatformSessionRequest(string Email, string Password);
 internal sealed record PlatformActivationRequest(string Email);
 internal sealed record PlatformActivationConfirmation(string Ticket, string Password);
 internal sealed record PlatformPostureRequest(string OperationId, long ExpectedVersion, string Posture, string Note);
+internal sealed record OrganizationCreateRequest(string RequestId, string OrganizationName, string DisplayName,
+    string Country, string TimeZone, string InitialAdministratorEmail, string Placement);
 internal sealed record IntegrationChangeRequest(string OperationId, long ExpectedRevision, bool Enabled, string Scope,
     string? Endpoint, string? ClientId, string? CallbackUri, string? Model,
     IReadOnlyDictionary<string, string>? Options, string? SecretValue, bool ClearSecret, string SubscriptionStatus);
@@ -76,6 +78,16 @@ internal static class PlatformAdministrationEndpoints
         services.AddSingleton(new FileIntegrationConfigurationStore(integrationsPath!));
         services.AddSingleton(new FileProtectedIntegrationSecretStore(secretsPath!, secretProtectionKey!));
         services.AddSingleton(new GovernedProviderRuntimeAccess(runtimeToken!));
+        if (configuration.GetValue<bool>("Monergy:Onboarding:Enabled"))
+        {
+            var personaTesterCredential = section["PersonaTesterCredential"];
+            var identityOwnerToken = section["IdentityOwnerToken"];
+            if (string.IsNullOrWhiteSpace(personaTesterCredential) || string.IsNullOrWhiteSpace(identityOwnerToken))
+                throw new InvalidOperationException("Platform Administration requires protected first-administrator activation.");
+            services.AddSingleton(new LocalAdministratorWelcomeIssuer(
+                new Uri(section["CustomerIdentityUrl"] ?? "http://127.0.0.1:5101/"), personaTesterCredential,
+                identityOwnerToken));
+        }
         return services;
     }
 
@@ -142,6 +154,113 @@ internal static class PlatformAdministrationEndpoints
             _ = await sessions.RequireAsync(http).ConfigureAwait(false);
             return Results.Ok(new { productionAccepted = false, gates = ReadinessGates() });
         });
+        if (app.Configuration.GetValue<bool>("Monergy:Onboarding:Enabled"))
+        {
+        app.MapGet("/platform-api/local/v1/organizations", async (HttpContext http,
+            PlatformAdministratorSessions sessions, ITenantRegistry registry) =>
+        {
+            _ = await sessions.RequireAsync(http).ConfigureAwait(false);
+            var organizations = await registry.ListAsync(http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(new
+            {
+                items = organizations.Select(tenant => new
+                {
+                    organizationCode = tenant.TenantId,
+                    tenant.OrganizationName,
+                    tenant.DisplayName,
+                    country = tenant.CountryCode,
+                    tenant.TimeZone,
+                    initialAdministrator = tenant.InitialAdministratorEmail,
+                    status = tenant.State.ToString(),
+                    created = tenant.CreatedAt,
+                    updated = tenant.UpdatedAt,
+                    readiness = tenant.Receipts.Count == 6 ? "Provisioning complete" :
+                        $"{tenant.Receipts.Count} of 6 setup stages complete",
+                    attention = tenant.State == TenantLifecycleState.ProvisioningFailed ? tenant.LastFailureCode : null,
+                    completedSteps = tenant.Receipts.Select(receipt => (int)receipt.Step).ToArray(),
+                })
+            });
+        });
+        app.MapPost("/platform-api/local/v1/organizations", async (OrganizationCreateRequest request,
+            HttpContext http, PlatformAdministratorSessions sessions, TenantOnboardingOrchestrator orchestrator,
+            FileTenantLifecycleAudit lifecycleAudit) =>
+        {
+            _ = await sessions.RequireAsync(http).ConfigureAwait(false);
+            if (request.Placement != "Shared")
+                return Results.Json(new { error = "DEDICATED_PLACEMENT_UNAVAILABLE" }, statusCode: 422);
+            try
+            {
+                var tenant = await orchestrator.RequestAsync(new(request.RequestId, request.OrganizationName,
+                    request.DisplayName, request.Country, request.TimeZone, "LOCAL",
+                    request.InitialAdministratorEmail, TenantPlacementMode.Shared), http.RequestAborted).ConfigureAwait(false);
+                await lifecycleAudit.AppendAsync(tenant.TenantId + ":OrganizationRequested:1",
+                    tenant.TenantId, "A950", "OrganizationRequested", "Succeeded", 1,
+                    tenant.CreatedAt, http.RequestAborted).ConfigureAwait(false);
+                tenant = await orchestrator.StartOrResumeAsync(tenant.TenantId, http.RequestAborted).ConfigureAwait(false);
+                await AuditProvisioningAsync(tenant, lifecycleAudit, http.RequestAborted).ConfigureAwait(false);
+                return Results.Ok(new { organizationCode = tenant.TenantId, status = tenant.State.ToString(),
+                    completedSteps = tenant.Receipts.Select(receipt => (int)receipt.Step).ToArray(), tenant.LastFailureCode });
+            }
+            catch (InvalidOperationException failure)
+            {
+                var conflict = failure.Message.Contains("CONFLICT", StringComparison.Ordinal);
+                return Results.Json(new { error = failure.Message }, statusCode: conflict ? 409 : 422);
+            }
+        });
+        app.MapPost("/platform-api/local/v1/organizations/{organizationCode}/administrator-welcome", async (
+            string organizationCode, HttpContext http, PlatformAdministratorSessions sessions,
+            ITenantRegistry registry, LocalAdministratorWelcomeIssuer welcome,
+            FileTenantLifecycleAudit lifecycleAudit) =>
+        {
+            _ = await sessions.RequireAsync(http).ConfigureAwait(false);
+            var tenant = await registry.GetAsync(organizationCode, http.RequestAborted).ConfigureAwait(false);
+            if (tenant is null) return Results.NotFound(new { error = "ORGANIZATION_NOT_FOUND" });
+            if (tenant.State is not (TenantLifecycleState.ReadyForAdmin or TenantLifecycleState.Active) ||
+                tenant.Receipts.Count != 6)
+                return Results.Conflict(new { error = "ORGANIZATION_NOT_READY_FOR_ADMINISTRATOR" });
+            var issued = await welcome.IssueAsync(tenant, http.RequestAborted).ConfigureAwait(false);
+            await AuditInvitationAsync(tenant.TenantId, "A950", tenant.ConfigurationVersion,
+                lifecycleAudit, http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(issued);
+        });
+        app.MapPost("/platform-api/local/v1/organizations/{organizationCode}/resume", async (
+            string organizationCode, HttpContext http, PlatformAdministratorSessions sessions,
+            TenantOnboardingOrchestrator orchestrator, FileTenantLifecycleAudit lifecycleAudit) =>
+        {
+            _ = await sessions.RequireAsync(http).ConfigureAwait(false);
+            try
+            {
+                var tenant = await orchestrator.StartOrResumeAsync(organizationCode, http.RequestAborted).ConfigureAwait(false);
+                await AuditProvisioningAsync(tenant, lifecycleAudit, http.RequestAborted).ConfigureAwait(false);
+                return Results.Ok(new { organizationCode = tenant.TenantId, status = tenant.State.ToString(),
+                    completedSteps = tenant.Receipts.Select(receipt => (int)receipt.Step).ToArray(), tenant.LastFailureCode });
+            }
+            catch (InvalidOperationException failure)
+            { return Results.Json(new { error = failure.Message }, statusCode: 409); }
+        });
+        app.MapPost("/uat-api/v1/administration/people/{actorId}/welcome", async (
+            string actorId, HttpContext http, TenantAccessClient access,
+            LocalAdministratorWelcomeIssuer welcome, FileTenantLifecycleAudit lifecycleAudit) =>
+        {
+            var administrator = await access.RequireAdministratorAsync(http).ConfigureAwait(false);
+            if (!TenantAccessClient.Identifier(actorId, 128))
+                return Results.BadRequest(new { error = "IDENTITY_INVALID" });
+            var issued = await welcome.IssueAsync(
+                administrator.TenantId, actorId, http.RequestAborted).ConfigureAwait(false);
+            await AuditInvitationAsync(administrator.TenantId, administrator.ActorId,
+                administrator.PolicyVersion, lifecycleAudit, http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(issued);
+        });
+        }
+        else
+        {
+            app.MapGet("/platform-api/local/v1/organizations", async (HttpContext http,
+                PlatformAdministratorSessions sessions) =>
+            {
+                _ = await sessions.RequireAsync(http).ConfigureAwait(false);
+                return Results.Ok(new { items = Array.Empty<object>() });
+            });
+        }
         app.MapGet("/platform-api/local/v1/audit", async (HttpContext http, PlatformAdministratorSessions sessions,
             FilePlatformOperationsStore store, FileIntegrationConfigurationStore integrations) =>
         {
@@ -150,9 +269,13 @@ internal static class PlatformAdministrationEndpoints
             var integrationReceipts = await integrations.AuditAsync(http.RequestAborted).ConfigureAwait(false);
             var credentialReceipts = await http.RequestServices.GetRequiredService<FilePlatformCredentialStore>()
                 .AuditAsync(http.RequestAborted).ConfigureAwait(false);
+            var lifecycleItems = app.Configuration.GetValue<bool>("Monergy:Onboarding:Enabled")
+                ? await http.RequestServices.GetRequiredService<FileTenantLifecycleAudit>()
+                    .ListAsync(http.RequestAborted).ConfigureAwait(false)
+                : [];
             return Results.Ok(new { operationsRevision = operations.Version,
                 items = operations.Receipts.Select(item => new { item.OperationId, item.ServiceId, posture = item.Posture.ToString(), item.Note, item.ActorId, item.RecordedAt, item.Version }),
-                integrationItems = integrationReceipts, credentialItems = credentialReceipts });
+                integrationItems = integrationReceipts, credentialItems = credentialReceipts, lifecycleItems });
         });
         app.MapGet("/platform-api/local/v1/integrations", async (HttpContext http, PlatformAdministratorSessions sessions,
             FileIntegrationConfigurationStore integrations, FileProtectedIntegrationSecretStore secrets,
@@ -315,6 +438,36 @@ internal static class PlatformAdministrationEndpoints
             System.Text.Encoding.UTF8.GetBytes(supplied), System.Text.Encoding.UTF8.GetBytes(expected));
     }
 
+    private static async Task AuditProvisioningAsync(TenantRegistryRecord tenant,
+        FileTenantLifecycleAudit audit, CancellationToken ct)
+    {
+        await audit.AppendAsync(tenant.TenantId + ":ProvisioningStarted:2", tenant.TenantId,
+            "A950", "ProvisioningStarted", "Succeeded", 2, tenant.CreatedAt, ct).ConfigureAwait(false);
+        for (var index = 0; index < tenant.Receipts.Count; index++)
+        {
+            var receipt = tenant.Receipts[index];
+            await audit.AppendAsync(receipt.OperationId + ":completed", tenant.TenantId,
+                "platform-control-plane", "ProvisioningStepCompleted", receipt.Step.ToString(),
+                index + 3, receipt.CompletedAt, ct).ConfigureAwait(false);
+        }
+        if (tenant.State == TenantLifecycleState.ProvisioningFailed)
+            await audit.AppendAsync(tenant.TenantId + ":ProvisioningFailed:" + tenant.ConfigurationVersion,
+                tenant.TenantId, "platform-control-plane", "ProvisioningFailed",
+                tenant.LastFailureCode ?? "Failed", tenant.ConfigurationVersion, tenant.UpdatedAt, ct)
+                .ConfigureAwait(false);
+        if (tenant.State is TenantLifecycleState.ReadyForAdmin or TenantLifecycleState.Active &&
+            tenant.Receipts.Count == 6)
+            await audit.AppendAsync(tenant.TenantId + ":ReadyForAdministrator:9", tenant.TenantId,
+                "platform-control-plane", "ReadyForAdministrator", "Succeeded", 9,
+                tenant.Receipts[^1].CompletedAt, ct).ConfigureAwait(false);
+    }
+
+    private static Task AuditInvitationAsync(string tenantId, string actorId, long revision,
+        FileTenantLifecycleAudit audit, CancellationToken ct) => audit.AppendAsync(
+            tenantId + ":AdministratorInvitationIssued:" + Guid.NewGuid().ToString("N"),
+            tenantId, actorId, "AdministratorInvitationIssued", "Succeeded", revision,
+            DateTimeOffset.UtcNow, ct);
+
     private static object[] ReadinessGates() =>
     [
         new { id = "identity", state = "Blocked", detail = "Production identity provider, MFA and platform-administrator federation are not configured." },
@@ -323,4 +476,104 @@ internal static class PlatformAdministrationEndpoints
         new { id = "business", state = "Blocked", detail = "Production OCR/AI providers, durable business persistence and financial-profile adoption remain unselected." },
         new { id = "governance", state = "Blocked", detail = "Local health and configuration metadata do not confer provider entitlement, legal approval or Production acceptance." },
     ];
+}
+
+internal sealed class LocalAdministratorWelcomeIssuer : IDisposable
+{
+    private readonly Uri owner;
+    private readonly string testerCredential;
+    private readonly string identityOwnerToken;
+    private readonly HttpClient client = new(new SocketsHttpHandler { AllowAutoRedirect = false })
+    { Timeout = TimeSpan.FromSeconds(15) };
+
+    public LocalAdministratorWelcomeIssuer(Uri owner, string testerCredential, string identityOwnerToken)
+    {
+        if (owner.Scheme != Uri.UriSchemeHttp || owner.Host is not ("127.0.0.1" or "localhost") ||
+            string.IsNullOrWhiteSpace(testerCredential) || testerCredential.Length > 256 ||
+            string.IsNullOrWhiteSpace(identityOwnerToken) || identityOwnerToken.Length > 256 ||
+            testerCredential == identityOwnerToken)
+            throw new InvalidOperationException("LOCAL_ADMINISTRATOR_WELCOME_CONFIGURATION_INVALID");
+        this.owner = owner;
+        this.testerCredential = testerCredential;
+        this.identityOwnerToken = identityOwnerToken;
+    }
+
+    public async Task<object> IssueAsync(TenantRegistryRecord tenant, CancellationToken ct)
+    {
+        var identity = await ResolveIdentityAsync(tenant.TenantId, tenant.InitialAdministratorEmail, ct)
+            .ConfigureAwait(false);
+        return await IssueAsync(tenant.TenantId, identity.ActorId,
+            tenant.OrganizationName, identity.NormalizedEmail, ct).ConfigureAwait(false);
+    }
+
+    public async Task<object> IssueAsync(string tenantId, string actorId, CancellationToken ct)
+    {
+        if (!TenantAccessClient.Identifier(tenantId, 64) || !TenantAccessClient.Identifier(actorId, 128))
+            throw new TenantBoundaryException("IDENTITY_INVALID", 400);
+        using var identityRequest = new HttpRequestMessage(HttpMethod.Get,
+            new Uri(owner, "internal/v1/tenant-identities/" + Uri.EscapeDataString(actorId)));
+        identityRequest.Headers.Add("X-Monergy-Tenant", tenantId);
+        identityRequest.Headers.Add("X-Monergy-Owner-Token", identityOwnerToken);
+        using var identityResponse = await client.SendAsync(identityRequest, ct).ConfigureAwait(false);
+        if (identityResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+            throw new TenantBoundaryException("IDENTITY_NOT_FOUND", 404);
+        if (!identityResponse.IsSuccessStatusCode)
+            throw new TenantBoundaryException("IDENTITY_OWNER_UNAVAILABLE", 503);
+        var identity = await identityResponse.Content.ReadFromJsonAsync<ProvisionedIdentity>(cancellationToken: ct)
+            .ConfigureAwait(false) ?? throw new TenantBoundaryException("IDENTITY_OWNER_RESPONSE_INVALID", 503);
+        if (identity.TenantId != tenantId || identity.ActorId != actorId ||
+            string.IsNullOrWhiteSpace(identity.NormalizedEmail) || identity.NormalizedEmail.Length > 254)
+            throw new TenantBoundaryException("IDENTITY_OWNER_RESPONSE_INVALID", 503);
+        return await IssueAsync(tenantId, actorId, null, identity.NormalizedEmail, ct).ConfigureAwait(false);
+    }
+
+    private async Task<ProvisionedIdentity> ResolveIdentityAsync(string tenantId, string email, CancellationToken ct)
+    {
+        using var identityRequest = new HttpRequestMessage(HttpMethod.Post,
+            new Uri(owner, "internal/v1/tenant-identities/resolve"));
+        identityRequest.Headers.Add("X-Monergy-Tenant", tenantId);
+        identityRequest.Headers.Add("X-Monergy-Owner-Token", identityOwnerToken);
+        identityRequest.Content = JsonContent.Create(new { email });
+        using var identityResponse = await client.SendAsync(identityRequest, ct).ConfigureAwait(false);
+        if (identityResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+            throw new TenantBoundaryException("IDENTITY_NOT_FOUND", 404);
+        if (!identityResponse.IsSuccessStatusCode)
+            throw new TenantBoundaryException("IDENTITY_OWNER_UNAVAILABLE", 503);
+        var identity = await identityResponse.Content.ReadFromJsonAsync<ProvisionedIdentity>(cancellationToken: ct)
+            .ConfigureAwait(false) ?? throw new TenantBoundaryException("IDENTITY_OWNER_RESPONSE_INVALID", 503);
+        if (identity.TenantId != tenantId || !TenantAccessClient.Identifier(identity.ActorId, 128) ||
+            !string.Equals(identity.NormalizedEmail, email, StringComparison.Ordinal))
+            throw new TenantBoundaryException("IDENTITY_OWNER_RESPONSE_INVALID", 503);
+        return identity;
+    }
+
+    private async Task<object> IssueAsync(string tenantId, string actorId, string? organizationName,
+        string email, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post,
+            new Uri(owner, "local/v1/persona-credentials/tester/welcome-link"));
+        request.Headers.Add("X-Monergy-Tester-Activation", testerCredential);
+        request.Content = JsonContent.Create(new
+        {
+            tenantId,
+            email,
+            returnPath = "/access",
+            requestId = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16)),
+        });
+        using var response = await client.SendAsync(request, ct).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+            throw new TenantBoundaryException("ADMINISTRATOR_WELCOME_UNAVAILABLE", response.StatusCode == System.Net.HttpStatusCode.Conflict ? 409 : 503);
+        var receipt = await response.Content.ReadFromJsonAsync<WelcomeLinkReceipt>(cancellationToken: ct)
+            .ConfigureAwait(false) ?? throw new TenantBoundaryException("ADMINISTRATOR_WELCOME_INVALID", 503);
+        if (!receipt.WelcomePath.StartsWith("/welcome#tenant=" + Uri.EscapeDataString(tenantId) + "&ticket=",
+                StringComparison.Ordinal) || receipt.ExpiresAt <= DateTimeOffset.UtcNow)
+            throw new TenantBoundaryException("ADMINISTRATOR_WELCOME_INVALID", 503);
+        return new { receipt.WelcomePath, receipt.ExpiresAt, organizationName, organizationCode = tenantId,
+            email, actorId };
+    }
+
+    public void Dispose() => client.Dispose();
+
+    private sealed record ProvisionedIdentity(string TenantId, string ActorId, string NormalizedEmail);
+    private sealed record WelcomeLinkReceipt(string WelcomePath, DateTimeOffset ExpiresAt);
 }

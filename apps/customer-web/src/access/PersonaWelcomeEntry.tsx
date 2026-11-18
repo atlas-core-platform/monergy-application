@@ -5,9 +5,16 @@ interface Invitation {
   tenantId: string;
   ticket: string;
   mode: 'activation' | 'recovery';
+  organization?: string;
+  email?: string;
   returnPath: '/' | '/access' | '/advisor' | '/dsa' | '/lender' | '/financial-professional' | '/property-valuer' | '/legal-advisor' | '/operations-support';
 }
 interface Values { password: string; confirmation: string }
+const containsControlCharacter = (value: string) =>
+  Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && codePoint < 32;
+  });
 
 function readInvitation(): Invitation | null {
   const values = new URLSearchParams(window.location.hash.slice(1));
@@ -15,15 +22,20 @@ function readInvitation(): Invitation | null {
   const ticket = values.get('ticket') ?? '';
   const returnPath = values.get('return') ?? '';
   const mode = values.get('mode') === 'recovery' ? 'recovery' : 'activation';
+  const organization = values.get('organization') ?? undefined;
+  const email = values.get('email') ?? undefined;
   if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}$/.test(tenantId) ||
       !/^[0-9a-f]{64}$/.test(ticket) ||
       !['/', '/access', '/advisor', '/dsa', '/lender', '/financial-professional', '/property-valuer', '/legal-advisor', '/operations-support'].includes(returnPath)) return null;
-  return { tenantId, ticket, mode, returnPath: returnPath as Invitation['returnPath'] };
+  if (organization && (organization.length > 200 || containsControlCharacter(organization))) return null;
+  if (email && (email.length > 320 || !email.includes('@') || /\s/.test(email))) return null;
+  return { tenantId, ticket, mode, returnPath: returnPath as Invitation['returnPath'], organization, email };
 }
 
 export function PersonaWelcomeEntry() {
   const [invitation, setInvitation] = useState(readInvitation);
   const [destination, setDestination] = useState<Invitation['returnPath'] | null>(null);
+  const [signInContext, setSignInContext] = useState<{ tenantId: string; organization?: string; email?: string } | null>(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState('');
   // A fragment is not sent to the server; clear it before the browser paints
@@ -35,6 +47,7 @@ export function PersonaWelcomeEntry() {
       window.history.replaceState(null, '', '/welcome');
       setMessage('');
       setDestination(null);
+      setSignInContext(null);
       setInvitation(next);
     };
     window.addEventListener('hashchange', consumeNextLink);
@@ -61,14 +74,15 @@ export function PersonaWelcomeEntry() {
       });
       if (!response.ok) {
         setMessage(response.status === 401
-          ? 'This welcome link is invalid, expired, or has already been used. Ask your tester to create a new link.'
-          : 'Account activation is temporarily unavailable. Try again or ask your tester for help.');
+          ? 'This welcome link is invalid, expired, or has already been used. Ask your administrator for a new link.'
+          : 'Account activation is temporarily unavailable. Try again or ask your administrator for help.');
         return;
       }
       setDestination(invitation.returnPath);
+      setSignInContext({ tenantId: invitation.tenantId, organization: invitation.organization, email: invitation.email });
       setInvitation(null);
     } catch {
-      setMessage('Account activation is temporarily unavailable. Try again or ask your tester for help.');
+      setMessage('Account activation is temporarily unavailable. Try again or ask your administrator for help.');
     } finally {
       setPending(false);
     }
@@ -78,14 +92,15 @@ export function PersonaWelcomeEntry() {
     <Card className="access-connect-card">
       <Typography.Title level={1}>Welcome to Monergy</Typography.Title>
       {!invitation && !destination && <Alert showIcon type="error"
-        title="This welcome link is invalid or incomplete. Ask your tester to create a new link." />}
+        title="This welcome link is invalid or incomplete. Ask your administrator to create a new link." />}
       {message && <Alert showIcon type="error" title={message} />}
       {destination ? <>
         <Alert showIcon type="success"
-          title="Your password is set. Sign in normally to verify your current role and workspace access." />
-        <Button type="primary" href={destination}>Continue to sign in</Button>
+          title="Your account is ready. Continue to sign in." />
+        <Button type="primary" href={destination + '?organization=' + encodeURIComponent(signInContext?.tenantId ?? '') +
+          (signInContext?.email ? '&email=' + encodeURIComponent(signInContext.email) : '')}>Continue to sign in</Button>
       </> : invitation && <Form<Values> layout="vertical" onFinish={(values) => { void activate(values); }}>
-        <p>Your organization is <strong>{invitation.tenantId}</strong>. {invitation.mode === 'recovery'
+        <p>Your organization is <strong>{invitation.organization ?? invitation.tenantId}</strong>{invitation.email ? <> and this invitation is for <strong>{invitation.email}</strong></> : null}. {invitation.mode === 'recovery'
           ? 'Choose a new password. This ends your previous sessions; your administrator cannot see the password or sign in for you.'
           : 'Choose your own password; your administrator cannot see it or sign in for you.'}</p>
         <Form.Item name="password" label="Password (15–128 characters)"

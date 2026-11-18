@@ -6,6 +6,36 @@ namespace Monergy.Architecture.Tests;
 public sealed class TenantControlPlaneTests
 {
     [Fact]
+    public async Task LifecycleAuditIsRetainedIdempotentAndHasNoSecretPayloadChannel()
+    {
+        var path = TemporaryRegistry();
+        try
+        {
+            using var audit = new FileTenantLifecycleAudit(path);
+            var at = DateTimeOffset.Parse("2026-11-18T01:02:03Z",
+                global::System.Globalization.CultureInfo.InvariantCulture);
+            await audit.AppendAsync("tenant-03:OrganizationRequested:1", "tenant-03", "A950",
+                "OrganizationRequested", "Succeeded", 1, at, default);
+            await audit.AppendAsync("tenant-03:OrganizationRequested:1", "tenant-03", "A950",
+                "OrganizationRequested", "Succeeded", 1, at, default);
+            var items = await audit.ListAsync(default);
+            var item = Assert.Single(items);
+            Assert.Equal(1, item.LifecycleRevision);
+            Assert.Equal("A950", item.ActorId);
+            Assert.DoesNotContain("password", await File.ReadAllTextAsync(path),
+                StringComparison.OrdinalIgnoreCase);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => audit.AppendAsync(
+                "tenant-03:OrganizationRequested:1", "tenant-03", "another-actor",
+                "OrganizationRequested", "Succeeded", 1, at, default));
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+            if (File.Exists(path + ".lock")) File.Delete(path + ".lock");
+        }
+    }
+
+    [Fact]
     public async Task OnboardingRequestIsIdempotentAndConflictingReplayFails()
     {
         var path = TemporaryRegistry();

@@ -59,6 +59,17 @@ services:
         target: /app/access-management/appsettings.Development.json
     depends_on:
       workspace: { condition: service_started }
+  tenant-provisioning-owner:
+    <<: *runtime
+    network_mode: service:workspace
+    working_dir: /app/tenant-provisioning-owner
+    command: [Monergy.TenantProvisioningOwner.dll, --urls, 'http://127.0.0.1:5121']
+    volumes: ['onboarding-data:/var/lib/monergy-onboarding']
+    secrets:
+      - source: tenant-provisioning-config
+        target: /app/tenant-provisioning-owner/appsettings.Development.json
+    depends_on:
+      workspace: { condition: service_started }
   customer-identity:
     <<: *runtime
     network_mode: service:workspace
@@ -262,6 +273,8 @@ secrets:
     file: '${UAT_CONFIG_ROOT}/workspace.json'
   access-management-config:
     file: '${UAT_CONFIG_ROOT}/access-management.json'
+  tenant-provisioning-config:
+    file: '${UAT_CONFIG_ROOT}/tenant-provisioning.json'
   customer-identity-config:
     file: '${UAT_CONFIG_ROOT}/customer-identity.json'
   audit-config:

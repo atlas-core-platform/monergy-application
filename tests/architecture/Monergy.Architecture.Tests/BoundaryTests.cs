@@ -111,6 +111,23 @@ public sealed class BoundaryTests
     }
 
     [Fact]
+    public void TenantBindingResolutionCannotReenterTheProvisioningGate()
+    {
+        var owner = File.ReadAllText(Path.Combine(
+            RepositoryRoot, "build", "uat", "Monergy.TenantProvisioningOwner", "Program.cs"));
+        var start = owner.IndexOf(
+            "public async Task<object?> ResolveBindingAsync", StringComparison.Ordinal);
+        var end = owner.IndexOf(
+            "private async Task ProvisionDatabasesAsync", start, StringComparison.Ordinal);
+
+        Assert.True(start >= 0 && end > start);
+        var bindingResolution = owner[start..end];
+        Assert.DoesNotContain("gate.WaitAsync", bindingResolution, StringComparison.Ordinal);
+        Assert.Contains("var state = await ReadAsync", bindingResolution, StringComparison.Ordinal);
+        Assert.Contains("File.Move(temporary, statePath, true)", owner, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ServiceHostsMatchTheApprovedPrimaryResponsibilitySplit()
     {
         foreach (var serviceId in ServiceIds)
@@ -166,6 +183,15 @@ public sealed class BoundaryTests
             reference?.EndsWith("shared/platform/Monergy.Platform/Monergy.Platform.csproj", StringComparison.OrdinalIgnoreCase) == true;
         static bool IsContractsReference(string? reference) =>
             reference?.EndsWith("contracts/Monergy.Contracts/Monergy.Contracts.csproj", StringComparison.OrdinalIgnoreCase) == true;
+        static bool IsTenantPersistenceReference(string? reference) =>
+            reference?.EndsWith("shared/tenant-persistence/Monergy.TenantPersistence.csproj", StringComparison.OrdinalIgnoreCase) == true;
+        var dynamicTenantPersistenceServices = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "application-case",
+            "audit",
+            "consent",
+            "customer-identity",
+        };
 
         foreach (var serviceId in ServiceIds)
         {
@@ -176,13 +202,17 @@ public sealed class BoundaryTests
 
             var platformReferences = references.Where(IsPlatformReference).ToArray();
             var contractsReferences = references.Where(IsContractsReference).ToArray();
+            var tenantPersistenceReferences = references.Where(IsTenantPersistenceReference).ToArray();
 
             Assert.Single(platformReferences);
             Assert.InRange(contractsReferences.Length, 0, 1);
+            Assert.Equal(dynamicTenantPersistenceServices.Contains(serviceId) ? 1 : 0,
+                tenantPersistenceReferences.Length);
             Assert.Equal(references.Length, references.Distinct(StringComparer.OrdinalIgnoreCase).Count());
-            Assert.Equal(1 + contractsReferences.Length, references.Length);
+            Assert.Equal(1 + contractsReferences.Length + tenantPersistenceReferences.Length, references.Length);
             Assert.All(references, reference =>
-                Assert.True(IsPlatformReference(reference) || IsContractsReference(reference)));
+                Assert.True(IsPlatformReference(reference) || IsContractsReference(reference)
+                    || IsTenantPersistenceReference(reference)));
             Assert.DoesNotContain(references, reference => reference?.Contains("services/", StringComparison.OrdinalIgnoreCase) == true);
         }
     }
@@ -222,7 +252,7 @@ public sealed class BoundaryTests
             }
         }
 
-        var allBusinessMigrations = Directory.GetFiles(RepositoryRoot, "*.sql", SearchOption.AllDirectories)
+        var allBusinessMigrations = EnumerateRepositoryFiles("*.sql")
             .Where(path => !HasIgnoredSegment(path))
             .Select(Path.GetFullPath)
             .ToArray();
@@ -257,7 +287,7 @@ public sealed class BoundaryTests
             "application-case", // Phase 3 assigned professional workflows own durable case records.
         };
 
-        foreach (var projectPath in Directory.GetFiles(RepositoryRoot, "*.csproj", SearchOption.AllDirectories))
+        foreach (var projectPath in EnumerateRepositoryFiles("*.csproj"))
         {
             if (HasIgnoredSegment(projectPath)) continue;
             var content = File.ReadAllText(projectPath);
@@ -274,6 +304,8 @@ public sealed class BoundaryTests
                 ? relative.Split('/')[1]
                 : null;
             var persistenceBoundary = serviceId is not null && persistenceCohort.Contains(serviceId)
+                || relative.StartsWith("shared/tenant-persistence/", StringComparison.Ordinal)
+                || relative.StartsWith("build/uat/Monergy.TenantProvisioningOwner/", StringComparison.Ordinal)
                 || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
                 || relative.StartsWith("tests/job-management/", StringComparison.Ordinal)
                 || relative.StartsWith("tests/application-case/", StringComparison.Ordinal)
@@ -292,12 +324,13 @@ public sealed class BoundaryTests
             }
             if (packages.Contains("dbup-postgresql", StringComparer.OrdinalIgnoreCase))
             {
-                Assert.True(relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal),
+                Assert.True(relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal)
+                    || relative.StartsWith("build/uat/Monergy.TenantProvisioningOwner/", StringComparison.Ordinal),
                     $"DbUp dependency escaped D09 migration tooling: {relative}");
             }
         }
 
-        var persistenceSource = Directory.GetFiles(RepositoryRoot, "*.cs", SearchOption.AllDirectories)
+        var persistenceSource = EnumerateRepositoryFiles("*.cs")
             .Where(path => !HasIgnoredSegment(path))
             .Where(path =>
             {
@@ -310,6 +343,8 @@ public sealed class BoundaryTests
             .ToArray();
         Assert.All(persistenceSource, relative => Assert.True(
             persistenceCohort.Any(serviceId => relative.StartsWith($"services/{serviceId}/Infrastructure/", StringComparison.Ordinal))
+            || relative.StartsWith("shared/tenant-persistence/", StringComparison.Ordinal)
+            || relative.StartsWith("build/uat/Monergy.TenantProvisioningOwner/", StringComparison.Ordinal)
             || relative.StartsWith("services/document-intelligence/", StringComparison.Ordinal)
             || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
             || relative.StartsWith("tests/vs02/", StringComparison.Ordinal)
@@ -337,7 +372,9 @@ public sealed class BoundaryTests
             .Cast<string>()
             .ToArray();
 
-        Assert.Empty(references);
+        Assert.Equal(
+            ["../../shared/platform/Monergy.Platform/Monergy.Platform.csproj"],
+            references);
 
         Assert.DoesNotContain(
             Directory.GetFiles(ServicesRoot, "*.csproj", SearchOption.AllDirectories),
@@ -432,6 +469,14 @@ public sealed class BoundaryTests
         return relative.Split('/').Any(segment =>
             segment is ".git" or ".artifacts" or ".toolcache" or "bin" or "node_modules" or "obj");
     }
+
+    private static IEnumerable<string> EnumerateRepositoryFiles(string pattern) =>
+        Directory.EnumerateFiles(RepositoryRoot, pattern, new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+        });
 
     private static bool IsUnderRoot(string path, string root) =>
         path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);

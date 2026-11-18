@@ -33,8 +33,11 @@ it('clears the ticket from the URL, sets a password, and requires a separate nor
   await user.type(screen.getByLabelText('Password (15–128 characters)'), password);
   await user.type(screen.getByLabelText('Confirm password'), password);
   await user.click(screen.getByRole('button', { name: 'Set password' }));
-  expect(await screen.findByText(/Your password is set/)).toBeVisible();
-  expect(screen.getByRole('link', { name: 'Continue to sign in' })).toHaveAttribute('href', '/advisor');
+  expect(await screen.findByText('Your account is ready. Continue to sign in.')).toBeVisible();
+  expect(screen.getByRole('link', { name: 'Continue to sign in' })).toHaveAttribute(
+    'href',
+    '/advisor?organization=T001',
+  );
   expect(request).toHaveBeenCalledTimes(1);
   const options = request.mock.calls[0]?.[1];
   expect(JSON.parse(typeof options?.body === 'string' ? options.body : '')).toEqual({

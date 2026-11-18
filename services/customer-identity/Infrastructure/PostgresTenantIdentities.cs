@@ -8,6 +8,18 @@ namespace Monergy.Services.CustomerIdentity.Infrastructure;
 // transaction covers identity creation and its durable receipt, never AM SQL.
 public sealed class PostgresTenantIdentities(PostgresTenantSessions connections) : IConsentRecipientDirectory
 {
+    public async Task<(string TenantId, string ActorId, string NormalizedEmail)?> FindAsync(
+        string tenant, string actorId, CancellationToken ct)
+    {
+        TenantAccessProtocol.Identifier(tenant, 64);
+        TenantAccessProtocol.Identifier(actorId, 128);
+        await using var connection = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
+        var email = await connection.QuerySingleOrDefaultAsync<string>(new CommandDefinition("""
+            SELECT normalized_email FROM customer_identity.tenant_principals WHERE actor_id=@ActorId;
+            """, new { ActorId = actorId }, cancellationToken: ct)).ConfigureAwait(false);
+        return email is null ? null : (tenant, actorId, email);
+    }
+
     public async Task<TenantIdentityProvisioningReceipt> ProvisionAsync(string trustedTenant,
         TenantIdentityProvisioningRequest request, CancellationToken cancellationToken)
     {

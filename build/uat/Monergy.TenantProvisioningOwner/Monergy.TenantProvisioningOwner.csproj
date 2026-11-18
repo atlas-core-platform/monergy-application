@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <AssemblyName>Monergy.TenantProvisioningOwner</AssemblyName>
+    <RootNamespace>Monergy.TenantProvisioningOwner</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="dbup-postgresql" />
+    <PackageReference Include="Npgsql" />
+    <ProjectReference Include="../../../platform/control-plane/Monergy.Platform.ControlPlane.csproj" />
+  </ItemGroup>
+</Project>

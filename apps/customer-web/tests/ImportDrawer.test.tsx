@@ -286,6 +286,46 @@ it('lets a tenant administrator cancel only a pending credential invitation and 
   ).toHaveLength(2);
 }, 30000);
 
+it('offers a server-authorized LOCAL welcome without collecting protected tester authorization', async () => {
+  const calls: { url: string; method?: string; headers: Headers; body?: string | null }[] = [];
+  vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
+    calls.push({ url, method: options?.method, headers: new Headers(options?.headers),
+      body: typeof options?.body === 'string' ? options.body : null });
+    if (url === '/access-api/v1/administration/imports/op-local-welcome')
+      return Promise.resolve(json({ id: 'op-local-welcome', status: 'Activated',
+        policyVersion: 31, rowCount: 1,
+        identities: [{ rowNumber: 2, normalizedEmail: 'second.admin@example.test', actorId: 'A222' }] }));
+    if (url === '/identity-api/local/v1/administration/persona-invitations')
+      return Promise.resolve(json({ tenantId: 'T001', deliveryEnabled: false, items: [{
+        actorId: 'A222', email: 'second.admin@example.test', state: 'Pending',
+        issuedAt: '2026-11-18T10:00:00Z', consumedAt: null,
+      }] }));
+    if (url === '/uat-api/v1/administration/people/A222/welcome')
+      return Promise.resolve(json({ error: 'DEPENDENCY_UNAVAILABLE' }, 503));
+    return Promise.resolve(json({ error: 'NOT_FOUND' }, 404));
+  }));
+
+  render(<FoundationProvider><ImportDrawer api={new AccessApi(session)}
+    importId="op-local-welcome" onClose={vi.fn()} onChanged={vi.fn()} onExpired={vi.fn()} />
+  </FoundationProvider>);
+  expect(await screen.findByText('Person access activated.')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Check invitation status' }));
+  const region = await screen.findByRole('region', { name: 'Credential invitation status' });
+  expect(within(region).getByText('Administrator email delivery is not enabled for this profile.')).toBeVisible();
+  expect(screen.queryByLabelText(/tester authorization/i)).toBeNull();
+  fireEvent.click(within(region).getByRole('button', {
+    name: 'Open protected LOCAL welcome for second.admin@example.test',
+  }));
+  expect(await screen.findByText(
+    'The protected LOCAL welcome link could not be created. Refresh status before trying again.',
+  )).toBeVisible();
+  const mutation = calls.find((call) => call.url.endsWith('/people/A222/welcome'));
+  expect(mutation).toMatchObject({ method: 'POST', body: '{}' });
+  expect(mutation?.headers.get('X-Monergy-Tenant')).toBe('T001');
+  expect(mutation?.headers.get('X-Monergy-Session')).toBe('test-only');
+  expect(JSON.stringify(mutation)).not.toMatch(/tester|password|secret/i);
+}, 30000);
+
 it('refreshes the authoritative invitation state when cancellation loses a terminal-state race', async () => {
   let terminal = false;
   vi.stubGlobal(

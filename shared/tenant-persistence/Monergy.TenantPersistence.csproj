@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Monergy.TenantPersistence</AssemblyName>
+    <RootNamespace>Monergy.Platform</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+    <ProjectReference Include="../platform/Monergy.Platform/Monergy.Platform.csproj" />
+  </ItemGroup>
+</Project>

@@ -17,6 +17,7 @@
   <Folder Name="/Shared/">
     <Project Path="contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
     <Project Path="shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+    <Project Path="shared/tenant-persistence/Monergy.TenantPersistence.csproj" />
   </Folder>
   <Folder Name="/Platform/">
     <Project Path="platform/control-plane/Monergy.Platform.ControlPlane.csproj" />
@@ -25,6 +26,7 @@
     <Project Path="build/Monergy.DatabaseMigrator/Monergy.DatabaseMigrator.csproj" />
     <Project Path="build/local/Monergy.LocalAuditHost/Monergy.LocalAuditHost.csproj" />
     <Project Path="build/local/Monergy.LocalAccessAuditHost/Monergy.LocalAccessAuditHost.csproj" />
+    <Project Path="build/uat/Monergy.TenantProvisioningOwner/Monergy.TenantProvisioningOwner.csproj" />
   </Folder>
   <Folder Name="/Tests/">
     <Project Path="tests/application-case/Monergy.ApplicationCase.Tests/Monergy.ApplicationCase.Tests.csproj" />

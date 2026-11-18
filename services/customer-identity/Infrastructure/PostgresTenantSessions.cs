@@ -11,25 +11,13 @@ namespace Monergy.Services.CustomerIdentity.Infrastructure;
 
 public sealed class PostgresTenantSessions : ITenantSessionRepository, IAsyncDisposable
 {
-    private readonly Dictionary<string, NpgsqlDataSource> sources = new(StringComparer.Ordinal);
+    private readonly ProtectedTenantDatabaseConnections connections;
 
     public PostgresTenantSessions(IConfiguration configuration)
     {
         TenantAccessIntegration.EnsureAllowed(configuration);
-        foreach (var entry in configuration.GetSection("Monergy:AccessIntegration:CustomerIdentityDatabases").GetChildren())
-        {
-            TenantAccessProtocol.Identifier(entry.Key, 64);
-            var options = new NpgsqlConnectionStringBuilder(entry.Value ?? "")
-            {
-                IncludeErrorDetail = false,
-                NoResetOnClose = false,
-                Timeout = 5,
-                CommandTimeout = 15,
-                MaxPoolSize = 20,
-            };
-            sources.Add(entry.Key, NpgsqlDataSource.Create(options.ConnectionString));
-        }
-        if (sources.Count == 0) throw new InvalidOperationException("Tenant C&I bindings are required.");
+        connections = new(configuration, "customer-identity",
+            "Monergy:AccessIntegration:CustomerIdentityDatabases");
     }
 
     public async Task<TenantSessionContext> CreateAsync(string tenantId, string actorId, string sessionId, long subjectVersion, CancellationToken cancellationToken)
@@ -152,7 +140,7 @@ public sealed class PostgresTenantSessions : ITenantSessionRepository, IAsyncDis
     {
         try
         {
-            foreach (var tenant in sources.Keys)
+            foreach (var tenant in connections.ConfiguredTenants)
             {
                 await using var connection = await OpenAsync(tenant, cancellationToken).ConfigureAwait(false);
             }
@@ -163,8 +151,10 @@ public sealed class PostgresTenantSessions : ITenantSessionRepository, IAsyncDis
 
     internal async Task<NpgsqlConnection> OpenAsync(string tenantId, CancellationToken cancellationToken)
     {
-        if (!sources.TryGetValue(tenantId, out var source)) throw new TenantAccessException("TENANT_UNAVAILABLE", 503);
-        var connection = await source.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        NpgsqlConnection connection;
+        try { connection = await connections.OpenAsync(tenantId, cancellationToken).ConfigureAwait(false); }
+        catch (TenantBoundaryException failure)
+        { throw new TenantAccessException(failure.Code, failure.Status); }
         try
         {
             var valid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
@@ -201,7 +191,7 @@ public sealed class PostgresTenantSessions : ITenantSessionRepository, IAsyncDis
 
     public async ValueTask DisposeAsync()
     {
-        foreach (var source in sources.Values) await source.DisposeAsync().ConfigureAwait(false);
+        await connections.DisposeAsync().ConfigureAwait(false);
     }
 
     private sealed class SessionRow

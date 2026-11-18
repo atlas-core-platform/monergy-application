@@ -1,5 +1,8 @@
 using Dapper;
 using Npgsql;
+using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Http.Json;
 
 namespace Monergy.AccessManagement;
 
@@ -20,11 +23,16 @@ public interface ITenantConnectionFactory
 // bindings are operator configuration, never values supplied by an HTTP caller.
 public sealed class ReferenceTenantConnectionFactory : ITenantConnectionFactory, IAsyncDisposable
 {
-    private readonly Dictionary<string, NpgsqlDataSource> sources;
+    private readonly ConcurrentDictionary<string, NpgsqlDataSource> sources;
+    private readonly ConcurrentDictionary<string, SemaphoreSlim> gates = new(StringComparer.Ordinal);
+    private readonly DynamicTenantBindingRoute? dynamicRoute;
+    private readonly HttpClient client = new(new SocketsHttpHandler { AllowAutoRedirect = false })
+    { Timeout = TimeSpan.FromSeconds(10) };
 
-    public ReferenceTenantConnectionFactory(IReadOnlyDictionary<string, string> bindings)
+    public ReferenceTenantConnectionFactory(IReadOnlyDictionary<string, string> bindings,
+        DynamicTenantBindingRoute? dynamicRoute = null)
     {
-        sources = new Dictionary<string, NpgsqlDataSource>(StringComparer.Ordinal);
+        sources = new ConcurrentDictionary<string, NpgsqlDataSource>(StringComparer.Ordinal);
         foreach (var binding in bindings)
         {
             AccessInput.Identifier(binding.Key, 64);
@@ -38,16 +46,18 @@ public sealed class ReferenceTenantConnectionFactory : ITenantConnectionFactory,
                 IncludeErrorDetail = false,
                 NoResetOnClose = false
             };
-            sources.Add(binding.Key, NpgsqlDataSource.Create(options.ConnectionString));
+            if (!sources.TryAdd(binding.Key, NpgsqlDataSource.Create(options.ConnectionString)))
+                throw new InvalidOperationException("Duplicate tenant binding.");
         }
+        this.dynamicRoute = dynamicRoute;
     }
 
-    public bool IsConfigured => sources.Count > 0;
+    public bool IsConfigured => !sources.IsEmpty;
 
     public async ValueTask<NpgsqlConnection> OpenAsync(string tenantId, CancellationToken ct)
     {
         if (!sources.TryGetValue(tenantId, out var source))
-            throw new AccessStoreUnavailableException();
+            source = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
         NpgsqlConnection? connection = null;
         try
         {
@@ -98,10 +108,54 @@ public sealed class ReferenceTenantConnectionFactory : ITenantConnectionFactory,
 
     public async ValueTask DisposeAsync()
     {
+        client.Dispose();
         foreach (var source in sources.Values)
             await source.DisposeAsync().ConfigureAwait(false);
+        foreach (var gate in gates.Values) gate.Dispose();
     }
+
+    private async Task<NpgsqlDataSource> ResolveAsync(string tenantId, CancellationToken ct)
+    {
+        if (dynamicRoute is null) throw new AccessStoreUnavailableException();
+        var gate = gates.GetOrAdd(tenantId, static _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (sources.TryGetValue(tenantId, out var existing)) return existing;
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(dynamicRoute.Endpoint,
+                "internal/local/v1/tenant-bindings/access-management/" + Uri.EscapeDataString(tenantId)));
+            request.Headers.Add("X-Monergy-Tenant-Binding", dynamicRoute.Token);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+                .ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode) throw new AccessStoreUnavailableException();
+            var binding = await response.Content.ReadFromJsonAsync<TenantDatabaseBinding>(cancellationToken: ct)
+                .ConfigureAwait(false);
+            if (binding is null || binding.TenantId != tenantId || binding.Service != "access-management" ||
+                binding.Version < 1 || string.IsNullOrWhiteSpace(binding.ConnectionString))
+                throw new AccessStoreUnavailableException();
+            var options = new NpgsqlConnectionStringBuilder(binding.ConnectionString)
+            {
+                Pooling = true, MinPoolSize = 0, MaxPoolSize = 20, Timeout = 5, CommandTimeout = 15,
+                IncludeErrorDetail = false, NoResetOnClose = false,
+            };
+            var created = NpgsqlDataSource.Create(options.ConnectionString);
+            if (!sources.TryAdd(tenantId, created))
+            {
+                await created.DisposeAsync().ConfigureAwait(false);
+                return sources[tenantId];
+            }
+            return created;
+        }
+        catch (AccessStoreUnavailableException) { throw; }
+        catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        { throw new AccessStoreUnavailableException(failure); }
+        finally { gate.Release(); }
+    }
+
+    private sealed record TenantDatabaseBinding(string TenantId, string Service, string ConnectionString, long Version);
 }
+
+public sealed record DynamicTenantBindingRoute(Uri Endpoint, string Token);
 
 public sealed record VerifiedTenantIdentity(string TenantId, string ActorId, string NormalizedEmail);
 
@@ -122,4 +176,43 @@ public sealed class ReferenceTenantIdentityDirectory : IVerifiedTenantIdentityDi
             ? new VerifiedTenantIdentity(tenantId, actorId, actorId.ToLowerInvariant() + "@example.test")
             : null);
     }
+}
+
+public sealed class HttpVerifiedTenantIdentityDirectory : IVerifiedTenantIdentityDirectory, IDisposable
+{
+    private readonly HttpClient client;
+    private readonly ReferenceDeliveryRoute route;
+
+    public HttpVerifiedTenantIdentityDirectory(HttpClient client, ReferenceDeliveryRoute route)
+    {
+        this.client = client ?? throw new ArgumentNullException(nameof(client));
+        this.route = route ?? throw new ArgumentNullException(nameof(route));
+        ReferenceOwnerBoundary.Validate(route);
+    }
+
+    public async ValueTask<VerifiedTenantIdentity?> FindAsync(string tenantId, string actorId, CancellationToken ct)
+    {
+        AccessInput.Identifier(tenantId, 64);
+        AccessInput.Identifier(actorId);
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(route.Endpoint,
+                "internal/v1/tenant-identities/" + Uri.EscapeDataString(actorId)));
+            request.Headers.Add("X-Monergy-Tenant", tenantId);
+            request.Headers.Add("X-Monergy-Owner-Token", route.Token);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct)
+                .ConfigureAwait(false);
+            if (response.StatusCode == HttpStatusCode.NotFound) return null;
+            if (!response.IsSuccessStatusCode) throw new AccessStoreUnavailableException();
+            var identity = await response.Content.ReadFromJsonAsync<VerifiedTenantIdentity>(cancellationToken: ct)
+                .ConfigureAwait(false);
+            return identity is { TenantId: var tenant, ActorId: var actor } && tenant == tenantId && actor == actorId
+                ? identity : throw new AccessStoreUnavailableException();
+        }
+        catch (AccessStoreUnavailableException) { throw; }
+        catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        { throw new AccessStoreUnavailableException(failure); }
+    }
+
+    public void Dispose() => client.Dispose();
 }

@@ -24,12 +24,22 @@ var usePostgresReference =
 
 if (usePostgresReference)
 {
+    DynamicTenantBindingRoute? dynamicBindings = null;
+    if (builder.Configuration.GetValue<bool>("Monergy:DynamicTenantBindings:Enabled"))
+    {
+        if (builder.Configuration["Monergy:ExecutionZone"] is not ("LOCAL" or "CI_EPHEMERAL") ||
+            !Uri.TryCreate(builder.Configuration["Monergy:DynamicTenantBindings:Url"], UriKind.Absolute, out var endpoint) ||
+            endpoint.Scheme != Uri.UriSchemeHttp || endpoint.Host is not ("127.0.0.1" or "localhost") ||
+            string.IsNullOrWhiteSpace(builder.Configuration["Monergy:DynamicTenantBindings:Tokens:access-management"]))
+            throw new InvalidOperationException("Dynamic tenant binding configuration is invalid.");
+        dynamicBindings = new(endpoint,
+            builder.Configuration["Monergy:DynamicTenantBindings:Tokens:access-management"]!);
+    }
     builder.Services.AddSingleton<ITenantConnectionFactory>(_ => new ReferenceTenantConnectionFactory(
         builder.Configuration.GetSection("Monergy:AccessManagement:TenantDatabases").GetChildren()
-            .ToDictionary(entry => entry.Key, entry => entry.Value ?? "", StringComparer.Ordinal)));
+            .ToDictionary(entry => entry.Key, entry => entry.Value ?? "", StringComparer.Ordinal), dynamicBindings));
     builder.Services.AddSingleton<PostgresAccessPolicyStore>();
     builder.Services.AddSingleton<IAccessPolicyStore>(provider => provider.GetRequiredService<PostgresAccessPolicyStore>());
-    builder.Services.AddSingleton<IVerifiedTenantIdentityDirectory, ReferenceTenantIdentityDirectory>();
     builder.Services.AddSingleton<PostgresAccessAdministration>();
     var ownerContext = builder.Configuration["Monergy:AccessManagement:TrustedContext"];
     if (ownerContext == "customer-identity-reference")
@@ -44,11 +54,14 @@ if (usePostgresReference)
         ReferenceOwnerBoundary.Validate(identityRoute);
         if (identityRoute.Token == route.Token)
             throw new InvalidOperationException("Identity provisioning requires a separate workload credential.");
+        builder.Services.AddSingleton<IVerifiedTenantIdentityDirectory>(_ => new HttpVerifiedTenantIdentityDirectory(
+            ReferenceHttpEventTransport.CreateClient(), identityRoute));
         builder.Services.AddSingleton<ITenantIdentityProvisioner>(_ => new HttpTenantIdentityProvisioner(
             ReferenceHttpEventTransport.CreateClient(), identityRoute));
     }
     else if (string.IsNullOrEmpty(ownerContext))
     {
+        builder.Services.AddSingleton<IVerifiedTenantIdentityDirectory, ReferenceTenantIdentityDirectory>();
         builder.Services.AddSingleton<ITrustedSecurityContextResolver, ReferenceTrustedSecurityContextResolver>();
         builder.Services.AddSingleton<ITenantIdentityProvisioner, ReferenceTenantIdentityProvisioner>();
     }

@@ -5,6 +5,8 @@ using Monergy.Services.CustomerIdentity.Infrastructure;
 
 namespace Monergy.Services.CustomerIdentity;
 
+internal sealed record InternalIdentityLookup(string Email);
+
 public static class TenantSessionEndpoints
 {
     public static void AddTenantSessionAuthority(this IServiceCollection services, IConfiguration configuration)
@@ -150,6 +152,53 @@ public static class TenantSessionEndpoints
                         return receipt;
                     })
                     : Task.FromResult<IResult>(Results.StatusCode(403)));
+            app.MapGet("/internal/v1/tenant-identities/{actorId}", async (string actorId,
+                HttpContext http, PostgresTenantIdentities identities) =>
+            {
+                if (!TenantAccessIntegration.TokenMatches(
+                    http.Request.Headers["X-Monergy-Owner-Token"].ToString(), provisioningToken))
+                    return Results.StatusCode(403);
+                try
+                {
+                    var identity = await identities.FindAsync(
+                        http.Request.Headers["X-Monergy-Tenant"].ToString(), actorId,
+                        http.RequestAborted).ConfigureAwait(false);
+                    return identity is null ? Results.NotFound() : Results.Ok(new
+                    {
+                        tenantId = identity.Value.TenantId,
+                        actorId = identity.Value.ActorId,
+                        normalizedEmail = identity.Value.NormalizedEmail,
+                    });
+                }
+                catch (TenantAccessException failure)
+                { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }
+                catch (System.Data.Common.DbException)
+                { return Results.Json(new { error = "IDENTITY_OWNER_UNAVAILABLE" }, statusCode: 503); }
+            });
+            app.MapPost("/internal/v1/tenant-identities/resolve", async (InternalIdentityLookup lookup,
+                HttpContext http, PostgresTenantIdentities identities) =>
+            {
+                if (!TenantAccessIntegration.TokenMatches(
+                    http.Request.Headers["X-Monergy-Owner-Token"].ToString(), provisioningToken))
+                    return Results.StatusCode(403);
+                try
+                {
+                    var email = CustomerEmailAccess.NormalizeEmail(lookup.Email);
+                    var identity = await identities.ResolveAsync(
+                        http.Request.Headers["X-Monergy-Tenant"].ToString(), email,
+                        http.RequestAborted).ConfigureAwait(false);
+                    return identity is null ? Results.NotFound() : Results.Ok(new
+                    {
+                        tenantId = identity.TenantId,
+                        actorId = identity.ActorId,
+                        normalizedEmail = identity.RecipientLabel,
+                    });
+                }
+                catch (TenantAccessException failure)
+                { return Results.Json(new { error = failure.Code }, statusCode: failure.StatusCode); }
+                catch (System.Data.Common.DbException)
+                { return Results.Json(new { error = "IDENTITY_OWNER_UNAVAILABLE" }, statusCode: 503); }
+            });
         }
         app.MapGet("/internal/health/ready", async (ITenantSessionRepository repository, CancellationToken ct) =>
             await repository.ReadyAsync(ct).ConfigureAwait(false) ? Results.Ok() : (IResult)Results.StatusCode(503));

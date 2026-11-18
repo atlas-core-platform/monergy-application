@@ -10,19 +10,12 @@ namespace Monergy.Services.Consent;
 public sealed partial class PostgresCustomerConsent : IAsyncDisposable, ICustomerSharingStore, ICustomerSharingReplacementStore
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
-    private readonly Dictionary<string, NpgsqlDataSource> sources = new(StringComparer.Ordinal);
+    private readonly ProtectedTenantDatabaseConnections connections;
 
     public PostgresCustomerConsent(IConfiguration configuration)
     {
         TenantAccessIntegration.EnsureAllowed(configuration);
-        foreach (var entry in configuration.GetSection("Monergy:AccessIntegration:ConsentDatabases").GetChildren())
-        {
-            if (!TenantAccessClient.Identifier(entry.Key, 64)) throw new InvalidOperationException("Invalid Consent tenant binding.");
-            var options = new NpgsqlConnectionStringBuilder(entry.Value ?? "")
-            { IncludeErrorDetail = false, NoResetOnClose = false, Timeout = 5, CommandTimeout = 15, MaxPoolSize = 20 };
-            sources.Add(entry.Key, NpgsqlDataSource.Create(options.ConnectionString));
-        }
-        if (sources.Count == 0) throw new InvalidOperationException("Consent database bindings are required.");
+        connections = new(configuration, "consent", "Monergy:AccessIntegration:ConsentDatabases");
     }
 
     public async Task<ConsentOverview> ListAsync(string tenant, string customer, CancellationToken ct)
@@ -210,8 +203,9 @@ public sealed partial class PostgresCustomerConsent : IAsyncDisposable, ICustome
 
     private async Task<NpgsqlConnection> OpenAsync(string tenant, CancellationToken ct)
     {
-        if (!sources.TryGetValue(tenant, out var source)) throw new TenantBoundaryException("CONSENT_TENANT_UNAVAILABLE", 503);
-        var connection = await source.OpenConnectionAsync(ct).ConfigureAwait(false);
+        NpgsqlConnection connection;
+        try { connection = await connections.OpenAsync(tenant, ct).ConfigureAwait(false); }
+        catch (TenantBoundaryException) { throw new TenantBoundaryException("CONSENT_TENANT_UNAVAILABLE", 503); }
         try
         {
             var valid = await connection.ExecuteScalarAsync<bool>(new CommandDefinition("""
@@ -235,7 +229,7 @@ public sealed partial class PostgresCustomerConsent : IAsyncDisposable, ICustome
 
     public async Task<bool> ReadyAsync(CancellationToken ct)
     {
-        try { foreach (var tenant in sources.Keys) { await using var connection = await OpenAsync(tenant, ct).ConfigureAwait(false); } return true; }
+        try { foreach (var tenant in connections.ConfiguredTenants) { await using var connection = await OpenAsync(tenant, ct).ConfigureAwait(false); } return true; }
         catch (Exception error) when (error is NpgsqlException or TenantBoundaryException) { return false; }
     }
 
@@ -277,7 +271,7 @@ public sealed partial class PostgresCustomerConsent : IAsyncDisposable, ICustome
     }
     private static string Hash<T>(T value) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value, Json))));
     private static CommandDefinition Command(string sql, object values, NpgsqlTransaction transaction, CancellationToken ct) => new(sql, values, transaction, cancellationToken: ct);
-    public async ValueTask DisposeAsync() { foreach (var source in sources.Values) await source.DisposeAsync().ConfigureAwait(false); }
+    public async ValueTask DisposeAsync() { await connections.DisposeAsync().ConfigureAwait(false); }
     private sealed record ReplayRow(string Hash, string Receipt);
     private static DateTimeOffset Utc(DateTime value) => new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
     private sealed record DecisionRow(DateTime EvaluatedAt, DateTime? ExpiresAt);

@@ -8,6 +8,7 @@
     <PackageReference Include="Npgsql" />
     <ProjectReference Include="../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />
     <ProjectReference Include="../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
+    <ProjectReference Include="../../shared/tenant-persistence/Monergy.TenantPersistence.csproj" />
   </ItemGroup>
 </Project>
 
