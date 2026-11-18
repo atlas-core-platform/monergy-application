@@ -1,3 +1,4 @@
+using Monergy.DatabaseMigrator;
 using Monergy.Platform.ControlPlane;
 using System.Text.Json;
 using Xunit;
@@ -7,6 +8,42 @@ namespace Monergy.Architecture.Tests;
 public sealed class TenantControlPlaneTests
 {
     private static readonly JsonSerializerOptions WebJson = new(JsonSerializerDefaults.Web);
+
+    [Theory]
+    [InlineData("T001", "t001")]
+    [InlineData("T002", "t002")]
+    public async Task ReferenceBootstrapRequestIsStableAcrossPreparationAndReadback(
+        string tenantId,
+        string expectedSlug)
+    {
+        var path = TemporaryRegistry();
+        try
+        {
+            var instanceId = Guid.NewGuid().ToString("N");
+            var request = LocalUatBootstrap.ReferenceTenantRequest(instanceId, tenantId);
+            using var registry = new FileTenantRegistry(path,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                { [instanceId + ":" + tenantId] = tenantId });
+
+            var prepared = await registry.CreateOrGetAsync(request, new FixedClock(), default);
+            var readback = await registry.CreateOrGetAsync(
+                LocalUatBootstrap.ReferenceTenantRequest(instanceId, tenantId), new FixedClock(), default);
+
+            Assert.Equal(tenantId, prepared.TenantId);
+            Assert.Equal(expectedSlug, prepared.Endpoint?.TenantSlug);
+            Assert.Equal(prepared.TenantId, readback.TenantId);
+            Assert.Equal(prepared.RequestId, readback.RequestId);
+            Assert.Equal(prepared.ConfigurationVersion, readback.ConfigurationVersion);
+            Assert.Equal(prepared.Endpoint, readback.Endpoint);
+            Assert.Equal(prepared.Receipts, readback.Receipts);
+        }
+        finally
+        {
+            if (File.Exists(path)) File.Delete(path);
+            if (File.Exists(path + ".lock")) File.Delete(path + ".lock");
+        }
+    }
+
     [Fact]
     public async Task LifecycleAuditIsRetainedIdempotentAndHasNoSecretPayloadChannel()
     {

@@ -11,6 +11,11 @@ internal static partial class LocalUatBootstrap
     private const int ExpectedAccessManagementSchemaVersion = 8;
     private static readonly string[] ReferenceActors = ["A100", "A200", "A300", "A400", "A500", "A600", "A700", "A800", "A850", "A900", "A901"];
 
+    internal static TenantOnboardingRequest ReferenceTenantRequest(string instanceId, string tenant) =>
+        new(instanceId + ":" + tenant, "Monergy local workspace " + tenant,
+            "Local workspace " + tenant, "US", "UTC", "LOCAL", "a900@example.test",
+            TenantPlacementMode.Shared, tenant.ToLowerInvariant());
+
     private static async Task PrepareOnboardingAsync(UatProfile profile)
     {
         var bindings = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -18,8 +23,8 @@ internal static partial class LocalUatBootstrap
         using var registry = new FileTenantRegistry(Path.Combine(OnboardingFolder, "registry.json"), bindings);
         foreach (var tenant in new[] { "T001", "T002" })
         {
-            var record = await registry.CreateOrGetAsync(new(profile.InstanceId + ":" + tenant, "Monergy local workspace " + tenant,
-                "Local workspace " + tenant, "US", "UTC", "LOCAL", "a900@example.test", TenantPlacementMode.Shared), TimeProvider.System, default).ConfigureAwait(false);
+            var record = await registry.CreateOrGetAsync(
+                ReferenceTenantRequest(profile.InstanceId, tenant), TimeProvider.System, default).ConfigureAwait(false);
             if (record.State is TenantLifecycleState.Requested or TenantLifecycleState.ProvisioningFailed)
                 await registry.ReplaceAsync(record with { State = TenantLifecycleState.Provisioning, LastFailureCode = null, UpdatedAt = DateTimeOffset.UtcNow },
                     record.ConfigurationVersion, default).ConfigureAwait(false);
@@ -212,9 +217,7 @@ internal static partial class LocalUatBootstrap
         var orchestrator = new TenantOnboardingOrchestrator(registry, operations, TimeProvider.System);
         foreach (var tenant in new[] { "T001", "T002" })
         {
-            await orchestrator.RequestAsync(new(profile.InstanceId + ":" + tenant, "Monergy local workspace " + tenant,
-                "Local workspace " + tenant, "US", "UTC", "LOCAL", "a900@example.test", TenantPlacementMode.Shared,
-                tenant.ToLowerInvariant())).ConfigureAwait(false);
+            await orchestrator.RequestAsync(ReferenceTenantRequest(profile.InstanceId, tenant)).ConfigureAwait(false);
             var record = await orchestrator.StartOrResumeAsync(tenant).ConfigureAwait(false);
             if (record.State is not (TenantLifecycleState.ReadyForAdmin or TenantLifecycleState.Active))
                 throw new InvalidOperationException("Local tenant owner verification failed.");

@@ -17,6 +17,7 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="../../../shared/platform/Monergy.Platform/Monergy.Platform.csproj" />
     <ProjectReference Include="../../../platform/control-plane/Monergy.Platform.ControlPlane.csproj" />
+    <ProjectReference Include="../../../build/Monergy.DatabaseMigrator/Monergy.DatabaseMigrator.csproj" />
     <Compile Include="../../../build/uat/Monergy.UatGateway/TenantEntryRouting.cs" Link="TenantEntryRouting.cs" />
   </ItemGroup>
 </Project>
