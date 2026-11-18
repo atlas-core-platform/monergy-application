@@ -709,7 +709,10 @@ if ($Action -in @('Prepare','Start')) {
         }
         if ($onboarding -and $service -in @('customer-identity','integration-gateway')) {
             $config.Monergy.GovernedProviders=@{
-                Enabled='true'; Url="http://platform.localhost:$($state.port)/"
+                # All runtime services share the workspace network namespace.
+                # Keep this security-sensitive owner call on the actual loopback
+                # listener; platform.localhost is the separate browser entry host.
+                Enabled='true'; Url='http://127.0.0.1:4173/'
                 Token=(Convert-HexToBase64 ([string]$state.tokens.platformIntegrationRuntime))
             }
         }

@@ -80,12 +80,19 @@ catch { $personaMissingActivation = $_.Exception.Message -like '*either email ac
 if (-not $personaMissingActivation) { throw 'Persona login allowed without any activation owner.' }
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EnablePersonaLogin -EnablePersonaTesterActivation
 $identityTester = Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
+$integrationTester = Get-Content (Join-Path (Split-Path $onboardPath) 'integration-gateway.json') -Raw | ConvertFrom-Json
+$governedProviderUrl = [Uri]$identityTester.Monergy.GovernedProviders.Url
 if ($identityTester.Monergy.PersonaCredentials.Enabled -ne 'true' -or
     $identityTester.Monergy.PersonaCredentials.TesterActivation.Enabled -ne 'true' -or
     $null -ne $identityTester.Monergy.PSObject.Properties['CustomerEmailAccess'] -or
     [Convert]::FromBase64String($identityTester.Monergy.PersonaCredentials.TesterActivation.AccessSecret).Length -ne 32 -or
     [Convert]::FromBase64String($identityTester.Monergy.PersonaCredentials.TesterActivation.ChallengeSecret).Length -ne 32) {
     throw 'Protected tester activation did not configure a no-SMTP Development owner.'
+}
+if ($identityTester.Monergy.GovernedProviders.Url -ne 'http://127.0.0.1:4173/' -or
+    $integrationTester.Monergy.GovernedProviders.Url -ne 'http://127.0.0.1:4173/' -or
+    -not $governedProviderUrl.IsLoopback) {
+    throw 'Governed provider clients must use the shared runtime loopback listener, not a browser entry hostname.'
 }
 $personaMailPath = Join-Path $testRoot 'persona-smtp-fixture.json'
 @{ SmtpHost='mail.example.test';SmtpPort=587;SmtpUser='uat-owner@example.test';SmtpPassword='fixture-only';From='uat-owner@example.test' } |
