@@ -25,6 +25,37 @@ public sealed class TenantEntryRoutingTests
         Assert.False(TenantEntryRouting.AllowsPath(EntryHostKind.Health, "/"));
     }
 
+    [Theory]
+    [InlineData("access-api")]
+    [InlineData("audit-api")]
+    [InlineData("case-api")]
+    [InlineData("classification-api")]
+    [InlineData("connections-api")]
+    [InlineData("consent-api")]
+    [InlineData("evidence-api")]
+    [InlineData("identity-api")]
+    [InlineData("jobs-api")]
+    [InlineData("ocr-api")]
+    [InlineData("product-api")]
+    [InlineData("uat-api")]
+    public void EveryCurrentBrowserApiFamilyIsTenantOnly(string family)
+    {
+        var path = $"/{family}/local/v1/probe";
+        Assert.False(TenantEntryRouting.AllowsPath(EntryHostKind.Platform, path));
+        Assert.True(TenantEntryRouting.AllowsPath(EntryHostKind.Tenant, path));
+    }
+
+    [Fact]
+    public void ApiBoundaryDefaultsFutureFamiliesToTenantOnlyAndKeepsExplicitExceptions()
+    {
+        Assert.False(TenantEntryRouting.AllowsPath(EntryHostKind.Platform, "/payments-api/v1/probe"));
+        Assert.True(TenantEntryRouting.AllowsPath(EntryHostKind.Tenant, "/payments-api/v1/probe"));
+        Assert.True(TenantEntryRouting.AllowsPath(EntryHostKind.Platform, "/platform-api/local/v1/context"));
+        Assert.False(TenantEntryRouting.AllowsPath(EntryHostKind.Tenant, "/platform-api/local/v1/context"));
+        Assert.True(TenantEntryRouting.AllowsPath(EntryHostKind.Platform, "/entry-api/local/v1/context"));
+        Assert.True(TenantEntryRouting.AllowsPath(EntryHostKind.Tenant, "/entry-api/local/v1/context"));
+    }
+
     [Fact]
     public void SpoofedTenantHeadersAndQueryAreReplacedByHostnameContext()
     {

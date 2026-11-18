@@ -39,11 +39,16 @@ public static class TenantEntryRouting
 
     public static bool AllowsPath(EntryHostKind kind, string path)
     {
-        var platformOnly = path.StartsWith("/platform-api/", StringComparison.Ordinal) || path is "/platform" or "/operations" ||
+        var firstSegmentEnd = path.IndexOf('/', 1);
+        var firstSegment = path.Length > 1
+            ? path[1..(firstSegmentEnd < 0 ? path.Length : firstSegmentEnd)]
+            : string.Empty;
+        var browserApi = firstSegment.EndsWith("-api", StringComparison.Ordinal);
+        var platformApi = firstSegment == "platform-api";
+        var sharedEntryApi = firstSegment == "entry-api";
+        var platformOnly = platformApi || path is "/platform" or "/operations" ||
             path.StartsWith("/platform/", StringComparison.Ordinal) || path.StartsWith("/operations/", StringComparison.Ordinal);
-        var tenantOnly = path == "/welcome" || path.StartsWith("/identity-api/", StringComparison.Ordinal) ||
-            path.StartsWith("/access-api/", StringComparison.Ordinal) || path.StartsWith("/product-api/", StringComparison.Ordinal) ||
-            path.StartsWith("/uat-api/", StringComparison.Ordinal) || path.StartsWith("/case-api/", StringComparison.Ordinal) ||
+        var tenantOnly = browserApi && !platformApi && !sharedEntryApi || path == "/welcome" ||
             path.StartsWith("/contracts/", StringComparison.Ordinal) || path is "/access" or "/advisor" or "/dsa" or
             "/lender" or "/financial-professional" or "/property-valuer" or "/legal-advisor" or
             "/operations-support" or "/kyc/reviews" || path.StartsWith("/access/", StringComparison.Ordinal);
