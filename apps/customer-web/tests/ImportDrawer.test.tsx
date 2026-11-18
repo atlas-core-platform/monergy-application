@@ -297,8 +297,8 @@ it('offers a server-authorized LOCAL welcome without collecting protected tester
         identities: [{ rowNumber: 2, normalizedEmail: 'second.admin@example.test', actorId: 'A222' }] }));
     if (url === '/identity-api/local/v1/administration/persona-invitations')
       return Promise.resolve(json({ tenantId: 'T001', deliveryEnabled: false, items: [{
-        actorId: 'A222', email: 'second.admin@example.test', state: 'Pending',
-        issuedAt: '2026-11-18T10:00:00Z', consumedAt: null,
+        actorId: 'A222', email: 'second.admin@example.test', state: 'Not sent',
+        issuedAt: null, consumedAt: null,
       }] }));
     if (url === '/uat-api/v1/administration/people/A222/welcome')
       return Promise.resolve(json({ error: 'DEPENDENCY_UNAVAILABLE' }, 503));

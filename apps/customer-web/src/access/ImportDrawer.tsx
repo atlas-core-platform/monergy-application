@@ -933,7 +933,8 @@ export function ImportDrawer({
                             render: (_: unknown, item: InvitationStatus) => {
                               if (invitationRequestedActors.has(item.actorId))
                                 return <span className="access-form-hint">Delivery requested</span>;
-                              if (item.state === 'Pending')
+                              if (item.state === 'Pending' ||
+                                  (!invitationDeliveryEnabled && item.state === 'Not sent'))
                                 return (
                                   <Space wrap>
                                     {!invitationDeliveryEnabled && (
@@ -949,7 +950,7 @@ export function ImportDrawer({
                                         Open LOCAL welcome
                                       </Button>
                                     )}
-                                    <Popconfirm
+                                    {item.state === 'Pending' && <Popconfirm
                                       title="Cancel credential invitation?"
                                       description="This revokes only the pending credential invitation. Organization membership and assigned access remain active."
                                       okText="Cancel invitation"
@@ -970,7 +971,7 @@ export function ImportDrawer({
                                       >
                                         Cancel invitation
                                       </Button>
-                                    </Popconfirm>
+                                    </Popconfirm>}
                                   </Space>
                                 );
                               if (invitationDeliveryEnabled && item.state !== 'Completed') {
