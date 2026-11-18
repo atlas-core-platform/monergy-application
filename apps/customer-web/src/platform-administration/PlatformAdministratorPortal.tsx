@@ -2,6 +2,7 @@ import { Alert, Button, Card, Form, Input, Modal, Select, Space, Steps, Switch, 
 import { useCallback, useEffect, useState } from 'react';
 import { FoundationProvider, WorkspaceShell } from '@monergy/ui-foundation';
 import '../access/access.css';
+import { prepareAdministratorWelcomeUrl } from './administratorWelcome';
 
 type Posture = 'Normal' | 'Investigating' | 'Maintenance';
 interface PlatformSession { actorId: string; authority: string; session: string; expiresAt: string }
@@ -15,7 +16,7 @@ interface IntegrationProvider { code: string; displayName: string; category: str
 interface Integrations { revision: number; providers: IntegrationProvider[] }
 interface Organization { organizationCode: string; organizationId: string; organizationName: string; displayName: string; tenantSlug: string; hostname: string; tenantUrl: string; endpointStatus: string; country: string; timeZone: string; initialAdministrator: string; status: 'Requested' | 'Provisioning' | 'ProvisioningFailed' | 'ReadyForAdmin' | 'Active'; created: string; updated: string; readiness: string; attention?: string; completedSteps: number[] }
 interface Organizations { items: Organization[] }
-interface WelcomeReceipt { welcomeUrl: string; expiresAt: string }
+interface WelcomeReceipt { welcomeUrl: string; expiresAt: string; email: string }
 
 const request = async <T,>(path: string, session?: string, init?: RequestInit): Promise<T> => {
   const headers = new Headers(init?.headers);
@@ -184,10 +185,7 @@ export default function PlatformAdministratorPortal() {
     try {
       const receipt = await request<WelcomeReceipt>('/platform-api/local/v1/organizations/' +
         encodeURIComponent(organization.organizationCode) + '/administrator-welcome', session.session, { method: 'POST' });
-      const welcome = new URL(receipt.welcomeUrl);
-      if (welcome.hostname !== organization.hostname || welcome.pathname !== '/welcome' ||
-          welcome.protocol !== window.location.protocol || welcome.port !== window.location.port)
-        throw new Error('The administrator setup page was not valid.');
+      const welcome = prepareAdministratorWelcomeUrl(receipt, organization, window.location);
       window.location.assign(welcome);
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'The administrator setup page is unavailable.'); }
     finally { setBusy(false); }

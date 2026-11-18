@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import PlatformAdministratorPortal from '../src/platform-administration/PlatformAdministratorPortal';
+import { prepareAdministratorWelcomeUrl } from '../src/platform-administration/administratorWelcome';
 
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
@@ -25,6 +26,44 @@ const integrations = { revision: 0, providers: [{ code: 'email', displayName: 'E
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe('Platform Administrator portal', () => {
+  it('binds the first-administrator welcome page to the tenant host and invited recipient', () => {
+    const welcome = prepareAdministratorWelcomeUrl({
+      welcomeUrl: 'http://northwind.localhost:4338/welcome#tenant=tenant-02a&ticket=' +
+        'a'.repeat(64) + '&return=%2Faccess',
+      expiresAt: '2099-01-01T00:00:00Z',
+      email: 'admin@northwind.example.test',
+    }, {
+      organizationCode: 'tenant-02a', displayName: 'Northwind',
+      hostname: 'northwind.localhost', initialAdministrator: 'admin@northwind.example.test',
+    }, { protocol: 'http:', port: '4338' });
+
+    const invitation = new URLSearchParams(welcome.hash.slice(1));
+    expect(welcome.origin).toBe('http://northwind.localhost:4338');
+    expect(invitation.get('tenant')).toBe('tenant-02a');
+    expect(invitation.get('organization')).toBe('Northwind');
+    expect(invitation.get('email')).toBe('admin@northwind.example.test');
+    expect(welcome.href).not.toContain('tester');
+    expect(welcome.href).not.toContain('session');
+
+    expect(() => prepareAdministratorWelcomeUrl({
+      welcomeUrl: 'http://other.localhost:4338/welcome#tenant=tenant-02a&ticket=' +
+        'a'.repeat(64) + '&return=%2Faccess',
+      expiresAt: '2099-01-01T00:00:00Z', email: 'admin@northwind.example.test',
+    }, {
+      organizationCode: 'tenant-02a', displayName: 'Northwind',
+      hostname: 'northwind.localhost', initialAdministrator: 'admin@northwind.example.test',
+    }, { protocol: 'http:', port: '4338' })).toThrow('The administrator setup page was not valid.');
+
+    expect(() => prepareAdministratorWelcomeUrl({
+      welcomeUrl: 'http://northwind.localhost:4338/welcome#tenant=tenant-02a&ticket=' +
+        'a'.repeat(64) + '&return=%2Faccess',
+      expiresAt: '2099-01-01T00:00:00Z', email: 'someone-else@northwind.example.test',
+    }, {
+      organizationCode: 'tenant-02a', displayName: 'Northwind',
+      hostname: 'northwind.localhost', initialAdministrator: 'admin@northwind.example.test',
+    }, { protocol: 'http:', port: '4338' })).toThrow('The administrator setup page was not valid.');
+  });
+
   it('creates an organization through the platform session without collecting an administrator password', async () => {
     let created = false;
     const writes: Record<string, unknown>[] = [];
