@@ -13,9 +13,20 @@ function Invoke-WebRequest { [pscustomobject]@{StatusCode=200} }
 $global:fixtureMembers=@{ T001=@('A900'); T002=@('A900') }
 $global:memberWrites=@()
 $global:tenantHostHeaders=@()
+$global:welcomeHostHeaders=@()
+$global:openedWelcomeTargets=@()
+function Start-Process { param([string]$FilePath) $global:openedWelcomeTargets+=$FilePath }
 function Invoke-RestMethod {
  param([string]$Uri,[string]$Method='Get',[string]$ContentType,[hashtable]$Headers,[string]$Body,[int]$TimeoutSec)
  if ($Uri.EndsWith('/identity-api/local/v1/tenant-sessions/revoke')) { return $true }
+ if ($Uri.EndsWith('/platform-api/local/v1/credentials/tester/welcome-link')) {
+  $global:welcomeHostHeaders+=([string]$Headers.Host)
+  return [pscustomobject]@{welcomePath=('/platform?ticket='+('a'*64))}
+ }
+ if ($Uri.EndsWith('/identity-api/local/v1/persona-credentials/tester/welcome-link')) {
+  $global:welcomeHostHeaders+=([string]$Headers.Host)
+  return [pscustomobject]@{welcomePath=('/welcome#tenant=T001&ticket='+('b'*64)+'&return=%2Fadvisor')}
+ }
  if ($Uri.EndsWith('/identity-api/local/v1/tenant-sessions')) {
   $tenant=($Body | ConvertFrom-Json).tenantId
   $global:tenantHostHeaders+=([string]$Headers.Host)
@@ -98,6 +109,14 @@ if ($identityTester.Monergy.GovernedProviders.Url -ne 'http://127.0.0.1:4173/' -
     $integrationTester.Monergy.GovernedProviders.Url -ne 'http://127.0.0.1:4173/' -or
     -not $governedProviderUrl.IsLoopback) {
     throw 'Governed provider clients must use the shared runtime loopback listener, not a browser entry hostname.'
+}
+& $scriptPath -Action Welcome -Profile onboarding -Actor A950
+& $scriptPath -Action Welcome -Profile onboarding -Tenant T001 -Actor A300
+if ('platform.localhost:4183' -notin $global:welcomeHostHeaders -or
+    't001.localhost:4183' -notin $global:welcomeHostHeaders -or
+    $global:openedWelcomeTargets -notcontains ('http://platform.localhost:4183/platform?ticket='+('a'*64)) -or
+    $global:openedWelcomeTargets -notcontains ('http://t001.localhost:4183/welcome#tenant=T001&ticket='+('b'*64)+'&return=%2Fadvisor')) {
+    throw 'Protected welcome bootstrap did not separate loopback transport from the browser entry hostname.'
 }
 $personaMailPath = Join-Path $testRoot 'persona-smtp-fixture.json'
 @{ SmtpHost='mail.example.test';SmtpPort=587;SmtpUser='uat-owner@example.test';SmtpPassword='fixture-only';From='uat-owner@example.test' } |

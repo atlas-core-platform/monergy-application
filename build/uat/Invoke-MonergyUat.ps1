@@ -1140,8 +1140,8 @@ if ($onboarding) { Write-Host "Show the Operations Support key: ./build/uat/Invo
 if ($Action -eq 'Welcome') {
     if ($Actor -eq 'A950') {
         $request = @{ email='a950.platform@example.test' } | ConvertTo-Json -Compress
-        $headers = @{ 'X-Monergy-Platform-Tester'=[string]$state.platformAuthority.token }
-        $welcome = Invoke-RestMethod "$platformUrl/platform-api/local/v1/credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
+        $headers = @{ Host="platform.localhost:$($state.port)"; 'X-Monergy-Platform-Tester'=[string]$state.platformAuthority.token }
+        $welcome = Invoke-RestMethod "http://127.0.0.1:$($state.port)/platform-api/local/v1/credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
         if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/platform\?ticket=[0-9a-f]{64}$') {
             throw 'The Platform credential owner did not return a valid protected welcome path.'
         }
@@ -1159,9 +1159,9 @@ if ($Action -eq 'Welcome') {
     $email = $Actor.ToLowerInvariant() + '@example.test'
     $returnPath = switch ($Actor) { 'A900' { '/access' } 'A300' { '/advisor' } 'A400' { '/dsa' } 'A500' { '/lender' } 'A600' { '/financial-professional' } 'A700' { '/property-valuer' } 'A800' { '/legal-advisor' } 'A850' { '/operations-support' } default { '/' } }
     $request = @{ tenantId=$Tenant; email=$email; returnPath=$returnPath; requestId=[guid]::NewGuid().ToString('N') } | ConvertTo-Json -Compress
-    $headers = @{ 'X-Monergy-Tester-Activation'=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess)) }
+    $headers = @{ Host="$($Tenant.ToLowerInvariant()).localhost:$($state.port)"; 'X-Monergy-Tester-Activation'=(Convert-HexToBase64 ([string]$state.tokens.personaTesterAccess)) }
     $tenantUrl = "http://$($Tenant.ToLowerInvariant()).localhost:$($state.port)"
-    $welcome = Invoke-RestMethod "$tenantUrl/identity-api/local/v1/persona-credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
+    $welcome = Invoke-RestMethod "http://127.0.0.1:$($state.port)/identity-api/local/v1/persona-credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
     if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/welcome#tenant=[A-Za-z0-9_.:-]+&ticket=[0-9a-f]{64}&return=%2F') {
         throw 'The identity owner did not return a valid protected welcome path.'
     }
