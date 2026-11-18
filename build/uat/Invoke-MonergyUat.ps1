@@ -824,11 +824,12 @@ if (-not $ready) { Compose @('ps','--all'); throw 'UAT readiness timed out. Insp
 $memberBootstrapMarker = Join-Path $folder 'reference-members-v6-initialized'
 if ($Action -eq 'Start' -and -not (Test-Path $memberBootstrapMarker)) {
     foreach ($tenantId in @('T001','T002')) {
-        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
+        $url = "http://127.0.0.1:$($state.port)"
+        $hostHeader = "$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
-        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader; 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
-            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $headers = @{ Host=$hostHeader; 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $memberActors = @('A100','A300','A400','A500','A600','A700','A800','A850')
             if ($onboarding) { $memberActors += 'A200' }
             foreach ($actorId in $memberActors) {
@@ -844,7 +845,7 @@ if ($Action -eq 'Start' -and -not (Test-Path $memberBootstrapMarker)) {
                 }
             }
         } finally {
-            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader } -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
     Save-Text 'reference-members-v6-initialized' $state.instanceId
@@ -852,11 +853,12 @@ if ($Action -eq 'Start' -and -not (Test-Path $memberBootstrapMarker)) {
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-case-policy-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
-        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
+        $url = "http://127.0.0.1:$($state.port)"
+        $hostHeader = "$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
-        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader; 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
-            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $headers = @{ Host=$hostHeader; 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
             if ($pack.installedVersion -notin @('2.0','2.1','2.2','2.3','2.4','2.5','2.6','2.7','2.8','2.9','2.10','2.11','2.12')) {
                 throw 'The Access Management owner has not confirmed a supported Default Access Pack.'
@@ -876,7 +878,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
                 }
             }
         } finally {
-            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader } -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
     Save-Text 'p3-case-policy-initialized' $state.instanceId
@@ -884,11 +886,12 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-advisor-policy-2-7-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
-        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
+        $url = "http://127.0.0.1:$($state.port)"
+        $hostHeader = "$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
-        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader; 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
-            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $headers = @{ Host=$hostHeader; 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
             if ($pack.installedVersion -notin @('2.7','2.8','2.9','2.10','2.11','2.12')) {
                 $plan = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/plan" -Headers $headers -TimeoutSec 15
@@ -907,7 +910,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
                 throw "Advisor-capable Default Access Pack readback failed for $tenantId."
             }
         } finally {
-            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader } -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
     Save-Text 'p3-advisor-policy-2-7-initialized' $state.instanceId
@@ -915,11 +918,12 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-lender-policy-2-8-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
-        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
+        $url = "http://127.0.0.1:$($state.port)"
+        $hostHeader = "$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
-        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader; 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
-            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $headers = @{ Host=$hostHeader; 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
             if ($pack.installedVersion -notin @('2.8','2.9','2.10','2.11','2.12')) {
                 $plan = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/plan" -Headers $headers -TimeoutSec 15
@@ -947,7 +951,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
                 Invoke-RestMethod "$url/access-api/v1/administration/members/A500" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;businessRoleId=$lenderRole.id;active=$true;tenantAdmin=$false}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
             }
         } finally {
-            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader } -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
     Save-Text 'p3-lender-policy-2-8-initialized' $state.instanceId
@@ -955,11 +959,12 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-financial-professional-policy-2-9-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
-        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
+        $url = "http://127.0.0.1:$($state.port)"
+        $hostHeader = "$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
-        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader; 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
-            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $headers = @{ Host=$hostHeader; 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
             if ($pack.installedVersion -notin @('2.9','2.10','2.11','2.12')) {
                 $plan = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/plan" -Headers $headers -TimeoutSec 15
@@ -987,7 +992,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
                 Invoke-RestMethod "$url/access-api/v1/administration/members/A600" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;businessRoleId=$professionalRole.id;active=$true;tenantAdmin=$false}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
             }
         } finally {
-            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader } -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
     Save-Text 'p3-financial-professional-policy-2-9-initialized' $state.instanceId
@@ -995,11 +1000,12 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-property-valuer-policy-2-10-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
-        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
+        $url = "http://127.0.0.1:$($state.port)"
+        $hostHeader = "$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
-        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader; 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
-            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $headers = @{ Host=$hostHeader; 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
             if ($pack.installedVersion -notin @('2.10','2.11','2.12')) {
                 $plan = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/plan" -Headers $headers -TimeoutSec 15
@@ -1027,7 +1033,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
                 Invoke-RestMethod "$url/access-api/v1/administration/members/A700" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;businessRoleId=$valuerRole.id;active=$true;tenantAdmin=$false}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
             }
         } finally {
-            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader } -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
     Save-Text 'p3-property-valuer-policy-2-10-initialized' $state.instanceId
@@ -1035,11 +1041,12 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-legal-advisor-policy-2-11-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
-        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
+        $url = "http://127.0.0.1:$($state.port)"
+        $hostHeader = "$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
-        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader; 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
-            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $headers = @{ Host=$hostHeader; 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
             if ($pack.installedVersion -notin @('2.11','2.12')) {
                 $plan = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/plan" -Headers $headers -TimeoutSec 15
@@ -1067,7 +1074,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
                 Invoke-RestMethod "$url/access-api/v1/administration/members/A800" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;businessRoleId=$legalRole.id;active=$true;tenantAdmin=$false}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
             }
         } finally {
-            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader } -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
     Save-Text 'p3-legal-advisor-policy-2-11-initialized' $state.instanceId
@@ -1075,11 +1082,12 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
 }
 if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder 'p3-operations-support-policy-2-12-initialized'))) {
     foreach ($tenantId in @('T001','T002')) {
-        $url = "http://$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
+        $url = "http://127.0.0.1:$($state.port)"
+        $hostHeader = "$($tenantId.ToLowerInvariant()).localhost:$($state.port)"
         $identity = $state.identities | Where-Object { $_.tenantId -eq $tenantId -and $_.actorId -eq 'A900' }
-        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
+        $session = Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader; 'X-Monergy-Reference-Authentication'=$identity.token } -Body (@{tenantId=$tenantId}|ConvertTo-Json) -TimeoutSec 15
         try {
-            $headers = @{ 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
+            $headers = @{ Host=$hostHeader; 'X-Monergy-Tenant'=$tenantId; 'X-Monergy-Session'=$session.authenticationContextId }
             $pack = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack" -Headers $headers -TimeoutSec 15
             if ($pack.installedVersion -ne '2.12') {
                 $plan = Invoke-RestMethod "$url/access-api/v1/administration/default-access-pack/plan" -Headers $headers -TimeoutSec 15
@@ -1107,7 +1115,7 @@ if ($Action -eq 'Start' -and $onboarding -and -not (Test-Path (Join-Path $folder
                 Invoke-RestMethod "$url/access-api/v1/administration/members/A850" -Method Put -ContentType 'application/json' -Headers $headers -Body (@{expectedPolicyVersion=$members.policyVersion;businessRoleId=$supportRole.id;active=$true;tenantAdmin=$false}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
             }
         } finally {
-            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
+            Invoke-RestMethod "$url/identity-api/local/v1/tenant-sessions/revoke" -Method Post -ContentType 'application/json' -Headers @{ Host=$hostHeader } -Body (@{tenantId=$tenantId;authenticationContextId=$session.authenticationContextId}|ConvertTo-Json) -TimeoutSec 15 | Out-Null
         }
     }
     Save-Text 'p3-operations-support-policy-2-12-initialized' $state.instanceId

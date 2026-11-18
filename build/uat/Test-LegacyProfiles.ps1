@@ -12,11 +12,13 @@ function docker { $global:LASTEXITCODE=0; if ($args[0] -eq 'info') { 'linux' } }
 function Invoke-WebRequest { [pscustomobject]@{StatusCode=200} }
 $global:fixtureMembers=@{ T001=@('A900'); T002=@('A900') }
 $global:memberWrites=@()
+$global:tenantHostHeaders=@()
 function Invoke-RestMethod {
  param([string]$Uri,[string]$Method='Get',[string]$ContentType,[hashtable]$Headers,[string]$Body,[int]$TimeoutSec)
  if ($Uri.EndsWith('/identity-api/local/v1/tenant-sessions/revoke')) { return $true }
  if ($Uri.EndsWith('/identity-api/local/v1/tenant-sessions')) {
   $tenant=($Body | ConvertFrom-Json).tenantId
+  $global:tenantHostHeaders+=([string]$Headers.Host)
   return [pscustomobject]@{tenantId=$tenant;actorId='A900';authenticationContextId=('session-'+$tenant);subjectVersion=1;expiresAt='2099-01-01T00:00:00Z'}
  }
  if ($Uri -like '*/access-api/v1/administration/members?limit=100') {
@@ -54,6 +56,9 @@ foreach ($action in @('Prepare','Start','Status','Verify','Stop')) {
 }
 foreach ($expected in @('T001/A100','T001/A300','T001/A400','T002/A100','T002/A300','T002/A400')) {
  if ($expected -notin $global:memberWrites) { throw "Retained profile did not repair $expected" }
+}
+foreach ($expected in @('t001.localhost:4173','t002.localhost:4173')) {
+ if ($expected -notin $global:tenantHostHeaders) { throw "Machine bootstrap did not preserve tenant Host routing for $expected" }
 }
 $memberWriteCount=@($global:memberWrites).Count
 if (-not (Test-Path (Join-Path (Split-Path $path) 'reference-members-v6-initialized'))) { throw 'Current membership marker missing' }
