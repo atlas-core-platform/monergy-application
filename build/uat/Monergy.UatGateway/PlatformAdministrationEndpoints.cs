@@ -22,7 +22,7 @@ internal sealed record IntegrationProviderView(
     string SubscriptionStatus, string Readiness, long Revision, string UpdatedBy, DateTimeOffset UpdatedAt);
 internal sealed record IntegrationConfigurationView(long Revision, IReadOnlyList<IntegrationProviderView> Providers);
 
-internal sealed class PlatformAdministratorSessions(FilePlatformCredentialStore credentials, TimeProvider? clock = null)
+internal sealed partial class PlatformAdministratorSessions(FilePlatformCredentialStore credentials, TimeProvider? clock = null)
 {
     private readonly TimeProvider clock = clock ?? TimeProvider.System;
     private readonly ConcurrentDictionary<string, Session> sessions = new(StringComparer.Ordinal);
@@ -32,7 +32,7 @@ internal sealed class PlatformAdministratorSessions(FilePlatformCredentialStore 
         var authentication = await credentials.AuthenticateAsync(email, password, cancellationToken).ConfigureAwait(false);
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
         var expiresAt = clock.GetUtcNow().AddHours(8);
-        sessions[token] = new(expiresAt, authentication.CredentialVersion);
+        sessions[token] = new(expiresAt, authentication.CredentialVersion, authentication.ActorId);
         return new { actorId = authentication.ActorId, authority = "PlatformAdministrator", session = token, expiresAt };
     }
 
@@ -53,7 +53,7 @@ internal sealed class PlatformAdministratorSessions(FilePlatformCredentialStore 
     }
 
     public async Task RevokeAsync(HttpContext http) => sessions.TryRemove(await RequireAsync(http).ConfigureAwait(false), out _);
-    private sealed record Session(DateTimeOffset ExpiresAt, long CredentialVersion);
+    private sealed record Session(DateTimeOffset ExpiresAt, long CredentialVersion, string PrincipalId);
 }
 
 internal static class PlatformAdministrationEndpoints

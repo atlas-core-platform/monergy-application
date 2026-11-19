@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { FoundationProvider, WorkspaceShell } from '@monergy/ui-foundation';
 import '../access/access.css';
 import { prepareAdministratorWelcomeUrl } from './administratorWelcome';
+import AskMonergyAction from '../assistant/AskMonergyAction';
 
 type Posture = 'Normal' | 'Investigating' | 'Maintenance';
 interface PlatformSession { actorId: string; authority: string; session: string; expiresAt: string }
@@ -54,6 +55,10 @@ export default function PlatformAdministratorPortal() {
   const [integrationForm] = Form.useForm<{ enabled: boolean; scope: 'Platform' | 'Organization'; tenantId?: string; endpoint?: string; clientId?: string; callbackUri?: string; model?: string; providerLabel?: string; notice?: string; secretValue?: string; clearSecret: boolean; subscriptionStatus: string }>();
   const [postureForm] = Form.useForm<{ posture: Posture; note: string }>();
   const [organizationForm] = Form.useForm<{ organizationName: string; displayName: string; tenantSlug?: string; country: string; timeZone: string; initialAdministratorEmail: string; placement: 'Shared' }>();
+  const endAssistantSession = useCallback(() => {
+    setSession(null); setContext(null); setTopology(null); setGates([]); setReceipts([]);
+    setError('Your platform session has ended. Sign in again to continue.');
+  }, []);
 
   const load = useCallback(async (current: PlatformSession) => {
     const [verified, services, readiness, history, providerConfiguration, organizationDirectory] = await Promise.all([
@@ -228,7 +233,10 @@ export default function PlatformAdministratorPortal() {
         module={{ name: 'Monergy Administration', homeHref: '/platform', guide: <p>Review system status and operational notes. Customer and organization information is not available here.</p> }}
         destinations={[{ id: 'platform', label: 'System status', icon: 'layers', href: '/' }, { id: 'organizations', label: 'Organizations', icon: 'users', href: '/' }]}
         active={active} onNavigate={(id) => { if (id === 'platform' || id === 'organizations') setActive(id); }}
-        actions={<Button type="text" onClick={() => { void signOut(); }}>Sign out</Button>}>
+        actions={<Space><AskMonergyAction key={session.session + ':' + JSON.stringify(context) + ':' + active}
+          session={{ audience: 'platform', credential: session.session, expiresAt: session.expiresAt }}
+          onSessionEnded={endAssistantSession} />
+          <Button type="text" onClick={() => { void signOut(); }}>Sign out</Button></Space>}>
         <main className="access-page">
           {active === 'organizations' ? <>
             <header className="access-page-header"><div><p className="workspace-eyebrow">MONERGY ADMINISTRATION · {context.environment.toUpperCase()}</p><h1>Organizations</h1><p>Create an organization, follow secure provisioning and hand account setup to its first administrator.</p></div><Space><Button onClick={() => { void load(session).catch((failure: unknown) => { setError(failure instanceof Error ? failure.message : 'We could not refresh organizations.'); }); }}>Refresh</Button><Button type="primary" onClick={() => { setCreateOrganization(true); organizationForm.setFieldsValue({ country: 'IN', timeZone: 'Asia/Calcutta', placement: 'Shared' }); }}>Create organization</Button></Space></header>

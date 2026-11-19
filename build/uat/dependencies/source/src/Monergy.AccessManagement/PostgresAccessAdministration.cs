@@ -22,6 +22,7 @@ public sealed partial class PostgresAccessAdministration(
         {
             if (grant is null) throw new AccessAdministrationException("INVALID_CAPABILITY_GRANT", 400);
             AccessInput.Identifier(grant.CapabilityId, 160);
+            AccessInput.Require(!PlatformReviewerContract.IsPlatformCapability(grant.CapabilityId), "PLATFORM_CAPABILITY_NOT_TENANT");
             AccessInput.Require(Enum.IsDefined(grant.Scope), "INVALID_CAPABILITY_GRANT");
             AccessInput.Require(catalog.TryGet(grant.CapabilityId, out var definition) &&
                 definition is { Lifecycle: CapabilityLifecycle.Active }, "CAPABILITY_NOT_ASSIGNABLE");
@@ -381,6 +382,7 @@ public sealed partial class PostgresAccessAdministration(
         AccessInput.Identifier(request.ActorId);
         AccessInput.Identifier(request.ResourceId, 200);
         AccessInput.Identifier(request.CapabilityId, 160);
+        AccessInput.Require(!PlatformReviewerContract.IsPlatformCapability(request.CapabilityId), "PLATFORM_CAPABILITY_NOT_TENANT");
         AccessInput.Require(catalog.TryGet(request.CapabilityId, out var capability) &&
             capability is { Lifecycle: CapabilityLifecycle.Active, ResourceType: not null } &&
             capability.ResourceType == request.ResourceType, "INVALID_RESOURCE_CAPABILITY");

@@ -3,6 +3,7 @@ using Monergy.Platform;
 using Monergy.Services.Audit.Application;
 using Monergy.Services.Audit.Infrastructure;
 using Monergy.Services.Audit;
+using Monergy.Services.Audit.PlatformAudit;
 
 var builder = WebApplication.CreateBuilder(args);
 if (!builder.Environment.IsDevelopment()) throw new InvalidOperationException("Access Audit ingress is Development-only.");
@@ -15,6 +16,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.RespectRequiredConstructorParameters = true;
 });
 builder.AddMonergyPlatform("Audit Service");
+builder.Services.AddPlatformAudit();
 builder.Services.AddSingleton<PostgresTenantAccessAudit>();
 builder.Services.AddSingleton<ITenantAccessAuditRepository>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
 builder.Services.AddSingleton<ITenantJobAuditRepository>(services => services.GetRequiredService<PostgresTenantAccessAudit>());
@@ -37,6 +39,7 @@ if (new[] { token, jobToken, financialToken,productToken }.Distinct(StringCompar
 var loseReceipt = builder.Configuration["Monergy:AccessIntegration:VerificationLoseReceiptOnce"] == "true" ? 1 : 0;
 var app = builder.Build();
 app.MapProductAuditLog();
+app.MapPlatformAudit();
 app.MapPost("/reference/events/product-activity",async(ProductAuditRecord record,HttpContext http,IProductAuditLog ledger)=>{
  if(!TenantAccessIntegration.TokenMatches(http.Request.Headers["X-Monergy-Reference-Transport"].ToString(),productToken)||http.Request.Headers["X-Monergy-Reference-Tenant"].Count!=1||http.Request.Headers["X-Monergy-Reference-Tenant"].ToString()!=record.TenantId)return (IResult)Results.StatusCode(403);
  try{return Results.Ok(await ledger.AppendActivityAsync(record,http.RequestAborted));}

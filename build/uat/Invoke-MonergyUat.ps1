@@ -11,6 +11,10 @@ param(
     [switch]$EnableCustomerRegistration,
     [switch]$EnablePersonaLogin,
     [switch]$EnablePersonaTesterActivation,
+    [switch]$EnableAssistant,
+    [switch]$DisableAssistant,
+    [string]$SystemExpertRoot,
+    [string]$AssistantPublishedResolutionsFile,
     [string]$AccountAgreementFile,
     [string]$EmailConfigurationFile,
     [string]$GoogleDriveConfigurationFile,
@@ -41,6 +45,12 @@ $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $folder = Join-Path $repository ".artifacts/uat/$Profile"
 $profileFile = Join-Path $folder 'profile.json'
 $windows = $env:OS -eq 'Windows_NT'
+. (Join-Path $PSScriptRoot 'Assistant.Local.ps1')
+$assistantProfileExisted = Test-Path -LiteralPath $profileFile -PathType Leaf
+if ($EnableAssistant -and $DisableAssistant) { throw 'Select either EnableAssistant or DisableAssistant.' }
+if ($DisableAssistant -and -not $assistantProfileExisted) { throw 'DisableAssistant requires an existing Assistant profile; no profile will be created.' }
+if ($EnableAssistant -and -not $EnableOnboarding -and -not $assistantProfileExisted) { throw 'EnableAssistant requires a new named onboarding profile.' }
+if ($EnableAssistant -and -not $assistantProfileExisted) { Get-AssistantExpertIdentity $SystemExpertRoot | Out-Null }
 function Secret { $bytes = New-Object byte[] 32; $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }; return ([BitConverter]::ToString($bytes)).Replace('-','').ToLowerInvariant() }
 # Compatible with Windows PowerShell 5.1 (.NET Framework) and PowerShell 7.
 function Convert-HexToBase64([string]$Hex) {
@@ -98,6 +108,9 @@ function Invoke-UatDocker([string[]]$Arguments) {
 }
 function Compose([string[]]$Arguments) {
     $composeArgs = @('compose','--env-file',(Join-Path $folder 'compose.env'),'-f',(Join-Path $PSScriptRoot 'compose.yml'),'--project-name',"monergy-uat-$($state.instanceId.Substring(0,8))")
+    if ($null -ne $state.PSObject.Properties['assistant'] -and $state.assistant.enabled) { $composeArgs += @('-f',(Join-Path $PSScriptRoot 'compose.assistant.yml')) }
+    if ($null -ne $state.PSObject.Properties['assistant'] -and $state.assistant.enabled -and
+        $null -ne $state.assistant.PSObject.Properties['publishedResolutionsSha256']) { $composeArgs += @('-f',(Join-Path $PSScriptRoot 'compose.assistant-resolutions.yml')) }
     if ($onboarding) { $composeArgs += @('--profile','document-security') }
     Invoke-UatDocker ($composeArgs + $Arguments)
 }
@@ -151,6 +164,7 @@ foreach ($name in @('membership','context','provisioning','identityEvent','audit
 }
 $Port = [int]$state.port
 $onboarding = ($null -ne $state.PSObject.Properties['onboarding']) -and [bool]$state.onboarding
+if ($Action -in @('Prepare','Start')) { Initialize-AssistantProfile $assistantProfileExisted }
 # Phase 3 adds persona workspaces and the durable Application & Case owner without
 # rotating or replacing retained credentials. Existing profiles receive only missing keys.
 if ($Action -in @('Prepare','Start')) {
@@ -530,6 +544,7 @@ if ($Action -in @('Prepare','Start')) {
         $am.Monergy.AccessManagement.ConsentToken=$state.tokens.consent
     }
     if ($EnableCustomerRegistration) { $am.Monergy.AccessManagement.CustomerEnrollmentToken=$state.tokens.customerEnrollment }
+    Set-AssistantOwnerConfiguration 'access-management' $am
     Save-Json 'access-management.json' $am
     foreach ($service in $ports.Keys) {
         $config = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{ ExecutionZone='LOCAL'; TenantAccess=@{ AccessManagementUrl='http://127.0.0.1:5088/' }; TenantBoundary=@{ Enabled='true'; ProbeUrl="http://127.0.0.1:$($ports[$service])/"; CustomerTenants=@{ 'reference-customer'='T001'; 'other-customer'='T002'; C001='T001'; C002='T002' } } } }
@@ -739,6 +754,7 @@ if ($Action -in @('Prepare','Start')) {
                 $config.Monergy.Persistence=@{ Provider='POSTGRESQL_S3'; ApplicationCase=@{ RuntimeConnections=$connections } }
             }
         }
+        Set-AssistantOwnerConfiguration $service $config
         Save-Json "$service.json" $config
     }
     foreach ($tenantId in @('T001','T002')) {
@@ -775,6 +791,7 @@ if ($Action -in @('Prepare','Start')) {
             ReportingUrl='http://127.0.0.1:5116/'
         }
     }
+    Set-AssistantOwnerConfiguration 'workspace' $workspace
     Save-Json 'workspace.json' $workspace
     if ($onboarding) {
         $owner = @{ AllowedHosts='localhost;127.0.0.1'; Logging=@{ LogLevel=@{ Default='Warning' } }; Monergy=@{
@@ -799,12 +816,18 @@ if ($Action -in @('Prepare','Start')) {
     }
     $runtimeUid = if ($windows) { '1654' } else { (& id -u).Trim() }
     $path = $folder.Replace('\','/')
-    Save-Text 'compose.env' "UAT_CONFIG_ROOT='$path'`nUAT_PORT=$($state.port)`nUAT_UID=$runtimeUid`n"
+    $composeEnvironment = "UAT_CONFIG_ROOT='$path'`nUAT_PORT=$($state.port)`nUAT_UID=$runtimeUid`n"
+    if ($null -ne $state.PSObject.Properties['assistant']) {
+        $expertPath = [string]$state.assistant.systemExpertRoot
+        if ($expertPath.Contains("'") -or $expertPath.Contains("`n") -or $expertPath.Contains("`r")) { throw 'Unsupported Expert source path for Compose environment.' }
+        $composeEnvironment += "UAT_SYSTEM_EXPERT_ROOT='$($expertPath.Replace('\','/'))'`n"
+    }
+    Save-Text 'compose.env' $composeEnvironment
     Protect-Files
 }
 if ($Action -eq 'Prepare') { Write-Host "Local profile prepared. Credentials: -Action Credentials -Tenant T001 -Actor A900"; return }
 if ($Action -eq 'Stop') { Compose @('down','--remove-orphans'); Write-Host 'Stopped. Tenant databases and credentials retained.'; return }
-if ($Action -eq 'Status') { Compose @('ps','--all'); return }
+if ($Action -eq 'Status') { Compose @('ps','--all'); if ($null -ne $state.PSObject.Properties['assistant']) { Write-Host 'Knowledge Runtime is optional infrastructure, separate from the 14-service business topology. Review its container health independently.' }; return }
 if ($Action -eq 'Start') {
     $os = & docker info --format '{{.OSType}}'
     if ($LASTEXITCODE -ne 0 -or $os -ne 'linux') { throw 'Start Docker Desktop with Linux containers, then retry.' }
@@ -818,6 +841,10 @@ for ($attempt=0; $attempt -lt 90; $attempt++) {
     Start-Sleep -Seconds 2
 }
 if (-not $ready) { Compose @('ps','--all'); throw 'UAT readiness timed out. Inspect docker compose service logs using this profile; do not share credentials.' }
+if ($Action -eq 'Verify' -and $null -ne $state.PSObject.Properties['assistant'] -and $state.assistant.enabled) {
+    # Separately reported opt-in infrastructure; never amend business readiness totals.
+    Compose @('exec','-T','knowledge-runtime','node','-e',"fetch('http://127.0.0.1:5122/health/ready',{signal:AbortSignal.timeout(3000)}).then(r=>{console.log(r.ok?'Assistant knowledge: ready':'Assistant knowledge: unavailable');process.exit(r.ok?0:1)}).catch(()=>{console.log('Assistant knowledge: unavailable');process.exit(1)})")
+}
 # Fixture membership is created through AM once per bootstrap revision; subsequent
 # starts preserve operator changes. The revisioned marker repairs retained profiles
 # whose older marker exists while one or more advertised local identities are absent.

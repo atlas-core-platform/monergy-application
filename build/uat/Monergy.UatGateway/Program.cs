@@ -35,6 +35,7 @@ builder.AddProductLiabilityRecords();
 builder.AddProductReporting();
 builder.AddProductSearch();
 builder.Services.AddPlatformAdministration(builder.Configuration);
+builder.Services.AddAssistant();
 builder.Services.AddSingleton<GoogleDriveProxyClient>();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
 builder.Services.AddSingleton(new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false })
@@ -51,6 +52,7 @@ app.Use(async (http, next) =>
     { http.Response.StatusCode = 403; return; }
     await GatewayExceptionBoundary.InvokeAsync(http, next).ConfigureAwait(false);
 });
+app.UseAssistantPlatformIdentity();
 app.UseTrustedEntryRouting();
 app.UseProductAudit();
 app.UseStaticFiles();
@@ -78,6 +80,7 @@ app.MapProductLiabilityRecords();
 app.MapProductReporting();
 app.MapProductSearch();
 app.MapPlatformAdministration();
+app.MapAssistant();
 app.MapGet("/health/live", () => Results.Ok(new { profile = "local-uat", productionAccepted = false }));
 app.MapGet("/health/ready", async (HttpClient client, CancellationToken ct) =>
 {

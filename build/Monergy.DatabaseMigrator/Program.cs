@@ -4,6 +4,8 @@ if (args.Length == 2 && args[0] == "--local-uat-bootstrap")
     return await Monergy.DatabaseMigrator.LocalUatBootstrap.RunAsync(args[1]);
 if (args.Length == 2 && args[0] == "--verify-local-uat-storage")
     return await Monergy.DatabaseMigrator.LocalUatBootstrap.VerifyStorageAsync(args[1]);
+if (args.Length == 2 && args[0] == "--local-uat-assistant-bootstrap")
+    return await Monergy.DatabaseMigrator.LocalUatBootstrap.RunAssistantAsync(args[1]);
 
 var options = Parse(args);
 var service = Required(options, "service");
@@ -26,7 +28,7 @@ if (!Directory.Exists(migrationRoot))
 
 var upgrader = DeployChanges.To.PostgresqlDatabase(connection)
     .JournalToPostgresqlTable("public", "monergy_migration_history")
-    .WithScriptsFromFileSystem(migrationRoot)
+    .WithScriptsFromFileSystem(migrationRoot, new DbUp.ScriptProviders.FileSystemScriptOptions { IncludeSubDirectories = false })
     .LogToConsole()
     .Build();
 var result = upgrader.PerformUpgrade();

@@ -125,6 +125,8 @@ public sealed class AuthorizationEvaluator(
         TrustedActorContext context, AuthorizationEvaluationRequest request, CancellationToken ct)
     {
         var now = clock.GetUtcNow();
+        if (PlatformReviewerContract.IsPlatformCapability(request.CapabilityId))
+            return Deny(AuthorizationReasonCode.CapabilityUnknown, 0, 0);
         if (!store.IsReady)
             return Deny(AuthorizationReasonCode.DependencyUnavailable, 0, 0);
 

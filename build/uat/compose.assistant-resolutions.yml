@@ -1,0 +1,9 @@
+# Optional operator-reviewed publication/verification receipts, never browser input.
+services:
+  ai-intelligence:
+    secrets:
+      - source: assistant-published-resolutions
+        target: assistant-published-resolutions
+secrets:
+  assistant-published-resolutions:
+    file: '${UAT_CONFIG_ROOT}/assistant-published-resolutions.json'
