@@ -8,6 +8,7 @@ import { requireUnactivatedPlatform } from './assistant-01b.guards.mjs';
 import { configureAndAuthorizeQa, providerCallCount, verifyQaContinuity } from './assistant-01b.qa-browser';
 import { withTemporaryAdministrativeWorkspace } from './assistant-01b.membership';
 import { captureNaturalExpiry, verifyLiveNaturalExpiry, verifyNaturalExpiry, verifyOwnPasswordRecovery } from './assistant-01b.auth-lifecycle';
+import { prepareAssistantRetry } from './assistant-01b.question-form.mjs';
 
 // No storageState, test-clock override or fabricated owner response. The explicit
 // lost-reply case alone intercepts transport: route.fetch reaches the real owner,
@@ -375,8 +376,9 @@ if (phase === 'unknown-outcome') test('D-UNKNOWN-SUBMISSION lost committed reply
   await page.getByRole('button', { name: 'Submit suggestion', exact: true }).click();
   await expect(page.getByText('We couldn’t confirm whether your suggestion was saved. Retry to check.', { exact: true })).toBeVisible();
   await expect(page.locator('#assistant-suggestion')).toBeDisabled();
+  const retryButton = await prepareAssistantRetry(page.getByRole('region', { name: 'Suggest a help topic', exact: true }), 'Retry suggestion');
   const retry = page.waitForResponse(response => response.url().endsWith('/help-topics'));
-  await page.getByRole('button', { name: 'Retry suggestion', exact: true }).click();
+  await retryButton.click();
   const retried = await retry; expect(retried.status()).toBe(200);
   expect(retried.request().headers()['idempotency-key']).toBe(firstOperation);
   expect(await retried.json()).toEqual(committed);
@@ -409,10 +411,10 @@ if (phase === 'unknown-outcome') test('D-UNKNOWN-REVIEW lost review reply retrie
       operation = route.request().headers()['idempotency-key']; await route.abort('failed');
     }, { times: 1 });
     await editor.getByRole('button', { name: 'Save review', exact: true }).click();
-    await expect(editor.getByRole('button', { name: 'Retry review', exact: true })).toBeVisible();
+    const retryButton = await prepareAssistantRetry(editor, 'Retry review');
     await expect(editor.getByLabel('Responsible owner reference', { exact: true })).toBeDisabled();
     const pending = page.waitForResponse(response => response.request().method() === 'PATCH' && response.url().endsWith(previous.gapId));
-    await editor.getByRole('button', { name: 'Retry review', exact: true }).click();
+    await retryButton.click();
     const response = await pending; expect(response.status()).toBe(200);
     expect(response.request().headers()['idempotency-key']).toBe(operation);
     const matches = (await topics(page, session)).filter(item => item.gapId === previous.gapId);
