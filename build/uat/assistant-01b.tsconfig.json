@@ -4,5 +4,5 @@
     "strict": true, "skipLibCheck": true, "types": ["node"],
     "esModuleInterop": true, "noEmit": true, "allowJs": true, "checkJs": true
   },
-  "include": ["assistant-01b.playwright.config.ts", "assistant-01b.reporter.ts", "assistant-01b.fixture.ts", "assistant-01b.uat.spec.ts", "assistant-01b.qa-browser.ts", "assistant-01b.membership.ts", "assistant-01b.auth-lifecycle.ts", "assistant-01b.guards.mjs"]
+  "include": ["assistant-01b.playwright.config.ts", "assistant-01b.reporter.ts", "assistant-01b.fixture.ts", "assistant-01b.uat.spec.ts", "assistant-01b.qa-browser.ts", "assistant-01b.membership.ts", "assistant-01b.auth-lifecycle.ts", "assistant-01b.guards.mjs", "assistant-01b.local-dns.mjs"]
 }

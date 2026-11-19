@@ -27,7 +27,7 @@ if ($IsWindows) {
 }
 $rawOutput=& (Join-Path $PSScriptRoot 'assistant-01b.private-artifacts.ps1') -Mode Prepare -FixtureFile $fixture
 $old=@{}
-foreach ($name in @('MONERGY_ASSISTANT_GATE_D_AUTHORIZED','MONERGY_ASSISTANT_UAT_FIXTURE','MONERGY_ASSISTANT_PHASE','MONERGY_ASSISTANT_VISIBLE','MONERGY_ASSISTANT_RAW_ARTIFACTS')) { $old[$name]=[Environment]::GetEnvironmentVariable($name,'Process') }
+foreach ($name in @('MONERGY_ASSISTANT_GATE_D_AUTHORIZED','MONERGY_ASSISTANT_UAT_FIXTURE','MONERGY_ASSISTANT_PHASE','MONERGY_ASSISTANT_VISIBLE','MONERGY_ASSISTANT_RAW_ARTIFACTS','MONERGY_ASSISTANT_LOCAL_DNS','NODE_OPTIONS')) { $old[$name]=[Environment]::GetEnvironmentVariable($name,'Process') }
 Push-Location $repository
 try {
     $env:MONERGY_ASSISTANT_GATE_D_AUTHORIZED='true'
@@ -35,6 +35,11 @@ try {
     $env:MONERGY_ASSISTANT_PHASE=$Phase
     $env:MONERGY_ASSISTANT_VISIBLE=if($Visible){'true'}else{'false'}
     $env:MONERGY_ASSISTANT_RAW_ARTIFACTS=$rawOutput
+    $env:MONERGY_ASSISTANT_LOCAL_DNS='true'
+    $preload=([Uri](Join-Path $PSScriptRoot 'assistant-01b.local-dns.mjs')).AbsoluteUri
+    # Preserve existing Node options; append a process-local test resolver only.
+    # The file URI encodes spaces and never contains fixture content or secrets.
+    $env:NODE_OPTIONS=(@($old['NODE_OPTIONS'],"--import=$preload") | Where-Object { $_ }) -join ' '
     & pnpm exec playwright test --config build/uat/assistant-01b.playwright.config.ts
     if ($LASTEXITCODE -ne 0) { throw 'Physical Assistant phase failed. See sanitized scenario outcomes; no acceptance is claimed.' }
 } finally {

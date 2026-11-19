@@ -21,6 +21,19 @@ or port collision requires a different clearly named profile, never Reset. Recor
 the new profile's instance ID and exact candidate identities outside the source tree.
 Retained environment inventory precedes profile creation.
 
+On this Windows host, the installed Chrome resolves the LOCAL hostnames, but
+Playwright's Node API transport initially failed with `getaddrinfo ENOTFOUND` for
+`platform.localhost`. The phase wrapper therefore opts into a process-only DNS
+preload for exactly `platform.localhost`, `t001.localhost`, `t002.localhost` and
+`unknown.localhost`, resolving their IPv4 sockets to `127.0.0.1`. The original URL
+and HTTP Host remain unchanged, so the Gateway must still reject the unknown
+host. All other names use the original resolver. Both explicit execution flags
+are required; discovery is inert. Existing `NODE_OPTIONS` are preserved and all
+temporary options are restored after the phase. This changes no hosts file,
+system DNS, browser host rules, product routing or runtime image. The focused
+resolver tests and the actual hostname-based public readiness check are recorded
+in the `harness-local-dns-*` evidence files; they do not replace browser acceptance.
+
 ```powershell
 # Run only after Gates A–C PASS and root's physical-start authorization.
 pwsh -File build/uat/Invoke-MonergyUat.ps1 -Action Start -Profile assistant01b -Port 4350 `
