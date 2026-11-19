@@ -1,6 +1,7 @@
 import { readFileSync, lstatSync } from 'node:fs';
 import { resolve, relative, isAbsolute } from 'node:path';
 import { expect, type Page } from '@playwright/test';
+import { prepareAssistantQuestion } from './assistant-01b.question-form.mjs';
 
 export interface Persona {
   actor: string; tenant: 'T001' | 'T002' | null; email: string; password: string; path: string;
@@ -84,9 +85,9 @@ export async function open(page: Page) {
   await expect(page.locator('#assistant-question')).toBeVisible();
 }
 export async function ask(page: Page, question: string) {
-  await page.locator('#assistant-question').fill(question);
+  const submit = await prepareAssistantQuestion(page, question);
   const pending = page.waitForResponse(response => new URL(response.url()).pathname.endsWith('/answers'));
-  await page.getByRole('button', { name: 'Ask', exact: true }).click();
+  await submit.click();
   const response = await pending;
   expect(response.status()).toBe(200);
   expect(response.headers()['cache-control']).toContain('no-store');
