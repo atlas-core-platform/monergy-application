@@ -6,5 +6,6 @@
     <PackageReference Include="dbup-postgresql" />
     <ProjectReference Include="../../src/Monergy.AccessManagement/Monergy.AccessManagement.csproj" />
     <EmbeddedResource Include="migrations/*.sql" />
+    <EmbeddedResource Include="platform-migrations/*.sql" LogicalName="Monergy.AccessManagement.Migrations.platform-migrations.%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

@@ -50,6 +50,7 @@ public sealed class CustomerAccessEvaluator(IAccessPolicyStore policies, ICustom
         long consentVersion = 0;
         try
         {
+            if (PlatformReviewerContract.IsPlatformCapability(request.CapabilityId)) return Decision("CustomerCapabilityUnsupported");
             if (!policies.IsReady) return Decision("DependencyUnavailable");
             if (request.Purpose != CustomerAccessPolicy.AdvicePurpose || !catalog.TryGet(request.CapabilityId, out var capability) ||
                 capability is not { Lifecycle: CapabilityLifecycle.Active } || !CustomerAccessPolicy.Supports(capability))

@@ -5,6 +5,9 @@ using DbUp;
 using Monergy.AccessManagement;
 using Npgsql;
 
+if (args is ["--platform"])
+    return await PlatformMigration.RunAsync();
+
 if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") != "Development" ||
     Environment.GetEnvironmentVariable("MONERGY_AM_REFERENCE_PROVISIONING") != "1" || args.Length is not (2 or 3))
 {
@@ -49,6 +52,8 @@ await connection.OpenAsync();
 await connection.ExecuteAsync("SELECT pg_advisory_lock(1549537391,2);");
 try
 {
+    if (await connection.ExecuteScalarAsync<bool>("SELECT to_regnamespace('am_platform') IS NOT NULL;"))
+        throw new InvalidOperationException("PLATFORM_DATABASE_NOT_TENANT");
     var hasIdentityTable = await connection.ExecuteScalarAsync<bool>(
         "SELECT to_regclass('am.tenant_identity') IS NOT NULL;");
     if (hasIdentityTable)
@@ -60,7 +65,7 @@ try
 
     var upgrade = DeployChanges.To.PostgresqlDatabase(connectionString)
         .JournalToPostgresqlTable("public", "am_schema_history")
-        .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly())
+        .WithScriptsEmbeddedInAssembly(Assembly.GetExecutingAssembly(), name => name.Contains(".migrations.", StringComparison.Ordinal))
         .WithTransaction()
         .LogToConsole()
         .Build()

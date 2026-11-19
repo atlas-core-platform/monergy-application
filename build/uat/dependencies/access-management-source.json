@@ -4,19 +4,11 @@
   "storageMode": "verified-files",
   "sourceFolder": "source",
   "repository": "atlas-core-platform/monergy-access-management-service",
-  "commit": "85cb70159a1a8f700c2e15d191fb8097651c4b78",
-  "sourceTree": "ab5482549fbc8a27a5b6eaa583687906e80cbe4b",
-  "verificationStatus": "PRE_AZURE_02_CANDIDATE",
-  "candidatePullRequest": null,
+  "commit": "fddce958102941585f74e656186f544f13954f46",
+  "sourceTree": "ebc7b7b64d126f247bd174cf8837de959b9e604b",
+  "verificationStatus": "MONERGY_ASSISTANT_01B_IMPLEMENTATION_CANDIDATE_NOT_TESTED",
+  "candidatePullRequest": "https://github.com/atlas-core-platform/monergy-access-management-service/pull/32",
   "files": [
-    {
-      "path": "build/prepare-ci-databases.sh",
-      "gitBlobSha": "a926759d6f06cf4f252f182ab4995996fc5febb1"
-    },
-    {
-      "path": "build/provision-ci-tenants.sh",
-      "gitBlobSha": "c1455f534a88e4ceeea5e4e5ac8a420ceab09357"
-    },
     {
       "path": "Directory.Build.props",
       "gitBlobSha": "5094ccf734d4847291035cbfb3e2774e3dc3b915"
@@ -26,16 +18,24 @@
       "gitBlobSha": "fccfad4d8368d3309847b21c232c04915b38c904"
     },
     {
+      "path": "build/prepare-ci-databases.sh",
+      "gitBlobSha": "a926759d6f06cf4f252f182ab4995996fc5febb1"
+    },
+    {
+      "path": "build/provision-ci-tenants.sh",
+      "gitBlobSha": "c1455f534a88e4ceeea5e4e5ac8a420ceab09357"
+    },
+    {
       "path": "global.json",
       "gitBlobSha": "e1c5e9980fedfa6ce8a2a67c128634c78c392f46"
     },
     {
-      "path": "src/Monergy.AccessManagement/AccessRequests.cs",
-      "gitBlobSha": "0f6a2dc81380911c6680aa2f6edbcb52131692c1"
-    },
-    {
       "path": "src/Monergy.AccessManagement/AccessRequestTargets.cs",
       "gitBlobSha": "093c604539ee2d68c5d4f5870ffaa8f9d4a501b9"
+    },
+    {
+      "path": "src/Monergy.AccessManagement/AccessRequests.cs",
+      "gitBlobSha": "0f6a2dc81380911c6680aa2f6edbcb52131692c1"
     },
     {
       "path": "src/Monergy.AccessManagement/AdministrationContext.cs",
@@ -67,7 +67,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerAccess.cs",
-      "gitBlobSha": "8fc2c1aec4eb4a9e09d85a9c86ef2e30e7bbe9b2"
+      "gitBlobSha": "29f3f22bb8eb8d485bbd051ebc9cb302b768e6c2"
     },
     {
       "path": "src/Monergy.AccessManagement/CustomerEnrollment.cs",
@@ -95,7 +95,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/ModelsAndEvaluator.cs",
-      "gitBlobSha": "47c23fcedc824f52bbd7c78d2e121dca20a9dd1a"
+      "gitBlobSha": "850ffda0ca5bd657ceb4522d6027dac3f862da88"
     },
     {
       "path": "src/Monergy.AccessManagement/Monergy.AccessManagement.csproj",
@@ -106,12 +106,32 @@
       "gitBlobSha": "b848ad2f9d89a78afc469c210f043715e3a52db2"
     },
     {
-      "path": "src/Monergy.AccessManagement/packages.lock.json",
-      "gitBlobSha": "673fcd32cdd707959f6c727de8a22989457aee10"
+      "path": "src/Monergy.AccessManagement/PlatformAuthorization/PlatformAuditDispatcher.cs",
+      "gitBlobSha": "6451a591b0e81bfbe16eba037c1bbd6079cbf25b"
+    },
+    {
+      "path": "src/Monergy.AccessManagement/PlatformAuthorization/PlatformAuthorizationEndpoints.cs",
+      "gitBlobSha": "77ab5948455d344fef5bfa910b2f920880d2b679"
+    },
+    {
+      "path": "src/Monergy.AccessManagement/PlatformAuthorization/PlatformAuthorizationModels.cs",
+      "gitBlobSha": "03a6ee256b2aedbe9b07f1536ac406ad9a4b181d"
+    },
+    {
+      "path": "src/Monergy.AccessManagement/PlatformAuthorization/PlatformIdentityClient.cs",
+      "gitBlobSha": "a564f37d9e0933a7b453321f57756a1a27942b48"
+    },
+    {
+      "path": "src/Monergy.AccessManagement/PlatformAuthorization/PlatformReviewerOperator.cs",
+      "gitBlobSha": "ce67ea6958e4025f63513cbea8647ec8e3b5045f"
+    },
+    {
+      "path": "src/Monergy.AccessManagement/PlatformAuthorization/PostgresPlatformAuthorizationStore.cs",
+      "gitBlobSha": "195b3631c73ff4d1d44fdaf6d5645f8a391c2a1f"
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessAdministration.cs",
-      "gitBlobSha": "08bfb29365e759afbb039fabd0528ffb065664ae"
+      "gitBlobSha": "d2a4e051c33090de4edfbf27e2f422e0b661454a"
     },
     {
       "path": "src/Monergy.AccessManagement/PostgresAccessPolicyStore.cs",
@@ -123,7 +143,7 @@
     },
     {
       "path": "src/Monergy.AccessManagement/Program.cs",
-      "gitBlobSha": "a6db003fad7e1d42e2aab069084c16bf0d61de3e"
+      "gitBlobSha": "41b9c09b93ff88e27b0a60588d7e15cad58ab51f"
     },
     {
       "path": "src/Monergy.AccessManagement/ReferenceAdapters.cs",
@@ -138,16 +158,12 @@
       "gitBlobSha": "65854bd23581c444f078c0eb2214414f470b881a"
     },
     {
-      "path": "tools/Monergy.AccessManagement.DeliveryReference/fixture.sql",
-      "gitBlobSha": "a4b5b4f0afef5da27c5cbf3ae01e7451e08d0b04"
+      "path": "src/Monergy.AccessManagement/packages.lock.json",
+      "gitBlobSha": "673fcd32cdd707959f6c727de8a22989457aee10"
     },
     {
       "path": "tools/Monergy.AccessManagement.DeliveryReference/Monergy.AccessManagement.DeliveryReference.csproj",
       "gitBlobSha": "b9079abd09ea03e5aaae4177305052ff07fb8c87"
-    },
-    {
-      "path": "tools/Monergy.AccessManagement.DeliveryReference/packages.lock.json",
-      "gitBlobSha": "62a8b8bb0a72db3c3d1591c3d1a53fc4148456ae"
     },
     {
       "path": "tools/Monergy.AccessManagement.DeliveryReference/Program.cs",
@@ -156,6 +172,26 @@
     {
       "path": "tools/Monergy.AccessManagement.DeliveryReference/ReferenceDeliveryReceiver.cs",
       "gitBlobSha": "64635c9688bf6f884d408c5f6ab87f08d3ba84a1"
+    },
+    {
+      "path": "tools/Monergy.AccessManagement.DeliveryReference/fixture.sql",
+      "gitBlobSha": "a4b5b4f0afef5da27c5cbf3ae01e7451e08d0b04"
+    },
+    {
+      "path": "tools/Monergy.AccessManagement.DeliveryReference/packages.lock.json",
+      "gitBlobSha": "62a8b8bb0a72db3c3d1591c3d1a53fc4148456ae"
+    },
+    {
+      "path": "tools/Monergy.AccessManagement.Migrations/Monergy.AccessManagement.Migrations.csproj",
+      "gitBlobSha": "d049800f10035305d1c52aa2f834d5932f5bb613"
+    },
+    {
+      "path": "tools/Monergy.AccessManagement.Migrations/PlatformMigration.cs",
+      "gitBlobSha": "e42e408ebf109a4870db794148c7437c3c282603"
+    },
+    {
+      "path": "tools/Monergy.AccessManagement.Migrations/Program.cs",
+      "gitBlobSha": "781cfbb6917e6fa620cc5bfdbed9a71988faefcd"
     },
     {
       "path": "tools/Monergy.AccessManagement.Migrations/migrations/0001_tenant_access_policy.sql",
@@ -190,16 +226,12 @@
       "gitBlobSha": "20462da2f7355b16986e5d763482785f79fde14a"
     },
     {
-      "path": "tools/Monergy.AccessManagement.Migrations/Monergy.AccessManagement.Migrations.csproj",
-      "gitBlobSha": "e9fcbe639463dc2bced97dd85f21692e34fbc2e2"
-    },
-    {
       "path": "tools/Monergy.AccessManagement.Migrations/packages.lock.json",
       "gitBlobSha": "45328e64d43da453a7accddb94584e1d7fe5f2a6"
     },
     {
-      "path": "tools/Monergy.AccessManagement.Migrations/Program.cs",
-      "gitBlobSha": "9f0eebc9209512271a2e9709ef2f9376395931be"
+      "path": "tools/Monergy.AccessManagement.Migrations/platform-migrations/0001_platform_reviewer.sql",
+      "gitBlobSha": "3d77a57760e2a31be1317f9d834a3be674095c99"
     }
   ]
 }

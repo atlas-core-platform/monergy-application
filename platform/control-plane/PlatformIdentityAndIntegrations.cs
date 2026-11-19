@@ -10,6 +10,7 @@ public sealed record PlatformCredentialEvent(string EventType, string Outcome, l
 
 public sealed class FilePlatformCredentialStore : IDisposable
 {
+    private const string CanonicalPrincipalId = "A950";
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     private readonly StrongPasswordPolicy passwords = new("platform-administrator");
     private readonly string path;
@@ -39,6 +40,12 @@ public sealed class FilePlatformCredentialStore : IDisposable
             return new(state.Activated, state.CredentialVersion, state.LockedUntil);
         }
         finally { gate.Release(); }
+    }
+
+    public async Task<(string PrincipalId, long CredentialVersion, bool Active)> PrincipalAsync(CancellationToken cancellationToken)
+    {
+        var status = await StatusAsync(cancellationToken).ConfigureAwait(false);
+        return (CanonicalPrincipalId, status.CredentialVersion, status.Activated);
     }
 
     public async Task<IReadOnlyList<PlatformCredentialEvent>> AuditAsync(CancellationToken cancellationToken)
@@ -122,7 +129,7 @@ public sealed class FilePlatformCredentialStore : IDisposable
             state.LockedUntil = null;
             state.Events.Add(new("PasswordSignIn", "Succeeded", state.CredentialVersion, now));
             await SaveAsync(state, cancellationToken).ConfigureAwait(false);
-            return new("A950", state.CredentialVersion);
+            return new(CanonicalPrincipalId, state.CredentialVersion);
         }
         finally { gate.Release(); }
     }

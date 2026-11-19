@@ -362,3 +362,10 @@ See [2026-10-17 focused local verification](evidence/t1-39-local-verification-20
 ## Full Expert compilation receipt
 
 [2026-10-17 full current-source compilation](evidence/t1-41-full-expert-compile-20261017.md) supersedes earlier NOT_RUN/STale/full-compile-pending statements for the documented source revisions. Historical acceptance and source locks are retained. Current-source artifacts are separate from the historical baseline. Live owner UAT and product acceptance remain pending.
+
+## MONERGY-ASSISTANT-01B — implementation candidate prepared
+
+2026-11-19. **Implementation candidate prepared — awaiting separate testing.**
+Ask Monergy covers authenticated tenant and platform audiences; explicit knowledge-gap intake/review is owned by AI Intelligence, separate platform reviewer grants/evaluation by AM, identity by Platform Control Plane and platform evidence by Audit. System Expert remains read-only. Decision-01 authorizes four isolated candidate branches and draft PRs.
+
+Builds, tests, new test-suite implementation, lint/TypeScript, model validation, Docker/runtime, migrations, credentials, grants, LOCAL acceptance and merge remain deferred. No product or business acceptance is claimed. Preserve MONERGY-ASSISTANT-01A COMPLETE, its accepted sources/receipts, acceptedThrough=T1-06 and Business accepted=0. See MONERGY-ASSISTANT-01B-IMPLEMENTATION.md and MONERGY-ASSISTANT-01B-TESTING-HANDOFF.md. This acceptance metadata does not change implementation totals or prior operator history.

@@ -4,6 +4,8 @@ COPY . .
 RUN npm install --global pnpm@12.4.1 && pnpm install --frozen-lockfile
 RUN node build/uat/restore-source.mjs build/uat/dependencies /access-management
 ENV VITE_MONERGY_LOCAL_UAT=true
+ARG VITE_MONERGY_ASSISTANT_ENABLED=false
+ENV VITE_MONERGY_ASSISTANT_ENABLED=${VITE_MONERGY_ASSISTANT_ENABLED}
 RUN pnpm --filter @monergy/customer-web build
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0.401-noble@sha256:2fa828c68761b1b8c23d7662dc134421b9d3b59fe1425fdbc80804e390cdb24d AS build
@@ -31,6 +33,7 @@ COPY --from=build /source/services/customer-identity/migrations /source/services
 COPY --from=build /source/services/audit/migrations /source/services/audit/migrations
 COPY --from=build /source/services/consent/migrations /source/services/consent/migrations
 COPY --from=build /source/services/application-case/migrations /source/services/application-case/migrations
+COPY --from=build /source/services/ai-intelligence/migrations/assistant-feedback /source/services/ai-intelligence/migrations/assistant-feedback
 COPY --from=build /runtime-data/ /var/lib/
 COPY --from=frontend /source/apps/customer-web/dist /app/workspace/wwwroot
 ENV DOTNET_PROCESSOR_COUNT=2 DOTNET_EnableDiagnostics=0 DOTNET_ENVIRONMENT=Development ASPNETCORE_ENVIRONMENT=Development

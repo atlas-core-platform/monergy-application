@@ -1,5 +1,5 @@
 import { Button, Card, Descriptions, Modal, Space, Tag, Typography } from 'antd';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import type { ComponentProps } from 'react';
 import { FoundationProvider, WorkspaceShell } from '@monergy/ui-foundation';
 
@@ -13,6 +13,7 @@ import { WorkspaceEntry } from './access/WorkspaceEntry';
 import { PersonaWelcomeEntry } from './access/PersonaWelcomeEntry';
 import { RequestAccessGate } from './access/RequestAccess';
 import { workspaceAreaForPath } from './workspaceAreaForPath';
+import AskMonergyAction from './assistant/AskMonergyAction';
 const TenantSetupGate = lazy(() =>
   import('./access/TenantSetup').then((module) => ({ default: module.TenantSetupGate })),
 );
@@ -297,7 +298,8 @@ export function App() {
 }
 
 function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
-  const { session, authorization, workspaces = [], selectWorkspace, signOut } = useWorkspaceSession();
+  const { session, status, authorization, workspaces = [], selectWorkspace, signOut } = useWorkspaceSession();
+  const endAssistantSession = useCallback(() => { void signOut(); }, [signOut]);
   const product = authorization?.area === 'product' ? authorization.context : null;
   const active = workspaces.find(workspace => workspace.area === authorization?.area);
   return (
@@ -307,6 +309,10 @@ function SessionShell(props: ComponentProps<typeof WorkspaceShell>) {
       actions={
         session ? (
           <Space wrap>
+            {status === 'authorized' && authorization && <AskMonergyAction
+              key={session.authenticationContextId + ':' + JSON.stringify(authorization)}
+              session={{ audience: 'product', credential: session.authenticationContextId, expiresAt: session.expiresAt }}
+              workspace={active?.label} onSessionEnded={endAssistantSession} />}
             {workspaces.length > 1 && <><span>Current workspace: {active?.label}</span>
               {workspaces.filter(workspace => workspace.area !== authorization?.area).map(workspace =>
                 <Button key={workspace.area} type="link" onClick={() => { void selectWorkspace?.(workspace.area); }}>

@@ -6,7 +6,7 @@ using Npgsql;
 namespace Monergy.DatabaseMigrator;
 
 internal sealed record UatDatabase(string Service, string Tenant, string Name, string OwnerPassword, string RuntimePassword, string? DeliveryPassword);
-internal sealed record UatProfile(string InstanceId, string PostgresPassword, UatDatabase[] Databases, bool Onboarding = false);
+internal sealed record UatProfile(string InstanceId, string PostgresPassword, UatDatabase[] Databases, bool Onboarding = false, UatAssistantProfile? Assistant = null);
 
 internal static partial class LocalUatBootstrap
 {
@@ -93,7 +93,7 @@ internal static partial class LocalUatBootstrap
                 else
                 {
                     var result = DeployChanges.To.PostgresqlDatabase(connection).JournalToPostgresqlTable("public", "monergy_migration_history")
-                        .WithScriptsFromFileSystem("/source/services/" + database.Service + "/migrations").LogToConsole().Build().PerformUpgrade();
+                        .WithScriptsFromFileSystem("/source/services/" + database.Service + "/migrations", new DbUp.ScriptProviders.FileSystemScriptOptions { IncludeSubDirectories = false }).LogToConsole().Build().PerformUpgrade();
                     if (!result.Successful) throw new InvalidOperationException("Owner migration failed.");
                 }
                 await using var scoped = new NpgsqlConnection(connection);
