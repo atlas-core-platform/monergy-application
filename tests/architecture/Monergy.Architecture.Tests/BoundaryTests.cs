@@ -235,6 +235,7 @@ public sealed class BoundaryTests
         };
         var authorizedRoots = persistenceCohort
             .Select(serviceId => Path.GetFullPath(Path.Combine(ServicesRoot, serviceId, "migrations")))
+            .Append(Path.GetFullPath(Path.Combine(ServicesRoot, "ai-intelligence", "migrations", "assistant-feedback")))
             .ToArray();
 
         foreach (var serviceId in ServiceIds)
@@ -242,7 +243,14 @@ public sealed class BoundaryTests
             var migrationRoot = Path.Combine(ServicesRoot, serviceId, "migrations");
             Assert.True(Directory.Exists(migrationRoot));
             var sqlMigrations = Directory.GetFiles(migrationRoot, "*.sql", SearchOption.AllDirectories);
-            if (persistenceCohort.Contains(serviceId))
+            if (serviceId == "ai-intelligence")
+            {
+                // Decision-01 authorizes only the separate AssistantFeedback owner namespace.
+                Assert.NotEmpty(sqlMigrations);
+                Assert.All(sqlMigrations, path => Assert.True(IsUnderRoot(path,
+                    Path.GetFullPath(Path.Combine(migrationRoot, "assistant-feedback")))));
+            }
+            else if (persistenceCohort.Contains(serviceId))
             {
                 Assert.NotEmpty(sqlMigrations);
             }
@@ -304,11 +312,13 @@ public sealed class BoundaryTests
                 ? relative.Split('/')[1]
                 : null;
             var persistenceBoundary = serviceId is not null && persistenceCohort.Contains(serviceId)
+                || relative == "services/ai-intelligence/Monergy.Services.AiIntelligence.csproj"
                 || relative.StartsWith("shared/tenant-persistence/", StringComparison.Ordinal)
                 || relative.StartsWith("build/uat/Monergy.TenantProvisioningOwner/", StringComparison.Ordinal)
                 || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
                 || relative.StartsWith("tests/job-management/", StringComparison.Ordinal)
                 || relative.StartsWith("tests/application-case/", StringComparison.Ordinal)
+                || relative.StartsWith("tests/assistant/Monergy.Assistant.Tests/", StringComparison.Ordinal)
                 || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal);
 
             if (packages.Contains("Npgsql", StringComparer.OrdinalIgnoreCase)
@@ -325,7 +335,8 @@ public sealed class BoundaryTests
             if (packages.Contains("dbup-postgresql", StringComparer.OrdinalIgnoreCase))
             {
                 Assert.True(relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal)
-                    || relative.StartsWith("build/uat/Monergy.TenantProvisioningOwner/", StringComparison.Ordinal),
+                    || relative.StartsWith("build/uat/Monergy.TenantProvisioningOwner/", StringComparison.Ordinal)
+                    || relative.StartsWith("tests/assistant/Monergy.Assistant.Tests/", StringComparison.Ordinal),
                     $"DbUp dependency escaped D09 migration tooling: {relative}");
             }
         }
@@ -346,10 +357,13 @@ public sealed class BoundaryTests
             || relative.StartsWith("shared/tenant-persistence/", StringComparison.Ordinal)
             || relative.StartsWith("build/uat/Monergy.TenantProvisioningOwner/", StringComparison.Ordinal)
             || relative.StartsWith("services/document-intelligence/", StringComparison.Ordinal)
+            || relative.StartsWith("services/ai-intelligence/AssistantFeedback/", StringComparison.Ordinal)
+            || relative.StartsWith("services/audit/PlatformAudit/", StringComparison.Ordinal)
             || relative.StartsWith("tests/persistence/", StringComparison.Ordinal)
             || relative.StartsWith("tests/vs02/", StringComparison.Ordinal)
             || relative.StartsWith("tests/job-management/", StringComparison.Ordinal)
             || relative.StartsWith("tests/application-case/", StringComparison.Ordinal)
+            || relative.StartsWith("tests/assistant/Monergy.Assistant.Tests/", StringComparison.Ordinal)
             || relative.StartsWith("build/Monergy.DatabaseMigrator/", StringComparison.Ordinal)
             || relative.StartsWith("build/demo/cohort-p/", StringComparison.Ordinal),
             $"Physical persistence source escaped its D09 boundary: {relative}"));

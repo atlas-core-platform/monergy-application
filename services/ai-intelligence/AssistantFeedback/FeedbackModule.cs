@@ -29,7 +29,7 @@ public static class FeedbackModule
             try
             {
                 if (!string.Equals(app.Configuration["Monergy:AssistantFeedback:Enabled"], "true", StringComparison.OrdinalIgnoreCase))
-                    return Results.Json(new { error = "FEEDBACK_UNAVAILABLE", saved = false }, statusCode: 503);
+                    return Results.Json(new { error = "FEEDBACK_UNAVAILABLE", outcome = "REJECTED", saved = false }, statusCode: 503);
                 var review = http.Request.Path.StartsWithSegments("/internal/assistant-feedback/v1/review");
                 var purpose = review ? "ReviewToken" : "IngestToken";
                 var token = app.Configuration["Monergy:AssistantFeedback:" + purpose];
@@ -38,9 +38,11 @@ public static class FeedbackModule
                 AssistantContract.RequireWorkload(http, "X-Monergy-Assistant-Feedback", token);
                 return await next(context).ConfigureAwait(false);
             }
-            catch (TenantBoundaryException failure) { return Results.Json(new { error = failure.Code, saved = false }, statusCode: failure.Status); }
-            catch (Exception failure) when (failure is System.Data.Common.DbException or System.Data.DataException or InvalidOperationException or IOException or JsonException or HttpRequestException or OperationCanceledException)
-            { return Results.Json(new { error = "FEEDBACK_UNAVAILABLE", saved = false }, statusCode: 503); }
+            catch (AssistantOutcomeUnknownException)
+            { return Results.Json(new { error = "ASSISTANT_OUTCOME_UNKNOWN", outcome = "UNKNOWN" }, statusCode: 503); }
+            catch (TenantBoundaryException failure) { return Results.Json(new { error = failure.Code, outcome = "REJECTED", saved = false }, statusCode: failure.Status); }
+            catch (Exception failure) when (failure is System.Data.Common.DbException or System.Data.DataException or InvalidOperationException or ArgumentException or IOException or JsonException or HttpRequestException or OperationCanceledException)
+            { return Results.Json(new { error = "FEEDBACK_UNAVAILABLE", outcome = "REJECTED", saved = false }, statusCode: 503); }
         });
         group.MapGet("/status", async (FeedbackStore store, CancellationToken ct) =>
             await store.ReadyAsync(ct).ConfigureAwait(false) ? Results.Ok(new { available = true }) : Results.Json(new { available = false }, statusCode: 503));
@@ -93,6 +95,21 @@ public static class FeedbackModule
             var request = await AssistantContract.ReadAsync<FeedbackReviewRequest>(http.Request, 2048, http.RequestAborted).ConfigureAwait(false);
             return Results.Ok(await store.DeliveryStatusAsync(request, authority, true, http.RequestAborted).ConfigureAwait(false));
         });
+        group.MapPost("/review/audit-deliveries", async (HttpContext http, FeedbackStore store, FeedbackAuthority authority) =>
+        {
+            var request = await AssistantContract.ReadAsync<FeedbackAuditRequest>(http.Request, 2048, http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(await store.DiscoverAuditAsync(request, authority, http.RequestAborted).ConfigureAwait(false));
+        });
+        group.MapPost("/review/audit-deliveries/status", async (HttpContext http, FeedbackStore store, FeedbackAuthority authority) =>
+        {
+            var request = await AssistantContract.ReadAsync<FeedbackAuditRequest>(http.Request, 2048, http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(await store.RecoverAuditAsync(request, authority, false, http.RequestAborted).ConfigureAwait(false));
+        });
+        group.MapPost("/review/audit-deliveries/retry", async (HttpContext http, FeedbackStore store, FeedbackAuthority authority) =>
+        {
+            var request = await AssistantContract.ReadAsync<FeedbackAuditRequest>(http.Request, 2048, http.RequestAborted).ConfigureAwait(false);
+            return Results.Ok(await store.RecoverAuditAsync(request, authority, true, http.RequestAborted).ConfigureAwait(false));
+        });
     }
 }
 
@@ -100,29 +117,35 @@ internal sealed class FeedbackMaintenance(FeedbackStore store, IConfiguration co
 {
     private static readonly Action<ILogger, Exception?> DeliveryUnavailable = LoggerMessage.Define(LogLevel.Warning,
         new EventId(71101, "AssistantFeedbackDeliveryUnavailable"), "Assistant feedback audit delivery unavailable; durable events remain pending.");
+    private static readonly Action<ILogger, Exception?> RetentionUnavailable = LoggerMessage.Define(LogLevel.Warning,
+        new EventId(71103, "AssistantFeedbackRetentionUnavailable"), "Assistant feedback retention unavailable; the next bounded cycle will retry.");
+    private DateTimeOffset nextRetention = DateTimeOffset.MinValue;
+    internal async Task RunCycleAsync(HttpClient client, CancellationToken ct)
+    {
+        if (!string.Equals(configuration["Monergy:AssistantFeedback:Enabled"], "true", StringComparison.OrdinalIgnoreCase)) return;
+        if (nextRetention <= DateTimeOffset.UtcNow)
+        {
+            try
+            {
+                await store.RetainAsync(ct).ConfigureAwait(false);
+                nextRetention = DateTimeOffset.UtcNow.AddHours(1);
+            }
+            catch (Exception failure) when (failure is System.Data.Common.DbException or System.Data.DataException or InvalidOperationException or ArgumentException or IOException or OperationCanceledException)
+            { if (!ct.IsCancellationRequested) RetentionUnavailable(logger, null); }
+        }
+        if (ct.IsCancellationRequested) return;
+        try { await store.DeliverAsync(client, ct).ConfigureAwait(false); }
+        catch (Exception failure) when (failure is System.Data.Common.DbException or System.Data.DataException or InvalidOperationException or ArgumentException or HttpRequestException or JsonException or OperationCanceledException)
+        { if (!ct.IsCancellationRequested) DeliveryUnavailable(logger, null); }
+    }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         using var client = new HttpClient(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false, UseCookies = false })
         { Timeout = TimeSpan.FromSeconds(3), MaxResponseContentBufferSize = 8192 };
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
-        var nextRetention = DateTimeOffset.MinValue;
         while (await timer.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
         {
-            if (!string.Equals(configuration["Monergy:AssistantFeedback:Enabled"], "true", StringComparison.OrdinalIgnoreCase)) continue;
-            try
-            {
-                await store.DeliverAsync(client, stoppingToken).ConfigureAwait(false);
-                if (nextRetention <= DateTimeOffset.UtcNow)
-                {
-                    await store.RetainAsync(stoppingToken).ConfigureAwait(false);
-                    nextRetention = DateTimeOffset.UtcNow.AddHours(1);
-                }
-            }
-            catch (Exception failure) when (failure is System.Data.Common.DbException or System.Data.DataException or InvalidOperationException or HttpRequestException or JsonException or OperationCanceledException)
-            {
-                if (stoppingToken.IsCancellationRequested) break;
-                DeliveryUnavailable(logger, null); // No exception, connection string, request body or principal enters logs.
-            }
+            await RunCycleAsync(client, stoppingToken).ConfigureAwait(false);
         }
     }
 }

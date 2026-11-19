@@ -1,6 +1,7 @@
 import { Alert, Button, Checkbox, Drawer, Input, Select, Space, Spin, Typography } from 'antd';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AssistantApi, AssistantError } from './assistantApi';
+import AuditDeliveryReview from './AuditDeliveryReview';
 import type { AssistantAnswer, AssistantSession, AssistantStatus, DeliveryStatus, HelpTopic, TopicChange, TopicPage } from './assistantApi';
 
 const explanations: Record<string, string> = {
@@ -30,7 +31,9 @@ export default function AskMonergyDrawer({ session, workspace, onSessionEnded, o
   const pending = useRef(new Map<AbortController, 'ordinary' | 'review'>());
   const alive = useRef(true);
   const generation = useRef(0);
+  const conversationGeneration = useRef(0);
   const reviewGeneration = useRef(0);
+  const reviewAuthority = useRef<boolean | null>(null);
   const [status, setStatus] = useState<AssistantStatus | null>(null);
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState<AssistantAnswer | null>(null);
@@ -42,12 +45,21 @@ export default function AskMonergyDrawer({ session, workspace, onSessionEnded, o
   const [sending, setSending] = useState(false);
   const [saved, setSaved] = useState(false);
   const [suggestionError, setSuggestionError] = useState('');
+  const [suggestionUnknown, setSuggestionUnknown] = useState(false);
   const suggestionOperation = useRef<string | null>(null);
   const [reviewing, setReviewing] = useState(false);
   const [page, setPage] = useState<TopicPage | null>(null);
   const [loadingTopics, setLoadingTopics] = useState(false);
   const [selected, setSelected] = useState<HelpTopic | null>(null);
   const [retryUntil, setRetryUntil] = useState(0);
+  const invalidate = useCallback(() => { generation.current++; reviewGeneration.current++; }, []);
+  const clearConversation = useCallback(() => {
+    conversationGeneration.current++;
+    for (const controller of pending.current.keys()) controller.abort();
+    setQuestion(''); setAnswer(null); setAsking(false); setSuggesting(false); setSuggestion('');
+    setConfirmed(false); setSending(false); setSaved(false); setSuggestionError(''); setSuggestionUnknown(false);
+    suggestionOperation.current = null;
+  }, []);
 
   const clearReview = useCallback(() => {
     reviewGeneration.current++;
@@ -57,13 +69,12 @@ export default function AskMonergyDrawer({ session, workspace, onSessionEnded, o
   const run = useCallback(async <T,>(operation: (signal: AbortSignal) => Promise<T>, purpose: 'ordinary' | 'review' = 'ordinary'): Promise<T | undefined> => {
     const current = generation.current;
     const controller = new AbortController(); pending.current.set(controller, purpose);
-    let timedOut = false;
-    const timeout = window.setTimeout(() => { timedOut = true; controller.abort(); }, 12000);
+    const timeout = window.setTimeout(() => { controller.abort('assistant-timeout'); }, 12000);
     try {
       const result = await operation(controller.signal);
       return alive.current && current === generation.current && !controller.signal.aborted ? result : undefined;
     } catch (value) {
-      if (!alive.current || current !== generation.current || (controller.signal.aborted && !timedOut)) return undefined;
+      if (!alive.current || current !== generation.current || (controller.signal.aborted && controller.signal.reason !== 'assistant-timeout')) return undefined;
       throw value;
     } finally { window.clearTimeout(timeout); pending.current.delete(controller); }
   }, []);
@@ -71,13 +82,13 @@ export default function AskMonergyDrawer({ session, workspace, onSessionEnded, o
     if (!alive.current) return;
     if (value instanceof AssistantError && value.status === 401) { onSessionEnded(); onClose(); return; }
     if (value instanceof AssistantError && value.status === 403) {
-      clearReview();
+      reviewAuthority.current = false; clearConversation(); clearReview();
       setStatus(current => current ? { ...current, reviewAllowed: false } : current);
     }
     if (value instanceof AssistantError && value.status === 429)
       setRetryUntil(Date.now() + Math.max(1, value.retryAfter) * 1000);
     setError(value instanceof AssistantError ? value.message : 'Help is temporarily unavailable. Please try again.');
-  }, [clearReview, onClose, onSessionEnded]);
+  }, [clearConversation, clearReview, onClose, onSessionEnded]);
 
   useEffect(() => {
     alive.current = true;
@@ -86,6 +97,10 @@ export default function AskMonergyDrawer({ session, workspace, onSessionEnded, o
     const refresh = () => {
       void run(signal => api.status(signal)).then(result => {
         if (!result || !alive.current || current !== generation.current) return;
+        if (reviewAuthority.current !== null && reviewAuthority.current !== result.reviewAllowed) {
+          clearConversation(); clearReview();
+        }
+        reviewAuthority.current = result.reviewAllowed;
         setStatus(result);
         if (!result.reviewAllowed) clearReview();
       }).catch((value: unknown) => {
@@ -99,44 +114,51 @@ export default function AskMonergyDrawer({ session, workspace, onSessionEnded, o
     const interval = window.setInterval(refresh, 30000);
     const expiry = window.setTimeout(() => { onSessionEnded(); onClose(); }, Math.max(0, Math.min(2147483647, Date.parse(session.expiresAt) - Date.now())));
     return () => {
-      alive.current = false; generation.current++; reviewGeneration.current++;
+      alive.current = false; invalidate();
       window.clearInterval(interval); window.clearTimeout(expiry);
       for (const controller of controllers.keys()) controller.abort();
       controllers.clear();
     };
-  }, [api, clearReview, failure, onClose, onSessionEnded, run, session.expiresAt]);
+  }, [api, clearConversation, clearReview, failure, invalidate, onClose, onSessionEnded, run, session.expiresAt]);
 
   const ask = async () => {
     if (!question.trim() || asking || Date.now() < retryUntil) return;
     setAsking(true); setAnswer(null); setError('');
     const current = generation.current;
+    const conversation = conversationGeneration.current;
+    const isCurrent = () => alive.current && current === generation.current && conversation === conversationGeneration.current;
     try {
       const result = await run(signal => api.ask(question.trim(), signal));
-      if (result && current === generation.current) setAnswer(result);
+      if (result && isCurrent()) setAnswer(result);
     } catch (value) {
-      if (!alive.current || current !== generation.current) return;
+      if (!isCurrent()) return;
       if (value instanceof AssistantError && value.status === 403) onClose();
       else failure(value);
     }
-    finally { if (alive.current && current === generation.current) setAsking(false); }
+    finally { if (isCurrent()) setAsking(false); }
   };
   const submit = async () => {
     if (!confirmed || !suggestion.trim() || sending || Date.now() < retryUntil) return;
     setSending(true); setSaved(false); setSuggestionError('');
     const current = generation.current;
+    const conversation = conversationGeneration.current;
+    const isCurrent = () => alive.current && current === generation.current && conversation === conversationGeneration.current;
     suggestionOperation.current ??= crypto.randomUUID();
     try {
       const result = await run(async signal => {
         await api.suggest(suggestion.trim(), suggestionOperation.current ?? '', signal); return true;
       });
-      if (result && current === generation.current) { setSaved(true); setSuggestion(''); setConfirmed(false); suggestionOperation.current = null; }
+      if (result && isCurrent()) { setSaved(true); setSuggestion(''); setConfirmed(false); setSuggestionUnknown(false); suggestionOperation.current = null; }
     } catch (value) {
-      if (alive.current && current === generation.current) {
-        setSuggestionError('Your suggestion was not saved. ' + (value instanceof AssistantError ? value.message : 'Please try again.'));
+      if (isCurrent()) {
+        const unknown = !(value instanceof AssistantError) || value.outcome !== 'REJECTED';
+        setSuggestionUnknown(unknown);
+        setSuggestionError(unknown ? 'We couldn’t confirm whether your suggestion was saved. Retry to check.' :
+          'Your suggestion was not saved. ' + value.message);
         if (value instanceof AssistantError && value.status === 403) onClose();
         else if (value instanceof AssistantError && (value.status === 401 || value.status === 429)) failure(value);
       }
-    } finally { if (alive.current && current === generation.current) setSending(false); }
+    } finally { if (isCurrent()) setSending(false); }
   };
   const loadTopics = async (cursor: string | null = null) => {
     const current = generation.current;
@@ -186,14 +208,27 @@ export default function AskMonergyDrawer({ session, workspace, onSessionEnded, o
         {saved && <Alert type="success" title="Your suggestion has been saved for review." />}
         {suggestionError && <Alert type="warning" title={suggestionError} />}
         <label htmlFor="assistant-suggestion">General help question</label>
-        <Input.TextArea id="assistant-suggestion" value={suggestion} maxLength={500} rows={3} autoComplete="off" spellCheck={false} disabled={sending}
+        <Input.TextArea id="assistant-suggestion" value={suggestion} maxLength={500} rows={3} autoComplete="off" spellCheck={false} disabled={sending || suggestionUnknown}
           onChange={event => { setSuggestion(event.target.value); setConfirmed(false); setSaved(false); suggestionOperation.current = null; }} />
-        <Checkbox checked={confirmed} disabled={sending} onChange={event => { setConfirmed(event.target.checked); }}>I have reviewed this question and want to submit it without personal or customer details.</Checkbox>
-        <p><Button onClick={() => { void submit(); }} disabled={!confirmed || !suggestion.trim()} loading={sending}>Submit suggestion</Button></p>
+        <Checkbox checked={confirmed} disabled={sending || suggestionUnknown} onChange={event => { setConfirmed(event.target.checked); }}>I have reviewed this question and want to submit it without personal or customer details.</Checkbox>
+        <p><Button onClick={() => { void submit(); }} disabled={!confirmed || !suggestion.trim()} loading={sending}>{suggestionUnknown ? 'Retry suggestion' : 'Submit suggestion'}</Button></p>
       </section>}
       {reviewing && status.reviewAllowed && <section aria-label="Questions to improve">
         <h2>Questions to improve</h2>
         <p>New submissions are restricted intake. Approve only general product topics after privacy review. This view does not publish guidance.</p>
+        <AuditDeliveryReview load={async cursor => {
+          const current = generation.current; const review = reviewGeneration.current;
+          try {
+            const result = await run(signal => api.auditDeliveries(cursor, signal), 'review');
+            return current === generation.current && review === reviewGeneration.current ? result : undefined;
+          } catch (value) { if (alive.current && current === generation.current && review === reviewGeneration.current) failure(value); return undefined; }
+        }} retry={async (eventId, operationId) => {
+          const current = generation.current; const review = reviewGeneration.current;
+          try {
+            const result = await run(signal => api.retryAuditDelivery(eventId, operationId, signal), 'review');
+            return current === generation.current && review === reviewGeneration.current ? result : undefined;
+          } catch (value) { if (alive.current && current === generation.current && review === reviewGeneration.current) failure(value); return undefined; }
+        }} />
         <Button loading={loadingTopics} onClick={() => { void loadTopics(); }}>Refresh questions</Button>
         {page?.topics.length === 0 && <p>No questions are waiting here.</p>}
         {page?.topics.map(item => <article key={item.gapId} style={{ marginBlock: 20 }}>
@@ -204,7 +239,7 @@ export default function AskMonergyDrawer({ session, workspace, onSessionEnded, o
           <Button onClick={() => { setSelected(item); }}>Review question</Button>
         </article>)}
         {page?.nextCursor && <Button onClick={() => { void loadTopics(page.nextCursor); }}>Next questions</Button>}
-        {selected && <TopicEditor key={selected.gapId + ':' + selected.revision} topic={selected}
+        {selected && <TopicEditor key={`${selected.gapId}:${String(selected.revision)}`} topic={selected}
           onDelivery={async operationId => {
             const current = generation.current; const review = reviewGeneration.current;
             try {
@@ -224,7 +259,7 @@ export default function AskMonergyDrawer({ session, workspace, onSessionEnded, o
               await loadTopics(); return true;
             } catch (value) {
               if (alive.current && current === generation.current && review === reviewGeneration.current) failure(value);
-              return false;
+              return value instanceof AssistantError && value.outcome === 'UNKNOWN' ? 'UNKNOWN' : false;
             }
           }} />}
       </section>}
@@ -233,7 +268,7 @@ export default function AskMonergyDrawer({ session, workspace, onSessionEnded, o
 }
 
 function TopicEditor({ topic, onSave, onDelivery }: {
-  topic: HelpTopic; onSave: (change: TopicChange, operationId: string) => Promise<boolean>;
+  topic: HelpTopic; onSave: (change: TopicChange, operationId: string) => Promise<boolean | 'UNKNOWN'>;
   onDelivery: (operationId?: string) => Promise<DeliveryStatus | undefined>;
 }) {
   const [change, setChange] = useState<TopicChange>({
@@ -243,36 +278,38 @@ function TopicEditor({ topic, onSave, onDelivery }: {
     privacyDelete: false, resolution: topic.resolution ?? null,
   });
   const [busy, setBusy] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
   const operation = useRef<string | null>(null);
   const [delivery, setDelivery] = useState<DeliveryStatus | null>(null);
   const [deliveryBusy, setDeliveryBusy] = useState(false);
   const retryOperation = useRef<string | null>(null);
-  const update = (next: Partial<TopicChange>) => { setChange(current => ({ ...current, ...next })); operation.current = null; };
+  const locked = busy || uncertain;
+  const update = (next: Partial<TopicChange>) => { if (locked) return; setChange(current => ({ ...current, ...next })); operation.current = null; };
   return <section aria-label="Review question" style={{ marginBlock: 24 }}>
     <h3>Review question</h3><p>{topic.generalQuestion}</p>
     <Space orientation="vertical" style={{ width: '100%' }}>
-      <label>Classification <Select value={change.classification} disabled={busy} style={{ minWidth: 240 }}
+      <label>Classification <Select value={change.classification} disabled={locked} style={{ minWidth: 240 }}
         options={classifications.map(value => ({ value, label: value }))} onChange={value => { update({ classification: value }); }} /></label>
-      <label>Status <Select value={change.status} disabled={busy} style={{ minWidth: 240 }}
+      <label>Status <Select value={change.status} disabled={locked} style={{ minWidth: 240 }}
         options={statuses.map(value => ({ value, label: value }))} onChange={value => { update({ status: value }); }} /></label>
-      <Checkbox checked={change.approvedGeneralTopic} disabled={busy} onChange={event => { update({ approvedGeneralTopic: event.target.checked }); }}>Privacy reviewed: this is a general product topic</Checkbox>
-      <label>Reviewed topic reference<Input value={change.topicId ?? ''} maxLength={128} disabled={busy} autoComplete="off" onChange={event => { update({ topicId: event.target.value || null }); }} /></label>
-      <label>Responsible owner reference<Input value={change.ownerReference ?? ''} maxLength={128} disabled={busy} autoComplete="off" onChange={event => { update({ ownerReference: event.target.value || null }); }} /></label>
-      <label>Duplicate question reference<Input value={change.duplicateOf ?? ''} maxLength={100} disabled={busy} autoComplete="off" onChange={event => { update({ duplicateOf: event.target.value || null }); }} /></label>
+      <Checkbox checked={change.approvedGeneralTopic} disabled={locked} onChange={event => { update({ approvedGeneralTopic: event.target.checked }); }}>Privacy reviewed: this is a general product topic</Checkbox>
+      <label>Reviewed topic reference<Input value={change.topicId ?? ''} maxLength={128} disabled={locked} autoComplete="off" onChange={event => { update({ topicId: event.target.value || null }); }} /></label>
+      <label>Responsible owner reference<Input value={change.ownerReference ?? ''} maxLength={128} disabled={locked} autoComplete="off" onChange={event => { update({ ownerReference: event.target.value || null }); }} /></label>
+      <label>Duplicate question reference<Input value={change.duplicateOf ?? ''} maxLength={100} disabled={locked} autoComplete="off" onChange={event => { update({ duplicateOf: event.target.value || null }); }} /></label>
       {(change.status === 'Ready for verification' || change.status === 'Resolved') && <>
         <p>Resolution needs an approved change, a published version and verification evidence. The owner verifies these references before accepting Resolved.</p>
         {(['approvedChangeReference', 'publishedVersion', 'verificationReference'] as const).map((field, index) => <label key={field}>
           {['Approved change reference', 'Published version', 'Verification evidence reference'][index]}
-          <Input value={change.resolution?.[field] ?? ''} maxLength={256} disabled={busy} autoComplete="off" onChange={event => {
+          <Input value={change.resolution?.[field] ?? ''} maxLength={256} disabled={locked} autoComplete="off" onChange={event => {
             update({ resolution: { approvedChangeReference: '', publishedVersion: '', verificationReference: '', ...change.resolution, [field]: event.target.value } });
           }} />
         </label>)}
       </>}
-      <Checkbox checked={change.privacyDelete} disabled={busy} onChange={event => { update({ privacyDelete: event.target.checked }); }}>Delete this submitted text for privacy. This cannot be undone in the review view.</Checkbox>
+      <Checkbox checked={change.privacyDelete} disabled={locked} onChange={event => { update({ privacyDelete: event.target.checked }); }}>Delete this submitted text for privacy. This cannot be undone in the review view.</Checkbox>
       <Button type="primary" danger={change.privacyDelete} loading={busy} onClick={() => {
         setBusy(true); operation.current ??= crypto.randomUUID();
-        void onSave(change, operation.current).finally(() => { setBusy(false); });
-      }}>{change.privacyDelete ? 'Delete submitted text' : 'Save review'}</Button>
+        void onSave(change, operation.current).then(result => { setUncertain(result === 'UNKNOWN'); }).finally(() => { setBusy(false); });
+      }}>{uncertain ? 'Retry review' : change.privacyDelete ? 'Delete submitted text' : 'Save review'}</Button>
       <details><summary>Review history delivery</summary>
         <p>A saved change remains saved while its review history is waiting for delivery. Retrying history does not repeat the change.</p>
         <Button loading={deliveryBusy} onClick={() => {

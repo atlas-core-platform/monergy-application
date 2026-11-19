@@ -57,7 +57,7 @@ internal static class AssistantPlatformIdentity
         {
             if (!http.Request.Path.StartsWithSegments("/internal/platform-identity")) { await next(http).ConfigureAwait(false); return; }
             http.Response.Headers.CacheControl = "no-store";
-            if (!app.Configuration.GetValue<bool>("Monergy:Assistant:Enabled") || http.Connection.RemoteIpAddress is not { } remote ||
+            if (!string.Equals(app.Configuration["Monergy:Assistant:Enabled"], "true", StringComparison.OrdinalIgnoreCase) || http.Connection.RemoteIpAddress is not { } remote ||
                 !IPAddress.IsLoopback(remote) || http.Request.Host.Host is not ("127.0.0.1" or "localhost") || http.Request.Method != "POST")
             { http.Response.StatusCode = 404; return; }
             try

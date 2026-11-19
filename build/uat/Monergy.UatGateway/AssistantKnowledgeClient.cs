@@ -10,12 +10,19 @@ internal sealed record AnonymousAssistantCounter(string ContractVersion, string 
     string Intent, string KnowledgeRevision, string RetrievalRevision);
 internal sealed record ValidatedAssistantAnswer(AssistantAnswer Projection, AnonymousAssistantCounter Counter);
 
-internal sealed class AssistantKnowledgeClient(IConfiguration configuration) : IDisposable
+internal sealed class AssistantKnowledgeClient : IDisposable
 {
-    private readonly HttpClient client = new(new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false, UseCookies = false })
-    { Timeout = TimeSpan.FromSeconds(3), MaxResponseContentBufferSize = 131072 };
-    private readonly Lazy<AssistantKnowledgeCatalogue> catalogue = new(() => new(configuration["Monergy:Assistant:CataloguePath"] ?? "",
-        configuration["Monergy:Assistant:CatalogueSha256"] ?? ""));
+    private readonly IConfiguration configuration;
+    private readonly HttpClient client;
+    private readonly Lazy<AssistantKnowledgeCatalogue> catalogue;
+    public AssistantKnowledgeClient(IConfiguration configuration) : this(configuration,
+        new SocketsHttpHandler { AllowAutoRedirect = false, UseProxy = false, UseCookies = false }) { }
+    internal AssistantKnowledgeClient(IConfiguration configuration, HttpMessageHandler transport)
+    {
+        this.configuration = configuration;
+        client = new HttpClient(transport) { Timeout = TimeSpan.FromSeconds(3), MaxResponseContentBufferSize = 131072 };
+        catalogue = new(() => new(configuration["Monergy:Assistant:CataloguePath"] ?? "", configuration["Monergy:Assistant:CatalogueSha256"] ?? ""));
+    }
     private static readonly Dictionary<string, string> Diagnostics = new(StringComparer.Ordinal)
     {
         ["INSUFFICIENT_GROUNDING"] = "The available Monergy knowledge is insufficient for this question.",
@@ -110,7 +117,8 @@ internal sealed class AssistantKnowledgeClient(IConfiguration configuration) : I
         foreach (var claim in claims)
         {
             var id = claim.GetProperty("claimId").GetString() ?? "";
-            if (!ids.Add(id) || !canonical.Any(value => JsonElement.DeepEquals(value, claim)))
+            if (claim.GetProperty("knowledgeStatus").GetString() is not ("AUTHORITATIVE" or "CURATED" or "DERIVED") ||
+                !ids.Add(id) || !canonical.Any(value => JsonElement.DeepEquals(value, claim)))
                 throw new InvalidOperationException("Assistant claim provenance invalid.");
             texts.Add(claim.GetProperty("text").GetString()!);
             labels.Add(scope.GetProperty("sourceLabels").GetProperty(id).GetString()!);

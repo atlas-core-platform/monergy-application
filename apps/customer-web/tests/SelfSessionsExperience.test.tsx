@@ -149,7 +149,21 @@ it('sends only operation and selected reference, using the current session heade
 });
 
 it('gates the actual anonymous Settings route before private session content loads', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ enabled: false }))); window.history.replaceState({}, '', '/settings/sessions'); render(<App />);
+  const fetcher = vi.fn((url: string) => {
+    if (url === '/entry-api/local/v1/context')
+      return Promise.resolve(json({ kind: 'tenant', tenantId: 'T001', displayName: 'Reference organization' }));
+    if (url === '/identity-api/local/v1/persona-credentials') return Promise.resolve(json({ enabled: true }));
+    if (url === '/identity-api/local/v1/customer-registration' || url === '/identity-api/local/v1/customer-email-access')
+      return Promise.resolve(json({ enabled: false }));
+    return Promise.resolve(new Response(null, { status: 404 }));
+  });
+  vi.stubGlobal('fetch', fetcher); window.history.replaceState({}, '', '/settings/sessions'); render(<App />);
+  expect(await screen.findByLabelText('Email address')).toBeVisible();
+  expect(screen.queryByLabelText('Local access key')).not.toBeInTheDocument();
+  expect(screen.queryByRole('list', { name: 'Your sessions' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Current session')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Use a local test key' }));
   expect(await screen.findByLabelText('Local access key')).toBeVisible(); expect(screen.queryByRole('list', { name: 'Your sessions' })).not.toBeInTheDocument();
   expect(screen.queryByText('Current session')).not.toBeInTheDocument();
+  expect(fetcher.mock.calls.some(([url]) => url.includes('/me/sessions'))).toBe(false);
 });

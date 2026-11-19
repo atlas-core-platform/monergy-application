@@ -50,7 +50,7 @@ $assistantProfileExisted = Test-Path -LiteralPath $profileFile -PathType Leaf
 if ($EnableAssistant -and $DisableAssistant) { throw 'Select either EnableAssistant or DisableAssistant.' }
 if ($DisableAssistant -and -not $assistantProfileExisted) { throw 'DisableAssistant requires an existing Assistant profile; no profile will be created.' }
 if ($EnableAssistant -and -not $EnableOnboarding -and -not $assistantProfileExisted) { throw 'EnableAssistant requires a new named onboarding profile.' }
-if ($EnableAssistant -and -not $assistantProfileExisted) { Get-AssistantExpertIdentity $SystemExpertRoot | Out-Null }
+if ($EnableAssistant -and -not $assistantProfileExisted) { Get-AssistantRuntimeIdentity | Out-Null; Get-AssistantExpertIdentity $SystemExpertRoot | Out-Null }
 function Secret { $bytes = New-Object byte[] 32; $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }; return ([BitConverter]::ToString($bytes)).Replace('-','').ToLowerInvariant() }
 # Compatible with Windows PowerShell 5.1 (.NET Framework) and PowerShell 7.
 function Convert-HexToBase64([string]$Hex) {
@@ -818,6 +818,10 @@ if ($Action -in @('Prepare','Start')) {
     $path = $folder.Replace('\','/')
     $composeEnvironment = "UAT_CONFIG_ROOT='$path'`nUAT_PORT=$($state.port)`nUAT_UID=$runtimeUid`n"
     if ($null -ne $state.PSObject.Properties['assistant']) {
+        if ($state.assistant.enabled) {
+            $assistantIdentity = Get-AssistantRuntimeIdentity
+            $composeEnvironment += "UAT_ASSISTANT_UID=$($assistantIdentity.uid)`nUAT_ASSISTANT_GID=$($assistantIdentity.gid)`n"
+        }
         $expertPath = [string]$state.assistant.systemExpertRoot
         if ($expertPath.Contains("'") -or $expertPath.Contains("`n") -or $expertPath.Contains("`r")) { throw 'Unsupported Expert source path for Compose environment.' }
         $composeEnvironment += "UAT_SYSTEM_EXPERT_ROOT='$($expertPath.Replace('\','/'))'`n"

@@ -72,9 +72,10 @@ public static class PlatformAuthorizationEndpoints
                 var status = await dependencies.Store.StatusAsync(http.RequestAborted).ConfigureAwait(false);
                 return Results.Json(new { available = ready && status.PendingAudit < PlatformReviewerContract.MaximumPendingAudit }, statusCode: ready ? 200 : 503);
             }));
-        app.MapPost(prefix + "/evaluate", (PlatformReviewEvaluationRequest request, HttpContext http, PlatformAuthorizationModule module) =>
+        app.MapPost(prefix + "/evaluate", (HttpContext http, PlatformAuthorizationModule module) =>
             ExecuteAsync(http, module, false, async dependencies =>
             {
+                var request = await ReadRequestAsync<PlatformReviewEvaluationRequest>(http).ConfigureAwait(false);
                 PlatformReviewerContract.Require(request.AuthenticationContext is { Length: >= 32 and <= 256 } &&
                     request.AuthenticationContext.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_') &&
                     PlatformReviewerContract.ValidBinding(request.Operation, request.ResourceId), "PLATFORM_EVALUATION_INVALID");
@@ -88,9 +89,10 @@ public static class PlatformAuthorizationEndpoints
         app.MapGet(prefix + "/entitlements", (HttpContext http, PlatformAuthorizationModule module) =>
             ExecuteAsync(http, module, true, async dependencies =>
                 Results.Ok(await dependencies.Store.StatusAsync(http.RequestAborted).ConfigureAwait(false))));
-        app.MapPost(prefix + "/entitlements", (PlatformEntitlementCommand command, HttpContext http, PlatformAuthorizationModule module) =>
+        app.MapPost(prefix + "/entitlements", (HttpContext http, PlatformAuthorizationModule module) =>
             ExecuteAsync(http, module, true, async dependencies =>
             {
+                var command = await ReadRequestAsync<PlatformEntitlementCommand>(http).ConfigureAwait(false);
                 PlatformReviewerContract.Require(command.ContractVersion == "1.0.0" && command.Capability == PlatformReviewerContract.Capability &&
                     Guid.TryParseExact(command.OperationId, "D", out _) &&
                     PlatformReviewerContract.IsIdentifier(command.PrincipalId) && command.Action is "Grant" or "Revoke" &&
@@ -103,9 +105,28 @@ public static class PlatformAuthorizationEndpoints
         app.MapGet(prefix + "/operations/{operationId:guid}", (Guid operationId, HttpContext http, PlatformAuthorizationModule module) =>
             ExecuteAsync(http, module, true, async dependencies =>
                 Results.Ok(await dependencies.Store.DeliveryAsync(operationId, http.RequestAborted).ConfigureAwait(false))));
+        app.MapGet(prefix + "/delivery", (HttpContext http, PlatformAuthorizationModule module) =>
+            ExecuteAsync(http, module, true, async dependencies =>
+            {
+                var query = http.Request.Query;
+                PlatformReviewerContract.Require(query.All(item => item.Key is "after" or "limit" or "state" && item.Value.Count == 1), "PLATFORM_DELIVERY_QUERY_INVALID");
+                Guid? after = null;
+                if (query.TryGetValue("after", out var cursor))
+                {
+                    PlatformReviewerContract.Require(Guid.TryParseExact(cursor.ToString(), "D", out _), "PLATFORM_DELIVERY_QUERY_INVALID");
+                    after = Guid.Parse(cursor.ToString());
+                }
+                var limit = 20;
+                if (query.TryGetValue("limit", out var count))
+                    PlatformReviewerContract.Require(int.TryParse(count.ToString(), System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture, out limit), "PLATFORM_DELIVERY_QUERY_INVALID");
+                return Results.Ok(await dependencies.Store.DiscoverDeliveryAsync(after, limit,
+                    query.TryGetValue("state", out var state) ? state.ToString() : null, http.RequestAborted).ConfigureAwait(false));
+            }));
         app.MapPost(prefix + "/delivery/{eventId:guid}/resume", (Guid eventId, HttpContext http, PlatformAuthorizationModule module) =>
             ExecuteAsync(http, module, true, async dependencies =>
-                Results.Ok(new { resumed = await dependencies.Store.ResumeDeliveryAsync(eventId, http.RequestAborted).ConfigureAwait(false) })));
+                Results.Ok(await dependencies.Store.ResumeDeliveryAsync(eventId,
+                    await ReadRequestAsync<PlatformAuditRecoveryRequest>(http).ConfigureAwait(false), http.RequestAborted).ConfigureAwait(false))));
     }
 
     private static async Task<IResult> ExecuteAsync(HttpContext http, PlatformAuthorizationModule module, bool operatorCommand,
@@ -119,7 +140,10 @@ public static class PlatformAuthorizationEndpoints
             var name = operatorCommand ? "X-Monergy-AM-Platform-Operator" : "X-Monergy-AM-Platform";
             var credential = http.Request.Headers[name];
             var expected = operatorCommand ? dependencies.OperatorToken : dependencies.EvaluationToken;
-            if (credential.Count != 1 || !ReferenceOwnerBoundary.TokenMatches(credential.ToString(), expected))
+            if (credential.Count != 1 || !ReferenceOwnerBoundary.TokenMatches(credential.ToString(), expected) ||
+                http.Request.Headers.ContainsKey("Authorization") || http.Request.Headers.ContainsKey("Cookie") ||
+                http.Request.Headers.Keys.Any(key => key.StartsWith("X-Monergy-", StringComparison.OrdinalIgnoreCase) &&
+                    !key.Equals(name, StringComparison.OrdinalIgnoreCase)))
                 return Results.Json(new { error = "PLATFORM_WORKLOAD_DENIED" }, statusCode: 403);
             return await action(dependencies).ConfigureAwait(false);
         }
@@ -138,4 +162,29 @@ public static class PlatformAuthorizationEndpoints
 
     private static void SafeFailure(HttpContext http) => DependencyUnavailable(
         http.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("PlatformAuthorization"), null);
+
+    private static async Task<T> ReadRequestAsync<T>(HttpContext http)
+    {
+        PlatformReviewerContract.Require(http.Request.Query.Count == 0 && http.Request.ContentLength is not > 4096 &&
+            http.Request.ContentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true &&
+            !http.Request.Headers.ContainsKey("Content-Encoding"), "PLATFORM_REQUEST_INVALID");
+        using var buffer = new MemoryStream();
+        var bytes = new byte[4097];
+        while (true)
+        {
+            var count = await http.Request.Body.ReadAsync(bytes, http.RequestAborted).ConfigureAwait(false);
+            if (count == 0) break;
+            PlatformReviewerContract.Require(buffer.Length + count <= 4096, "PLATFORM_REQUEST_INVALID");
+            buffer.Write(bytes, 0, count);
+        }
+        try
+        {
+            using var json = JsonDocument.Parse(buffer.ToArray(), new JsonDocumentOptions { MaxDepth = 16 });
+            PlatformReviewerContract.Require(json.RootElement.ValueKind == JsonValueKind.Object, "PLATFORM_REQUEST_INVALID");
+            var names = json.RootElement.EnumerateObject().Select(property => property.Name).ToArray();
+            PlatformReviewerContract.Require(names.Distinct(StringComparer.Ordinal).Count() == names.Length, "PLATFORM_REQUEST_INVALID");
+            return json.RootElement.Deserialize<T>(PlatformReviewerContract.Json) ?? throw new JsonException();
+        }
+        catch (JsonException) { throw new PlatformAuthorizationException("PLATFORM_REQUEST_INVALID", 400); }
+    }
 }

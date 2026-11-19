@@ -41,7 +41,7 @@ services:
       dockerfile: build/assistant/Dockerfile
     pull_policy: never
     network_mode: service:workspace
-    user: '1000:1000'
+    user: '${UAT_ASSISTANT_UID:?Assistant non-root UID is required}:${UAT_ASSISTANT_GID:?Assistant non-root GID is required}'
     read_only: true
     cap_drop: [ALL]
     security_opt: ['no-new-privileges:true']

@@ -11,10 +11,15 @@ public static class PlatformReviewerContract
     public const string Risk = "Administrative";
     public const int MaximumPendingAudit = 1000;
     public const int MaximumDeliveryAttempts = 8;
+    public const int MaximumRecoveryCycles = 3;
+    public const int RecoveryAuditReserve = 16;
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-        RespectRequiredConstructorParameters = true
+        RespectRequiredConstructorParameters = true,
+        RespectNullableAnnotations = true,
+        PropertyNameCaseInsensitive = false,
+        MaxDepth = 16
     };
 
     public static bool IsPlatformCapability(string? capability) =>
@@ -54,6 +59,11 @@ public sealed record PlatformEntitlementResult(string OperationId, string Entitl
 public sealed record PlatformEntitlementStatus(long PolicyRevision, int PendingAudit);
 public sealed record PlatformAuditDeliveryStatus(string OperationId, string EventId, string State, int Attempts,
     string? ReceiptId, DateTimeOffset? RecordedAt);
+public sealed record PlatformAuditPendingEvent(string EventId, string OperationId, string Action, string Outcome,
+    string State, int Attempts, int RecoveryCount, DateTimeOffset OccurredAt);
+public sealed record PlatformAuditPendingPage(PlatformAuditPendingEvent[] Items, string? NextCursor);
+public sealed record PlatformAuditRecoveryRequest(string OperationId, int ExpectedRecoveryCount);
+public sealed record PlatformAuditRecoveryResult(string OperationId, string EventId, bool Resumed, int RecoveryCount, string AuditState);
 public sealed record PlatformAuditEnvelope(string SchemaVersion, string EventId, string OperationId, string Realm,
     string Producer, string ActorKind, string ActorId, string Capability, string? DecisionId,
     long PolicyRevision, long GrantRevision, long? RecordVersion, string Action, string Outcome,

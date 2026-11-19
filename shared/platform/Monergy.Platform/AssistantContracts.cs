@@ -93,12 +93,12 @@ public static class AssistantContract
     public static void ValidateAudit(PlatformAuditEnvelope item, string producer)
     {
         string[] actions = producer == "am-platform"
-            ? ["ReviewerGrant", "ReviewerRevoke", "ReviewerAuthorization"]
+            ? ["ReviewerGrant", "ReviewerRevoke", "ReviewerAuthorization", "ReviewerAuditRecovery"]
             : ["FeedbackRead", "FeedbackClassify", "FeedbackAssign", "FeedbackDuplicate", "FeedbackStatus", "FeedbackPrivacyDelete"];
         string[] reasons = ["GrantApplied", "RevokeApplied", "AlreadyGranted", "AlreadyRevoked", "EntitlementMissing",
             "EntitlementRevoked", "Authorized", "IdentityUnavailable", "IdentityInvalid", "ContextExpired",
             "PolicyRevisionConflict", "ReviewApplied", "ReleaseAuthorized", "PrivacyDeletion", "RetentionExpiry",
-            "REVIEW_ASSIGNMENT", "REVIEW_REMOVAL", "SECURITY_RESPONSE", "DeliveryRetry"];
+            "REVIEW_ASSIGNMENT", "REVIEW_REMOVAL", "SECURITY_RESPONSE", "DeliveryRetry", "DeliveryDiscovery", "AuditRecovery"];
         if (item.SchemaVersion != "1.0.0" || item.Realm != Realm || item.Producer != producer ||
             !OpaqueId(item.EventId) || !OpaqueId(item.OperationId) || item.Capability != Capability ||
             item.ActorKind is not ("PlatformPrincipal" or "OperatorWorkload") || !Code(item.ActorId) ||

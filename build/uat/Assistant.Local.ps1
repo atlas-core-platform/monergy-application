@@ -1,5 +1,26 @@
 # Optional LOCAL Assistant preparation. Functions are invoked by the named-profile
 # launcher only; dot-sourcing this file does not provision or start anything.
+function Resolve-AssistantRuntimeIdentity([bool]$OnWindows, [string]$OperatorUid, [string]$OperatorGid) {
+    # Docker Desktop applies the protected host ACL through its file-sharing boundary.
+    # Native Linux bind mounts retain the owner's numeric UID and mode 0600.
+    if ($OnWindows) { return [pscustomobject]@{ uid='1000'; gid='1000' } }
+    foreach ($value in @($OperatorUid, $OperatorGid)) {
+        if ($value -notmatch '^[1-9][0-9]{0,9}$' -or [uint64]$value -gt 2147483647) {
+            throw 'Assistant requires a supported non-root operator UID and GID. Run as a non-root local operator; secret permissions will not be relaxed.'
+        }
+    }
+    return [pscustomobject]@{ uid=$OperatorUid; gid=$OperatorGid }
+}
+
+function Get-AssistantRuntimeIdentity {
+    if ($windows) { return Resolve-AssistantRuntimeIdentity $true '' '' }
+    $operatorUid = (& id -u)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot determine the Assistant secret owner UID.' }
+    $operatorGid = (& id -g)
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot determine the Assistant secret owner GID.' }
+    return Resolve-AssistantRuntimeIdentity $false $operatorUid.Trim() $operatorGid.Trim()
+}
+
 function Get-AssistantExpertIdentity([string]$Root) {
     if ([string]::IsNullOrWhiteSpace($Root)) { throw 'EnableAssistant requires an explicit SystemExpertRoot.' }
     $resolved = (Resolve-Path -LiteralPath $Root -ErrorAction Stop).Path
@@ -26,6 +47,7 @@ function Initialize-AssistantProfile([bool]$ExistedBeforeInvocation) {
     if ($DisableAssistant -and -not $retained) { throw 'This profile has no Assistant configuration to disable.' }
     if (-not $EnableAssistant -and -not $retained) { return }
     if (-not $onboarding) { throw 'Assistant requires a named onboarding profile.' }
+    if (-not $DisableAssistant -and ($EnableAssistant -or ($retained -and $state.assistant.enabled))) { Get-AssistantRuntimeIdentity | Out-Null }
     if (-not $retained) {
         if ($ExistedBeforeInvocation) { throw 'Assistant is opt-in for a new isolated profile. Existing profiles are not silently upgraded.' }
         $expert = Get-AssistantExpertIdentity $SystemExpertRoot

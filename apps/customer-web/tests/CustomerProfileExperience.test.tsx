@@ -103,21 +103,39 @@ function LabelProbe() {
 }
 it('refreshes the real session owner context after save while keeping the profile page mounted', async () => {
   let saved = false;
-  vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
-    let value: unknown = {};
-    if (url.endsWith('/tenant-sessions')) value = session;
-    else if (url.endsWith('/v1/context')) value = { ...context, customerName: saved ? 'Updated Customer' : 'Customer' };
-    else if (url.endsWith('/customer-profile')) {
+  const deniedContexts = new Set([
+    '/access-api/v1/administration/context', '/access-api/v1/advisor/context',
+    '/case-api/local/v1/cases/context', '/case-api/local/v1/cases/lender/context',
+    '/case-api/local/v1/cases/financial-professional/context', '/case-api/local/v1/cases/property-valuer/context',
+    '/case-api/local/v1/cases/legal-advisor/context', '/jobs-api/local/v1/operations/context',
+    '/identity-api/local/v1/basic-kyc/reviewer-context',
+  ]);
+  const methods = new Set(['/identity-api/local/v1/persona-credentials',
+    '/identity-api/local/v1/customer-registration', '/identity-api/local/v1/customer-email-access']);
+  const fetcher = vi.fn((url: string, options?: RequestInit) => {
+    let value: unknown;
+    let status = 200;
+    if (url === '/entry-api/local/v1/context') value = { kind: 'tenant', tenantId: 'T001', displayName: 'Reference organization' };
+    else if (url === '/identity-api/local/v1/tenant-sessions') value = session;
+    else if (url === '/product-api/v1/context') value = { ...context, customerName: saved ? 'Updated Customer' : 'Customer' };
+    else if (deniedContexts.has(url)) { status = 403; value = { error: 'DENIED' }; }
+    else if (methods.has(url)) value = { enabled: false };
+    else if (url === '/identity-api/local/v1/me/customer-profile') {
       if (options?.method === 'PUT') { saved = true; const change = JSON.parse(options.body as string) as { operationId: string }; value = { operationId: change.operationId, version: 3 }; }
       else value = saved ? { ...profile(), displayName: 'Updated Customer', version: 3 } : profile();
-    }
-    return Promise.resolve(new Response(JSON.stringify(value), { status: 200, headers: { 'Content-Type': 'application/json' } }));
-  }));
+    } else { status = 404; value = { error: 'NOT_FOUND' }; }
+    return Promise.resolve(new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } }));
+  });
+  vi.stubGlobal('fetch', fetcher);
   render(<FoundationProvider appearance="midnight"><WorkspaceSessionProvider area="product"><LabelProbe /></WorkspaceSessionProvider></FoundationProvider>);
+  expect(screen.queryByLabelText('Your name')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Connect test' })); await edit();
   const heading = screen.getByRole('heading', { name: 'My Profile' }); save();
   expect(await screen.findByText('Your profile has been saved.')).toBeVisible();
   expect(screen.getByText('Updated Customer')).toBeVisible(); expect(screen.getByRole('heading', { name: 'My Profile' })).toBe(heading);
+  expect(fetcher.mock.calls.filter(([url]) => url === '/product-api/v1/context')).toHaveLength(2);
+  expect(new Set(fetcher.mock.calls.map(([url]) => url).filter(url => deniedContexts.has(url)))).toEqual(deniedContexts);
+  expect(screen.queryByRole('heading', { name: 'Choose workspace' })).not.toBeInTheDocument();
 });
 
 it('keeps anonymous direct profile entry behind the workspace gate', () => {

@@ -19,7 +19,7 @@ public sealed class PostgresPlatformAuthorizationStore(string connectionString, 
     {
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
         return await connection.ExecuteScalarAsync<bool>(new CommandDefinition(
-            "SELECT EXISTS(SELECT 1 FROM am_platform.policy WHERE singleton AND schema_version=1);", cancellationToken: ct)).ConfigureAwait(false);
+            "SELECT EXISTS(SELECT 1 FROM am_platform.policy WHERE singleton AND schema_version=2);", cancellationToken: ct)).ConfigureAwait(false);
     }
 
     public async Task<PlatformEntitlementStatus> StatusAsync(CancellationToken ct)
@@ -170,13 +170,64 @@ public sealed class PostgresPlatformAuthorizationStore(string connectionString, 
             cancellationToken: ct)).ConfigureAwait(false);
     }
 
-    public async Task<bool> ResumeDeliveryAsync(Guid eventId, CancellationToken ct)
+    public async Task<PlatformAuditPendingPage> DiscoverDeliveryAsync(Guid? after, int limit, string? state, CancellationToken ct)
     {
+        PlatformReviewerContract.Require(limit is >= 1 and <= 100 && state is null or "Pending" or "Retry" or "Delivering" or "Paused", "PLATFORM_DELIVERY_QUERY_INVALID");
         await using var connection = await OpenAsync(ct).ConfigureAwait(false);
-        return await connection.ExecuteAsync(new CommandDefinition("""
-            UPDATE am_platform.audit_delivery SET state='Retry',attempts=0,next_attempt_at=@now,lease_id=NULL,lease_until=NULL
-            WHERE event_id=@eventId AND (state='Paused' OR (state='Delivering' AND attempts=8 AND lease_until<=@now));
-            """, new { eventId, now = time.GetUtcNow() }, cancellationToken: ct)).ConfigureAwait(false) == 1;
+        var rows = (await connection.QueryAsync<PendingRow>(new CommandDefinition("""
+            SELECT o.event_id::text AS EventId,o.operation_id::text AS OperationId,
+                o.payload_json->>'action' AS Action,o.payload_json->>'outcome' AS Outcome,
+                CASE WHEN d.state='Delivering' AND d.attempts=8 AND d.lease_until<=@now THEN 'Paused' ELSE d.state END AS State,
+                d.attempts AS Attempts,d.recovery_count AS RecoveryCount,o.occurred_at AS OccurredAt
+            FROM am_platform.audit_outbox o JOIN am_platform.audit_delivery d USING(event_id)
+            WHERE d.state<>'Accepted' AND (@after::uuid IS NULL OR o.event_id>@after)
+                AND (@state::text IS NULL OR d.state=@state OR (@state='Paused' AND d.state='Delivering' AND d.attempts=8 AND d.lease_until<=@now))
+            ORDER BY o.event_id LIMIT @take;
+            """, new { after, state, now = time.GetUtcNow(), take = limit + 1 }, cancellationToken: ct)).ConfigureAwait(false)).ToArray();
+        var items = rows.Take(limit).Select(row => new PlatformAuditPendingEvent(row.EventId, row.OperationId, row.Action,
+            row.Outcome, row.State, row.Attempts, row.RecoveryCount, new DateTimeOffset(DateTime.SpecifyKind(row.OccurredAt, DateTimeKind.Utc)))).ToArray();
+        return new(items, rows.Length > limit ? items[^1].EventId : null);
+    }
+
+    public async Task<PlatformAuditRecoveryResult> ResumeDeliveryAsync(Guid eventId, PlatformAuditRecoveryRequest request, CancellationToken ct)
+    {
+        PlatformReviewerContract.Require(Guid.TryParseExact(request.OperationId, "D", out _) &&
+            request.ExpectedRecoveryCount is >= 0 and < PlatformReviewerContract.MaximumRecoveryCycles, "PLATFORM_RECOVERY_INVALID");
+        var operation = Guid.Parse(request.OperationId);
+        var fingerprint = Hash("recovery:" + eventId.ToString("D") + ":" + JsonSerializer.Serialize(request, PlatformReviewerContract.Json));
+        await using var connection = await OpenAsync(ct).ConfigureAwait(false);
+        await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
+        var policy = await LockPolicyAsync(connection, transaction, ct).ConfigureAwait(false);
+        var prior = await connection.QuerySingleOrDefaultAsync<CommandRow>(new CommandDefinition(
+            "SELECT request_hash AS RequestHash,result_json::text AS ResultJson FROM am_platform.command_results WHERE operation_id=@operation;",
+            new { operation }, transaction, cancellationToken: ct)).ConfigureAwait(false);
+        if (prior is not null)
+        {
+            PlatformReviewerContract.Require(prior.RequestHash == fingerprint, "PLATFORM_OPERATION_CONFLICT", 409);
+            return JsonSerializer.Deserialize<PlatformAuditRecoveryResult>(prior.ResultJson, PlatformReviewerContract.Json)!;
+        }
+        var pending = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT count(*) FROM am_platform.audit_delivery WHERE state<>'Accepted';", transaction: transaction, cancellationToken: ct)).ConfigureAwait(false);
+        PlatformReviewerContract.Require(pending < PlatformReviewerContract.MaximumPendingAudit + PlatformReviewerContract.RecoveryAuditReserve,
+            "PLATFORM_RECOVERY_AUDIT_CAPACITY", 503);
+        var now = time.GetUtcNow();
+        var count = await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE am_platform.audit_delivery SET state='Retry',attempts=0,recovery_count=recovery_count+1,
+                next_attempt_at=@now,lease_id=NULL,lease_until=NULL
+            WHERE event_id=@eventId AND recovery_count=@expected AND recovery_count<3
+                AND (state='Paused' OR (state='Delivering' AND attempts=8 AND lease_until<=@now));
+            """, new { eventId, now, expected = request.ExpectedRecoveryCount }, transaction, cancellationToken: ct)).ConfigureAwait(false);
+        PlatformReviewerContract.Require(count == 1, "PLATFORM_DELIVERY_NOT_RECOVERABLE", 409);
+        var result = new PlatformAuditRecoveryResult(request.OperationId, eventId.ToString("D"), true, request.ExpectedRecoveryCount + 1, "Pending");
+        await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO am_platform.command_results(operation_id,request_hash,result_json,recorded_at)
+            VALUES(@operation,@fingerprint,CAST(@json AS jsonb),@now);
+            """, new { operation, fingerprint, json = JsonSerializer.Serialize(result, PlatformReviewerContract.Json), now }, transaction, cancellationToken: ct)).ConfigureAwait(false);
+        await EnqueueAsync(connection, transaction, new PlatformAuditEnvelope("1.0.0", Guid.NewGuid().ToString("D"), request.OperationId,
+            PlatformReviewerContract.Realm, "am-platform", "OperatorWorkload", "local-reviewer-operator", PlatformReviewerContract.Capability,
+            null, policy, 0, null, "ReviewerAuditRecovery", "Committed", "AuditRecovery", eventId.ToString("D"), "platform", now), ct).ConfigureAwait(false);
+        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        return result;
     }
 
     private static Task<long> LockPolicyAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct) =>
@@ -211,6 +262,7 @@ public sealed class PostgresPlatformAuthorizationStore(string connectionString, 
     private sealed record CommandRow(string RequestHash, string ResultJson);
     private sealed record GrantRow(Guid EntitlementId, bool Granted, long Revision);
     private sealed record DeliveryStatusRow(string OperationId, string EventId, string State, int Attempts, string? ReceiptId, DateTime? RecordedAt);
+    private sealed record PendingRow(string EventId, string OperationId, string Action, string Outcome, string State, int Attempts, int RecoveryCount, DateTime OccurredAt);
 }
 
 public sealed record PlatformDelivery(Guid EventId, string Payload, int Attempts, Guid LeaseId);

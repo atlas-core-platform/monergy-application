@@ -24,7 +24,7 @@ public static class PlatformAuditModule
             context.HttpContext.Response.Headers.CacheControl = "no-store";
             try { return await next(context).ConfigureAwait(false); }
             catch (TenantBoundaryException failure) { return Results.Json(new { error = failure.Code }, statusCode: failure.Status); }
-            catch (Exception failure) when (failure is System.Data.Common.DbException or InvalidOperationException or OperationCanceledException)
+            catch (Exception failure) when (failure is System.Data.Common.DbException or InvalidOperationException or ArgumentException or OperationCanceledException)
             { return Results.Json(new { error = "PLATFORM_AUDIT_UNAVAILABLE" }, statusCode: 503); }
         });
         group.MapPost("/events", async (HttpContext http, IConfiguration config, PlatformAuditStore store) =>
@@ -72,7 +72,7 @@ public sealed class PlatformAuditStore(IConfiguration configuration)
             await using var command = new NpgsqlCommand("SELECT to_regclass('audit_platform.receipts') IS NOT NULL", connection);
             return await command.ExecuteScalarAsync(ct).ConfigureAwait(false) is true;
         }
-        catch (Exception failure) when (failure is System.Data.Common.DbException or InvalidOperationException) { return false; }
+        catch (Exception failure) when (failure is System.Data.Common.DbException or InvalidOperationException or ArgumentException) { return false; }
     }
 
     public async Task<PlatformAuditReceipt> AppendAsync(PlatformAuditEnvelope envelope, CancellationToken ct)
@@ -96,7 +96,10 @@ public sealed class PlatformAuditStore(IConfiguration configuration)
                 return new(envelope.EventId, reader.GetGuid(2).ToString(), reader.GetFieldValue<DateTimeOffset>(3), "Accepted");
             }
         }
-        var receipt = new PlatformAuditReceipt(envelope.EventId, Guid.NewGuid().ToString(), DateTimeOffset.UtcNow, "Accepted");
+        var now = DateTimeOffset.UtcNow;
+        // PostgreSQL persists microseconds. Return the exact durable precision on the first receipt as on replay.
+        var recordedAt = new DateTimeOffset(now.Ticks - now.Ticks % 10, TimeSpan.Zero);
+        var receipt = new PlatformAuditReceipt(envelope.EventId, Guid.NewGuid().ToString(), recordedAt, "Accepted");
         await using (var command = new NpgsqlCommand("""
             INSERT INTO audit_platform.inbox(event_id,producer,payload_hash) VALUES(@id,@producer,@hash);
             INSERT INTO audit_platform.evidence(event_id,producer,realm,envelope) VALUES(@id,@producer,'MONERGY_PLATFORM',@payload::jsonb);

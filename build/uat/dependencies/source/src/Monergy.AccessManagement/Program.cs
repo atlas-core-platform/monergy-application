@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
 using Monergy.AccessManagement;
 
-var operatorCommand = args is ["--platform-reviewer-command"];
+var operatorCommand = args is ["--platform-reviewer-command" or "--platform-reviewer-status" or "--platform-reviewer-discover" or
+    "--platform-reviewer-operation" or "--platform-reviewer-resume"];
 var builder = WebApplication.CreateBuilder(operatorCommand ? Array.Empty<string>() : args);
 if (operatorCommand)
 {
-    Environment.ExitCode = await PlatformReviewerOperator.RunAsync(builder.Configuration, builder.Environment);
+    Environment.ExitCode = await PlatformReviewerOperator.RunAsync(builder.Configuration, builder.Environment, args[0]);
     return;
 }
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 262_144);

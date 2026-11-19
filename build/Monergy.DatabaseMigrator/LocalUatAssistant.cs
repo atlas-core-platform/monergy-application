@@ -129,7 +129,7 @@ internal static partial class LocalUatBootstrap
         var common = $"REVOKE CREATE ON SCHEMA public FROM PUBLIC; REVOKE ALL ON SCHEMA {schema} FROM {runtime}; REVOKE ALL ON ALL TABLES IN SCHEMA {schema} FROM {runtime}; GRANT USAGE ON SCHEMA {schema} TO {runtime}; GRANT SELECT ON ALL TABLES IN SCHEMA {schema} TO {runtime};";
         return common + (service switch
         {
-            "ai-feedback" => $"GRANT INSERT,UPDATE,DELETE ON ai_feedback.topics,ai_feedback.operations,ai_feedback.counters TO {runtime}; GRANT INSERT ON ai_feedback.audit_outbox TO {runtime}; GRANT UPDATE(attempt_count,recovery_count,next_attempt_at,receipt,delivered_at) ON ai_feedback.audit_outbox TO {runtime}; GRANT EXECUTE ON FUNCTION ai_feedback.purge_delivered_audit() TO {runtime};",
+            "ai-feedback" => $"GRANT INSERT,UPDATE,DELETE ON ai_feedback.topics,ai_feedback.operations,ai_feedback.counters TO {runtime}; GRANT INSERT,DELETE ON ai_feedback.audit_recovery_operations TO {runtime}; GRANT INSERT ON ai_feedback.audit_outbox TO {runtime}; GRANT UPDATE(attempt_count,recovery_count,next_attempt_at,receipt,delivered_at) ON ai_feedback.audit_outbox TO {runtime}; GRANT EXECUTE ON FUNCTION ai_feedback.purge_delivered_audit() TO {runtime};",
             "am-platform" => $"GRANT INSERT,UPDATE ON am_platform.policy,am_platform.principal_references,am_platform.reviewer_grants,am_platform.audit_delivery TO {runtime}; GRANT INSERT ON am_platform.command_results,am_platform.audit_outbox TO {runtime};",
             "audit-platform" => $"GRANT INSERT ON audit_platform.inbox,audit_platform.evidence,audit_platform.receipts TO {runtime};",
             _ => throw new InvalidOperationException(),

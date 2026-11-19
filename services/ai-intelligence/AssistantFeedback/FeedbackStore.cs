@@ -7,7 +7,7 @@ using Npgsql;
 
 namespace Monergy.Services.AiIntelligence.AssistantFeedback;
 
-public sealed class FeedbackStore(IConfiguration configuration)
+public sealed partial class FeedbackStore(IConfiguration configuration)
 {
     private string Connection => configuration["Monergy:AssistantFeedback:ConnectionString"] is { Length: > 0 } value
         ? value : throw new InvalidOperationException("Assistant feedback store unavailable.");
@@ -30,7 +30,7 @@ public sealed class FeedbackStore(IConfiguration configuration)
             await using var connection = await OpenAsync(ct).ConfigureAwait(false);
             return await connection.ExecuteScalarAsync<bool>(Sql("SELECT to_regclass('ai_feedback.topics') IS NOT NULL AND to_regclass('ai_feedback.audit_outbox') IS NOT NULL", ct: ct)).ConfigureAwait(false);
         }
-        catch (Exception failure) when (failure is System.Data.Common.DbException or InvalidOperationException) { return false; }
+        catch (Exception failure) when (failure is System.Data.Common.DbException or InvalidOperationException or ArgumentException) { return false; }
     }
 
     public async Task<FeedbackSaved> SubmitAsync(HelpTopicSubmission request, CancellationToken ct)
@@ -52,7 +52,7 @@ public sealed class FeedbackStore(IConfiguration configuration)
                 payload = Serialize(topic), knowledge = request.KnowledgeRevision, retrieval = request.RetrievalRevision }, transaction, ct)).ConfigureAwait(false);
         var saved = new FeedbackSaved(true, topic.GapId);
         await RecordOperationAsync(connection, transaction, request.IdempotencyKey, digest, saved, topic.ExpiresAt, ct).ConfigureAwait(false);
-        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        await CommitMutationAsync(transaction, ct).ConfigureAwait(false);
         return saved;
     }
 
@@ -123,6 +123,8 @@ public sealed class FeedbackStore(IConfiguration configuration)
         if (request.Change is not { } change || request.GapId is null || !AssistantContract.OpaqueId(request.GapId) ||
             request.OperationId is null || !AssistantContract.OpaqueId(request.OperationId)) throw new TenantBoundaryException("FEEDBACK_REVIEW_INVALID", 400);
         FeedbackRules.Change(change);
+        change = change with { DuplicateOf = change.DuplicateOf is null ? null : Guid.Parse(change.DuplicateOf).ToString() };
+        request = request with { GapId = Guid.Parse(request.GapId).ToString(), OperationId = Guid.Parse(request.OperationId).ToString(), Change = change };
         var operation = change.PrivacyDelete ? "privacy-delete" : change.Resolution is not null ? "resolution" : "status";
         var decision = await authority.RequireAsync(request.AuthenticationContext, operation, request.GapId, ct).ConfigureAwait(false);
         var key = AssistantContract.Hash("review|" + decision.PrincipalId + "|" + request.OperationId);
@@ -137,9 +139,14 @@ public sealed class FeedbackStore(IConfiguration configuration)
             new { id = Guid.Parse(request.GapId) }, transaction, ct)).ConfigureAwait(false) ?? throw new TenantBoundaryException("HELP_TOPIC_NOT_FOUND", 404);
         var original = Deserialize<HelpTopic>(payload);
         if (original.Revision != change.ExpectedRevision) throw new TenantBoundaryException("HELP_TOPIC_REVISION_CONFLICT", 409);
+        using (var catalogue = new AssistantKnowledgeCatalogue(configuration["Monergy:AssistantFeedback:CataloguePath"] ?? "",
+            configuration["Monergy:AssistantFeedback:CatalogueSha256"] ?? ""))
+            if (original.SourceAudience == "product" && change.TopicId is not null && catalogue.TopicAllowed("platform", change.TopicId) &&
+                !catalogue.TopicAllowed("product", change.TopicId))
+                throw new TenantBoundaryException("HELP_TOPIC_AUDIENCE_MISMATCH", 400);
         if (change.DuplicateOf is not null)
         {
-            if (change.DuplicateOf == original.GapId || !await connection.ExecuteScalarAsync<bool>(Sql("SELECT EXISTS(SELECT 1 FROM ai_feedback.topics WHERE gap_id=@id AND deleted_at IS NULL AND expires_at>clock_timestamp() AND status<>'Duplicate')",
+            if (Guid.Parse(change.DuplicateOf) == Guid.Parse(original.GapId) || !await connection.ExecuteScalarAsync<bool>(Sql("SELECT EXISTS(SELECT 1 FROM ai_feedback.topics WHERE gap_id=@id AND deleted_at IS NULL AND expires_at>clock_timestamp() AND status<>'Duplicate')",
                     new { id = Guid.Parse(change.DuplicateOf) }, transaction, ct)).ConfigureAwait(false))
                 throw new TenantBoundaryException("HELP_TOPIC_DUPLICATE_INVALID", 400);
         }
@@ -160,7 +167,7 @@ public sealed class FeedbackStore(IConfiguration configuration)
         var saved = new FeedbackSaved(true, updated.GapId, "Pending");
         await RecordOperationAsync(connection, transaction, key, digest, saved, expires, ct, Guid.Parse(audit.EventId)).ConfigureAwait(false);
         await authority.ReconfirmAsync(decision, request.AuthenticationContext, ct).ConfigureAwait(false);
-        await transaction.CommitAsync(ct).ConfigureAwait(false);
+        await CommitMutationAsync(transaction, ct).ConfigureAwait(false);
         return saved;
     }
 
@@ -180,6 +187,13 @@ public sealed class FeedbackStore(IConfiguration configuration)
             publication.KnowledgeRevision == catalogue.KnowledgeRevision && publication.RetrievalRevision == catalogue.RetrievalRevision &&
             (resolution.PublishedVersion == catalogue.KnowledgeRevision || resolution.PublishedVersion == catalogue.RetrievalRevision) &&
             publication.ApprovedChanges.Contains(resolution);
+    }
+
+    private static async Task CommitMutationAsync(NpgsqlTransaction transaction, CancellationToken ct)
+    {
+        try { await transaction.CommitAsync(ct).ConfigureAwait(false); }
+        catch (Exception failure) when (failure is System.Data.Common.DbException or OperationCanceledException or IOException)
+        { throw new AssistantOutcomeUnknownException(); }
     }
 
     private static async Task LockAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, CancellationToken ct) =>
@@ -204,7 +218,7 @@ public sealed class FeedbackStore(IConfiguration configuration)
             decision.ResourceId, audience, DateTimeOffset.UtcNow);
     private static async Task OutboxAsync(NpgsqlConnection connection, NpgsqlTransaction transaction, PlatformAuditEnvelope envelope, CancellationToken ct)
     {
-        var capacity = envelope.ReasonCode == "DeliveryRetry" ? 10064 : 10000;
+        var capacity = envelope.ReasonCode is "DeliveryRetry" or "DeliveryDiscovery" or "AuditRecovery" ? 10064 : 10000;
         if (await connection.ExecuteScalarAsync<long>(Sql("SELECT count(*) FROM ai_feedback.audit_outbox WHERE delivered_at IS NULL", tx: transaction, ct: ct)).ConfigureAwait(false) >= capacity)
             throw new TenantBoundaryException("FEEDBACK_AUDIT_CAPACITY", 503);
         await connection.ExecuteAsync(Sql("INSERT INTO ai_feedback.audit_outbox(event_id,payload) VALUES(@id,@payload::jsonb)",
@@ -251,6 +265,7 @@ public sealed class FeedbackStore(IConfiguration configuration)
         await connection.ExecuteAsync(Sql("""
             DELETE FROM ai_feedback.topics WHERE expires_at<=clock_timestamp();
             DELETE FROM ai_feedback.operations WHERE expires_at<=clock_timestamp();
+            DELETE FROM ai_feedback.audit_recovery_operations WHERE expires_at<=clock_timestamp();
             DELETE FROM ai_feedback.counters WHERE day<=(clock_timestamp() AT TIME ZONE 'UTC')::date-90;
             SELECT ai_feedback.purge_delivered_audit();
             """, tx: transaction, ct: ct)).ConfigureAwait(false);
@@ -288,8 +303,12 @@ public sealed class FeedbackStore(IConfiguration configuration)
         var rows = (await connection.QueryAsync<FeedbackDelivery>(Sql("SELECT event_id::text AS EventId,attempt_count AS Attempts,recovery_count AS Recoveries,CASE WHEN delivered_at IS NOT NULL THEN 'Accepted' WHEN attempt_count>=16 THEN 'Paused' ELSE 'Pending' END AS State FROM ai_feedback.audit_outbox WHERE payload->>'resourceId'=@id ORDER BY created_at DESC LIMIT 50",
             new { id = request.GapId }, transaction, ct)).ConfigureAwait(false)).ToArray();
         await authority.ReconfirmAsync(decision, request.AuthenticationContext, ct).ConfigureAwait(false);
-        await transaction.CommitAsync(ct).ConfigureAwait(false);
-        await authority.ReconfirmAsync(decision, request.AuthenticationContext, ct).ConfigureAwait(false);
+        if (retry) await CommitMutationAsync(transaction, ct).ConfigureAwait(false);
+        else
+        {
+            await transaction.CommitAsync(ct).ConfigureAwait(false);
+            await authority.ReconfirmAsync(decision, request.AuthenticationContext, ct).ConfigureAwait(false);
+        }
         return new(request.GapId, rows, 16, 3);
     }
     private sealed record OperationRow(string Hash, string Result, bool Delivered, bool Expired);

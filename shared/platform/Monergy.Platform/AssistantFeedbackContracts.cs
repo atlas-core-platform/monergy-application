@@ -18,3 +18,8 @@ public sealed record FeedbackPage(IReadOnlyList<HelpTopic> Topics, string? NextC
 public sealed record FeedbackSaved(bool Saved, string GapId, string AuditState = "NotApplicable");
 public sealed record FeedbackDelivery(string EventId, int Attempts, int Recoveries, string State);
 public sealed record FeedbackDeliveryStatus(string GapId, IReadOnlyList<FeedbackDelivery> Deliveries, int RetryLimit, int RecoveryLimit);
+public sealed record FeedbackAuditRequest(string AuthenticationContext, string? EventId, string? Cursor, int Limit, string? OperationId);
+public sealed record FeedbackAuditEvent(string EventId, string OperationId, string? ResourceId, string Action, string State,
+    int Attempts, int Recoveries, DateTimeOffset CreatedAt);
+public sealed record FeedbackAuditPage(IReadOnlyList<FeedbackAuditEvent> Events, string? NextCursor);
+public sealed record FeedbackAuditResult(FeedbackAuditEvent Event, bool? Saved = null, string? AuditState = null);

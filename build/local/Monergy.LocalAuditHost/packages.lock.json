@@ -42,6 +42,14 @@
           "Dapper": "[2.1.89, )",
           "Monergy.Contracts": "[1.0.0, )",
           "Monergy.Platform": "[1.0.0, )",
+          "Monergy.TenantPersistence": "[1.0.0, )",
+          "Npgsql": "[10.0.3, )"
+        }
+      },
+      "monergy.tenantpersistence": {
+        "type": "Project",
+        "dependencies": {
+          "Monergy.Platform": "[1.0.0, )",
           "Npgsql": "[10.0.3, )"
         }
       },

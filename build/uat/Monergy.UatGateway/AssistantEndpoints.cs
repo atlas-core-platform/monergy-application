@@ -34,10 +34,12 @@ internal static class AssistantEndpoints
                     if (!app.Configuration.GetValue<bool>("Monergy:Assistant:Enabled")) return Results.NotFound();
                     return await next(context).ConfigureAwait(false);
                 }
+                catch (AssistantOutcomeUnknownException)
+                { return Results.Json(new { error = "ASSISTANT_OUTCOME_UNKNOWN", outcome = "UNKNOWN", message = "We couldn’t confirm whether your change was saved. Retry to check." }, statusCode: 503); }
                 catch (TenantBoundaryException failure)
-                { return Results.Json(new { error = failure.Code, message = Message(failure.Status), saved = false }, statusCode: failure.Status); }
+                { return Results.Json(new { error = failure.Code, message = Message(failure.Status), outcome = "REJECTED", saved = false }, statusCode: failure.Status); }
                 catch (Exception failure) when (failure is HttpRequestException or TaskCanceledException or JsonException or IOException or InvalidOperationException or KeyNotFoundException or FormatException or ArgumentException)
-                { return Results.Json(new { error = "ASSISTANT_KNOWLEDGE_UNAVAILABLE", message = Message(503), saved = false }, statusCode: 503); }
+                { return Results.Json(new { error = "ASSISTANT_KNOWLEDGE_UNAVAILABLE", message = Message(503), outcome = "REJECTED", saved = false }, statusCode: 503); }
             });
             group.MapGet("/status", async (HttpContext http, AssistantKnowledgeClient knowledge, AssistantFeedbackClient feedback, AssistantRateLimiter rate) =>
             {
@@ -87,7 +89,7 @@ internal static class AssistantEndpoints
                     knowledge.Catalogue.KnowledgeRevision, knowledge.Catalogue.RetrievalRevision, idempotency);
                 if (await AuthenticateAsync(http, audience).ConfigureAwait(false) != caller) throw new TenantBoundaryException("ASSISTANT_CONTEXT_CHANGED", 403);
                 var saved = await feedback.SendAsync<FeedbackSaved>("topics", submission, false, http.RequestAborted).ConfigureAwait(false);
-                if (!saved.Saved || !AssistantContract.OpaqueId(saved.GapId)) throw new InvalidOperationException("Feedback receipt invalid.");
+                if (!saved.Saved || !AssistantContract.OpaqueId(saved.GapId)) throw new AssistantOutcomeUnknownException();
                 return Results.Ok(new { saved = true, saved.GapId });
             });
             if (audience == "platform") MapReview(group);
@@ -96,6 +98,31 @@ internal static class AssistantEndpoints
 
     private static void MapReview(RouteGroupBuilder group)
     {
+        group.MapGet("/review/audit-deliveries", async (HttpContext http, AssistantFeedbackClient feedback, AssistantRateLimiter rate) =>
+        {
+            var caller = await AuthenticateAsync(http, "platform").ConfigureAwait(false);
+            rate.Require(http, caller, "review", 20, TimeSpan.FromMinutes(1));
+            if (http.Request.Query.Any(pair => pair.Key is not ("limit" or "cursor") || pair.Value.Count != 1) ||
+                !int.TryParse(http.Request.Query["limit"].FirstOrDefault() ?? "20", System.Globalization.CultureInfo.InvariantCulture, out var limit) || limit is < 1 or > 20)
+                throw new TenantBoundaryException("FEEDBACK_AUDIT_QUERY_INVALID", 400);
+            var cursor = http.Request.Query.TryGetValue("cursor", out var value) ? value.ToString() : null;
+            if (cursor?.Length > 256) throw new TenantBoundaryException("FEEDBACK_CURSOR_INVALID", 400);
+            var context = await http.RequestServices.GetRequiredService<PlatformAdministratorSessions>().RequireContextAsync(http, "list", null).ConfigureAwait(false);
+            var page = await feedback.SendAsync<FeedbackAuditPage>("review/audit-deliveries", new FeedbackAuditRequest(context.AuthenticationContext, null, cursor, limit, null), true, http.RequestAborted).ConfigureAwait(false);
+            if (page.Events.Count > limit || page.NextCursor?.Length > 256 || page.Events.Any(item => !ValidAuditEvent(item)))
+                throw new InvalidOperationException("Feedback audit projection invalid.");
+            await AuthenticateAsync(http, "platform").ConfigureAwait(false);
+            return Results.Ok(page);
+        });
+        group.MapGet("/review/audit-deliveries/{eventId}", async (string eventId, HttpContext http, AssistantFeedbackClient feedback, AssistantRateLimiter rate) =>
+            await AuditEventAsync(eventId, http, feedback, rate, false).ConfigureAwait(false));
+        group.MapPost("/review/audit-deliveries/{eventId}/retry", async (string eventId, HttpContext http, AssistantFeedbackClient feedback, AssistantRateLimiter rate) =>
+        {
+            await AuthenticateAsync(http, "platform").ConfigureAwait(false);
+            var request = await AssistantContract.ReadAsync<AssistantDeliveryRetry>(http.Request, 256, http.RequestAborted).ConfigureAwait(false);
+            if (request.ContractVersion != "1.0.0") throw new TenantBoundaryException("FEEDBACK_AUDIT_REQUEST_INVALID", 400);
+            return await AuditEventAsync(eventId, http, feedback, rate, true).ConfigureAwait(false);
+        });
         group.MapGet("/review/topics", async (HttpContext http, AssistantFeedbackClient feedback, AssistantRateLimiter rate) =>
         {
             var caller = await AuthenticateAsync(http, "platform").ConfigureAwait(false);
@@ -120,13 +147,14 @@ internal static class AssistantEndpoints
             var caller = await AuthenticateAsync(http, "platform").ConfigureAwait(false);
             rate.Require(http, caller, "review", 20, TimeSpan.FromMinutes(1));
             if (!AssistantContract.OpaqueId(gapId)) throw new TenantBoundaryException("HELP_TOPIC_INVALID", 400);
+            gapId = Guid.Parse(gapId).ToString();
             var change = await AssistantContract.ReadAsync<TopicChange>(http.Request, 4096, http.RequestAborted).ConfigureAwait(false);
             var operation = change.PrivacyDelete ? "privacy-delete" : change.Resolution is not null ? "resolution" : "status";
             var context = await http.RequestServices.GetRequiredService<PlatformAdministratorSessions>().RequireContextAsync(http, operation, gapId).ConfigureAwait(false);
             var result = await feedback.SendAsync<FeedbackSaved>("review/change", new FeedbackReviewRequest(context.AuthenticationContext, gapId, null, 1,
                 null, null, Operation(http), change), true, http.RequestAborted).ConfigureAwait(false);
             if (!result.Saved || result.GapId != gapId || result.AuditState is not ("Pending" or "Accepted"))
-                throw new InvalidOperationException("Feedback mutation receipt invalid.");
+                throw new AssistantOutcomeUnknownException();
             return Results.Ok(result);
         });
         group.MapGet("/review/topics/{gapId}/delivery", async (string gapId, HttpContext http, AssistantFeedbackClient feedback, AssistantRateLimiter rate) =>
@@ -140,6 +168,27 @@ internal static class AssistantEndpoints
         });
     }
 
+    private static async Task<IResult> AuditEventAsync(string eventId, HttpContext http, AssistantFeedbackClient feedback, AssistantRateLimiter rate, bool retry)
+    {
+        var caller = await AuthenticateAsync(http, "platform").ConfigureAwait(false);
+        rate.Require(http, caller, "review", 20, TimeSpan.FromMinutes(1));
+        if (!AssistantContract.OpaqueId(eventId) || http.Request.Query.Count != 0) throw new TenantBoundaryException("FEEDBACK_AUDIT_REQUEST_INVALID", 400);
+        eventId = Guid.Parse(eventId).ToString();
+        var context = await http.RequestServices.GetRequiredService<PlatformAdministratorSessions>().RequireContextAsync(http, "status", eventId).ConfigureAwait(false);
+        var result = await feedback.SendAsync<FeedbackAuditResult>(retry ? "review/audit-deliveries/retry" : "review/audit-deliveries/status",
+            new FeedbackAuditRequest(context.AuthenticationContext, eventId, null, 1, retry ? Operation(http) : null), true, http.RequestAborted).ConfigureAwait(false);
+        if (result.Event.EventId != eventId || !ValidAuditEvent(result.Event) || retry && (result.Saved != true || result.AuditState is not ("Pending" or "Accepted")))
+        {
+            if (retry) throw new AssistantOutcomeUnknownException();
+            throw new InvalidOperationException("Feedback audit projection invalid.");
+        }
+        if (!retry) await AuthenticateAsync(http, "platform").ConfigureAwait(false);
+        return Results.Ok(result);
+    }
+    private static bool ValidAuditEvent(FeedbackAuditEvent item) => AssistantContract.OpaqueId(item.EventId) && AssistantContract.OpaqueId(item.OperationId) &&
+        (item.ResourceId is null || AssistantContract.OpaqueId(item.ResourceId)) && item.Attempts is >= 0 and <= 16 && item.Recoveries is >= 0 and <= 3 &&
+        item.State is "Accepted" or "Pending" or "Paused" && item.Action is "FeedbackRead" or "FeedbackClassify" or "FeedbackAssign" or "FeedbackDuplicate" or "FeedbackStatus" or "FeedbackPrivacyDelete";
+
     private static async Task<IResult> DeliveryAsync(string gapId, HttpContext http, AssistantFeedbackClient feedback, AssistantRateLimiter rate, bool retry)
     {
         var caller = await AuthenticateAsync(http, "platform").ConfigureAwait(false);
@@ -151,14 +200,17 @@ internal static class AssistantEndpoints
         if (result.GapId != gapId || result.RetryLimit != 16 || result.RecoveryLimit != 3 || result.Deliveries.Count > 50 ||
             result.Deliveries.Any(item => !AssistantContract.OpaqueId(item.EventId) || item.Attempts is < 0 or > 16 ||
                 item.Recoveries is < 0 or > 3 || item.State is not ("Accepted" or "Pending" or "Paused")))
+        {
+            if (retry) throw new AssistantOutcomeUnknownException();
             throw new InvalidOperationException("Feedback delivery projection invalid.");
-        await AuthenticateAsync(http, "platform").ConfigureAwait(false);
+        }
+        if (!retry) await AuthenticateAsync(http, "platform").ConfigureAwait(false);
         return Results.Ok(result);
     }
 
     private static string Operation(HttpContext http) => http.Request.Headers["Idempotency-Key"].Count == 1 &&
         AssistantContract.OpaqueId(http.Request.Headers["Idempotency-Key"].ToString())
-        ? http.Request.Headers["Idempotency-Key"].ToString() : throw new TenantBoundaryException("ASSISTANT_OPERATION_ID_REQUIRED", 400);
+        ? Guid.Parse(http.Request.Headers["Idempotency-Key"].ToString()).ToString() : throw new TenantBoundaryException("ASSISTANT_OPERATION_ID_REQUIRED", 400);
 
     private static async Task<string> AuthenticateAsync(HttpContext http, string audience)
     {

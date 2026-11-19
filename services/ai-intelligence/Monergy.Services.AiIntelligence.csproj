@@ -4,6 +4,7 @@
     <RootNamespace>Monergy.Services.AiIntelligence</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Monergy.Assistant.Tests" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="Npgsql" />
     <ProjectReference Include="../../contracts/Monergy.Contracts/Monergy.Contracts.csproj" />

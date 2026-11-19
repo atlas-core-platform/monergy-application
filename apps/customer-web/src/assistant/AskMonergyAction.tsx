@@ -18,7 +18,8 @@ export default function AskMonergyAction(props: {
   return <>
     <Button type="text" onClick={() => { setOpen(true); }}>Ask Monergy</Button>
     {open && <Suspense fallback={<span role="status">Opening help…</span>}>
-      <Drawer {...props} session={session} onClose={close} />
+      <Drawer key={`${session.audience}:${session.credential}:${session.expiresAt}:${props.workspace ?? ''}`}
+        {...props} session={session} onClose={close} />
     </Suspense>}
   </>;
 }

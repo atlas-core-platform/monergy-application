@@ -18,15 +18,49 @@ internal sealed class AssistantFeedbackClient(IConfiguration configuration) : ID
         using var request = new HttpRequestMessage(HttpMethod.Post, "http://127.0.0.1:5119/internal/assistant-feedback/v1/" + path);
         request.Headers.Add("X-Monergy-Assistant-Feedback", token);
         request.Content = JsonContent.Create(body, options: AssistantContract.Json);
-        using var response = await client.SendAsync(request, ct).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode)
+        var mutation = path is "topics" or "review/change" or "review/delivery/retry" or "review/audit-deliveries/retry";
+        try
         {
-            var status = (int)response.StatusCode;
-            // Reviewer entitlement failures do not revoke an otherwise valid platform login.
-            throw new TenantBoundaryException(status == 403 ? "ASSISTANT_REVIEW_REQUIRED" : status == 409 ? "ASSISTANT_FEEDBACK_CONFLICT" : "ASSISTANT_FEEDBACK_UNAVAILABLE",
-                status is 400 or 403 or 404 or 409 or 429 ? status : 503);
+            using var response = await client.SendAsync(request, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                var status = (int)response.StatusCode;
+                if (mutation)
+                {
+                    using var failure = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false));
+                    // An HTTP status alone cannot establish that a dispatched mutation
+                    // did not commit. Only the owner's complete, unambiguous rejection can.
+                    AssistantKnowledgeCatalogue.RequireFields(failure.RootElement, "error", "outcome", "saved");
+                    if (failure.RootElement.GetProperty("error").GetString() is not { } error || !AssistantContract.Code(error) ||
+                        failure.RootElement.GetProperty("outcome").GetString() != "REJECTED" ||
+                        failure.RootElement.GetProperty("saved").ValueKind != JsonValueKind.False)
+                        throw new AssistantOutcomeUnknownException();
+                }
+                // Reviewer entitlement failures do not revoke an otherwise valid platform login.
+                throw new TenantBoundaryException(status == 403 ? "ASSISTANT_REVIEW_REQUIRED" : status == 409 ? "ASSISTANT_FEEDBACK_CONFLICT" : "ASSISTANT_FEEDBACK_UNAVAILABLE",
+                    status is 400 or 403 or 404 or 409 or 429 ? status : 503);
+            }
+            using var success = JsonDocument.Parse(await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false),
+                new JsonDocumentOptions { MaxDepth = AssistantContract.Json.MaxDepth });
+            RequireUniqueFields(success.RootElement);
+            return success.RootElement.Deserialize<T>(AssistantContract.Json) ?? throw new JsonException();
         }
-        return await response.Content.ReadFromJsonAsync<T>(AssistantContract.Json, ct).ConfigureAwait(false) ?? throw new JsonException();
+        catch (Exception failure) when (mutation && failure is HttpRequestException or OperationCanceledException or JsonException or IOException or InvalidOperationException or NotSupportedException)
+        { throw new AssistantOutcomeUnknownException(); }
+    }
+    private static void RequireUniqueFields(JsonElement value)
+    {
+        if (value.ValueKind == JsonValueKind.Object)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var property in value.EnumerateObject())
+            {
+                if (!names.Add(property.Name)) throw new JsonException();
+                RequireUniqueFields(property.Value);
+            }
+        }
+        else if (value.ValueKind == JsonValueKind.Array)
+            foreach (var item in value.EnumerateArray()) RequireUniqueFields(item);
     }
     public void Dispose() => client.Dispose();
 }
@@ -71,7 +105,7 @@ internal sealed class AssistantRateLimiter
         lock (gate)
         {
             var now = DateTimeOffset.UtcNow;
-            foreach (var key in windows.Where(pair => pair.Value.ExpiresAt <= now).Select(pair => pair.Key).ToArray()) windows.Remove(key);
+            foreach (var expiredKey in windows.Where(pair => pair.Value.ExpiresAt <= now).Select(pair => pair.Key).ToArray()) windows.Remove(expiredKey);
             var key = purpose + ":" + AssistantContract.Hash(principal);
             if (!windows.TryGetValue(key, out var window))
             {

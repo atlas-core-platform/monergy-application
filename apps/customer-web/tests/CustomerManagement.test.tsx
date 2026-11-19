@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AccessApi, AccessApiError } from '../src/access/accessApi';
 import { CustomerManagement } from '../src/access/CustomerManagement';
@@ -25,8 +25,41 @@ function api() {
  }); return result;
 }
 const view = (value: AccessApi, tenantId = 'T001', actorId = 'A900') => <FoundationProvider><CustomerManagement api={value} tenantId={tenantId} actorId={actorId} /></FoundationProvider>;
-async function openDetails() { fireEvent.click(await screen.findByRole('button', { name: 'View Aisha Khan' })); return await screen.findByRole('button', { name: 'Suspend customer' }); }
-async function review() { fireEvent.click(await openDetails()); fireEvent.change(screen.getByLabelText('Reason for the change'), { target: { value: 'Requested by customer' } }); fireEvent.click(screen.getByRole('checkbox')); }
+async function visibleButton(name: string, container: HTMLElement = document.body) {
+ // Find the exact visible text before checking its button semantics. A global
+ // role query computes every table-row button's accessible name in jsdom.
+ const label = await within(container).findByText(name, { selector: 'button span' });
+ const button = label.closest('button');
+ if (!button) throw new Error(`Expected ${name} button.`);
+ expect(button).toHaveRole('button'); expect(button).toHaveAccessibleName(name);
+ await waitFor(() => { expect(button).toBeVisible(); expect(button).toBeEnabled(); });
+ return button;
+}
+function dialogByTitle(title: string) {
+ const label = screen.getByText(title, { selector: '.ant-drawer-title, .ant-modal-title' });
+ const dialog = label.closest<HTMLElement>('[role="dialog"]');
+ if (!dialog) throw new Error(`Expected ${title} dialog.`);
+ expect(dialog).toHaveRole('dialog');
+ return dialog;
+}
+async function findDialogByTitle(title: string) {
+ const label = await screen.findByText(title, { selector: '.ant-drawer-title, .ant-modal-title' });
+ const dialog = dialogByTitle(title);
+ await waitFor(() => { expect(label).toBeVisible(); expect(dialog).toBeVisible(); });
+ return dialog;
+}
+async function openDetails() {
+ fireEvent.click(await visibleButton('View Aisha Khan'));
+ const drawer = await findDialogByTitle('Customer details');
+ return await visibleButton('Suspend customer', drawer);
+}
+async function review() {
+ fireEvent.click(await openDetails());
+ const dialog = await findDialogByTitle('Suspend customer');
+ fireEvent.change(within(dialog).getByLabelText('Reason for the change'), { target: { value: 'Requested by customer' } });
+ fireEvent.click(within(dialog).getByRole('checkbox'));
+ return dialog;
+}
 beforeEach(() => { row = { ...alice }; receipts = []; calls = []; fault = null; pendingCustomerChanges.clear(); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); pendingCustomerChanges.clear(); });
 it('shows customer names, current counts and metadata without financial or protected identity fields', async () => { render(view(api())); await openDetails(); expect(screen.getByText(/1 total customers · 1 active · 0 inactive/)).toBeVisible(); expect(await screen.findByText('Owner link recorded')).toBeVisible(); expect(screen.getByText('No administrator status changes have been recorded.')).toBeVisible(); expect(screen.queryByText(/PAN|Date of birth|Net worth/)).not.toBeInTheDocument(); });
@@ -43,7 +76,21 @@ it('shows empty results without manufacturing a customer', async () => { fault =
 it('keeps unavailability distinct from an empty directory', async () => { fault = () => { throw new AccessApiError(503, 'CUSTOMER_MANAGEMENT_UNAVAILABLE'); }; render(view(api())); expect(await screen.findByRole('alert')).toBeVisible(); expect(screen.queryByText('0 total customers')).not.toBeInTheDocument(); });
 it.each(['tenant','duplicate','count'])('rejects invalid directory data: %s', async mode => { fault = path => path === '' ? mode === 'tenant' ? { ...list(), tenantId: 'foreign' } : mode === 'duplicate' ? list([row,row]) : { ...list(), active: 500 } : undefined; render(view(api())); expect(await screen.findByRole('alert')).toBeVisible(); expect(screen.queryByRole('button', { name: 'View Aisha Khan' })).not.toBeInTheDocument(); });
 it('rejects foreign customer detail and hides lifecycle controls', async () => { fault = path => path === '/customer-one' ? { ...row, customerId: 'other' } : undefined; render(view(api())); fireEvent.click(await screen.findByRole('button', { name: 'View Aisha Khan' })); await screen.findByRole('alert'); expect(screen.queryByRole('button', { name: 'Suspend customer' })).not.toBeInTheDocument(); });
-it('preserves identical input through uncertain close and retry', async () => { render(view(api())); await review(); let failed = false; fault = (_, method) => { if (method === 'POST' && !failed) { failed = true; throw new AccessApiError(503, 'CONNECTION_UNAVAILABLE'); } return undefined; }; fireEvent.click(screen.getByRole('button', { name: 'Confirm suspension' })); await screen.findByText('Confirm the pending customer change'); const original = calls.find(c => c.method === 'POST')?.body; fireEvent.click(await screen.findByRole('button', { name: 'Close review' })); fireEvent.click(screen.getByRole('button', { name: 'Review pending change' })); fireEvent.click(await screen.findByRole('button', { name: 'Retry confirmation' })); await screen.findByText('Customer suspension confirmed.'); expect(calls.filter(c => c.method === 'POST').map(c => c.body)).toEqual([original, original]); expect(receipts).toHaveLength(1); });
+it('preserves identical input through uncertain close and retry', async () => {
+ render(view(api())); const dialog = await review(); let failed = false;
+ fault = (_, method) => { if (method === 'POST' && !failed) { failed = true; throw new AccessApiError(503, 'CONNECTION_UNAVAILABLE'); } return undefined; };
+ fireEvent.click(await visibleButton('Confirm suspension', dialog));
+ const pendingTitle = await screen.findByText('Confirm the pending customer change');
+ const original = calls.find(c => c.method === 'POST')?.body;
+ fireEvent.click(await visibleButton('Close review', dialog));
+ const warning = pendingTitle.closest<HTMLElement>('[role="alert"]');
+ if (!warning) throw new Error('Expected pending customer change alert.');
+ fireEvent.click(await visibleButton('Review pending change', warning));
+ const reopened = await findDialogByTitle('Suspend customer');
+ fireEvent.click(await visibleButton('Retry confirmation', reopened));
+ await screen.findByText('Customer suspension confirmed.');
+ expect(calls.filter(c => c.method === 'POST').map(c => c.body)).toEqual([original, original]); expect(receipts).toHaveLength(1);
+});
 it('recovers the same operation after the same administrator reconnects', async () => { const mounted = render(view(api())); await review(); fault = (_, method) => { if (method === 'POST') throw new AccessApiError(503, 'CONNECTION_UNAVAILABLE'); return undefined; }; fireEvent.click(screen.getByRole('button', { name: 'Confirm suspension' })); await screen.findByText('Confirm the pending customer change'); const original = calls.find(c => c.method === 'POST')?.body; mounted.unmount(); fault = null; render(view(api())); fireEvent.click(await screen.findByRole('button', { name: 'Review pending change' })); fireEvent.click(await screen.findByRole('button', { name: 'Retry confirmation' })); await screen.findByText('Customer suspension confirmed.'); expect(calls.filter(c => c.method === 'POST').at(-1)?.body).toEqual(original); });
 it.each(['mutation','readback'])('rejects forged %s and keeps the pending operation', async mode => { render(view(api())); await review(); fault = (path, method) => mode === 'mutation' && method === 'POST' ? { tenantId: 'foreign' } : mode === 'readback' && path.includes('/changes/') ? { ...receipts[0], reason: 'Forged reason' } : undefined; fireEvent.click(screen.getByRole('button', { name: 'Confirm suspension' })); await screen.findByText('Confirm the pending customer change'); expect(screen.queryByText('Customer suspension confirmed.')).not.toBeInTheDocument(); expect(pendingCustomerChanges.size).toBe(1); });
 it('permits editing after a confirmed invalid request', async () => { render(view(api())); await review(); fault = (_, method) => { if (method === 'POST') throw new AccessApiError(400, 'CUSTOMER_CHANGE_INVALID'); return undefined; }; fireEvent.click(screen.getByRole('button', { name: 'Confirm suspension' })); await waitFor(() => { expect(pendingCustomerChanges.size).toBe(0); }); expect(screen.getByLabelText('Reason for the change')).toBeEnabled(); });
@@ -54,9 +101,9 @@ it('does not offer reactivation for an unavailable identity owner', async () => 
 it('loads the next customer page and can return to the first page', async () => {
  const rows = Array.from({ length: 50 }, (_, i) => ({ ...alice, customerId: 'customer-' + String(i).padStart(3, '0'), displayName: 'Customer ' + String(i) }));
  fault = path => path === '' ? { ...list(rows), total: 51, active: 51, matching: 51, nextCursor: rows[49]?.customerId } : undefined;
- render(view(api())); fireEvent.click(await screen.findByRole('button', { name: 'Next customers' }));
+ render(view(api())); fireEvent.click(await visibleButton('Next customers'));
  await waitFor(() => { expect(calls.some(c => c.path === '?after=customer-049')).toBe(true); });
- fireEvent.click(await screen.findByRole('button', { name: 'First page' })); await waitFor(() => { expect(calls.filter(c => c.path === '').length).toBe(2); });
+ fireEvent.click(await visibleButton('First page')); await waitFor(() => { expect(calls.filter(c => c.path === '').length).toBe(2); });
 });
 it('opens earlier status history using the last exact version cursor', async () => {
  receipts = Array.from({ length: 50 }, (_, i) => { const version = 102 - i; return { tenantId: 'T001', customerId: row.customerId, operationId: version.toString(16).padStart(32, '0'), before: { ...row, version: version - 1, active: version % 2 === 0 }, after: { ...row, version, active: version % 2 !== 0 }, reason: 'Historical change ' + String(version), recordedBy: 'A900', recordedByLabel: 'admin@example.test', recordedAt: new Date().toISOString() }; });
