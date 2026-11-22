@@ -497,10 +497,9 @@ if (phase === 'owner-faults') for (const module of ['ai-feedback', 'am-platform'
           }, randomUUID());
           expect(changed.status()).toBe(200);
           expect(await changed.json()).toMatchObject({ saved: true, gapId: initial.gapId, auditState: 'Pending' });
-          const deliveries = await publicCall(page, selected, session, '/review/audit-deliveries?limit=20');
-          expect(deliveries.status()).toBe(200);
-          const events = (await deliveries.json() as { events: { eventId: string; resourceId: string | null; state: string }[] }).events;
-          expect(events.some(item => item.resourceId === null && item.state === 'Pending')).toBe(true);
+          const platformPending = await findAuditDelivery(page, session,
+            item => item.resourceId === null && item.state === 'Pending');
+          expect(platformPending).toBeTruthy();
           pendingEvent = (await findAuditDelivery(page, session,
             item => item.resourceId === initial.gapId && item.state === 'Pending'))?.eventId;
           expect(pendingEvent).toBeTruthy();
