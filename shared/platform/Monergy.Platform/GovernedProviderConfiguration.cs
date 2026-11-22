@@ -52,6 +52,9 @@ public sealed class GovernedProviderConfigurationClient(HttpClient client, strin
             throw new InvalidOperationException("GOVERNED_PROVIDER_REQUEST_INVALID");
         using var request = new HttpRequestMessage(HttpMethod.Get,
             "internal/local/v1/governed-integrations/" + Uri.EscapeDataString(provider) + "?tenant=" + Uri.EscapeDataString(tenant));
+        // Keep the physical connection on validated LOCAL loopback while selecting
+        // the trusted control-plane entry. The workload credential remains required.
+        request.Headers.Host = "platform.localhost";
         request.Headers.Add("X-Monergy-Provider-Configuration", token);
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         if (response.StatusCode != HttpStatusCode.OK)
