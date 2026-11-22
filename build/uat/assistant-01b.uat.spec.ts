@@ -31,6 +31,9 @@ interface Topic {
   topicSubmissionCount: number | null; matchedOutcomeCount: number | null;
   resolution: { approvedChangeReference: string; publishedVersion: string; verificationReference: string } | null;
 }
+interface AuditDelivery {
+  eventId: string; resourceId: string | null; state: string;
+}
 
 async function publicCall(page: Page, selected: Persona, session: string, suffix: string, method = 'GET', body?: unknown, operationId?: string) {
   return page.request.fetch(origin(selected) + base(selected) + suffix, { method,
@@ -57,6 +60,21 @@ async function topics(page: Page, session: string) {
   const response = await publicCall(page, person('A950'), session, '/review/topics?limit=20');
   expect(response.status()).toBe(200);
   return (await response.json() as { topics: Topic[] }).topics;
+}
+async function findAuditDelivery(page: Page, session: string, predicate: (event: AuditDelivery) => boolean) {
+  const seen = new Set<string>(); let cursor: string | null = null;
+  for (let pageNumber = 0; pageNumber < 20; pageNumber++) {
+    const suffix = '/review/audit-deliveries?limit=20' + (cursor ? '&cursor=' + encodeURIComponent(cursor) : '');
+    const response = await publicCall(page, person('A950'), session, suffix);
+    expect(response.status()).toBe(200);
+    const result = await response.json() as { events: AuditDelivery[]; nextCursor: string | null };
+    expect(result.events.length).toBeLessThanOrEqual(20);
+    const match = result.events.find(predicate); if (match) return match;
+    if (!result.nextCursor) return undefined;
+    if (seen.has(result.nextCursor)) throw new Error('Audit delivery cursor did not advance.');
+    seen.add(result.nextCursor); cursor = result.nextCursor;
+  }
+  throw new Error('Audit delivery lookup exceeded its bounded page limit.');
 }
 function remember(topic: Topic) {
   const file = resolve(dirname(process.env.MONERGY_ASSISTANT_UAT_FIXTURE ?? ''), 'browser-readback.json');
@@ -483,7 +501,8 @@ if (phase === 'owner-faults') for (const module of ['ai-feedback', 'am-platform'
           expect(deliveries.status()).toBe(200);
           const events = (await deliveries.json() as { events: { eventId: string; resourceId: string | null; state: string }[] }).events;
           expect(events.some(item => item.resourceId === null && item.state === 'Pending')).toBe(true);
-          pendingEvent = events.find(item => item.resourceId === initial.gapId && item.state === 'Pending')?.eventId;
+          pendingEvent = (await findAuditDelivery(page, session,
+            item => item.resourceId === initial.gapId && item.state === 'Pending'))?.eventId;
           expect(pendingEvent).toBeTruthy();
         } else {
           expect(read.status()).toBe(module === 'am-platform' ? 403 : 503); expect(await read.text()).not.toContain(suggestion);
