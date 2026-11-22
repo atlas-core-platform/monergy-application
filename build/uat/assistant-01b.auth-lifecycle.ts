@@ -5,9 +5,12 @@ import { expect, type Browser, type Page } from '@playwright/test';
 import { base, fixture, headers, login, open, origin, person, type Fixture } from './assistant-01b.fixture';
 import { requireNaturalExpiry } from './assistant-01b.guards.mjs';
 
+type PrivateLifecycleFile = 'auth-expiry.json' | 'auth-expiry-retry.json' |
+  'auth-recovery.json' | 'auth-recovery-a600.json' | 'fixture.json';
+
 // These paths are reachable only after the runner's private ancestor/ACL guard.
 // New profile/instance binding is independently checked by the lazy fixture loader.
-function privateFile(name: 'auth-expiry.json' | 'auth-recovery.json' | 'fixture.json') {
+function privateFile(name: PrivateLifecycleFile) {
   const actual = resolve(process.env.MONERGY_ASSISTANT_UAT_FIXTURE ?? 'FIXTURE_REQUIRED');
   if (!fixture.instanceId || !actual.endsWith('fixture.json')) throw new Error('Private fixture unavailable.');
   const file = resolve(dirname(actual), name);
@@ -16,11 +19,11 @@ function privateFile(name: 'auth-expiry.json' | 'auth-recovery.json' | 'fixture.
     throw new Error('An ordinary private lifecycle file is required.');
   return file;
 }
-function readPrivate(name: 'auth-expiry.json' | 'auth-recovery.json' | 'fixture.json'): unknown {
+function readPrivate(name: PrivateLifecycleFile): unknown {
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- closed private filename and verified parent.
   return JSON.parse(readFileSync(privateFile(name), 'utf8')) as unknown;
 }
-function savePrivate(name: 'auth-expiry.json' | 'auth-recovery.json' | 'fixture.json', value: unknown) {
+function savePrivate(name: PrivateLifecycleFile, value: unknown) {
   const file = privateFile(name);
   const temporary = `${file}.${randomUUID()}.pending`;
   // Keep the previous record intact if writing fails. Both copies remain private.
@@ -29,23 +32,36 @@ function savePrivate(name: 'auth-expiry.json' | 'auth-recovery.json' | 'fixture.
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- atomic replacement of the same guarded private record; no evidence export.
   renameSync(temporary, file);
 }
-function createPrivate(name: 'auth-expiry.json' | 'auth-recovery.json', value: unknown) {
+function createPrivate(name: Exclude<PrivateLifecycleFile, 'fixture.json'>, value: unknown) {
   // Exclusive first publication: a concurrent phase cannot overwrite a journal
   // and then dispatch a second credential mutation. Its losing write stops here.
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed filename under verified inheritable private ACLs; wx refuses an existing or linked record.
   writeFileSync(privateFile(name), JSON.stringify(value), { mode: 0o600, flag: 'wx', flush: true });
 }
-function requireAbsent(name: 'auth-expiry.json' | 'auth-recovery.json') {
+function requireAbsent(name: Exclude<PrivateLifecycleFile, 'fixture.json'>) {
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- read-only guard against resetting an existing lifecycle run.
   if (existsSync(privateFile(name))) throw new Error('This lifecycle fixture already exists. Preserve it; do not repeat or rotate credentials automatically.');
 }
 interface ExpiryCapture {
   schemaVersion: number; profile: string; instanceId: string; actor: string; tenant: string;
-  session: string; expiresAt: string; capturedAt: string;
+  session: string; expiresAt: string; capturedAt: string; run?: 'initial' | 'retry';
+}
+
+function expiryFile(): 'auth-expiry.json' | 'auth-expiry-retry.json' {
+  const run = process.env.MONERGY_ASSISTANT_EXPIRY_RUN ?? 'initial';
+  if (run !== 'initial' && run !== 'retry') throw new Error('Unknown bounded natural-expiry run.');
+  return run === 'retry' ? 'auth-expiry-retry.json' : 'auth-expiry.json';
+}
+
+function recoverySelection() {
+  const actor = process.env.MONERGY_ASSISTANT_RECOVERY_ACTOR ?? 'A800';
+  if (actor !== 'A600' && actor !== 'A800') throw new Error('Unknown bounded recovery actor.');
+  return { actor, file: actor === 'A600' ? 'auth-recovery-a600.json' as const : 'auth-recovery.json' as const };
 }
 
 export async function captureNaturalExpiry(page: Page) {
-  requireAbsent('auth-expiry.json');
+  const file = expiryFile();
+  requireAbsent(file);
   const selected = person('A700', 'T001');
   const signedIn = page.waitForResponse(response => new URL(response.url()).pathname ===
     '/identity-api/local/v1/persona-credentials/sign-in' && response.request().method() === 'POST');
@@ -58,8 +74,9 @@ export async function captureNaturalExpiry(page: Page) {
   expect(remaining).toBeLessThanOrEqual(31 * 60_000);
   expect((await page.request.get(origin(selected) + base(selected) + '/status', { headers: headers(selected, session) })).status()).toBe(200);
   const capture: ExpiryCapture = { schemaVersion: 1, profile: fixture.profile, instanceId: fixture.instanceId,
-    actor: 'A700', tenant: 'T001', session, expiresAt: body.expiresAt, capturedAt: new Date().toISOString() };
-  createPrivate('auth-expiry.json', capture);
+    actor: 'A700', tenant: 'T001', session, expiresAt: body.expiresAt, capturedAt: new Date().toISOString(),
+    run: file === 'auth-expiry-retry.json' ? 'retry' : 'initial' };
+  createPrivate(file, capture);
   return capture;
 }
 
@@ -91,9 +108,11 @@ export async function verifyLiveNaturalExpiry(page: Page, setTimeout: (milliseco
 }
 
 export async function verifyNaturalExpiry(page: Page) {
-  const capture = readPrivate('auth-expiry.json') as ExpiryCapture;
+  const file = expiryFile();
+  const capture = readPrivate(file) as ExpiryCapture;
   if (capture.schemaVersion !== 1 || capture.profile !== fixture.profile || capture.instanceId !== fixture.instanceId ||
-      capture.actor !== 'A700' || capture.tenant !== 'T001' || !/^[a-f0-9]{64}$/.test(capture.session))
+      capture.actor !== 'A700' || capture.tenant !== 'T001' || !/^[a-f0-9]{64}$/.test(capture.session) ||
+      (file === 'auth-expiry-retry.json' ? capture.run !== 'retry' : capture.run !== undefined && capture.run !== 'initial'))
     throw new Error('Expiry capture does not belong to this isolated fixture.');
   requireNaturalExpiry(capture, Date.now());
   const selected = person('A700', 'T001');
@@ -112,24 +131,25 @@ export async function verifyNaturalExpiry(page: Page) {
 }
 
 export async function verifyOwnPasswordRecovery(browser: Browser, page: Page) {
-  requireAbsent('auth-recovery.json');
-  const selected = person('A800', 'T001');
+  const selection = recoverySelection();
+  requireAbsent(selection.file);
+  const selected = person(selection.actor, 'T001');
   const oldSession = await login(page, selected); await open(page);
   await page.locator('#assistant-question').fill('Temporary private recovery lifecycle canary');
   const journal = { schemaVersion: 1, profile: fixture.profile, instanceId: fixture.instanceId,
-    actor: 'A800', tenant: 'T001', oldPassword: selected.password,
+    actor: selection.actor, tenant: 'T001', oldPassword: selected.password,
     newPassword: `Aa9!${randomBytes(24).toString('base64url')}`, oldSession,
     requestId: randomUUID().replaceAll('-', ''), state: 'Prepared', welcomePath: '', updatedAt: new Date().toISOString() };
   // Persist both possible credentials BEFORE requesting/consuming the challenge.
   // A lost reply is indeterminate; never issue another reset to make a test green.
-  createPrivate('auth-recovery.json', journal);
+  createPrivate(selection.file, journal);
   function advance(expectedState: string, state: string) {
-    const current = readPrivate('auth-recovery.json') as typeof journal;
+    const current = readPrivate(selection.file) as typeof journal;
     if (current.profile !== journal.profile || current.instanceId !== journal.instanceId ||
         current.actor !== journal.actor || current.tenant !== journal.tenant || current.requestId !== journal.requestId ||
         current.state !== expectedState || current.newPassword !== journal.newPassword || current.oldPassword !== journal.oldPassword)
       throw new Error('The private recovery journal changed. Preserve both credential records and stop.');
-    journal.state = state; journal.updatedAt = new Date().toISOString(); savePrivate('auth-recovery.json', journal);
+    journal.state = state; journal.updatedAt = new Date().toISOString(); savePrivate(selection.file, journal);
   }
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- exact profile path already bound to this new fixture instance.
   const profile = JSON.parse(readFileSync(fixture.profilePath, 'utf8')) as { tokens: { personaTesterAccess: string } };
@@ -142,7 +162,11 @@ export async function verifyOwnPasswordRecovery(browser: Browser, page: Page) {
     });
     expect(issued.status()).toBe(200);
     const issuedBody = await issued.json() as { welcomePath: string };
-    if (!/^\/welcome#tenant=T001&ticket=[a-f0-9]{64}&return=%2Flegal-advisor&mode=recovery$/.test(issuedBody.welcomePath))
+    const fragment = issuedBody.welcomePath.startsWith('/welcome#')
+      ? new URLSearchParams(issuedBody.welcomePath.slice('/welcome#'.length)) : new URLSearchParams();
+    if ([...fragment.keys()].length !== 4 || fragment.get('tenant') !== 'T001' ||
+        !/^[a-f0-9]{64}$/.test(fragment.get('ticket') ?? '') || fragment.get('return') !== selected.path ||
+        fragment.get('mode') !== 'recovery')
       throw new Error('The recovery owner returned an unexpected bound welcome path.');
     journal.welcomePath = issuedBody.welcomePath; advance('Prepared', 'LinkIssued');
     await recoveryPage.goto(origin(selected) + journal.welcomePath);
@@ -160,7 +184,7 @@ export async function verifyOwnPasswordRecovery(browser: Browser, page: Page) {
     const stored = readPrivate('fixture.json') as Fixture;
     if (stored.instanceId !== fixture.instanceId || stored.profile !== fixture.profile)
       throw new Error('Credential fixture changed during recovery; both possible credentials remain in the private journal.');
-    const original = stored.personas.find(value => value.actor === 'A800' && value.tenant === 'T001');
+    const original = stored.personas.find(value => value.actor === selection.actor && value.tenant === 'T001');
     if (original?.password !== journal.oldPassword)
       throw new Error('A concurrent credential fixture change cannot be overwritten.');
     original.password = journal.newPassword; savePrivate('fixture.json', stored);

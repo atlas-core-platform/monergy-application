@@ -210,11 +210,18 @@ try {
     $operatorValue = [IO.File]::ReadAllText($operatorFile).Trim()
     if ($operatorValue -cnotmatch '^[a-f0-9]{64}$') { throw 'Protected operator comparison value is invalid.' }
     Add-PrivacySecret $operatorValue; $inputFiles++
-    foreach ($name in @('auth-expiry.json','auth-recovery.json')) {
+    $lifecycleNames = @('auth-expiry.json','auth-expiry-retry.json','auth-recovery.json','auth-recovery-a600.json')
+    foreach ($name in $lifecycleNames) {
         $path = Join-Path $browserRoot $name
         if (Test-Path -LiteralPath $path) {
+            Assert-PrivacyPrivateFile $path
             $record = Read-PrivacyJson $path
             if ($record.schemaVersion -ne 1 -or $record.profile -cne $Profile -or $record.instanceId -cne $ExpectedNewInstance) { throw 'Lifecycle fixture binding changed.' }
+            $expiryRun = if ($null -ne $record.PSObject.Properties['run']) { [string]$record.run } else { $null }
+            if ($name -eq 'auth-expiry-retry.json' -and $expiryRun -cne 'retry') { throw 'Retry expiry fixture binding changed.' }
+            if ($name -eq 'auth-expiry.json' -and $expiryRun -notin @($null,'initial')) { throw 'Initial expiry fixture binding changed.' }
+            if ($name -eq 'auth-recovery-a600.json' -and $record.actor -cne 'A600') { throw 'Recovery fixture actor binding changed.' }
+            if ($name -eq 'auth-recovery.json' -and $record.actor -cne 'A800') { throw 'Initial recovery fixture actor binding changed.' }
             Add-PrivacyValues $record; $inputFiles++
         }
     }

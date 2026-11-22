@@ -142,6 +142,22 @@ this actual interrupted run records one additional continuity-only case.
 pwsh -File build/uat/assistant-01b.run.ps1 -FixtureFile $fixture -Phase qa-continuity -ConfirmGatesABC
 ```
 
+If an operator/browser interruption contaminated the first natural-expiry run,
+preserve its private capture and receipt. The only permitted retry uses the same
+A700 owner TTL with a distinct private journal and no overlapping browser work:
+
+```powershell
+pwsh -File build/uat/assistant-01b.run.ps1 -FixtureFile $fixture -Phase auth-live-expiry -ExpiryRun retry -ConfirmGatesABC
+```
+
+Likewise, an indeterminate A800 recovery is reconciled rather than repeated. A
+single fresh physical recovery proof may use the distinct A600 identity with its
+own exclusive journal; it never overwrites or reissues A800's recovery:
+
+```powershell
+pwsh -File build/uat/assistant-01b.run.ps1 -FixtureFile $fixture -Phase credential-recovery -RecoveryActor A600 -ConfirmGatesABC
+```
+
 The new natural-expiry test has its own dynamically bounded deadline, at most31
 minutes, because the accepted C&I schema gives normal sessions a fixed30-minute
 lifetime. It is not a timeout increase for a failing test. The A700 session and

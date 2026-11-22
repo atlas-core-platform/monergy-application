@@ -4,11 +4,15 @@ param(
     [Parameter(Mandatory)][string]$FixtureFile,
     [Parameter(Mandatory)][ValidateSet('activate','setup','baseline','reviewer','rates','qa-setup','qa-continuity','runtime-outage','feedback-outage','am-outage','audit-outage','owner-faults','unknown-outcome','workspace-switch','restart','disabled','reenabled','auth-capture','auth-expiry','auth-live-expiry','credential-recovery')][string]$Phase,
     [Parameter(Mandatory)][switch]$ConfirmGatesABC,
+    [ValidateSet('initial','retry')][string]$ExpiryRun='initial',
+    [ValidateSet('A600','A800')][string]$RecoveryActor='A800',
     [switch]$Visible
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 if (-not $ConfirmGatesABC) { throw 'The exact candidate must pass Gates A, B and C before physical execution.' }
+if ($ExpiryRun -eq 'retry' -and $Phase -notin @('auth-capture','auth-expiry','auth-live-expiry')) { throw 'Expiry retry is valid only for a natural-expiry phase.' }
+if ($RecoveryActor -ne 'A800' -and $Phase -ne 'credential-recovery') { throw 'Alternate recovery actor is valid only for the recovery phase.' }
 $repository=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $privateRoot=[IO.Path]::GetFullPath((Join-Path $repository '.artifacts/assistant-01b-private-fixtures'))+[IO.Path]::DirectorySeparatorChar
 $fixture=[IO.Path]::GetFullPath($FixtureFile)
@@ -27,13 +31,15 @@ if ($IsWindows) {
 }
 $rawOutput=& (Join-Path $PSScriptRoot 'assistant-01b.private-artifacts.ps1') -Mode Prepare -FixtureFile $fixture
 $old=@{}
-foreach ($name in @('MONERGY_ASSISTANT_GATE_D_AUTHORIZED','MONERGY_ASSISTANT_UAT_FIXTURE','MONERGY_ASSISTANT_PHASE','MONERGY_ASSISTANT_VISIBLE','MONERGY_ASSISTANT_RAW_ARTIFACTS','MONERGY_ASSISTANT_LOCAL_DNS','NODE_OPTIONS')) { $old[$name]=[Environment]::GetEnvironmentVariable($name,'Process') }
+foreach ($name in @('MONERGY_ASSISTANT_GATE_D_AUTHORIZED','MONERGY_ASSISTANT_UAT_FIXTURE','MONERGY_ASSISTANT_PHASE','MONERGY_ASSISTANT_VISIBLE','MONERGY_ASSISTANT_RAW_ARTIFACTS','MONERGY_ASSISTANT_LOCAL_DNS','MONERGY_ASSISTANT_EXPIRY_RUN','MONERGY_ASSISTANT_RECOVERY_ACTOR','NODE_OPTIONS')) { $old[$name]=[Environment]::GetEnvironmentVariable($name,'Process') }
 Push-Location $repository
 try {
     $env:MONERGY_ASSISTANT_GATE_D_AUTHORIZED='true'
     $env:MONERGY_ASSISTANT_UAT_FIXTURE=$fixture
     $env:MONERGY_ASSISTANT_PHASE=$Phase
     $env:MONERGY_ASSISTANT_VISIBLE=if($Visible){'true'}else{'false'}
+    $env:MONERGY_ASSISTANT_EXPIRY_RUN=$ExpiryRun
+    $env:MONERGY_ASSISTANT_RECOVERY_ACTOR=$RecoveryActor
     $env:MONERGY_ASSISTANT_RAW_ARTIFACTS=$rawOutput
     $env:MONERGY_ASSISTANT_LOCAL_DNS='true'
     $preload=([Uri](Join-Path $PSScriptRoot 'assistant-01b.local-dns.mjs')).AbsoluteUri
