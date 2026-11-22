@@ -105,6 +105,7 @@ with `route.fetch` before dropping a response; it does not fabricate owner behav
 | workspace-switch | Active new-profile A200 Customer and normal A900 administrator | Existing owner membership API temporarily adds only TenantAdmin while preserving Customer role/assignments, real chooser and owner reauthorization, then optimistic owner restoration in finally |
 | rates | A850 has not submitted suggestions previously; limiter elapsed or restart recorded | At most 20 questions/minute, five submissions/hour, Retry-After, T002 namespace independent |
 | qa-setup | New protected deterministic QA provider prepared/started | Actual Platform configuration, Customer Request Access/A900 approval, fresh session, explicit question permission, configured HTTP200 INSUFFICIENT_DATA with zero claims and actual LOCAL provider call; ordinary Ask causes zero provider-call drift |
+| qa-continuity | Provider configuration and Customer approval already succeeded; provider transport correction deployed to the same profile | Read-only A950 exact safe-provider readback, fresh A100 login, existing Fulfilled access, Ask provider drift zero, configured Q&A HTTP200 INSUFFICIENT_DATA/zero claims and exactly one real LOCAL provider call; no provider PUT, access submission or approval |
 | runtime-outage | Stop only this profile's knowledge-runtime | Help unavailable; customer and platform login/session remain valid |
 | feedback-outage | Only ai_feedback runtime DB access unavailable, other AI routes healthy | Answers still work; submission has no false receipt; valid session remains |
 | am-outage | Only am_platform store unavailable; tenant AM healthy | Platform reviewer unavailable; ordinary product/platform help and tenant login work |
@@ -121,8 +122,25 @@ only normal A900 owner APIs; if its original membership precondition fails, reco
 that explicitly and do not overwrite it. The separate
 feedback-outage/am-outage/audit-outage phases remain diagnostic alternatives and
 need not duplicate the three stronger owner-faults cases. All phases together
-discover 67 scenarios (including two fallback auth capture/readback cases);
+discover 68 scenarios (including two fallback auth capture/readback cases and the explicit continuity-only resume);
 discovery is not execution or a pass count.
+
+The original `qa-setup` attempt completed its governed provider PUT and Customer
+Request Access approval before encountering a real missing trusted-host transport
+defect in the provider client. Preserve that historical failed attempt and its
+successful setup operations. Do not repeat `qa-setup`, provider configuration,
+access requests or grants to obtain a green result. After the bounded product
+correction is frozen and deployed, run the new one-case `qa-continuity` phase.
+It must read the existing safe provider view against the exact protected fixture
+metadata, then prove current access and continuity using a fresh normal login.
+This one required resumption result supplements the historical attempted setup;
+it must not relabel that original attempt as passing. No database, provider state
+or credentials are reset. The normal 59-case plan remains the original plan;
+this actual interrupted run records one additional continuity-only case.
+
+```powershell
+pwsh -File build/uat/assistant-01b.run.ps1 -FixtureFile $fixture -Phase qa-continuity -ConfirmGatesABC
+```
 
 The new natural-expiry test has its own dynamically bounded deadline, at most31
 minutes, because the accepted C&I schema gives normal sessions a fixed30-minute

@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { activationPersonas, ask, base, fixture, headers, login, open, origin, person, personas, phase, type Persona } from './assistant-01b.fixture';
 import { requireUnactivatedPlatform } from './assistant-01b.guards.mjs';
-import { configureAndAuthorizeQa, providerCallCount, verifyQaContinuity } from './assistant-01b.qa-browser';
+import { configureAndAuthorizeQa, providerCallCount, verifyExistingQaProvider, verifyQaContinuity } from './assistant-01b.qa-browser';
 import { withTemporaryAdministrativeWorkspace } from './assistant-01b.membership';
 import { captureNaturalExpiry, verifyLiveNaturalExpiry, verifyNaturalExpiry, verifyOwnPasswordRecovery } from './assistant-01b.auth-lifecycle';
 import { prepareAssistantRetry } from './assistant-01b.question-form.mjs';
@@ -14,7 +14,7 @@ import { prepareAssistantRetry } from './assistant-01b.question-form.mjs';
 // lost-reply case alone intercepts transport: route.fetch reaches the real owner,
 // then its committed response is dropped. It never manufactures a response.
 test.describe.configure({ mode: 'serial' });
-const phases = ['activate', 'setup', 'baseline', 'reviewer', 'rates', 'qa-setup', 'runtime-outage', 'feedback-outage',
+const phases = ['activate', 'setup', 'baseline', 'reviewer', 'rates', 'qa-setup', 'qa-continuity', 'runtime-outage', 'feedback-outage',
   'am-outage', 'audit-outage', 'owner-faults', 'unknown-outcome', 'workspace-switch', 'restart', 'disabled', 'reenabled',
   'auth-capture', 'auth-expiry', 'auth-live-expiry', 'credential-recovery'];
 if (!phases.includes(phase)) throw new Error('Unknown physical acceptance phase.');
@@ -356,6 +356,21 @@ if (phase === 'qa-setup') test('D-QA-SETUP governed configured empty-profile con
     expect(providerCallCount()).toBe(before);
     await verifyQaContinuity(page, current); expect(providerCallCount()).toBe(before + 1);
   } finally { await administrator.close(); await platform.close(); }
+});
+
+if (phase === 'qa-continuity') test('D-QA-CONTINUITY existing governed provider and fulfilled access resume without reconfiguration', async ({ page, context }) => {
+  test.setTimeout(300000);
+  const platform = await context.newPage();
+  try {
+    const platformSession = await login(platform, person('A950'));
+    const expected = await verifyExistingQaProvider(platform, platformSession);
+    const customerSession = await login(page, person('A100'));
+    const before = providerCallCount();
+    await open(page); await ask(page, productQuestions[2]);
+    expect(providerCallCount()).toBe(before);
+    await verifyQaContinuity(page, customerSession, expected);
+    expect(providerCallCount()).toBe(before + 1);
+  } finally { await platform.close(); }
 });
 
 if (phase === 'unknown-outcome') test('D-UNKNOWN-SUBMISSION lost committed reply retries the same operation once', async ({ page, context }) => {

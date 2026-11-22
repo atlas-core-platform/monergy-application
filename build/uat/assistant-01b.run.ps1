@@ -2,7 +2,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$FixtureFile,
-    [Parameter(Mandatory)][ValidateSet('activate','setup','baseline','reviewer','rates','qa-setup','runtime-outage','feedback-outage','am-outage','audit-outage','owner-faults','unknown-outcome','workspace-switch','restart','disabled','reenabled','auth-capture','auth-expiry','auth-live-expiry','credential-recovery')][string]$Phase,
+    [Parameter(Mandatory)][ValidateSet('activate','setup','baseline','reviewer','rates','qa-setup','qa-continuity','runtime-outage','feedback-outage','am-outage','audit-outage','owner-faults','unknown-outcome','workspace-switch','restart','disabled','reenabled','auth-capture','auth-expiry','auth-live-expiry','credential-recovery')][string]$Phase,
     [Parameter(Mandatory)][switch]$ConfirmGatesABC,
     [switch]$Visible
 )

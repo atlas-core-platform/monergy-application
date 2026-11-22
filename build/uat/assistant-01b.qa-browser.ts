@@ -4,8 +4,9 @@ import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { expect, type Page } from '@playwright/test';
 import { fixture, headers, origin, person } from './assistant-01b.fixture';
+import { requireExistingQaProvider } from './assistant-01b.qa-readback.mjs';
 
-export async function configureAndAuthorizeQa(page: Page, sessions: { platform: string; customer: string; administrator: string }) {
+function qaMetadata() {
   const folder = resolve('.artifacts/assistant-01b-private-fixtures', 'qa-' + fixture.profile);
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- fixed metadata file beneath the validated new profile's private QA fixture.
   const metadata = JSON.parse(readFileSync(resolve(folder, 'fixture.json'), 'utf8')) as {
@@ -15,6 +16,22 @@ export async function configureAndAuthorizeQa(page: Page, sessions: { platform: 
   if (metadata.schemaVersion !== 1 || metadata.profile !== fixture.profile || metadata.instanceId !== fixture.instanceId ||
       metadata.endpoint !== `https://assistant01b-qa-${fixture.instanceId}:8443/v1/chat/completions` ||
       resolve(metadata.authorizationFile) !== resolve(folder, 'authorization.json')) throw new Error('QA fixture binding mismatch.');
+  return metadata;
+}
+
+export async function verifyExistingQaProvider(page: Page, platformSession: string) {
+  const metadata = qaMetadata();
+  const platform = person('A950');
+  const response = await page.request.get(origin(platform) + '/platform-api/local/v1/integrations', {
+    headers: headers(platform, platformSession), maxRedirects: 0,
+  });
+  expect(response.status()).toBe(200);
+  requireExistingQaProvider(await response.json() as unknown, metadata);
+  return { providerLabel: metadata.providerLabel, notice: metadata.notice };
+}
+
+export async function configureAndAuthorizeQa(page: Page, sessions: { platform: string; customer: string; administrator: string }) {
+  const metadata = qaMetadata();
   // eslint-disable-next-line security/detect-non-literal-fs-filename -- exact matched private authorization file; value stays in memory and protected requests only.
   const authorization = JSON.parse(readFileSync(metadata.authorizationFile, 'utf8')) as { ApiKey: string };
   if (typeof authorization.ApiKey !== 'string' || authorization.ApiKey.length < 32) throw new Error('QA fixture authorization unavailable.');
@@ -46,7 +63,7 @@ export async function configureAndAuthorizeQa(page: Page, sessions: { platform: 
   expect((await approved.json() as { state: string }).state).toBe('Fulfilled');
 }
 
-export async function verifyQaContinuity(page: Page, customerSession: string) {
+export async function verifyQaContinuity(page: Page, customerSession: string, expected?: { providerLabel: string; notice: string }) {
   const customer = person('A100'); const auth = headers(customer, customerSession);
   const access = await page.request.get(origin(customer) + '/access-api/v1/access-requests', { headers: auth });
   expect(access.status()).toBe(200);
@@ -57,6 +74,7 @@ export async function verifyQaContinuity(page: Page, customerSession: string) {
   const value = await configuration.json() as { available: boolean; revision: string; providerLabel: string; notice: string };
   expect(value.available).toBe(true); expect(value.revision).toMatch(/^[0-9a-f]{64}$/);
   expect(value.providerLabel.length).toBeGreaterThan(0); expect(value.notice.length).toBeGreaterThan(0);
+  if (expected) { expect(value.providerLabel).toBe(expected.providerLabel); expect(value.notice).toBe(expected.notice); }
   const operationId = randomUUID().replaceAll('-', '');
   const response = await page.request.post(origin(customer) + '/product-api/v1/financial-qa/questions', {
     headers: auth, data: { operationId, question: 'What investment source is recorded?',
