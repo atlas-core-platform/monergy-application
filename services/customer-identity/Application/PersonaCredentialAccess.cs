@@ -8,7 +8,8 @@ namespace Monergy.Services.CustomerIdentity.Application;
 // a C&I actor, choose its role or tenant, or grant an AM membership.
 public sealed record PersonaActivationRequest(string TenantId, string Email);
 public sealed record PersonaActivationConfirm(string TenantId, string ChallengeId, string Code, string Password);
-public sealed record PersonaRecoveryConfirm(string TenantId, string ChallengeId, string Code, string NewPassword);
+public sealed record PersonaRecoveryConfirm(string TenantId, string ChallengeId, string Code, string NewPassword,
+    string OperationId);
 public sealed record PersonaCredentialIdentity(string TenantId, string Email, string ActorId,
     string PasswordHash, long CredentialVersion);
 
@@ -21,7 +22,8 @@ public interface IPersonaCredentialRepository
     Task<PersonaCredentialIdentity?> ReadAsync(string tenant, string email, CancellationToken ct);
     Task<bool> RecordAttemptAsync(PersonaCredentialIdentity identity, bool valid, CancellationToken ct);
     Task<bool> IsCurrentAsync(PersonaCredentialIdentity identity, CancellationToken ct);
-    Task<bool> RecoverAsync(string tenant, string hash, string verifier, string newHash, CancellationToken ct);
+    Task<bool> RecoverAsync(string tenant, string hash, string verifier, string newHash,
+        string operationId, string resultFingerprint, CancellationToken ct);
 }
 
 public sealed class PersonaCredentialAccess(
@@ -95,12 +97,21 @@ public sealed class PersonaCredentialAccess(
     {
         TenantAccessProtocol.Identifier(request.TenantId, 64);
         CustomerRegistrationPolicy.ValidateChallenge(request.ChallengeId, request.Code);
+        ValidateRecoveryOperation(request.OperationId);
         var hash = passwords.Hash(request.NewPassword);
         if (!await repository.RecoverAsync(request.TenantId,
             CustomerEmailCodeProtector.ChallengeHash(request.ChallengeId),
             protector.Verifier(request.TenantId + ":persona-recovery", request.ChallengeId, request.Code),
-            hash, ct).ConfigureAwait(false))
+            hash, request.OperationId,
+            protector.Verifier(request.TenantId + ":persona-recovery-result", request.OperationId,
+                request.NewPassword), ct).ConfigureAwait(false))
             throw new TenantAccessException("EMAIL_CODE_INVALID", 401);
         return new { recovered = true };
+    }
+
+    internal static void ValidateRecoveryOperation(string? value)
+    {
+        if (value is null || value.Length != 32 || value.Any(static c => !char.IsAsciiHexDigitLower(c)))
+            throw new TenantAccessException("RECOVERY_OPERATION_INVALID", 400);
     }
 }

@@ -6,7 +6,8 @@ import { base, fixture, headers, login, open, origin, person, type Fixture } fro
 import { requireNaturalExpiry } from './assistant-01b.guards.mjs';
 
 type PrivateLifecycleFile = 'auth-expiry.json' | 'auth-expiry-retry.json' |
-  'auth-recovery.json' | 'auth-recovery-a600.json' | 'fixture.json';
+  'auth-recovery.json' | 'auth-recovery-a600.json' | 'auth-recovery-disposable.json' |
+  'auth-recovery-remediation.json' | 'auth-recovery-final.json' | 'fixture.json';
 
 // These paths are reachable only after the runner's private ancestor/ACL guard.
 // New profile/instance binding is independently checked by the lazy fixture loader.
@@ -55,8 +56,14 @@ function expiryFile(): 'auth-expiry.json' | 'auth-expiry-retry.json' {
 
 function recoverySelection() {
   const actor = process.env.MONERGY_ASSISTANT_RECOVERY_ACTOR ?? 'A800';
-  if (actor !== 'A600' && actor !== 'A800') throw new Error('Unknown bounded recovery actor.');
-  return { actor, file: actor === 'A600' ? 'auth-recovery-a600.json' as const : 'auth-recovery.json' as const };
+  if (actor !== 'A600' && actor !== 'ci-60000000000000000000000000000001' &&
+      actor !== 'ci-60000000000000000000000000000002' &&
+      actor !== 'ci-60000000000000000000000000000003' && actor !== 'A800')
+    throw new Error('Unknown bounded recovery actor.');
+  return { actor, file: actor === 'A600' ? 'auth-recovery-a600.json' as const :
+    actor.endsWith('0001') ? 'auth-recovery-disposable.json' as const :
+      actor.endsWith('0002') ? 'auth-recovery-remediation.json' as const :
+        actor.endsWith('0003') ? 'auth-recovery-final.json' as const : 'auth-recovery.json' as const };
 }
 
 export async function captureNaturalExpiry(page: Page) {
@@ -133,7 +140,11 @@ export async function verifyNaturalExpiry(page: Page) {
 export async function verifyOwnPasswordRecovery(browser: Browser, page: Page) {
   const selection = recoverySelection();
   requireAbsent(selection.file);
-  const selected = person(selection.actor, 'T001');
+  const selected = selection.actor.startsWith('ci-')
+    ? { ...person('A600', 'T001'), actor: selection.actor,
+        email: selection.actor.endsWith('0001') ? 'disposable-recovery@example.test' :
+          selection.actor.endsWith('0002') ? 'disposable-recovery-2@example.test' : 'disposable-recovery-3@example.test' }
+    : person(selection.actor, 'T001');
   const oldSession = await login(page, selected); await open(page);
   await page.locator('#assistant-question').fill('Temporary private recovery lifecycle canary');
   const journal = { schemaVersion: 1, profile: fixture.profile, instanceId: fixture.instanceId,
@@ -173,21 +184,51 @@ export async function verifyOwnPasswordRecovery(browser: Browser, page: Page) {
     await expect(recoveryPage.getByText('Choose a new password. This ends your previous sessions;', { exact: false })).toBeVisible();
     await recoveryPage.getByLabel('Password (15–128 characters)', { exact: true }).fill(journal.newPassword);
     await recoveryPage.getByLabel('Confirm password', { exact: true }).fill(journal.newPassword);
-    const committed = recoveryPage.waitForResponse(response => new URL(response.url()).pathname ===
-      '/identity-api/local/v1/persona-credentials/tester/recovery/confirm' && response.request().method() === 'POST');
+    let confirmationAttempts = 0;
+    const confirmationBodies: string[] = [];
+    let committedResponseWithheld = false;
+    if (selection.actor.startsWith('ci-')) {
+      await recoveryPage.route('**/identity-api/local/v1/persona-credentials/tester/recovery/confirm', async route => {
+        confirmationAttempts++;
+        confirmationBodies.push(route.request().postData() ?? '');
+        if (confirmationAttempts === 1) {
+          const response = await route.fetch();
+          expect(response.status(), 'Owner committed before the first acknowledgement was withheld').toBe(200);
+          committedResponseWithheld = true;
+          await route.fulfill({ status: 503, contentType: 'application/problem+json',
+            body: JSON.stringify({ error: 'AUDIT_OWNER_UNAVAILABLE' }) });
+          return;
+        }
+        await route.continue();
+      });
+    }
+    const committed = selection.actor.startsWith('ci-') ? undefined : recoveryPage.waitForResponse(response =>
+      new URL(response.url()).pathname === '/identity-api/local/v1/persona-credentials/tester/recovery/confirm' &&
+      response.request().method() === 'POST');
     advance('LinkIssued', 'ConfirmationDispatched');
     await recoveryPage.getByRole('button', { name: 'Set password', exact: true }).click();
-    const confirmation = await committed;
-    expect(confirmation.status()).toBe(200);
-    expect(await confirmation.json()).toEqual({ recovered: true });
+    if (selection.actor.startsWith('ci-')) {
+      await expect(recoveryPage.getByText('Your account is ready. Continue to sign in.', { exact: true })).toBeVisible();
+      expect(committedResponseWithheld).toBe(true);
+      expect(confirmationAttempts).toBe(2);
+      expect(confirmationBodies[0]).toBe(confirmationBodies[1]);
+    } else {
+      const confirmation = await committed!;
+      expect(confirmation.status()).toBe(200);
+      expect(await confirmation.json()).toEqual({ recovered: true });
+    }
     advance('ConfirmationDispatched', 'PasswordConfirmed');
     const stored = readPrivate('fixture.json') as Fixture;
     if (stored.instanceId !== fixture.instanceId || stored.profile !== fixture.profile)
       throw new Error('Credential fixture changed during recovery; both possible credentials remain in the private journal.');
-    const original = stored.personas.find(value => value.actor === selection.actor && value.tenant === 'T001');
+    const original = stored.personas.find(value => value.actor ===
+      (selection.actor.startsWith('ci-') ? 'A600' : selection.actor) && value.tenant === 'T001');
     if (original?.password !== journal.oldPassword)
       throw new Error('A concurrent credential fixture change cannot be overwritten.');
-    original.password = journal.newPassword; savePrivate('fixture.json', stored);
+    if (!selection.actor.startsWith('ci-')) {
+      original.password = journal.newPassword;
+      savePrivate('fixture.json', stored);
+    }
     selected.password = journal.newPassword;
     advance('PasswordConfirmed', 'FixtureUpdated');
     await expect(recoveryPage.getByRole('button', { name: 'Ask Monergy', exact: true })).toHaveCount(0);

@@ -71,19 +71,26 @@ export function PersonaWelcomeEntry() {
     setPending(true);
     setMessage('');
     try {
-      const response = await fetch(invitation.mode === 'recovery'
+      const recoveryOperation = invitation.mode === 'recovery'
+        ? crypto.randomUUID().replaceAll('-', '') : undefined;
+      const target = invitation.mode === 'recovery'
         ? '/identity-api/local/v1/persona-credentials/tester/recovery/confirm'
-        : '/identity-api/local/v1/persona-credentials/tester/activation/confirm', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: invitation.tenantId,
-          ticket: invitation.ticket,
+        : '/identity-api/local/v1/persona-credentials/tester/activation/confirm';
+      const options: RequestInit = {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId: invitation.tenantId, ticket: invitation.ticket,
           [invitation.mode === 'recovery' ? 'newPassword' : 'password']: values.password,
-        }),
-        cache: 'no-store',
-        redirect: 'error',
-      });
+          ...(recoveryOperation ? { operationId: recoveryOperation } : {}) }),
+        cache: 'no-store', redirect: 'error',
+      };
+      const send = () => fetch(target, options);
+      let response: Response;
+      try { response = await send(); }
+      catch (error) {
+        if (!recoveryOperation) throw error;
+        response = await send();
+      }
+      if (recoveryOperation && response.status === 503) response = await send();
       if (!response.ok) {
         setMessage(response.status === 401
           ? 'This welcome link is invalid, expired, or has already been used. Ask your administrator for a new link.'

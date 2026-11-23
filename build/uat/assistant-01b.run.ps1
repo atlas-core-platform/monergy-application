@@ -5,7 +5,7 @@ param(
     [Parameter(Mandatory)][ValidateSet('activate','setup','baseline','reviewer','rates','qa-setup','qa-continuity','runtime-outage','feedback-outage','am-outage','audit-outage','owner-faults','unknown-outcome','workspace-switch','restart','disabled','reenabled','auth-capture','auth-expiry','auth-live-expiry','credential-recovery')][string]$Phase,
     [Parameter(Mandatory)][switch]$ConfirmGatesABC,
     [ValidateSet('initial','retry')][string]$ExpiryRun='initial',
-    [ValidateSet('A600','A800')][string]$RecoveryActor='A800',
+    [ValidateSet('A600','A800','ci-60000000000000000000000000000001','ci-60000000000000000000000000000002','ci-60000000000000000000000000000003')][string]$RecoveryActor='A800',
     [switch]$Visible
 )
 $ErrorActionPreference='Stop'

@@ -11,13 +11,19 @@ interface Challenge {
   challengeId: string; expiresAt: string;
   tenantId: string; email: string;
 }
-async function personaRequest<T>(path: string, body: object, signal: AbortSignal): Promise<T> {
-  const response = await fetch('/identity-api/local/v1/persona-credentials' + path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    cache: 'no-store', redirect: 'error', signal,
+async function personaRequest<T>(path: string, body: object, signal: AbortSignal,
+  recoverCommittedOperation = false): Promise<T> {
+  const send = () => fetch('/identity-api/local/v1/persona-credentials' + path, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), cache: 'no-store', redirect: 'error', signal,
   });
+  let response: Response;
+  try { response = await send(); }
+  catch (error) {
+    if (!recoverCommittedOperation || signal.aborted) throw error;
+    response = await send();
+  }
+  if (recoverCommittedOperation && response.status === 503) response = await send();
   if (!response.ok) throw new AccessApiError(response.status, 'PERSONA_ACTIVATION_FAILED');
   return await response.json() as T;
 }
@@ -97,8 +103,9 @@ export function PersonaCredentialEntry({
           );
           if (!result.activated) throw new Error('ACTIVATION_NOT_CONFIRMED');
         } else {
+          const operationId = crypto.randomUUID().replaceAll('-', '');
           const result = await personaRequest<{ recovered: boolean }>(
-            '/recovery/confirm', { ...common, newPassword: password }, controller.signal,
+            '/recovery/confirm', { ...common, newPassword: password, operationId }, controller.signal, true,
           );
           if (!result.recovered) throw new Error('RECOVERY_NOT_CONFIRMED');
         }

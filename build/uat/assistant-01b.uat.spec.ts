@@ -114,7 +114,7 @@ if (phase === 'auth-expiry') test('D-AUTH-EXPIRY actual owner denies the natural
 if (phase === 'auth-live-expiry') test('D-AUTH-LIVE-EXPIRY real thirty-minute expiry clears the live drawer and denies owner access', async ({ page }) => {
   await verifyLiveNaturalExpiry(page, milliseconds => { test.setTimeout(milliseconds); });
 });
-if (phase === 'credential-recovery') test('D-CREDENTIAL-RECOVERY A800 own-password recovery revokes live sessions and clears help', async ({ browser, page }) => {
+if (phase === 'credential-recovery') test('D-CREDENTIAL-RECOVERY disposable own-password recovery reconciles a lost acknowledgement', async ({ browser, page }) => {
   await verifyOwnPasswordRecovery(browser, page);
 });
 

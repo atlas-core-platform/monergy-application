@@ -102,11 +102,25 @@ public sealed class PostgresPersonaCredentialTests
                 UPDATE customer_identity.registration_challenges
                 SET delivered=true,protected_code=NULL WHERE challenge_hash=@Hash;
                 """, new { Hash = recovery });
-            Assert.False(await repo.RecoverAsync("T002", recovery, verifier, new string('n', 72), default));
-            Assert.True(await repo.RecoverAsync("T001", recovery, verifier, new string('n', 72), default));
+            var recoveryOperation = new string('1', 32);
+            var recoveryFingerprint = new string('f', 64);
+            Assert.False(await repo.RecoverAsync("T002", recovery, verifier, new string('n', 72),
+                recoveryOperation, recoveryFingerprint, default));
+            Assert.True(await repo.RecoverAsync("T001", recovery, verifier, new string('n', 72),
+                recoveryOperation, recoveryFingerprint, default));
             Assert.False(await repo.IsCurrentAsync(first, default));
             Assert.Null(await sessions.ReadCurrentAsync("T001", sessionId, default));
-            Assert.False(await repo.RecoverAsync("T001", recovery, verifier, new string('r', 72), default));
+            Assert.True(await repo.RecoverAsync("T001", recovery, verifier, new string('r', 72),
+                recoveryOperation, recoveryFingerprint, default));
+            Assert.False(await repo.RecoverAsync("T001", recovery, verifier, new string('r', 72),
+                new string('2', 32), recoveryFingerprint, default));
+            Assert.Equal(1, await owner.ExecuteScalarAsync<int>("""
+                SELECT count(*) FROM customer_identity.registration_events
+                WHERE actor_id=@Actor AND action='PERSONA_PASSWORD_RECOVERED';
+                """, new { Actor = actor }));
+            Assert.Equal(2, await owner.ExecuteScalarAsync<long>("""
+                SELECT credential_version FROM customer_identity.persona_credentials WHERE actor_id=@Actor;
+                """, new { Actor = actor }));
         }
         finally
         {
