@@ -279,7 +279,7 @@ export default function PlatformAdministratorPortal() {
     <FoundationProvider appearance="midnight">
       <WorkspaceShell appearance="midnight" context="Platform Administrator" area="Administration"
         module={{ name: 'Monergy Administration', homeHref: '/platform', guide: <p>Review system status and operational notes. Customer and organization information is not available here.</p> }}
-        destinations={[{ id: 'platform', label: 'System status', icon: 'layers', href: '/' }, { id: 'diagnostics', label: 'Diagnostics', icon: 'activity', href: '/' }, { id: 'organizations', label: 'Organizations', icon: 'users', href: '/' }]}
+        destinations={[{ id: 'platform', label: 'System status', icon: 'layers', href: '/' }, { id: 'diagnostics', label: 'Diagnostics', icon: 'warning', href: '/' }, { id: 'organizations', label: 'Organizations', icon: 'users', href: '/' }]}
         active={active} onNavigate={(id) => { if (id === 'platform' || id === 'organizations' || id === 'diagnostics') setActive(id); }}
         actions={<Space><AskMonergyAction key={session.session + ':' + JSON.stringify(context) + ':' + active}
           session={{ audience: 'platform', credential: session.session, expiresAt: session.expiresAt }}
