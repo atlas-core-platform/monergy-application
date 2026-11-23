@@ -1,19 +1,21 @@
 # MONERGY-ASSISTANT-01B — testing execution, 19 November 2026
 
-**Status: TESTING IN PROGRESS — NOT ACCEPTED / NOT MERGED.** This is the separate
+**Status: TESTING BLOCKED — NOT ACCEPTED / NOT MERGED.** This is the separate
 TEST-01 execution record. The earlier implementation-only
 `MONERGY-ASSISTANT-01B-TESTING-HANDOFF.md` remains unchanged, including its historical
-NOT RUN statements. This report is an interim evidence snapshot for the coordinator
-to finish after the final source gates and physical Gate D. It is not a GO decision.
+NOT RUN statements. Gate D completed 59 planned browser executions, but the A600
+credential-recovery confirmation lost its HTTP acknowledgement after the credential
+state committed. The scenario therefore could not complete its required UI assertions.
+This is not a GO decision.
 
 ## Gate disposition
 
 | Gate | Disposition at this snapshot |
 | --- | --- |
-| A — corrections, source checks and compilation | **Recorded source checks PASS; coordinator closure pending.** Third complete Web run passes 1,256/1,256 across 96 files, 0 fail/skip. Full lint is 232 files, 0 errors/warnings; TypeScript and production/bundle build pass; all 274 frozen source hashes match. F1–F7 focused checks, AM and Expert suites pass. The final affected Gateway Release build passes with 0 warnings/errors after seven added duplicate-success regressions. Candidate freeze and final scans remain separate. |
+| A — corrections, source checks and compilation | **PASS.** Third complete Web run passes 1,256/1,256 across 96 files, 0 fail/skip. Full lint is 232 files, 0 errors/warnings; TypeScript and production/bundle build pass; all 274 frozen source hashes match. F1–F7 focused checks, AM and Expert suites pass. The final affected Gateway Release build passes with 0 warnings/errors after seven added duplicate-success regressions. |
 | B — disposable integration | **Recorded suites PASS:** Application backend 612/612 (new final Assistant run 133/133 plus 479 unchanged applicable regression results) and AM PostgreSQL 170/170. Seven added ambiguous-success cases passed after genuine RED evidence; no prior suite was silently relabeled as rerun. This is isolated owner/database evidence, not an integrated persona deployment. |
-| C — freeze candidate and governed dependencies | **PENDING.** AM and Expert corrections are committed and pushed to their existing draft PRs; their recorded exact heads remain open/unmerged with zero all-event workflow runs. Application remains an evolving isolated candidate. Final Application identity must be recorded externally after commit, not inside its own commit. |
-| D — new LOCAL profile, installed Chrome, deployment continuity | **NOT RUN.** Do not infer 14-service readiness, persona/browser results, full-profile outages, restart or disable/re-enable from unit/integration evidence. Gates A–C must finish first. |
+| C — freeze candidate and governed dependencies | **PASS through the runtime-tested Application identity.** Application `5062e0312875491182767eca9bb8b254674af1d8` / tree `566e975d5a146782574ddc76d5fbe20a6f7d31f6`; AM and Expert corrections are published to the existing draft PRs; Architecture remains unchanged. A report-only successor commit is recorded externally after this document is committed. |
+| D — new LOCAL profile, installed Chrome, deployment continuity | **BLOCKED: 58/59 PASS, 1/59 FAIL.** Readiness, topology, persona/question/authorization, outages, owner delivery, restart/readback, disable/re-enable, real 30-minute expiry, rate limits and privacy checks pass. A600 recovery committed the new credential but the confirmation request timed out, so the required success response and UI assertions did not complete. |
 | CTO acceptance, merge, Actions, Azure | **NOT PERFORMED / NOT AUTHORIZED by this testing record.** |
 
 `MONERGY-ASSISTANT-01A COMPLETE`, `acceptedThrough=T1-06` and **Business accepted=0**
@@ -27,7 +29,7 @@ dependencies are separately identified; they do not replace accepted authority.
 
 | Repository / draft PR | Starting HEAD / tree | Current candidate disposition |
 | --- | --- | --- |
-| Application #266 | `da2f3f6eb11cd2ee42e54450286de7ee7e4490b0` / `0afc2e4320607b5908010df7ed2f083cd49e7d8f` | Final HEAD/tree/branch and publication state to be recorded externally after Gate C. No self-referential final SHA is recorded here. |
+| Application #266 | `da2f3f6eb11cd2ee42e54450286de7ee7e4490b0` / `0afc2e4320607b5908010df7ed2f083cd49e7d8f` | Runtime-tested local identity `5062e0312875491182767eca9bb8b254674af1d8` / `566e975d5a146782574ddc76d5fbe20a6f7d31f6`. Final report-only successor and remote publication state are recorded externally. |
 | AM #32 | `fddce958102941585f74e656186f544f13954f46` / `ebc7b7b64d126f247bd174cf8837de959b9e604b` | Published `b517ce2326200bd7e32f81af467ca704bb6fee00` / `7d09b3ceca6763417a2bbc0f7fba57d215fbe101`, branch `codex/monergy-assistant-01b-platform-feedback-review`; draft/open/unmerged, 0 all-event workflow runs at the recorded readback. |
 | Architecture #27 | `90ea223fc37d47582010d603589506e1660dd659` / `2b1d5225aaf765df1fffe787daa8f1d55694030d` | Forward ownership amendment unchanged by this test execution. |
 | Expert #212 | `d0caa5f08884497ba50a6e30ded0d967e02ef21e` / `9591eb1e85bab99367b50ba9697bf929c68966fa` | Published `1eca90c3b566dc0922442f9760998d6844faa32b` / `a5f10d97b289ccfa9c78be3937a3c84e7484d38c`, branch `codex/monergy-assistant-01b-knowledge-runtime`; draft/open/unmerged, 0 all-event workflow runs at the recorded readback. |
@@ -357,17 +359,56 @@ database contents are not retained evidence; complete TRX/log/hash receipts rema
 A:`disposable-postgres-stopped.json` records the exact fixture names and stop action.
 No retained container or named volume was changed by that action.
 
-## Remaining completion record
+## Gate D final physical execution — 23 November 2026
 
-The coordinator must append the final affected Gateway source/integration results;
-freeze and record exact candidate identities; complete new-profile provenance, installed Chrome
-actor/question/authorization matrices, 14 business services plus independent Runtime,
-privacy/outage/restart/disable-reenable evidence; then capture final scans, preservation,
-draft PR/workflow and diff status. Do not replace a missing physical result with a
-source assertion or a previously accepted unrelated cohort count.
+The isolated profile is `assistant01b`, instance
+`efbc294990664317802e35a4f0eeb574`, public port 4350 and Compose project
+`monergy-uat-efbc2949`. It was created from the bounded candidate and retained; its
+databases, six named volumes, generated credentials and business state were not reset,
+recreated, pruned or replaced.
 
-Until those required gates complete, this is **not** a tested candidate ready for
-CTO re-review. No acceptance receipt, merge, main synchronization, Production/business
-acceptance, external-provider approval or Azure implementation is implied. Active-store
+| Physical evidence | Result |
+| --- | --- |
+| Planned installed-browser scenarios | **59 executed: 58 PASS, 1 FAIL, 0 missing/skip/interrupted** |
+| Passing phases | activation 13/13; setup 2/2; baseline 23/23; reviewer 1/1; governed QA continuity 1/1; unknown outcome 2/2; owner faults 3/3; workspace switch 1/1; Runtime outage 2/2; restart 3/3; disabled 2/2; re-enabled 3/3; rates 1/1; real-time auth expiry 1/1 |
+| Failing phase | credential recovery **0/1**; receipt `credential-recovery-2026-11-23T08-16-21-762Z.json` timed out after 120 seconds |
+| Readiness/topology | **PASS:** all 14 business services ready and authenticated topology 14/14; Knowledge Runtime separately ready, internal-only and has no host mapping |
+| Auxiliary host/KYC checks | **2/2 PASS**, reported separately and not added to the 59-scenario plan |
+| Runtime security | **PASS:** UID/GID 1000:1000, read-only filesystem, all capabilities dropped, `no-new-privileges`, no persistent volume and no host port |
+| Owner delivery | **PASS:** 77/77 accepted central receipts, zero pending; AI Feedback, AM Platform and Audit Platform failure/recovery paths passed |
+| Restart/readback | **PASS:** 2 topics, 154 events and 307 immutable rows retained; database/role identities and migration journals unchanged; no cross-owner SQL |
+| Privacy | **PASS:** 24/24 expected current containers read completely, 114 generated credential values / 782 variants and 30 canaries / 90 variants checked, **0 findings** |
+| Source-bound receipt aggregation | **BROWSER_EVIDENCE_INCOMPLETE** by design; current source hashes match, 59/59 executed, 58 pass, 1 fail; `--require-complete` exits 2 |
+
+### Blocking recovery result
+
+For A600, the recovery confirmation did not return its HTTP response before the
+120-second scenario timeout. Owner state subsequently showed that the new credential
+had committed: the new credential authenticated with HTTP 200 and the old credential
+was rejected with HTTP 401. Reconciliation revoked the temporary successful session,
+atomically updated the protected fixture and recovery journal, and proved a fresh
+normal login with HTTP 200. No second reset or recovery was issued. The sanitized
+receipt is `physical/assistant01b/credential-recovery-a600-reconciliation.json` with
+outcome `ReconciledAfterLostAcknowledgement`.
+
+That reconciliation protects the retained profile but **does not turn the browser
+scenario into PASS**: the confirmation success response, recovery UI completion and
+remaining in-scenario assertions were never observed. The operation journal stopped
+at `ConfirmationDispatched` while the credential owner had already committed.
+Inspection identified a plausible wider Gateway acknowledgement risk in the response
+capture path, which buffers the owner response while awaiting result-Audit delivery;
+this is an investigation finding, not a proven root cause and not an accepted fix.
+
+### Final disposition
+
+Gates A, B and C pass. Gate D is blocked solely by the physical credential-recovery
+acknowledgement/UI completion above. Historical non-passing receipts remain preserved;
+the latest successful reruns govern every other phase. The earlier 43-row handoff
+matrix in this document is a pre-Gate-D snapshot and is superseded for physical status
+by this final execution section.
+
+This candidate is **not ready for CTO re-review**, is not accepted and was not merged.
+No acceptance receipt, main synchronization, Production/business acceptance,
+external-provider approval or Azure implementation is implied. Active-store
 retention/privacy deletion does not establish historical backup deletion. Synthetic
 publication-proof fixtures do not publish Monergy knowledge.
