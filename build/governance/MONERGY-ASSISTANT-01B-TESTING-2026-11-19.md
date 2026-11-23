@@ -364,7 +364,7 @@ No retained container or named volume was changed by that action.
 The isolated profile is `assistant01b`, instance
 `efbc294990664317802e35a4f0eeb574`, public port 4350 and Compose project
 `monergy-uat-efbc2949`. It was created from the bounded candidate and retained; its
-databases, six named volumes, generated credentials and business state were not reset,
+databases, four named Compose volumes, generated credentials and business state were not reset,
 recreated, pruned or replaced.
 
 | Physical evidence | Result |
