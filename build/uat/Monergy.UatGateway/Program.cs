@@ -35,6 +35,7 @@ builder.AddProductLiabilityRecords();
 builder.AddProductReporting();
 builder.AddProductSearch();
 builder.Services.AddPlatformAdministration(builder.Configuration);
+builder.Services.AddDiagnosticMode();
 builder.Services.AddAssistant();
 builder.Services.AddSingleton<GoogleDriveProxyClient>();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));
@@ -80,6 +81,7 @@ app.MapProductLiabilityRecords();
 app.MapProductReporting();
 app.MapProductSearch();
 app.MapPlatformAdministration();
+app.MapDiagnosticMode();
 app.MapAssistant();
 app.MapGet("/health/live", () => Results.Ok(new { profile = "local-uat", productionAccepted = false }));
 app.MapGet("/health/ready", async (HttpClient client, CancellationToken ct) =>
