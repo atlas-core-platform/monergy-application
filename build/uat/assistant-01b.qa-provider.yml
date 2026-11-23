@@ -1,0 +1,41 @@
+# LOCAL test fixture only. Reuses the accepted Cohort O provider implementation.
+# No external provider, published port, shared credential, or new integration type.
+services:
+  integration-gateway:
+    environment:
+      SSL_CERT_FILE: /run/assistant-qa/ca-bundle.pem
+    volumes:
+      - type: bind
+        source: '${ASSISTANT_QA_PRIVATE_ROOT:?Explicit isolated QA fixture required}/ca-bundle.pem'
+        target: /run/assistant-qa/ca-bundle.pem
+        read_only: true
+  assistant-qa-provider:
+    image: monergy-local-uat:${COMPOSE_PROJECT_NAME}
+    pull_policy: never
+    user: '${ASSISTANT_QA_UID:?Non-root fixture UID required}:${ASSISTANT_QA_GID:?Non-root fixture GID required}'
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ['no-new-privileges:true']
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=16m,mode=1777']
+    restart: unless-stopped
+    networks:
+      default:
+        aliases: ['${ASSISTANT_QA_ALIAS:?Profile-bound fixture DNS required}']
+    entrypoint: [dotnet]
+    command: [/fixture/CohortOProviderFixture.dll, '8443', /run/assistant-qa/server.pfx, /run/assistant-qa/authorization.json, /receipts/provider-calls.ndjson]
+    volumes:
+      - type: bind
+        source: '${ASSISTANT_QA_PRIVATE_ROOT}/binary'
+        target: /fixture
+        read_only: true
+      - type: bind
+        source: '${ASSISTANT_QA_PRIVATE_ROOT}/server.pfx'
+        target: /run/assistant-qa/server.pfx
+        read_only: true
+      - type: bind
+        source: '${ASSISTANT_QA_PRIVATE_ROOT}/authorization.json'
+        target: /run/assistant-qa/authorization.json
+        read_only: true
+      - type: bind
+        source: '${ASSISTANT_QA_PRIVATE_ROOT}/receipts'
+        target: /receipts

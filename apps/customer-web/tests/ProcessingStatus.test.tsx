@@ -1,5 +1,5 @@
 import { FoundationProvider } from '@monergy/ui-foundation';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AccessApi, AccessApiError } from '../src/access/accessApi';
 import { ProcessingStatus } from '../src/access/ProcessingStatus';
@@ -31,12 +31,45 @@ function api() {
  return result;
 }
 const view = (value: AccessApi, tenantId = 'T001', actorId = 'A900', audience: 'administrator' | 'operations-support' = 'administrator') => <FoundationProvider><ProcessingStatus api={value} tenantId={tenantId} actorId={actorId} audience={audience} /></FoundationProvider>;
-async function detail() { fireEvent.click(await screen.findByRole('button', { name: 'View task Document processing' })); return await screen.findByText('No attempts have been recorded.'); }
-async function review(action: 'retry' | 'cancel' = 'cancel') { await detail(); fireEvent.click(await screen.findByRole('button', { name: action === 'retry' ? 'Try again' : 'Cancel task' })); fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Reviewed task recovery' } }); fireEvent.click(screen.getByRole('checkbox')); }
-function lastButton(name: 'Try again' | 'Cancel task') {
- const button = screen.getAllByRole('button', { name }).at(-1);
+async function visibleButton(name: string, container: HTMLElement = document.body) {
+ // Avoid computing accessible names for unrelated table/drawer buttons. The
+ // selected real control still has its exact role, name and visibility checked.
+ const label = await within(container).findByText(name, { selector: 'button span' });
+ const button = label.closest('button');
  if (!button) throw new Error(`Expected ${name} button.`);
+ expect(button).toHaveRole('button'); expect(button).toHaveAccessibleName(name);
+ await waitFor(() => { expect(button).toBeVisible(); expect(button).toBeEnabled(); });
  return button;
+}
+function dialogByTitle(title: string) {
+ const label = screen.getByText(title, { selector: '.ant-drawer-title, .ant-modal-title' });
+ const dialog = label.closest<HTMLElement>('[role="dialog"]');
+ if (!dialog) throw new Error(`Expected ${title} dialog.`);
+ expect(dialog).toHaveRole('dialog');
+ return dialog;
+}
+async function findDialogByTitle(title: string) {
+ const label = await screen.findByText(title, { selector: '.ant-drawer-title, .ant-modal-title' });
+ const dialog = dialogByTitle(title);
+ await waitFor(() => { expect(label).toBeVisible(); expect(dialog).toBeVisible(); });
+ return dialog;
+}
+async function detail() {
+ fireEvent.click(await screen.findByRole('button', { name: 'View task Document processing' }));
+ const drawer = await findDialogByTitle('Task details');
+ return await within(drawer).findByText('No attempts have been recorded.');
+}
+async function review(action: 'retry' | 'cancel' = 'cancel') {
+ await detail(); const drawer = dialogByTitle('Task details');
+ fireEvent.click(await visibleButton(action === 'retry' ? 'Try again' : 'Cancel task', drawer));
+ const dialog = await findDialogByTitle(action === 'retry' ? 'Try this task again?' : 'Cancel this task?');
+ fireEvent.change(within(dialog).getByLabelText('Reason'), { target: { value: 'Reviewed task recovery' } });
+ fireEvent.click(within(dialog).getByRole('checkbox'));
+ return dialog;
+}
+function lastButton(name: 'Try again' | 'Cancel task') {
+ const dialog = dialogByTitle(name === 'Try again' ? 'Try this task again?' : 'Cancel this task?');
+ return within(dialog).getByRole('button', { name });
 }
 function failed() { job = { ...job, state: 'FAILED', attempt: 1, canRetry: true, canCancel: true, failureCode: 'job.document-processing.owner-unavailable' }; }
 beforeEach(() => { window.history.replaceState(null, '', '/access/processing'); job = { ...initial }; receipts = []; calls = []; administrationCalls = 0; operationsCalls = 0; customerCalls = 0; fault = null; labelFault = null; processingPending.clear(); });
@@ -60,7 +93,21 @@ it('rejects customer names from another tenant before showing the queue', async 
 it('shows an unavailable customer label without inventing a name', async () => { labelFault = { tenantId: 'T001', items: [], unavailable: ['customer-one'] }; render(view(api())); expect(await screen.findByText('Customer unavailable')).toBeVisible(); expect(screen.queryByText('Aisha Khan')).not.toBeInTheDocument(); });
 it('rejects foreign job details and removes recovery actions', async () => { fault = path => path === '/job-one' ? { ...job, tenantId: 'foreign' } : undefined; render(view(api())); fireEvent.click(await screen.findByRole('button', { name: 'View task Document processing' })); await screen.findByRole('alert'); expect(screen.queryByRole('button', { name: 'Cancel task' })).not.toBeInTheDocument(); });
 it.each(['attempts', 'history'])('rejects foreign %s', async area => { fault = path => path.includes('/' + area) ? { tenantId: 'foreign', jobId: 'job-one', items: [], nextBeforeAttempt: null, nextBeforeId: null } : undefined; render(view(api())); fireEvent.click(await screen.findByRole('button', { name: 'View task Document processing' })); await screen.findByRole('alert'); expect(screen.queryByRole('button', { name: 'Cancel task' })).not.toBeInTheDocument(); });
-it('preserves the exact pending operation through close and retry', async () => { render(view(api())); await review(); let fail = true; fault = (_, method) => { if (method === 'POST' && fail) { fail = false; throw new AccessApiError(503, 'CONNECTION_UNAVAILABLE'); } return undefined; }; fireEvent.click(lastButton('Cancel task')); await screen.findByText('Confirm the unfinished change'); const original = calls.find(c => c.method === 'POST')?.body; fireEvent.click(await screen.findByRole('button', { name: 'Close review' })); fireEvent.click(screen.getByRole('button', { name: 'Review change' })); fireEvent.click(await screen.findByRole('button', { name: 'Check again' })); await screen.findByText('Task cancelled.'); expect(calls.filter(c => c.method === 'POST').map(c => c.body)).toEqual([original, original]); expect(receipts).toHaveLength(1); });
+it('preserves the exact pending operation through close and retry', async () => {
+ render(view(api())); const dialog = await review(); let fail = true;
+ fault = (_, method) => { if (method === 'POST' && fail) { fail = false; throw new AccessApiError(503, 'CONNECTION_UNAVAILABLE'); } return undefined; };
+ fireEvent.click(lastButton('Cancel task'));
+ const pendingTitle = await screen.findByText('Confirm the unfinished change');
+ const original = calls.find(c => c.method === 'POST')?.body;
+ fireEvent.click(await visibleButton('Close review', dialog));
+ const warning = pendingTitle.closest<HTMLElement>('[role="alert"]');
+ if (!warning) throw new Error('Expected unfinished task change alert.');
+ fireEvent.click(await visibleButton('Review change', warning));
+ const reopened = await findDialogByTitle('Cancel this task?');
+ fireEvent.click(await visibleButton('Check again', reopened));
+ await screen.findByText('Task cancelled.');
+ expect(calls.filter(c => c.method === 'POST').map(c => c.body)).toEqual([original, original]); expect(receipts).toHaveLength(1);
+});
 it('recovers a frozen request after reauthentication by the same tenant and actor', async () => { const first = render(view(api())); await review(); fault = (_, method) => { if (method === 'POST') throw new AccessApiError(503, 'CONNECTION_UNAVAILABLE'); return undefined; }; fireEvent.click(lastButton('Cancel task')); await screen.findByText('Confirm the unfinished change'); const original = calls.find(c => c.method === 'POST')?.body; first.unmount(); fault = null; render(view(api())); fireEvent.click(await screen.findByRole('button', { name: 'Review change' })); fireEvent.click(await screen.findByRole('button', { name: 'Check again' })); await screen.findByText('Task cancelled.'); expect(calls.filter(c => c.method === 'POST').at(-1)?.body).toEqual(original); });
 it.each(['mutation', 'readback'])('does not confirm a forged %s', async mode => { render(view(api())); await review(); fault = (path, method) => mode === 'mutation' && method === 'POST' ? { tenantId: 'foreign' } : mode === 'readback' && path.includes('/changes/') ? { ...receipts[0], reason: 'Forged reason' } : undefined; fireEvent.click(lastButton('Cancel task')); await screen.findByText('Confirm the unfinished change'); expect(screen.queryByText('Task cancelled.')).not.toBeInTheDocument(); expect(processingPending.size).toBe(1); });
 it('allows editing after a confirmed invalid request', async () => { render(view(api())); await review(); fault = (_, method) => { if (method === 'POST') throw new AccessApiError(400, 'PROCESSING_CHANGE_INVALID'); return undefined; }; fireEvent.click(lastButton('Cancel task')); await waitFor(() => { expect(processingPending.size).toBe(0); }); expect(screen.getByLabelText('Reason')).toBeEnabled(); });

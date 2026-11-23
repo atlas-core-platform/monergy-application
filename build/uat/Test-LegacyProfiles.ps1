@@ -4,6 +4,7 @@ $testRoot=Join-Path ([IO.Path]::GetTempPath()) ('monergy-uat-test-'+[Guid]::NewG
 $scriptPath=Join-Path $testRoot 'build/uat/Invoke-MonergyUat.ps1'
 New-Item -ItemType Directory -Path (Split-Path $scriptPath) -Force | Out-Null
 Copy-Item (Join-Path $PSScriptRoot 'Invoke-MonergyUat.ps1') $scriptPath
+Copy-Item (Join-Path $PSScriptRoot 'Assistant.Local.ps1') (Join-Path (Split-Path $scriptPath) 'Assistant.Local.ps1')
 try {
 $parseErrors=$null; $parseTokens=$null
 $null=[System.Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]$parseTokens,[ref]$parseErrors)

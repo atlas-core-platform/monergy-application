@@ -251,7 +251,7 @@ file sealed class LocalTenantProvisioningOwner : IDisposable
             };
             var result = DeployChanges.To.PostgresqlDatabase(connection)
                 .JournalToPostgresqlTable("public", "monergy_migration_history")
-                .WithScriptsFromFileSystem("/source/services/" + migrationService + "/migrations")
+                .WithScriptsFromFileSystem("/source/services/" + migrationService + "/migrations", new DbUp.ScriptProviders.FileSystemScriptOptions { IncludeSubDirectories = false })
                 .LogToNowhere().Build().PerformUpgrade();
             if (!result.Successful) throw new TenantProvisioningOwnerException("SERVICE_MIGRATION_FAILED");
             await using var db = new NpgsqlConnection(connection);

@@ -5,7 +5,8 @@ namespace Monergy.Services.CustomerIdentity.Application;
 
 public sealed record PersonaTesterWelcomeRequest(string TenantId, string Email, string ReturnPath, string RequestId);
 public sealed record PersonaTesterActivationConfirm(string TenantId, string Ticket, string Password);
-public sealed record PersonaTesterRecoveryConfirm(string TenantId, string Ticket, string NewPassword);
+public sealed record PersonaTesterRecoveryConfirm(string TenantId, string Ticket, string NewPassword,
+    string OperationId);
 
 public sealed class PersonaTesterActivationOptions
 {
@@ -108,11 +109,14 @@ public sealed class PersonaTesterActivation(
         TenantAccessProtocol.Identifier(request.TenantId, 64);
         if (request.Ticket.Length != 64 || request.Ticket.Any(static value => !Uri.IsHexDigit(value)))
             throw new TenantAccessException("RECOVERY_LINK_INVALID", 401);
+        PersonaCredentialAccess.ValidateRecoveryOperation(request.OperationId);
         var passwordHash = passwords.Hash(request.NewPassword);
         var recovered = await repository.RecoverAsync(request.TenantId,
             CustomerEmailCodeProtector.ChallengeHash(request.Ticket),
             protector.Verifier(request.TenantId + ":persona-recovery", request.Ticket, request.Ticket),
-            passwordHash, ct).ConfigureAwait(false);
+            passwordHash, request.OperationId,
+            protector.Verifier(request.TenantId + ":persona-recovery-result", request.OperationId,
+                request.NewPassword), ct).ConfigureAwait(false);
         if (!recovered) throw new TenantAccessException("RECOVERY_LINK_INVALID", 401);
         return new { recovered = true };
     }

@@ -65,7 +65,8 @@ public sealed class PersonaCredentialTests
         var requested = await fixture.Owner.RequestAsync(new("T001", "a300@example.test"), true, default);
         var pending = fixture.Repository.Queued!;
         var code = fixture.Protector.Unprotect("T001:persona-recovery", pending.ChallengeHash, pending.ProtectedCode);
-        _ = await fixture.Owner.RecoverAsync(new("T001", requested.ChallengeId, code, "another long secret value"), default);
+        _ = await fixture.Owner.RecoverAsync(new("T001", requested.ChallengeId, code,
+            "another long secret value", new string('1', 32)), default);
         Assert.True(fixture.Passwords.Verify(fixture.Repository.Identity!.PasswordHash, "another long secret value"));
         fixture.Sessions.AfterCreate = () => fixture.Repository.Current = false;
         await Assert.ThrowsAsync<TenantAccessException>(() =>
@@ -105,14 +106,19 @@ public sealed class PersonaCredentialTests
         Assert.EndsWith("&mode=recovery", path, StringComparison.Ordinal);
         var ticket = path.Split("ticket=", StringSplitOptions.None)[1].Split('&')[0];
 
+        var operation = new string('2', 32);
         var recovered = await owner.RecoverAsync(
-            new("T001", ticket, "a replacement password 2026!"), default);
+            new("T001", ticket, "a replacement password 2026!", operation), default);
         Assert.Equal(true, recovered.GetType().GetProperty("recovered")!.GetValue(recovered));
         Assert.True(fixture.Passwords.Verify(fixture.Repository.Identity!.PasswordHash,
             "a replacement password 2026!"));
         Assert.Equal(2, fixture.Repository.Identity.CredentialVersion);
+        var replay = await owner.RecoverAsync(
+            new("T001", ticket, "a replacement password 2026!", operation), default);
+        Assert.Equal(true, replay.GetType().GetProperty("recovered")!.GetValue(replay));
+        Assert.Equal(1, fixture.Repository.RecoveryMutations);
         await Assert.ThrowsAsync<TenantAccessException>(() => owner.RecoverAsync(
-            new("T001", ticket, "another replacement password 2026!"), default));
+            new("T001", ticket, "another replacement password 2026!", operation), default));
     }
 
     [Fact]
@@ -234,8 +240,11 @@ public sealed class PersonaCredentialTests
         public Repository(PersonaCredentialIdentity identity) { Identity = identity; }
         public RegistrationCode? Queued;
         public int TesterIssues;
+        public int RecoveryMutations;
         private string? testerHash;
         private DateTimeOffset? testerExpiresAt;
+        private string? recoveryOperation;
+        private string? recoveryFingerprint;
         public bool Current = true;
         public bool LastValid;
         public Task QueueAsync(string tenant, RegistrationCode challenge, CancellationToken ct)
@@ -276,11 +285,17 @@ public sealed class PersonaCredentialTests
         { LastValid = valid; return Task.FromResult(true); }
         public Task<bool> IsCurrentAsync(PersonaCredentialIdentity current, CancellationToken ct) =>
             Task.FromResult(Current);
-        public Task<bool> RecoverAsync(string tenant, string hash, string verifier, string newHash, CancellationToken ct)
+        public Task<bool> RecoverAsync(string tenant, string hash, string verifier, string newHash,
+            string operationId, string resultFingerprint, CancellationToken ct)
         {
+            if (tenant == "T001" && recoveryOperation == operationId && recoveryFingerprint == resultFingerprint)
+                return Task.FromResult(true);
             if (Queued?.ChallengeHash != hash || Queued.CodeHash != verifier || tenant != "T001")
                 return Task.FromResult(false);
             Identity = Identity! with { PasswordHash = newHash, CredentialVersion = Identity!.CredentialVersion + 1 };
+            recoveryOperation = operationId;
+            recoveryFingerprint = resultFingerprint;
+            RecoveryMutations++;
             Queued = null;
             return Task.FromResult(true);
         }

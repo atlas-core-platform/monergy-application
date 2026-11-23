@@ -82,7 +82,8 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                 requested_at=EXCLUDED.requested_at,expires_at=EXCLUDED.expires_at,
                 window_at=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN @RequestedAt ELSE c.window_at END,
                 requests=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN 1 ELSE c.requests+1 END,
-                attempts=0,consumed=false,delivered=false,delivery_attempt=0,lease_until=NULL
+                attempts=0,consumed=false,delivered=false,delivery_attempt=0,lease_until=NULL,
+                recovery_operation_id=NULL,recovery_result_fingerprint=NULL
             WHERE c.requested_at<=@RequestedAt-interval '1 minute'
               AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5);
             """, challenge, transaction: tx, cancellationToken: ct)).ConfigureAwait(false);
@@ -203,7 +204,8 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                 expires_at=EXCLUDED.expires_at,
                 window_at=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN @RequestedAt ELSE c.window_at END,
                 requests=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN 1 ELSE c.requests+1 END,
-                attempts=0,consumed=false,delivered=true,delivery_attempt=0,lease_until=NULL
+                attempts=0,consumed=false,delivered=true,delivery_attempt=0,lease_until=NULL,
+                recovery_operation_id=NULL,recovery_result_fingerprint=NULL
             WHERE c.requested_at<=@RequestedAt-interval '1 minute'
               AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5)
             RETURNING c.expires_at AS ExpiresAt;
@@ -315,7 +317,8 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
                 expires_at=EXCLUDED.expires_at,
                 window_at=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN @RequestedAt ELSE c.window_at END,
                 requests=CASE WHEN c.window_at<=@RequestedAt-interval '1 hour' THEN 1 ELSE c.requests+1 END,
-                attempts=0,consumed=false,delivered=true,delivery_attempt=0,lease_until=NULL
+                attempts=0,consumed=false,delivered=true,delivery_attempt=0,lease_until=NULL,
+                recovery_operation_id=NULL,recovery_result_fingerprint=NULL
             WHERE c.requested_at<=@RequestedAt-interval '1 minute'
               AND (c.window_at<=@RequestedAt-interval '1 hour' OR c.requests<5)
             RETURNING c.expires_at AS ExpiresAt;
@@ -425,10 +428,25 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
             """, identity, cancellationToken: ct)).ConfigureAwait(false);
     }
 
-    public async Task<bool> RecoverAsync(string tenant, string hash, string verifier, string newHash, CancellationToken ct)
+    public async Task<bool> RecoverAsync(string tenant, string hash, string verifier, string newHash,
+        string operationId, string resultFingerprint, CancellationToken ct)
     {
         await using var db = await connections.OpenAsync(tenant, ct).ConfigureAwait(false);
         await using var tx = await db.BeginTransactionAsync(ct).ConfigureAwait(false);
+        async Task<bool> ReplayedAsync() => await db.ExecuteScalarAsync<bool>(new CommandDefinition("""
+            SELECT EXISTS (
+              SELECT 1 FROM customer_identity.registration_challenges
+              WHERE purpose='persona-recovery' AND challenge_hash=@Hash AND code_hash=@Verifier
+                AND consumed AND recovery_operation_id=@OperationId
+                AND recovery_result_fingerprint=@ResultFingerprint
+                AND expires_at + interval '5 minutes' > clock_timestamp());
+            """, new { Hash = hash, Verifier = verifier, OperationId = operationId,
+                ResultFingerprint = resultFingerprint }, tx, cancellationToken: ct)).ConfigureAwait(false);
+        if (await ReplayedAsync().ConfigureAwait(false))
+        {
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return true;
+        }
         var email = await ConsumeAsync(db, tx, "persona-recovery", hash, verifier, ct).ConfigureAwait(false);
         string? actor = null;
         if (email is not null)
@@ -443,10 +461,21 @@ public sealed class PostgresPersonaCredentials(PostgresTenantSessions connection
         if (actor is not null)
         {
             await db.ExecuteAsync(new CommandDefinition("""
+                UPDATE customer_identity.registration_challenges
+                SET recovery_operation_id=@OperationId,
+                    recovery_result_fingerprint=@ResultFingerprint
+                WHERE purpose='persona-recovery' AND challenge_hash=@ChallengeHash AND consumed
+                  AND recovery_operation_id IS NULL AND recovery_result_fingerprint IS NULL;
                 UPDATE customer_identity.trusted_sessions SET revoked=true WHERE actor_id=@Actor;
                 INSERT INTO customer_identity.registration_events(event_id,action,actor_id)
                 VALUES(@Id,'PERSONA_PASSWORD_RECOVERED',@Actor);
-                """, new { Actor = actor, Id = Guid.NewGuid() }, tx, cancellationToken: ct)).ConfigureAwait(false);
+                """, new { Actor = actor, Id = Guid.NewGuid(), OperationId = operationId,
+                    ResultFingerprint = resultFingerprint, ChallengeHash = hash }, tx, cancellationToken: ct)).ConfigureAwait(false);
+        }
+        else if (await ReplayedAsync().ConfigureAwait(false))
+        {
+            await tx.CommitAsync(ct).ConfigureAwait(false);
+            return true;
         }
         await tx.CommitAsync(ct).ConfigureAwait(false);
         return actor is not null;

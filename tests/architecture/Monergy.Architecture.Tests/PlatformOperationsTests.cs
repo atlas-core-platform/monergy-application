@@ -159,6 +159,41 @@ public sealed class PlatformOperationsTests
         Assert.Equal("GOVERNED_PROVIDER_CONFIGURATION_UNAVAILABLE", failure.Message);
     }
 
+    [Theory]
+    [InlineData("ai", "T001")]
+    [InlineData("ai", "T002")]
+    [InlineData("email", "T001")]
+    [InlineData("email", "T002")]
+    public async Task GovernedProviderClientBindsPlatformHostWhileKeepingLoopbackAndPurposeCredential(string provider, string tenant)
+    {
+        const string token = "isolated-governed-runtime-purpose-credential";
+        var inspected = 0;
+        using var http = new HttpClient(new ResponseHandler(HttpStatusCode.OK,
+            GovernedProviderConfigurationDecision.NeverAdopted(), request =>
+            {
+                Assert.Equal("platform.localhost", request.Headers.Host);
+                Assert.Equal(new Uri($"http://127.0.0.1:4173/internal/local/v1/governed-integrations/{provider}?tenant={tenant}"), request.RequestUri);
+                Assert.Equal(HttpMethod.Get, request.Method);
+                Assert.Null(request.Content);
+                Assert.Equal(token, Assert.Single(request.Headers.GetValues("X-Monergy-Provider-Configuration")));
+                Assert.Null(request.Headers.Authorization);
+                Assert.False(request.Headers.Contains("Cookie"));
+                Assert.False(request.Headers.Contains("X-Monergy-Session"));
+                Assert.False(request.Headers.Contains("X-Monergy-Tenant"));
+                Assert.False(request.Headers.Contains("X-Monergy-Platform-Session"));
+                Assert.False(request.Headers.Contains("X-Monergy-Assistant-Feedback"));
+                inspected++;
+            })) { BaseAddress = new Uri("http://127.0.0.1:4173/") };
+        // Logical control-plane routing is fixed by this client, not by a caller's
+        // default Host or a tenant/provider identifier.
+        http.DefaultRequestHeaders.Host = "untrusted-default.invalid";
+        using var client = new GovernedProviderConfigurationClient(http, token);
+        var result = await client.ReadAsync(provider, tenant, default);
+        Assert.Equal(GovernedProviderAdoptionStates.NeverAdopted, result.State);
+        Assert.True(result.LegacyFallbackAllowed);
+        Assert.Equal(1, inspected);
+    }
+
     [Fact]
     public async Task PostureChangesAreVersionedIdempotentAndAuditable()
     {
@@ -241,10 +276,14 @@ public sealed class PlatformOperationsTests
         return new GovernedProviderConfigurationClient(http, token);
     }
 
-    private sealed class ResponseHandler(HttpStatusCode status, GovernedProviderConfigurationDecision? body) : HttpMessageHandler
+    private sealed class ResponseHandler(HttpStatusCode status, GovernedProviderConfigurationDecision? body,
+        Action<HttpRequestMessage>? inspect = null) : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromResult(new HttpResponseMessage(status) { Content = body is null ? null : JsonContent.Create(body) });
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            inspect?.Invoke(request);
+            return Task.FromResult(new HttpResponseMessage(status) { Content = body is null ? null : JsonContent.Create(body) });
+        }
     }
 
     private sealed class FixedClock : TimeProvider

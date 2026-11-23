@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable><IsTestProject>true</IsTestProject>
+    <AssemblyName>Monergy.Assistant.Tests</AssemblyName>
+    <AssistantAmSourceRoot Condition="'$(AssistantAmSourceRoot)' == ''">$(MSBuildThisFileDirectory)../../../.artifacts/assistant-01b-build/verified-am</AssistantAmSourceRoot>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio"><PrivateAssets>all</PrivateAssets></PackageReference>
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="dbup-postgresql" />
+    <ProjectReference Include="../../../build/uat/Monergy.UatGateway/Monergy.UatGateway.csproj" />
+    <ProjectReference Include="../../../services/ai-intelligence/Monergy.Services.AiIntelligence.csproj" />
+    <ProjectReference Include="../../../services/audit/Monergy.Services.Audit.csproj" />
+    <ProjectReference Include="$(AssistantAmSourceRoot)/src/Monergy.AccessManagement/Monergy.AccessManagement.csproj" />
+  </ItemGroup>
+</Project>

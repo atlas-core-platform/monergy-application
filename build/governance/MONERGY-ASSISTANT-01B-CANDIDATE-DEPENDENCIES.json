@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0.0",
+  "decision": "MONERGY-ASSISTANT-01B-DECISION-01",
+  "status": "TESTING_CANDIDATES_NOT_ACCEPTED",
+  "acceptedBaselines": {
+    "application": "995d0a30991ad2a14a464ade62e0ed948f3e6914",
+    "accessManagement": "85cb70159a1a8f700c2e15d191fb8097651c4b78",
+    "architecture": "80cb94953c2d67c9eee568d333ae3435532af0d8",
+    "systemExpert": "0bd252a317b1be3e3754b7ab8cdb855aa3561362"
+  },
+  "candidateDependencies": {
+    "architecture": {
+      "commit": "90ea223fc37d47582010d603589506e1660dd659",
+      "tree": "2b1d5225aaf765df1fffe787daa8f1d55694030d",
+      "draftPullRequest": "https://github.com/atlas-core-platform/monergy-architecture/pull/27"
+    },
+    "accessManagement": {
+      "commit": "b517ce2326200bd7e32f81af467ca704bb6fee00",
+      "tree": "7d09b3ceca6763417a2bbc0f7fba57d215fbe101",
+      "draftPullRequest": "https://github.com/atlas-core-platform/monergy-access-management-service/pull/32",
+      "embeddedSourceFiles": 57
+    },
+    "systemExpert": {
+      "commit": "1eca90c3b566dc0922442f9760998d6844faa32b",
+      "tree": "a5f10d97b289ccfa9c78be3937a3c84e7484d38c",
+      "draftPullRequest": "https://github.com/atlas-core-platform/monergy-system-expert/pull/212",
+      "catalogueByteSha256": "abb3c5be496cc8fe783eb02ab89e9b0d22a6c02795e06e279c8051d8376cf497",
+      "retrievalRevision": "8cd9cd53fcaff5485c3de17b01c472937f789af5ac5386c531cc2d99ddbd50cb",
+      "audienceRevision": "7e8c37afc97fe3ebb2780c8afcb9b163c8b251c0246a8a4b8c24f109bac551b0"
+    }
+  },
+  "applicationFinalIdentityRecordedExternally": true,
+  "acceptedKnowledgeDigest": "0e4020190ff2e204ab582fdcf1075a8ef90562845b502ddd695ecd9ed213039a",
+  "acceptedThrough": "T1-06",
+  "businessAccepted": 0,
+  "execution": "Separate TEST-01 execution; historical implementation handoff remains NOT RUN."
+}

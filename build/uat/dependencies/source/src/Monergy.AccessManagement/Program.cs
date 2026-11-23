@@ -1,7 +1,14 @@
 using System.Text.Json.Serialization;
 using Monergy.AccessManagement;
 
-var builder = WebApplication.CreateBuilder(args);
+var operatorCommand = args is ["--platform-reviewer-command" or "--platform-reviewer-status" or "--platform-reviewer-discover" or
+    "--platform-reviewer-operation" or "--platform-reviewer-resume"];
+var builder = WebApplication.CreateBuilder(operatorCommand ? Array.Empty<string>() : args);
+if (operatorCommand)
+{
+    Environment.ExitCode = await PlatformReviewerOperator.RunAsync(builder.Configuration, builder.Environment, args[0]);
+    return;
+}
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 262_144);
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -102,7 +109,9 @@ if (customerRelationships)
     builder.Services.AddSingleton<CustomerAccessEvaluator>();
 }
 
+builder.Services.AddPlatformReviewerAuthorization();
 var app = builder.Build();
+app.MapPlatformReviewerAuthorization();
 if(customerRelationships && builder.Configuration["Monergy:AccessManagement:CustomerEnrollmentToken"] is { } enrollmentToken)
     app.MapCustomerEnrollment(enrollmentToken);
 if (customerRelationships)
@@ -111,7 +120,11 @@ if (customerRelationships)
     app.MapPost("/v1/authorization/customer-evaluations", async (CustomerAccessRequest request, HttpContext http,
         ITrustedSecurityContextResolver resolver, CustomerAccessEvaluator evaluator, CancellationToken ct) =>
     {
-        try { AccessInput.Identifier(request.CapabilityId, 160); AccessInput.Identifier(request.CustomerId, 128); }
+        try
+        {
+            AccessInput.Require(!PlatformReviewerContract.IsPlatformCapability(request.CapabilityId), "PLATFORM_CAPABILITY_NOT_TENANT");
+            AccessInput.Identifier(request.CapabilityId, 160); AccessInput.Identifier(request.CustomerId, 128);
+        }
         catch (AccessAdministrationException) { return (IResult)Results.BadRequest(new { error = "INVALID_CUSTOMER_ACCESS_REQUEST" }); }
         var trusted = await resolver.ResolveAsync(http).ConfigureAwait(false);
         if (trusted.Context is null) return (IResult)Results.Json(new { error = trusted.Failure }, statusCode: trusted.Available ? 401 : 503);
@@ -160,7 +173,8 @@ await app.RunAsync();
 
 static bool Valid(AuthorizationEvaluationRequest request)
 {
-    if (string.IsNullOrWhiteSpace(request.CapabilityId) || request.CapabilityId.Length > 160 ||
+    if (PlatformReviewerContract.IsPlatformCapability(request.CapabilityId) ||
+        string.IsNullOrWhiteSpace(request.CapabilityId) || request.CapabilityId.Length > 160 ||
         request.CapabilityId[0] is < 'a' or > 'z' ||
         request.CapabilityId.Any(character => !(character is >= 'a' and <= 'z' or >= '0' and <= '9' or '.' or '-')))
         return false;

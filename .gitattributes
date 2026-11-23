@@ -4,5 +4,6 @@
 
 # This retained launcher was historically committed as CRLF. Keep its raw form so
 # bounded fixes do not rewrite the entire script during normalization.
-build/uat/Invoke-MonergyUat.ps1 -text
+build/uat/Invoke-MonergyUat.ps1 -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+build/uat/Test-LegacyProfiles.ps1 -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 
