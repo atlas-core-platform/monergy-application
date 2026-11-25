@@ -247,4 +247,42 @@ describe('Platform Administrator portal', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Configure' }));
     expect(within(await screen.findByRole('dialog')).getByLabelText('Set or replace secret')).toHaveValue('');
   });
+
+  it('manages a bounded diagnostic window and renders structured Expert evidence without raw JSON', async () => {
+    let started = false;
+    const diagnostic = { id: 'diag-' + '1'.repeat(48), reason: 'Investigate bounded owner timeout', startedBy: 'A950',
+      startedAt: '2026-11-25T08:00:00Z', expiresAt: '2026-11-25T08:15:00Z', active: true, state: 'Active', evidenceCount: 1 };
+    vi.stubGlobal('fetch', vi.fn((url: string, options?: RequestInit) => {
+      if (url.endsWith('/sessions/current')) return Promise.resolve(new Response(null, { status: 204 }));
+      if (url.endsWith('/sessions') && !url.includes('/diagnostics/')) return Promise.resolve(json(session));
+      if (url.endsWith('/context')) return Promise.resolve(json(context));
+      if (url.endsWith('/topology')) return Promise.resolve(json(topology));
+      if (url.endsWith('/readiness')) return Promise.resolve(json({ gates: [] }));
+      if (url.endsWith('/audit')) return Promise.resolve(json({ items: [] }));
+      if (url.endsWith('/integrations')) return Promise.resolve(json(integrations));
+      if (url.endsWith('/organizations')) return Promise.resolve(json({ items: [] }));
+      if (url.endsWith('/diagnostics/sessions') && options?.method === 'POST') { started = true; return Promise.resolve(json(diagnostic)); }
+      if (url.endsWith('/diagnostics/sessions')) return Promise.resolve(json({ items: started ? [diagnostic] : [] }));
+      if (url.endsWith('/diagnosis')) return Promise.resolve(json({ state: 'OBSERVED_FAILURES', diagnosticSessionId: diagnostic.id,
+        evidenceCount: 1, observations: [{ service: 'uat-gateway', operation: 'owner-call', outcome: 'FAILURE',
+          classification: 'TIMEOUT', occurredAt: '2026-11-25T08:01:00Z', durationMs: 5000 }],
+        hypotheses: [{ code: 'TIMEOUT', verified: false, evidenceCount: 1 }], verifiedCause: null,
+        sourceComparisons: [{ service: 'uat-gateway', status: 'MATCH', expectedCommit: 'a'.repeat(40), observedCommits: ['a'.repeat(40)] }],
+        remediation: ['VERIFY_CAUSE_BEFORE_REMEDIATION'] }));
+      throw new Error('Unexpected request: ' + url);
+    }));
+    render(<PlatformAdministratorPortal />);
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'Platform!Password123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    fireEvent.click(await screen.findByText('Diagnostics', { selector: 'span' }));
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'Investigate bounded owner timeout' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Start Diagnostic Mode' }));
+    expect(await screen.findByText(diagnostic.id)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Analyze' }));
+    expect(await screen.findByRole('heading', { name: 'Observations' })).toBeVisible();
+    expect(screen.getByText((_content, node) => node?.tagName === 'LI' &&
+      /uat-gateway.*owner-call.*FAILURE.*TIMEOUT/.test(node.textContent))).toBeVisible();
+    expect(screen.getByText('No cause is verified by this bounded operational evidence.')).toBeVisible();
+    expect(screen.queryByText(/"diagnosticSessionId"/)).not.toBeInTheDocument();
+  });
 });
