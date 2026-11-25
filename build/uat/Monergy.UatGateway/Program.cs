@@ -35,7 +35,7 @@ builder.AddProductLiabilityRecords();
 builder.AddProductReporting();
 builder.AddProductSearch();
 builder.Services.AddPlatformAdministration(builder.Configuration);
-builder.Services.AddDiagnosticMode();
+builder.Services.AddDiagnosticMode(builder.Configuration);
 builder.Services.AddAssistant();
 builder.Services.AddSingleton<GoogleDriveProxyClient>();
 builder.Services.AddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>()));

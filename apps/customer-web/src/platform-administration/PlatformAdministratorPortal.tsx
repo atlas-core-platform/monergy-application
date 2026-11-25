@@ -18,7 +18,11 @@ interface Integrations { revision: number; providers: IntegrationProvider[] }
 interface Organization { organizationCode: string; organizationId: string; organizationName: string; displayName: string; tenantSlug: string; hostname: string; tenantUrl: string; endpointStatus: string; country: string; timeZone: string; initialAdministrator: string; status: 'Requested' | 'Provisioning' | 'ProvisioningFailed' | 'ReadyForAdmin' | 'Active'; created: string; updated: string; readiness: string; attention?: string; completedSteps: number[] }
 interface Organizations { items: Organization[] }
 interface WelcomeReceipt { welcomeUrl: string; expiresAt: string; email: string }
-interface DiagnosticSessionView { id: string; reason: string; startedBy: string; startedAt: string; expiresAt: string; stoppedAt?: string; active: boolean; evidenceCount: number }
+interface DiagnosticSessionView { id: string; reason: string; startedBy: string; startedAt: string; expiresAt: string; stoppedAt?: string; active: boolean; state: 'Active' | 'Stopped' | 'Expired'; evidenceCount: number }
+interface DiagnosticObservation { service: string; operation: string; outcome: string; classification: string; detailCode?: string | null; occurredAt: string; correlationId?: string | null; causationId?: string | null; durationMs: number }
+interface DiagnosticHypothesis { code: string; verified: false; evidenceCount: number }
+interface DiagnosticSourceComparison { service: string; status: 'MATCH' | 'MISMATCH' | 'UNKNOWN'; expectedCommit?: string | null; observedCommits: string[] }
+interface DiagnosticAnalysis { state: string; diagnosticSessionId: string; evidenceCount: number; observations: DiagnosticObservation[]; hypotheses: DiagnosticHypothesis[]; verifiedCause: null; sourceComparisons: DiagnosticSourceComparison[]; remediation: string[] }
 
 const request = async <T,>(path: string, session?: string, init?: RequestInit): Promise<T> => {
   const headers = new Headers(init?.headers);
@@ -47,7 +51,7 @@ export default function PlatformAdministratorPortal() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [active, setActive] = useState<'platform' | 'organizations' | 'diagnostics'>('platform');
   const [diagnostics, setDiagnostics] = useState<DiagnosticSessionView[]>([]);
-  const [diagnosis, setDiagnosis] = useState<Record<string, unknown> | null>(null);
+  const [diagnosis, setDiagnosis] = useState<DiagnosticAnalysis | null>(null);
   const [diagnosticForm] = Form.useForm<{ reason: string; durationMinutes: number }>();
   const [createOrganization, setCreateOrganization] = useState(false);
   const [error, setError] = useState('');
@@ -60,7 +64,7 @@ export default function PlatformAdministratorPortal() {
   const [postureForm] = Form.useForm<{ posture: Posture; note: string }>();
   const [organizationForm] = Form.useForm<{ organizationName: string; displayName: string; tenantSlug?: string; country: string; timeZone: string; initialAdministratorEmail: string; placement: 'Shared' }>();
   const endAssistantSession = useCallback(() => {
-    setSession(null); setContext(null); setTopology(null); setGates([]); setReceipts([]);
+    setSession(null); setContext(null); setTopology(null); setGates([]); setReceipts([]); setDiagnostics([]); setDiagnosis(null);
     setError('Your platform session has ended. Sign in again to continue.');
   }, []);
 
@@ -87,15 +91,15 @@ export default function PlatformAdministratorPortal() {
   useEffect(() => {
     if (!session || active !== 'diagnostics') return;
     void request<{ items: DiagnosticSessionView[] }>('/platform-api/local/v1/diagnostics/sessions', session.session)
-      .then(value => setDiagnostics(value.items))
-      .catch(() => setError('Diagnostics could not be loaded.'));
+      .then(value => { setDiagnostics(value.items); })
+      .catch(() => { setError('Diagnostics could not be loaded.'); });
   }, [session, active]);
 
   useEffect(() => {
     if (!session) return;
     const expires = Date.parse(session.expiresAt);
     const timer = window.setTimeout(() => {
-      setSession(null); setContext(null); setTopology(null);
+      setSession(null); setContext(null); setTopology(null); setDiagnostics([]); setDiagnosis(null);
       setError('Your platform session has ended. Connect again to continue.');
     }, Math.max(0, Math.min(expires - Date.now(), 2_147_483_647)));
     return () => { window.clearTimeout(timer); };
@@ -130,7 +134,7 @@ export default function PlatformAdministratorPortal() {
 
   const signOut = async () => {
     if (session) await request<undefined>('/platform-api/local/v1/sessions/current', session.session, { method: 'DELETE' }).catch(() => undefined);
-    setSession(null); setContext(null); setTopology(null); setGates([]); setReceipts([]);
+    setSession(null); setContext(null); setTopology(null); setGates([]); setReceipts([]); setDiagnostics([]); setDiagnosis(null);
   };
 
   const refreshDiagnostics = async () => {
@@ -165,7 +169,7 @@ export default function PlatformAdministratorPortal() {
   const diagnose = async (id: string) => {
     if (!session) return;
     setBusy(true); setError('');
-    try { setDiagnosis(await request<Record<string, unknown>>('/platform-api/local/v1/diagnostics/sessions/' + encodeURIComponent(id) + '/diagnosis', session.session)); }
+    try { setDiagnosis(await request<DiagnosticAnalysis>('/platform-api/local/v1/diagnostics/sessions/' + encodeURIComponent(id) + '/diagnosis', session.session)); }
     catch (failure) { setError(failure instanceof Error ? failure.message : 'Diagnosis is unavailable.'); }
     finally { setBusy(false); }
   };
@@ -311,7 +315,7 @@ export default function PlatformAdministratorPortal() {
             <Card title="Start Diagnostic Mode">
               <Form form={diagnosticForm} layout="vertical" initialValues={{ durationMinutes: 15 }} onFinish={(values) => { void startDiagnostic(values); }}>
                 <Form.Item name="reason" label="Reason" rules={[{ required: true, whitespace: true }, { min: 8 }, { max: 256 }]}><Input placeholder="Example: Investigate repeated provider timeout" /></Form.Item>
-                <Form.Item name="durationMinutes" label="Window" rules={[{ required: true }]}><Select options={[5, 10, 15, 20, 30].map(value => ({ value, label: value + ' minutes' }))} /></Form.Item>
+                <Form.Item name="durationMinutes" label="Window" rules={[{ required: true }]}><Select options={[5, 10, 15, 20, 30].map(value => ({ value, label: `${String(value)} minutes` }))} /></Form.Item>
                 <Button type="primary" htmlType="submit" loading={busy}>Start Diagnostic Mode</Button>
               </Form>
             </Card>
@@ -319,10 +323,19 @@ export default function PlatformAdministratorPortal() {
               { title: 'Session', render: (_, row) => <><strong>{row.id}</strong><br /><Typography.Text type="secondary">{row.reason}</Typography.Text></> },
               { title: 'Window', render: (_, row) => <>{new Date(row.startedAt).toLocaleString()}<br /><Typography.Text type="secondary">Expires {new Date(row.expiresAt).toLocaleString()}</Typography.Text></> },
               { title: 'Evidence', render: (_, row) => row.evidenceCount },
-              { title: 'State', render: (_, row) => <Tag color={row.active ? 'processing' : 'default'}>{row.active ? 'Active' : 'Closed'}</Tag> },
+              { title: 'State', render: (_, row) => <Tag color={row.active ? 'processing' : 'default'}>{row.state}</Tag> },
               { title: 'Action', render: (_, row) => <Space><Button size="small" onClick={() => { void diagnose(row.id); }}>Analyze</Button>{row.active && <Button size="small" danger onClick={() => { void stopDiagnostic(row.id); }}>Stop</Button>}</Space> },
             ]} />
-            {diagnosis && <Card title="System Expert diagnosis"><pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{JSON.stringify(diagnosis, null, 2)}</pre></Card>}
+            {diagnosis && <Card title="System Expert diagnosis" aria-live="polite">
+              <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+                <Alert type={diagnosis.state === 'SOURCE_MISMATCH' ? 'warning' : diagnosis.state === 'OBSERVED_FAILURES' ? 'error' : 'info'} showIcon title={diagnosis.state.replaceAll('_', ' ')} description={`${String(diagnosis.evidenceCount)} distinct evidence event${diagnosis.evidenceCount === 1 ? '' : 's'} analyzed.`} />
+                <section><h3>Observations</h3>{diagnosis.observations.length === 0 ? <Typography.Text type="secondary">No failing operation was observed.</Typography.Text> : <ul>{diagnosis.observations.map((item, index) => <li key={`${item.service}-${item.operation}-${item.occurredAt}-${String(index)}`}><strong>{item.service}</strong> · {item.operation} · {item.outcome} · {item.classification} at {new Date(item.occurredAt).toLocaleString()}</li>)}</ul>}</section>
+                <section><h3>Hypotheses — not verified</h3>{diagnosis.hypotheses.length === 0 ? <Typography.Text type="secondary">No hypothesis is indicated by the supplied evidence.</Typography.Text> : <ul>{diagnosis.hypotheses.map(item => <li key={item.code}>{item.code} ({item.evidenceCount} observation{item.evidenceCount === 1 ? '' : 's'})</li>)}</ul>}</section>
+                <Alert type="info" showIcon title="Verified cause" description="No cause is verified by this bounded operational evidence." />
+                <section><h3>Source comparison</h3><ul>{diagnosis.sourceComparisons.map(item => <li key={item.service}><strong>{item.service}</strong>: {item.status}</li>)}</ul></section>
+                <section><h3>Next safe steps</h3><ul>{diagnosis.remediation.map(item => <li key={item}>{item.replaceAll('_', ' ')}</li>)}</ul></section>
+              </Space>
+            </Card>}
           </> : <>
           <header className="access-page-header"><div><p className="workspace-eyebrow">MONERGY ADMINISTRATION · {context.environment.toUpperCase()}</p><h1>System status</h1><p>Availability, release blockers and operational notes.</p></div><Button onClick={() => { void load(session).catch((failure: unknown) => { setError(failure instanceof Error ? failure.message : 'We could not refresh the system status.'); }); }}>Refresh</Button></header>
           <Alert type="info" showIcon className="access-notice" title="Separate from customer work" description="This workspace cannot open organization or customer information, sign in as another person or change their access." />

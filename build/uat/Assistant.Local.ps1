@@ -52,7 +52,7 @@ function Initialize-AssistantProfile([bool]$ExistedBeforeInvocation) {
         if ($ExistedBeforeInvocation) { throw 'Assistant is opt-in for a new isolated profile. Existing profiles are not silently upgraded.' }
         $expert = Get-AssistantExpertIdentity $SystemExpertRoot
         $tokens = @{}
-        foreach ($purpose in @('knowledgeProduct','knowledgePlatform','feedbackIngest','feedbackReview','identityValidation','platformEvaluation','feedbackAudit','amAudit')) { $tokens[$purpose] = Secret }
+        foreach ($purpose in @('knowledgeProduct','knowledgePlatform','diagnosticAnalysis','feedbackIngest','feedbackReview','identityValidation','platformEvaluation','feedbackAudit','amAudit')) { $tokens[$purpose] = Secret }
         $databases = @()
         foreach ($module in @('ai-feedback','am-platform','audit-platform')) {
             $databases += @{ service=$module; name=('uat_' + $Profile.Replace('-','_') + '_' + $module.Replace('-','_')); ownerPassword=(Secret); runtimePassword=(Secret) }
@@ -79,6 +79,11 @@ function Initialize-AssistantProfile([bool]$ExistedBeforeInvocation) {
         $value = [string]$assistant.tokens.$purpose
         if ($value -notmatch '^[0-9a-f]{64}$') { throw 'Missing retained Assistant workload credential. Restore the matching protected files; do not regenerate.' }
         $values += $value
+    }
+    if ($null -ne $assistant.tokens.PSObject.Properties['diagnosticAnalysis']) {
+        $diagnosticValue = [string]$assistant.tokens.diagnosticAnalysis
+        if ($diagnosticValue -notmatch '^[0-9a-f]{64}$') { throw 'Invalid retained diagnostic workload credential.' }
+        $values += $diagnosticValue
     }
     $operatorFile = Join-Path $folder 'assistant-operator-control'
     if (-not (Test-Path -LiteralPath $operatorFile -PathType Leaf)) { throw 'Missing retained Assistant operator credential. Restore its protected file.' }
@@ -122,7 +127,9 @@ function Initialize-AssistantProfile([bool]$ExistedBeforeInvocation) {
         if (-not (Test-Path -LiteralPath $receiptPath -PathType Leaf) -or
             (Get-FileHash -LiteralPath $receiptPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne $assistant.publishedResolutionsSha256) { throw 'Restore the retained approved publication receipt; it cannot be recreated by assertion.' }
     }
-    Save-Json 'assistant-runtime.json' @{ productToken=$assistant.tokens.knowledgeProduct; platformToken=$assistant.tokens.knowledgePlatform; catalogueSha256=$assistant.catalogueSha256; port=5122 }
+    $runtimeConfiguration = @{ productToken=$assistant.tokens.knowledgeProduct; platformToken=$assistant.tokens.knowledgePlatform; catalogueSha256=$assistant.catalogueSha256; port=5122 }
+    if ($null -ne $assistant.tokens.PSObject.Properties['diagnosticAnalysis']) { $runtimeConfiguration.diagnosticToken=$assistant.tokens.diagnosticAnalysis }
+    Save-Json 'assistant-runtime.json' $runtimeConfiguration
     Protect-Files
 }
 
@@ -166,6 +173,12 @@ function Set-AssistantOwnerConfiguration([string]$Service, [hashtable]$Configura
                 CatalogueSha256=$assistant.catalogueSha256; FeedbackUrl='http://127.0.0.1:5119/';
                 FeedbackIngestToken=$assistant.tokens.feedbackIngest; FeedbackReviewToken=$assistant.tokens.feedbackReview;
                 IdentityValidationToken=$assistant.tokens.identityValidation
+            }
+            if ($null -ne $assistant.tokens.PSObject.Properties['diagnosticAnalysis']) {
+                $Configuration.Monergy.Diagnostics = @{
+                    RuntimeToken=$assistant.tokens.diagnosticAnalysis
+                    SystemExpertUrl='http://127.0.0.1:5122/'
+                }
             }
         }
     }

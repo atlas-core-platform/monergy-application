@@ -52,6 +52,14 @@ internal sealed partial class PlatformAdministratorSessions(FilePlatformCredenti
         return token;
     }
 
+    public async Task<string> RequirePrincipalAsync(HttpContext http)
+    {
+        var token = await RequireAsync(http).ConfigureAwait(false);
+        return sessions.TryGetValue(token, out var session)
+            ? session.PrincipalId
+            : throw new TenantBoundaryException("PLATFORM_SESSION_REQUIRED", 401);
+    }
+
     public async Task RevokeAsync(HttpContext http) => sessions.TryRemove(await RequireAsync(http).ConfigureAwait(false), out _);
     private sealed record Session(DateTimeOffset ExpiresAt, long CredentialVersion, string PrincipalId);
 }
