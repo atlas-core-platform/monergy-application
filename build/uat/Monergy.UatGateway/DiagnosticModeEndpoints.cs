@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Mvc;
 
 namespace Monergy.UatGateway;
 
@@ -35,7 +36,9 @@ internal sealed class DiagnosticEvidenceRequest
 internal sealed class DiagnosticSessionStore(TimeProvider? timeProvider = null)
 {
     internal const int MaximumEvidence = 256;
-    private static readonly Regex ReasonPattern = new(@"^[\p{L}\p{N}][\p{L}\p{N} .,'()/_-]{7,255}$", RegexOptions.CultureInvariant);
+    // Diagnostic reasons are intentionally ASCII-only. This blocks invisible and
+    // homoglyph-obfuscated credential markers from becoming stored operator text.
+    private static readonly Regex ReasonPattern = new(@"^[A-Za-z0-9][A-Za-z0-9 .,'()/_-]{7,255}$", RegexOptions.CultureInvariant);
     private static readonly Regex SensitiveReasonPattern = new(@"(?i)(password|passwd|secret|token|api.?key|authorization|connection.?string|bearer|customer.?id|account.?number)", RegexOptions.CultureInvariant);
     private static readonly Regex CodePattern = new(@"^[A-Z][A-Z0-9_]{0,63}$", RegexOptions.CultureInvariant);
     private static readonly Regex NamePattern = new(@"^[a-z][a-z0-9-]{0,63}$", RegexOptions.CultureInvariant);
@@ -205,7 +208,7 @@ internal static class DiagnosticModeEndpoints
                 return Results.Ok(View(store.Start(request.Reason, request.DurationMinutes, actor), DateTimeOffset.UtcNow));
             }
             catch (InvalidOperationException failure) { return Results.UnprocessableEntity(new { error = failure.Message }); }
-        });
+        }).WithMetadata(new RequestSizeLimitAttribute(4096));
         app.MapPost("/platform-api/local/v1/diagnostics/sessions/{id}/stop", async (string id, HttpContext http, PlatformAdministratorSessions platform, DiagnosticSessionStore store) =>
         {
             _ = await platform.RequirePrincipalAsync(http).ConfigureAwait(false);
@@ -221,7 +224,7 @@ internal static class DiagnosticModeEndpoints
             catch (KeyNotFoundException) { return Results.NotFound(new { error = "DIAGNOSTIC_SESSION_NOT_FOUND" }); }
             catch (InvalidOperationException failure)
             { return Results.Json(new { error = failure.Message }, statusCode: failure.Message == "DIAGNOSTIC_SESSION_INACTIVE" ? 409 : failure.Message == "DIAGNOSTIC_EVIDENCE_CAPACITY" ? 429 : 422); }
-        });
+        }).WithMetadata(new RequestSizeLimitAttribute(16_384));
         app.MapGet("/platform-api/local/v1/diagnostics/sessions/{id}/diagnosis", async (string id, HttpContext http, PlatformAdministratorSessions platform, DiagnosticSessionStore store, DiagnosticAnalysisClient client) =>
         {
             _ = await platform.RequirePrincipalAsync(http).ConfigureAwait(false);

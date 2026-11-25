@@ -27,6 +27,7 @@ public sealed class DiagnosticModeTests
     [InlineData("short")]
     [InlineData("Investigate token=not-allowed")]
     [InlineData("Investigate customer id C001")]
+    [InlineData("Investigate p\u0430ssword credential")]
     public void RejectsUnboundedOrSensitiveReason(string reason) =>
         Assert.Throws<InvalidOperationException>(() => Store(out _).Start(reason, 15, "A950"));
 
