@@ -60,6 +60,39 @@ function Deny-Read($path) {
 
 try {
     & $launcher -Action Prepare -Profile $profile
+
+    # Docker's legacy bind mount could have created the missing JSON path as an
+    # ordinary empty directory. Recover just that case, retaining all other files.
+    $provisioningPath = Join-Path $folder 'tenant-provisioning.json'
+    if (-not (Test-Path -LiteralPath $provisioningPath -PathType Leaf)) {
+        throw 'Non-onboarding profile did not create the disabled provisioning configuration.'
+    }
+    Remove-Item -LiteralPath $provisioningPath -Force
+    New-Item -ItemType Directory -Path $provisioningPath | Out-Null
+    & $launcher -Action Prepare -Profile $profile
+    if (-not (Test-Path -LiteralPath $provisioningPath -PathType Leaf)) {
+        throw 'Empty Docker-created provisioning directory was not safely repaired.'
+    }
+    $provisioningConfig = Get-Content -LiteralPath $provisioningPath -Raw | ConvertFrom-Json
+    if ($provisioningConfig.Monergy.TenantProvisioning.Enabled -ne 'false') {
+        throw 'Default profile unexpectedly enabled tenant provisioning.'
+    }
+
+    # A nonempty directory must remain untouched and block startup.
+    Remove-Item -LiteralPath $provisioningPath -Force
+    New-Item -ItemType Directory -Path $provisioningPath | Out-Null
+    $fixtureMarker = Join-Path $provisioningPath 'preserve-this.txt'
+    Set-Content -LiteralPath $fixtureMarker -Value 'test-only'
+    $blocked = $false
+    try { & $launcher -Action Prepare -Profile $profile }
+    catch { $blocked = $_.Exception.Message -like '*non-empty directory or filesystem link*' }
+    if (-not $blocked -or -not (Test-Path -LiteralPath $fixtureMarker)) {
+        throw 'Nonempty provisioning directory was deleted or not rejected.'
+    }
+    # Clean up only this disposable test profile fixture before proceeding.
+    Remove-Item -LiteralPath $fixtureMarker -Force
+    Remove-Item -LiteralPath $provisioningPath -Force
+    & $launcher -Action Prepare -Profile $profile
     Assert-PrivateReadable
     $before = Snapshot
     & $launcher -Action RepairPermissions -Profile $profile
