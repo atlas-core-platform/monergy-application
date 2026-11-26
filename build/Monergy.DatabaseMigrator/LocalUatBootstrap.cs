@@ -181,25 +181,47 @@ internal static partial class LocalUatBootstrap
         if (privileges is not true)
             throw new InvalidOperationException("LOCAL_AM_RUNTIME_PROVENANCE_PRIVILEGE_MISMATCH");
 
+        // Retained tenant access packs may be older or operator-modified.
+        // Probe real role/permission FK references without upgrading the pack.
+        var roleId = await ScalarAsync(runtime,
+            "SELECT role_id FROM am.roles ORDER BY role_id LIMIT 1;").ConfigureAwait(false) as string;
+        if (string.IsNullOrWhiteSpace(roleId))
+            throw new InvalidOperationException("LOCAL_AM_RUNTIME_PROBE_ROLE_UNAVAILABLE");
+        string permissionId, permissionCode, capabilityId, scope;
+        await using (var references = new NpgsqlCommand("""
+            SELECT p.permission_id,p.code,pc.capability_id,pc.scope
+            FROM am.permissions p
+            JOIN am.permission_capabilities pc ON pc.permission_id=p.permission_id
+            ORDER BY p.permission_id,pc.capability_id,pc.scope LIMIT 1;
+            """, runtime))
+        await using (var reader = await references.ExecuteReaderAsync().ConfigureAwait(false))
+        {
+            if (!await reader.ReadAsync().ConfigureAwait(false))
+                throw new InvalidOperationException("LOCAL_AM_RUNTIME_PROBE_PERMISSION_UNAVAILABLE");
+            permissionId = reader.GetString(0);
+            permissionCode = reader.GetString(1);
+            capabilityId = reader.GetString(2);
+            scope = reader.GetString(3);
+        }
+
         // Exercise the deployed runtime fulfillment write set without retaining probe history.
         await using var transaction = await runtime.BeginTransactionAsync().ConfigureAwait(false);
         var requestId = Guid.NewGuid().ToString("N");
         var actorId = "local-runtime-probe-" + requestId;
         await using var command = new NpgsqlCommand("""
             INSERT INTO am.access_subjects (actor_id,normalized_email,status,business_role_id)
-            VALUES (@actor,@email,'Active','default-role-financial-advisor');
+            VALUES (@actor,@email,'Active',@role);
             INSERT INTO am.access_requests (
                 request_id,tenant_id,requester_actor_id,target_code,target_definition_hash,
                 requester_role_id,requester_subject_version,submit_operation_id,state,expires_at)
             VALUES (@request,@tenant,@actor,'financial-advisor.assigned-customer-financial-review',
-                @definition,'default-role-financial-advisor',1,@submit,'Submitted',clock_timestamp()+interval '1 hour');
+                @definition,@role,1,@submit,'Submitted',clock_timestamp()+interval '1 hour');
             INSERT INTO am.subject_permissions (
                 actor_id,permission_id,granted_at,granted_by,source_request_id)
-            VALUES (@actor,'default-permission-profile-read',clock_timestamp(),'A900',@request);
+            VALUES (@actor,@permission,clock_timestamp(),'A900',@request);
             INSERT INTO am.access_request_permission_grants (
                 request_id,actor_id,permission_id,permission_code,capability_id,scope)
-            VALUES (@request,@actor,'default-permission-profile-read','financial-profile-read',
-                'financial-profile.profile.read','Resource');
+            VALUES (@request,@actor,@permission,@permissionCode,@capability,@scope);
             UPDATE am.policy_state SET policy_version=policy_version+1 WHERE singleton;
             UPDATE am.access_requests SET state='Fulfilled',decision_at=clock_timestamp(),
                 deciding_actor_id='A900',decision_action='Approve',decision_operation_id=@decision,
@@ -217,10 +239,15 @@ internal static partial class LocalUatBootstrap
             SELECT EXISTS(
                 SELECT 1 FROM am.access_request_permission_grants
                 WHERE request_id=@request AND actor_id=@actor
-                  AND permission_id='default-permission-profile-read'
-                  AND capability_id='financial-profile.profile.read' AND scope='Resource');
+                  AND permission_id=@permission
+                  AND capability_id=@capability AND scope=@scope);
             """, runtime, transaction);
         command.Parameters.AddWithValue("actor", actorId);
+        command.Parameters.AddWithValue("role", roleId);
+        command.Parameters.AddWithValue("permission", permissionId);
+        command.Parameters.AddWithValue("permissionCode", permissionCode);
+        command.Parameters.AddWithValue("capability", capabilityId);
+        command.Parameters.AddWithValue("scope", scope);
         command.Parameters.AddWithValue("email", requestId + "@runtime-probe.example.test");
         command.Parameters.AddWithValue("request", requestId);
         command.Parameters.AddWithValue("tenant", database.Tenant);
