@@ -38,32 +38,36 @@ if (-not $embeddedAccessRequestSource.Contains('INSERT INTO am.access_request_pe
 }
 Write-Output "LOCAL-UAT AM runtime provenance privilege contract passed: SELECT/INSERT allowed; UPDATE/DELETE/TRUNCATE denied; $($flowWriteTables.Count) flow tables covered by the transactional probe."
 
-# Runtime probes must use existing retained tenant FK references rather than
-# assuming the newest default access pack has been installed.
+# Local runtime FK verification must be independent of any retained default access
+# pack, with all synthetic rows rolled back after checking the write privileges.
 foreach ($reference in @(
-    'SELECT role_id FROM am.roles ORDER BY role_id LIMIT 1;',
-    'JOIN am.permission_capabilities pc ON pc.permission_id=p.permission_id',
+    'INSERT INTO am.roles (role_id,code,label)',
+    'INSERT INTO am.permissions (permission_id,code,label)',
+    'INSERT INTO am.permission_capabilities (permission_id,capability_id,scope)',
     'VALUES (@actor,@email,''Active'',@role);',
     'VALUES (@actor,@permission,clock_timestamp(),''A900'',@request);',
     'VALUES (@request,@actor,@permission,@permissionCode,@capability,@scope);',
-    'AND permission_id=@permission',
-    'AND capability_id=@capability AND scope=@scope);',
-    'LOCAL_AM_RUNTIME_PROBE_ROLE_UNAVAILABLE',
-    'LOCAL_AM_RUNTIME_PROBE_PERMISSION_UNAVAILABLE',
+    'LOCAL_AM_RUNTIME_PROVENANCE_INSERT_FAILED',
     'await transaction.RollbackAsync()'
 )) {
     if (-not $bootstrapSource.Contains($reference)) {
-        throw "LOCAL-UAT runtime probe is not bound to preserved tenant reference data: $reference"
+        throw "LOCAL-UAT runtime probe no longer exercises an isolated, rollback-only FK fixture: $reference"
     }
 }
 foreach ($stale in @(
+    'SELECT role_id FROM am.roles ORDER BY role_id LIMIT 1;',
+    'JOIN am.permission_capabilities pc ON pc.permission_id=p.permission_id',
     "VALUES (@actor,@email,'Active','default-role-financial-advisor');",
     "VALUES (@actor,'default-permission-profile-read',clock_timestamp(),'A900',@request);"
 )) {
-    if ($bootstrapSource.Contains($stale)) { throw 'LOCAL-UAT runtime probe still hardcodes default pack FK identities.' }
+    if ($bootstrapSource.Contains($stale)) {
+        throw 'LOCAL-UAT runtime probe unexpectedly depends on retained access-pack identities.'
+    }
 }
-Write-Output 'LOCAL-UAT retained AM access pack compatibility probe contract passed.'
-
+if (-not $bootstrapSource.Contains('invalid.Message.StartsWith("LOCAL_AM_RUNTIME_", StringComparison.Ordinal)')) {
+    throw 'LOCAL-UAT diagnostic errors must expose allowlisted runtime-probe codes.'
+}
+Write-Output 'LOCAL-UAT isolated rollback-only AM runtime privilege probe contract passed.'
 
 $expectedSessionGrant = 'GRANT INSERT(session_hash,actor_id,subject_version,device_class,client_family),UPDATE(revoked) ON customer_identity.trusted_sessions TO {runtime};'
 if (-not $bootstrapSource.Contains($expectedSessionGrant)) {

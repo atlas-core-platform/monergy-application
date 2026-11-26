@@ -139,7 +139,10 @@ internal static partial class LocalUatBootstrap
             // Only controlled stage, exception type and SQLSTATE; an exception
             // message/connection string can contain profile credentials.
             var sqlState = error is PostgresException databaseError ? $"; SQLSTATE={databaseError.SqlState}" : "";
-            Console.Error.WriteLine($"Local UAT bootstrap failed at {stage}: {error.GetType().Name}{sqlState}. Credentials are not printed.");
+            var diagnostic = error is InvalidOperationException invalid &&
+                invalid.Message.StartsWith("LOCAL_AM_RUNTIME_", StringComparison.Ordinal)
+                    ? $"; code={invalid.Message}" : "";
+            Console.Error.WriteLine($"Local UAT bootstrap failed at {stage}: {error.GetType().Name}{sqlState}{diagnostic}. Credentials are not printed.");
             return 1;
         }
     }
@@ -181,34 +184,25 @@ internal static partial class LocalUatBootstrap
         if (privileges is not true)
             throw new InvalidOperationException("LOCAL_AM_RUNTIME_PROVENANCE_PRIVILEGE_MISMATCH");
 
-        // Retained tenant access packs may be older or operator-modified.
-        // Probe real role/permission FK references without upgrading the pack.
-        var roleId = await ScalarAsync(runtime,
-            "SELECT role_id FROM am.roles ORDER BY role_id LIMIT 1;").ConfigureAwait(false) as string;
-        if (string.IsNullOrWhiteSpace(roleId))
-            throw new InvalidOperationException("LOCAL_AM_RUNTIME_PROBE_ROLE_UNAVAILABLE");
-        string permissionId, permissionCode, capabilityId, scope;
-        await using (var references = new NpgsqlCommand("""
-            SELECT p.permission_id,p.code,pc.capability_id,pc.scope
-            FROM am.permissions p
-            JOIN am.permission_capabilities pc ON pc.permission_id=p.permission_id
-            ORDER BY p.permission_id,pc.capability_id,pc.scope LIMIT 1;
-            """, runtime))
-        await using (var reader = await references.ExecuteReaderAsync().ConfigureAwait(false))
-        {
-            if (!await reader.ReadAsync().ConfigureAwait(false))
-                throw new InvalidOperationException("LOCAL_AM_RUNTIME_PROBE_PERMISSION_UNAVAILABLE");
-            permissionId = reader.GetString(0);
-            permissionCode = reader.GetString(1);
-            capabilityId = reader.GetString(2);
-            scope = reader.GetString(3);
-        }
-
-        // Exercise the deployed runtime fulfillment write set without retaining probe history.
+        // Use self-contained, synthetic FK references in the same rollback-only
+        // transaction. A retained tenant may have no roles or permissions, and
+        // its access pack must never be reinstalled merely to run a health probe.
         await using var transaction = await runtime.BeginTransactionAsync().ConfigureAwait(false);
         var requestId = Guid.NewGuid().ToString("N");
         var actorId = "local-runtime-probe-" + requestId;
+        var roleId = "local-runtime-probe-role-" + requestId;
+        var permissionId = "local-runtime-probe-permission-" + requestId;
+        var roleCode = "probe_role_" + requestId;
+        var permissionCode = "probe_permission_" + requestId;
+        const string capabilityId = "local-runtime-probe.capability";
+        const string scope = "Resource";
         await using var command = new NpgsqlCommand("""
+            INSERT INTO am.roles (role_id,code,label)
+            VALUES (@role,@roleCode,'LOCAL rollback-only runtime probe');
+            INSERT INTO am.permissions (permission_id,code,label)
+            VALUES (@permission,@permissionCode,'LOCAL rollback-only runtime probe');
+            INSERT INTO am.permission_capabilities (permission_id,capability_id,scope)
+            VALUES (@permission,@capability,@scope);
             INSERT INTO am.access_subjects (actor_id,normalized_email,status,business_role_id)
             VALUES (@actor,@email,'Active',@role);
             INSERT INTO am.access_requests (
@@ -244,6 +238,7 @@ internal static partial class LocalUatBootstrap
             """, runtime, transaction);
         command.Parameters.AddWithValue("actor", actorId);
         command.Parameters.AddWithValue("role", roleId);
+        command.Parameters.AddWithValue("roleCode", roleCode);
         command.Parameters.AddWithValue("permission", permissionId);
         command.Parameters.AddWithValue("permissionCode", permissionCode);
         command.Parameters.AddWithValue("capability", capabilityId);
