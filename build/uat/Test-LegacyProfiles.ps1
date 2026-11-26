@@ -61,7 +61,6 @@ foreach ($name in @('instanceId','postgresPassword','port','identities','databas
 foreach ($prop in $before.tokens.PSObject.Properties) { if ($after.tokens.($prop.Name) -ne $prop.Value) { throw 'Rotated token' } }
 foreach ($name in @('jobAuditEvent','financialAuditEvent','productAuditEvent')) { if ($after.tokens.$name.Length -ne 64) { throw 'Missing migrated token' } }
 if ($null -ne $after.tokens.PSObject.Properties['customerContext'] -or $null -ne $after.tokens.PSObject.Properties['consent']) { throw 'Legacy default profile gained onboarding-only tokens.' }
-
 $bytes=Get-Content $path -Raw
 Set-Content (Join-Path (Split-Path $path) 'members-initialized') $after.instanceId
 foreach ($action in @('Prepare','Start','Status','Verify','Stop')) {
@@ -79,194 +78,14 @@ if (-not (Test-Path (Join-Path (Split-Path $path) 'reference-members-v6-initiali
 & $scriptPath -Action Start
 if (@($global:memberWrites).Count -ne $memberWriteCount) { throw 'Revised membership replay replaced operator state' }
 if ((Get-Content $path -Raw) -ne $bytes) { throw 'Profile changed during revised membership replay' }
+& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -Port 4183
+$onboardPath=Join-Path $testRoot '.artifacts/uat/onboarding/profile.json'
+$onboard=Get-Content $onboardPath -Raw | ConvertFrom-Json
+foreach ($name in @('googleDriveProtection','oneDriveProtection','financialQaProtection','aiModelInternal','jobAuditEvent','customerContext','consent')) {$onboard.tokens.PSObject.Properties.Remove($name)}
+$onboard | ConvertTo-Json -Depth 30 | Set-Content $onboardPath
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
 $restoredOnboard=Get-Content $onboardPath -Raw | ConvertFrom-Json
-foreach ($name in @('customerContext','consent')) { if ($restoredOnboard.tokens.$name -notmatch '^[0-9a-f]{64} -Port 4183
-$onboardPath=Join-Path $testRoot '.artifacts/uat/onboarding/profile.json'
-$onboard=Get-Content $onboardPath -Raw | ConvertFrom-Json
-foreach ($name in @('googleDriveProtection','oneDriveProtection','financialQaProtection','aiModelInternal','jobAuditEvent','customerContext','consent')) {$onboard.tokens.PSObject.Properties.Remove($name)}
-$onboard | ConvertTo-Json -Depth 30 | Set-Content $onboardPath
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
-$config=Get-Content (Join-Path (Split-Path $onboardPath) 'integration-gateway.json') -Raw | ConvertFrom-Json
-if ([Convert]::FromBase64String($config.Monergy.GoogleDrive.EncryptionKey).Length -ne 32) { throw 'Bad conversion' }
-$kycPath=Join-Path $testRoot 'kyc-fixture.json'
-@{ T001=@{ Notice='Test-only published review notice; no legal approval claimed.'; Reviewers=@(@{ActorId='A300';Name='Test reviewer'}) } } | ConvertTo-Json -Depth 10 | Set-Content $kycPath
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -KycConfigurationFile $kycPath
-$identity=Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
-if ($identity.Monergy.BasicKyc.Tenants.T001.Reviewers[0].ActorId -ne 'A300' -or $identity.Monergy.BasicKyc.EvidenceBaseUrl -ne 'http://127.0.0.1:5111/') { throw 'KYC configuration was not preserved.' }
-# Identity activation is opt-in and never silently enabled by a normal start.
-$personaMissingActivation = $false
-try { & $scriptPath -Action Prepare -Profile onboarding -EnablePersonaLogin }
-catch { $personaMissingActivation = $_.Exception.Message -like '*either email activation or protected tester activation*' }
-if (-not $personaMissingActivation) { throw 'Persona login allowed without any activation owner.' }
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EnablePersonaLogin -EnablePersonaTesterActivation
-$identityTester = Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
-$integrationTester = Get-Content (Join-Path (Split-Path $onboardPath) 'integration-gateway.json') -Raw | ConvertFrom-Json
-$governedProviderUrl = [Uri]$identityTester.Monergy.GovernedProviders.Url
-if ($identityTester.Monergy.PersonaCredentials.Enabled -ne 'true' -or
-    $identityTester.Monergy.PersonaCredentials.TesterActivation.Enabled -ne 'true' -or
-    $null -ne $identityTester.Monergy.PSObject.Properties['CustomerEmailAccess'] -or
-    [Convert]::FromBase64String($identityTester.Monergy.PersonaCredentials.TesterActivation.AccessSecret).Length -ne 32 -or
-    [Convert]::FromBase64String($identityTester.Monergy.PersonaCredentials.TesterActivation.ChallengeSecret).Length -ne 32) {
-    throw 'Protected tester activation did not configure a no-SMTP Development owner.'
-}
-if ($identityTester.Monergy.GovernedProviders.Url -ne 'http://127.0.0.1:4173/' -or
-    $integrationTester.Monergy.GovernedProviders.Url -ne 'http://127.0.0.1:4173/' -or
-    -not $governedProviderUrl.IsLoopback) {
-    throw 'Governed provider clients must use the shared runtime loopback listener, not a browser entry hostname.'
-}
-& $scriptPath -Action Welcome -Profile onboarding -Actor A950
-& $scriptPath -Action Welcome -Profile onboarding -Tenant T001 -Actor A300
-if ('platform.localhost:4183' -notin $global:welcomeHostHeaders -or
-    't001.localhost:4183' -notin $global:welcomeHostHeaders -or
-    $global:openedWelcomeTargets -notcontains ('http://platform.localhost:4183/platform?ticket='+('a'*64)) -or
-    $global:openedWelcomeTargets -notcontains ('http://t001.localhost:4183/welcome#tenant=T001&ticket='+('b'*64)+'&return=%2Fadvisor')) {
-    throw 'Protected welcome bootstrap did not separate loopback transport from the browser entry hostname.'
-}
-$personaMailPath = Join-Path $testRoot 'persona-smtp-fixture.json'
-@{ SmtpHost='mail.example.test';SmtpPort=587;SmtpUser='uat-owner@example.test';SmtpPassword='fixture-only';From='uat-owner@example.test' } |
-    ConvertTo-Json -Depth 5 | Set-Content $personaMailPath
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EnableEmailAccess -EnablePersonaLogin -EmailConfigurationFile $personaMailPath
-$identityPersona = Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
-if ($identityPersona.Monergy.PersonaCredentials.Enabled -ne 'true' -or
-    $identityPersona.Monergy.CustomerEmailAccess.Enabled -ne 'true') {
-    throw 'Activated-persona owner configuration did not select guarded email access.'
-}
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
-$identityWithoutPersona = Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw | ConvertFrom-Json
-if ($null -ne $identityWithoutPersona.Monergy.PSObject.Properties['PersonaCredentials']) {
-    throw 'Normal test profile unexpectedly enabled credential activation.'
-}
-'PASS: persona credentials require an explicit activation owner; tester activation uses no SMTP and production-like email configuration is unchanged.'
-$agreementPath=Join-Path $testRoot 'agreement-fixture.json'
-$agreementBody='LOCAL acceptance fixture only.'
-$agreementSha=[Security.Cryptography.SHA256]::Create()
-try { $agreementHash=($agreementSha.ComputeHash([Text.Encoding]::UTF8.GetBytes($agreementBody)) | ForEach-Object { $_.ToString('x2') }) -join '' }
-finally { $agreementSha.Dispose() }
-@{
-    Publications=@{ T001=@{
-        TenantId='T001'; PublishedAt='2026-11-06T00:00:00.0000000+00:00'; Documents=@(
-            @{Kind='TERMS';Version='local-1';Title='Terms';Body=$agreementBody;Sha256=$agreementHash},
-            @{Kind='PRIVACY';Version='local-1';Title='Privacy';Body=$agreementBody;Sha256=$agreementHash},
-            @{Kind='CONSENT';Version='local-1';Title='Consent';Body=$agreementBody;Sha256=$agreementHash}
-        )
-    } }
-} | ConvertTo-Json -Depth 10 | Set-Content $agreementPath
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -AccountAgreementFile $agreementPath
-$identityAgreementText=Get-Content (Join-Path (Split-Path $onboardPath) 'customer-identity.json') -Raw
-if ($identityAgreementText -notmatch '"PublishedAt"\s*:\s*"2026-11-06T00:00:00\.0000000\+00:00"') {
-    throw 'Account-agreement publication timestamp changed with the host time zone.'
-}
-$nonUtcAgreement=Get-Content $agreementPath -Raw
-$nonUtcAgreement=$nonUtcAgreement.Replace('2026-11-06T00:00:00.0000000+00:00','2026-11-06T05:30:00.0000000+05:30')
-Set-Content $agreementPath $nonUtcAgreement
-$nonUtcRejected=$false
-try { & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -AccountAgreementFile $agreementPath }
-catch { $nonUtcRejected=$_.Exception.Message -like '*exact UTC round-trip timestamp*' }
-if (-not $nonUtcRejected) { throw 'Non-UTC account-agreement publication timestamp was accepted.' }
-'PASS: account-agreement UTC publication timestamp is preserved exactly and non-UTC input fails closed.'
-$durablePath=Join-Path $testRoot 'evidence-fixture.json'
-@{ RuntimeConnections=@{T001='Host=127.0.0.1;Database=fixture_evidence;Username=fixture'}; S3=@{ Endpoint='http://127.0.0.1:9000';Bucket='fixture';AccessKey='fixture';SecretKey='fixture'} } | ConvertTo-Json -Depth 10 | Set-Content $durablePath
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -EvidencePersistenceConfigurationFile $durablePath
-$evidence=Get-Content (Join-Path (Split-Path $onboardPath) 'evidence.json') -Raw | ConvertFrom-Json
-if ($evidence.Monergy.ReferenceAdapters -ne 'false' -or $evidence.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3' -or $evidence.Monergy.Persistence.Evidence.RuntimeConnections.T001 -notlike '*fixture_evidence*') { throw 'Durable Evidence configuration missing.' }
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
-$again=Get-Content (Join-Path (Split-Path $onboardPath) 'evidence.json') -Raw | ConvertFrom-Json
-if ($again.Monergy.Persistence.Evidence.S3.Bucket -ne 'fixture' -or $again.Monergy.ReferenceAdapters -ne 'false') { throw 'Durable Evidence silently fell back on repeat start.' }
-'PASS: durable Evidence opt-in and retained configuration; no credentials output.'
-$classificationPath=Join-Path $testRoot 'classification-fixture.json'
-@{ RuntimeConnections=@{T001='Host=127.0.0.1;Database=fixture_classification;Username=fixture'}; Reviewers=@{T001=@('A900')} } | ConvertTo-Json -Depth 10 | Set-Content $classificationPath
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -ClassificationConfigurationFile $classificationPath
-$classification=Get-Content (Join-Path (Split-Path $onboardPath) 'document-intelligence.json') -Raw | ConvertFrom-Json
-if ($classification.Monergy.Classification.Reviewers.T001[0] -ne 'A900' -or $classification.Monergy.Classification.RuntimeConnections.T001 -notlike '*fixture_classification*') { throw 'Classification configuration missing.' }
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
-$classificationAgain=Get-Content (Join-Path (Split-Path $onboardPath) 'document-intelligence.json') -Raw | ConvertFrom-Json
-if ($classificationAgain.Monergy.Classification.Reviewers.T001[0] -ne 'A900') { throw 'Classification silently fell back on repeat start.' }
-'PASS: classification persistence and explicit reviewer configuration retained.'
-# A retained PostgreSQL volume cannot preserve in-memory Evidence/Financial Profile.
-$missingDurabilityRejected = $false
-try { & $scriptPath -Action Verify -RequireRetainedEvidenceAndFinancialProfile }
-catch { $missingDurabilityRejected = $_.Exception.Message -like '*requires both configured durable owner stores*' }
-if (-not $missingDurabilityRejected) { throw 'Temporary default UAT incorrectly passed retained-business-history preflight.' }
-# Partial configuration must fail before creating a protected selection.
-$halfSelectedRejected=$false
-try { & $scriptPath -Action Prepare -Profile halfprofile -Port 4192 -EnableOnboarding -EvidencePersistenceConfigurationFile $durablePath -RequireRetainedEvidenceAndFinancialProfile }
-catch { $halfSelectedRejected=$_.Exception.Message -like '*requires both configured durable owner stores*' }
-if (-not $halfSelectedRejected -or (Test-Path (Join-Path $testRoot '.artifacts/uat/halfprofile/evidence-persistence.json'))) {
-    throw 'Incomplete paired physical owner configuration was persisted.'
-}
-$financialPath=Join-Path $testRoot 'financial-fixture.json'
-@{ RuntimeConnection='Host=127.0.0.1;Database=fixture_financial;Username=fixture_financial_runtime;Password=fixture-only' } | ConvertTo-Json -Depth 10 | Set-Content $financialPath
-$conversionBlocked=$false
-try { & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -FinancialPersistenceConfigurationFile $financialPath }
-catch { $conversionBlocked=$_.Exception.Message -like '*Cannot convert a retained in-memory Financial Profile*' }
-if (-not $conversionBlocked) { throw 'Existing temporary profile was permitted to convert silently.' }
-$retainedFinancialConfig=Get-Content (Join-Path (Split-Path $onboardPath) 'financial-profile.json') -Raw | ConvertFrom-Json
-if ($retainedFinancialConfig.Monergy.ReferenceAdapters -ne 'true') { throw 'Rejected storage conversion mutated retained Financial Profile configuration.' }
-& $scriptPath -Action Prepare -Profile retained -Port 4191 -EnableOnboarding -EvidencePersistenceConfigurationFile $durablePath -FinancialPersistenceConfigurationFile $financialPath -RequireRetainedEvidenceAndFinancialProfile
-$retainedDir=Join-Path $testRoot '.artifacts/uat/retained'
-$financial=Get-Content (Join-Path $retainedDir 'financial-profile.json') -Raw | ConvertFrom-Json
-if ($financial.Monergy.ReferenceAdapters -ne 'false' -or $financial.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3' -or $financial.Monergy.Persistence.FinancialProfile.RuntimeConnection -notlike '*fixture_financial*') { throw 'Physical Financial Profile opt-in missing.' }
-& $scriptPath -Action Prepare -Profile retained -EnableOnboarding -RequireRetainedEvidenceAndFinancialProfile
-$financeAgain=Get-Content (Join-Path $retainedDir 'financial-profile.json') -Raw | ConvertFrom-Json
-$evidenceAgain=Get-Content (Join-Path $retainedDir 'evidence.json') -Raw | ConvertFrom-Json
-if ($financeAgain.Monergy.ReferenceAdapters -ne 'false' -or $evidenceAgain.Monergy.ReferenceAdapters -ne 'false') { throw 'Durable profile silently fell back to reference adapters.' }
-'PASS: temporary-profile continuity gate denies, conversion blocked, dual durable opt-in persists on repeated Prepare.'
-
-$jobManagementPath=Join-Path $testRoot 'job-management-fixture.json'
-@{ RuntimeConnection='Host=127.0.0.1;Database=fixture_jobs;Username=fixture_job_runtime;Password=fixture-only' } | ConvertTo-Json -Depth 10 | Set-Content $jobManagementPath
-& $scriptPath -Action Prepare -Profile retained -EnableOnboarding -JobManagementPersistenceConfigurationFile $jobManagementPath -RequireRetainedDocumentProcessing
-$jobConfig=Get-Content (Join-Path $retainedDir 'job-management.json') -Raw | ConvertFrom-Json
-if ($jobConfig.Monergy.ReferenceAdapters -ne 'false' -or $jobConfig.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3' -or
-    $jobConfig.Monergy.Persistence.JobManagement.RuntimeConnection -notlike '*fixture_jobs*' -or
-    $jobConfig.Monergy.DocumentProcessing.Enabled -ne 'true') {
-    throw 'Physical Job Management document-processing opt-in missing.'
-}
-& $scriptPath -Action Prepare -Profile retained -EnableOnboarding -RequireRetainedDocumentProcessing
-$jobAgain=Get-Content (Join-Path $retainedDir 'job-management.json') -Raw | ConvertFrom-Json
-if ($jobAgain.Monergy.ReferenceAdapters -ne 'false' -or $jobAgain.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3') {
-    throw 'Durable Job Management silently fell back to in-memory adapters.'
-}
-& $scriptPath -Action Verify -Profile retained -RequireRetainedDocumentProcessing
-'PASS: Job Management physical opt-in preserves document-processing receipts and fails closed unless explicitly required.'
-
-$financialRulesPath=Join-Path $testRoot 'financial-rules-fixture.json'
-@{ RuntimeConnection='Host=127.0.0.1;Database=fixture_financial_rules;Username=fixture_financial_rules_runtime;Password=fixture-only' } | ConvertTo-Json -Depth 10 | Set-Content $financialRulesPath
-& $scriptPath -Action Prepare -Profile retained -EnableOnboarding -FinancialRulesPersistenceConfigurationFile $financialRulesPath -RequireRetainedFinancialRules
-$rulesConfig=Get-Content (Join-Path $retainedDir 'financial-rules.json') -Raw | ConvertFrom-Json
-if ($rulesConfig.Monergy.ReferenceAdapters -ne 'false' -or $rulesConfig.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3' -or
-    $rulesConfig.Monergy.Persistence.FinancialRules.RuntimeConnection -notlike '*fixture_financial_rules*') {
-    throw 'Physical Financial Rules opt-in missing.'
-}
-& $scriptPath -Action Prepare -Profile retained -EnableOnboarding -RequireRetainedFinancialRules
-$rulesAgain=Get-Content (Join-Path $retainedDir 'financial-rules.json') -Raw | ConvertFrom-Json
-if ($rulesAgain.Monergy.ReferenceAdapters -ne 'false' -or $rulesAgain.Monergy.Persistence.Provider -ne 'POSTGRESQL_S3') {
-    throw 'Durable Financial Rules silently fell back to in-memory adapters.'
-}
-& $scriptPath -Action Verify -Profile retained -RequireRetainedFinancialRules
-$retainedRulesBinding=Join-Path $retainedDir 'financial-rules-persistence.json'
-$missingRulesBinding=$retainedRulesBinding+'.missing'
-Move-Item -LiteralPath $retainedRulesBinding -Destination $missingRulesBinding
-try {
-    $fallbackRejected=$false
-    try { & $scriptPath -Action Prepare -Profile retained -EnableOnboarding }
-    catch { $fallbackRejected=$_.Exception.Message -like '*in-memory fallback is prohibited*' }
-    if (-not $fallbackRejected) { throw 'Retained physical Financial Rules silently fell back without its protected binding.' }
-} finally {
-    Move-Item -LiteralPath $missingRulesBinding -Destination $retainedRulesBinding
-}
-'PASS: Financial Rules physical opt-in persists, verifies explicitly and fails closed when its retained binding is unavailable.'
-
-'PASS: Basic KYC onboarding configuration; syntax; fresh/default/legacy/onboarding configuration; retained membership repair; all non-destructive actions with mocked Docker/readiness; credential preservation; repeat-run stability; encryption conversion.'
-
-} finally { Remove-Item -LiteralPath $testRoot -Recurse -Force }
-) { throw "Missing onboarding token $name" } }
- -Port 4183
-$onboardPath=Join-Path $testRoot '.artifacts/uat/onboarding/profile.json'
-$onboard=Get-Content $onboardPath -Raw | ConvertFrom-Json
-foreach ($name in @('googleDriveProtection','oneDriveProtection','financialQaProtection','aiModelInternal','jobAuditEvent','customerContext','consent')) {$onboard.tokens.PSObject.Properties.Remove($name)}
-$onboard | ConvertTo-Json -Depth 30 | Set-Content $onboardPath
-& $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
+foreach ($name in @('customerContext','consent')) { if ($restoredOnboard.tokens.$name -notmatch '^[0-9a-f]{64}$') { throw "Missing onboarding token $name" } }
 $config=Get-Content (Join-Path (Split-Path $onboardPath) 'integration-gateway.json') -Raw | ConvertFrom-Json
 if ([Convert]::FromBase64String($config.Monergy.GoogleDrive.EncryptionKey).Length -ne 32) { throw 'Bad conversion' }
 $kycPath=Join-Path $testRoot 'kyc-fixture.json'
