@@ -9,6 +9,28 @@ namespace Monergy.IntegrationGateway.Tests;
 public sealed class ConnectionOverviewTests
 {
     [Fact]
+    public void DefaultReferenceCompositionSkipsOwnerOnlyConnectionOverview()
+    {
+        var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder();
+        builder.Configuration["Monergy:ExecutionZone"] = "LOCAL";
+        builder.Configuration["Monergy:ReferenceAdapters"] = "true";
+        // No AccessIntegration is configured in the retained standard profile.
+        builder.AddConnectionOverview();
+        using var app = builder.Build();
+        app.MapConnectionOverview();
+    }
+
+    [Fact]
+    public void ConflictingReferenceAndTenantOwnerModesRemainRejected()
+    {
+        var builder = Microsoft.AspNetCore.Builder.WebApplication.CreateBuilder();
+        builder.Configuration["Monergy:ExecutionZone"] = "LOCAL";
+        builder.Configuration["Monergy:ReferenceAdapters"] = "true";
+        builder.Configuration["Monergy:AccessIntegration:Enabled"] = "true";
+        Assert.Throws<InvalidOperationException>(() => builder.AddConnectionOverview());
+    }
+
+    [Fact]
     public async Task CurrentCustomerReceivesCanonicalProviderStatesInStableOrder()
     {
         var app = new ConnectionOverviewApplication(new Owners(),
