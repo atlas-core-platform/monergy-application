@@ -8,6 +8,11 @@ public static class ConnectionOverviewEndpoints
 {
     public static void AddConnectionOverview(this WebApplicationBuilder builder)
     {
+        // The ordinary LOCAL UAT profile uses reference adapters without tenant
+        // owner integration. Do not require owner-only configuration in that mode.
+        // If both modes are selected, retain EnsureAllowed's fail-closed guard.
+        if (ReferenceAdapterGuard.IsSelected(builder.Configuration) &&
+            !TenantAccessIntegration.IsSelected(builder.Configuration)) return;
         TenantAccessIntegration.EnsureAllowed(builder.Configuration);
         builder.Services.TryAddSingleton<CustomerOwnerClient>();
         builder.Services.TryAddSingleton(provider => new TenantAccessClient(provider.GetRequiredService<IConfiguration>()));
@@ -20,6 +25,8 @@ public static class ConnectionOverviewEndpoints
 
     public static void MapConnectionOverview(this WebApplication app)
     {
+        if (ReferenceAdapterGuard.IsSelected(app.Configuration) &&
+            !TenantAccessIntegration.IsSelected(app.Configuration)) return;
         app.MapGet("/local/v1/connections", async (HttpContext http, ConnectionOverviewApplication service) =>
         {
             Secure(http);
