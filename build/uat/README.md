@@ -8,6 +8,8 @@ Business reference adapters remain illustrative. AI remains a scaffold. Consent,
 
 In the main `monergy-application` directory, double-click **`Start-Monergy.cmd`** to start the retained standard `default` LOCAL profile and open the application when it is ready. Double-click **`Stop-Monergy.cmd`** to stop that profile while retaining Docker volumes and credentials. Docker Desktop must be running with Linux containers. These shortcuts never reset a profile or switch Git branches.
 
+The ordinary `default` LOCAL profile does not enable tenant onboarding/provisioning. The launcher writes a disabled provisioning configuration for Compose and automatically recovers only an **empty, ordinary** legacy `tenant-provisioning.json` directory accidentally created by Docker. Nonempty directories and filesystem links stop startup without deleting their contents. No manual profile selection or reset is required.
+
 ## Start on Windows
 
 Prerequisites: Git, PowerShell (Windows PowerShell 5.1 or PowerShell 7), Docker Desktop running **Linux containers**, and permission to pull the pinned public build images/packages. No host Node.js, .NET SDK or PostgreSQL installation is required. Allow enough Docker resources for 13 .NET processes and the build; 8 GB Docker memory is a practical starting allocation, subject to measurements on your machine.
