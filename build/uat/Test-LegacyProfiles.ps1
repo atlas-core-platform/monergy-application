@@ -50,7 +50,7 @@ function Invoke-RestMethod {
 $path=Join-Path $testRoot '.artifacts/uat/default/profile.json'
 $original=Get-Content $path -Raw | ConvertFrom-Json
 $original.PSObject.Properties.Remove('onboarding')
-foreach ($name in @('jobAuditEvent','financialAuditEvent','productAuditEvent')) { $original.tokens.PSObject.Properties.Remove($name) }
+foreach ($name in @('jobAuditEvent','financialAuditEvent','productAuditEvent','customerContext','consent')) { $original.tokens.PSObject.Properties.Remove($name) }
 $original | ConvertTo-Json -Depth 30 | Set-Content $path
 $before=Get-Content $path -Raw | ConvertFrom-Json
 & $scriptPath -Action Prepare
@@ -60,6 +60,7 @@ foreach ($name in @('instanceId','postgresPassword','port','identities','databas
 }
 foreach ($prop in $before.tokens.PSObject.Properties) { if ($after.tokens.($prop.Name) -ne $prop.Value) { throw 'Rotated token' } }
 foreach ($name in @('jobAuditEvent','financialAuditEvent','productAuditEvent')) { if ($after.tokens.$name.Length -ne 64) { throw 'Missing migrated token' } }
+if ($null -ne $after.tokens.PSObject.Properties['customerContext'] -or $null -ne $after.tokens.PSObject.Properties['consent']) { throw 'Legacy default profile gained onboarding-only tokens.' }
 $bytes=Get-Content $path -Raw
 Set-Content (Join-Path (Split-Path $path) 'members-initialized') $after.instanceId
 foreach ($action in @('Prepare','Start','Status','Verify','Stop')) {
@@ -80,9 +81,11 @@ if ((Get-Content $path -Raw) -ne $bytes) { throw 'Profile changed during revised
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding -Port 4183
 $onboardPath=Join-Path $testRoot '.artifacts/uat/onboarding/profile.json'
 $onboard=Get-Content $onboardPath -Raw | ConvertFrom-Json
-foreach ($name in @('googleDriveProtection','oneDriveProtection','financialQaProtection','aiModelInternal','jobAuditEvent')) {$onboard.tokens.PSObject.Properties.Remove($name)}
+foreach ($name in @('googleDriveProtection','oneDriveProtection','financialQaProtection','aiModelInternal','jobAuditEvent','customerContext','consent')) {$onboard.tokens.PSObject.Properties.Remove($name)}
 $onboard | ConvertTo-Json -Depth 30 | Set-Content $onboardPath
 & $scriptPath -Action Prepare -Profile onboarding -EnableOnboarding
+$restoredOnboard=Get-Content $onboardPath -Raw | ConvertFrom-Json
+foreach ($name in @('customerContext','consent')) { if ($restoredOnboard.tokens.$name -notmatch '^[0-9a-f]{64}$') { throw "Missing onboarding token $name" } }
 $config=Get-Content (Join-Path (Split-Path $onboardPath) 'integration-gateway.json') -Raw | ConvertFrom-Json
 if ([Convert]::FromBase64String($config.Monergy.GoogleDrive.EncryptionKey).Length -ne 32) { throw 'Bad conversion' }
 $kycPath=Join-Path $testRoot 'kyc-fixture.json'

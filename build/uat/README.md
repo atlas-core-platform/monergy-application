@@ -4,6 +4,10 @@ This profile runs the shared administration workspace and 13 service boundaries 
 
 Business reference adapters remain illustrative. AI remains a scaffold. Consent, Evidence, Job Management and Document Intelligence provide the guarded LOCAL/UAT customer-processing journey; Search and Reporting enforce current AM decisions before their reference business operations. The processor accepts structured text and the financial information CSV and bounded XLSX templates, candidate facts require explicit customer review before updating Financial Profile, and runtime business data remains non-production. Reporting reference data is volatile. This profile is not Production acceptance or a replacement for the separately verified D11 persisted-reporting profile.
 
+## Simplest option on Windows
+
+In the main `monergy-application` directory, double-click **`Start-Monergy.cmd`** to start the retained standard `default` LOCAL profile and open the application when it is ready. Double-click **`Stop-Monergy.cmd`** to stop that profile while retaining Docker volumes and credentials. Docker Desktop must be running with Linux containers. These shortcuts never reset a profile or switch Git branches.
+
 ## Start on Windows
 
 Prerequisites: Git, PowerShell (Windows PowerShell 5.1 or PowerShell 7), Docker Desktop running **Linux containers**, and permission to pull the pinned public build images/packages. No host Node.js, .NET SDK or PostgreSQL installation is required. Allow enough Docker resources for 13 .NET processes and the build; 8 GB Docker memory is a practical starting allocation, subject to measurements on your machine.
