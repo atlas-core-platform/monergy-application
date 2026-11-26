@@ -483,7 +483,7 @@ if ($Action -in @('Prepare','Start')) {
     if ($EnableCustomerRegistration) { $requiredTokens += 'customerEnrollment' }
     if ($EnableCustomerPan) { $requiredTokens += 'panProtection' }
     if ($onboarding) {
-        $requiredTokens += @('evidenceIntake','evidenceProcessing','jobControl','documentControl','reportJobControl','recipientLabel','googleDriveProtection','oneDriveProtection','aiModelInternal','financialQaProtection',
+        $requiredTokens += @('customerContext','consent','evidenceIntake','evidenceProcessing','jobControl','documentControl','reportJobControl','recipientLabel','googleDriveProtection','oneDriveProtection','aiModelInternal','financialQaProtection',
             'tenantProvisioning','tenantBindingProtection','tenantBindingAccessManagement','tenantBindingCustomerIdentity','tenantBindingAudit','tenantBindingConsent','tenantBindingApplicationCase')
     }
     foreach ($name in $requiredTokens) {
@@ -742,10 +742,11 @@ if ($Action -in @('Prepare','Start')) {
         }
         if ($service -eq 'application-case') {
             $config.Monergy.ReferenceAdapters=$(if ($onboarding) { 'false' } else { 'true' })
-            $config.Monergy.AccessIntegration=@{ Enabled='true'; CustomerRelationships='true';
-                AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
-                CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
             if ($onboarding) {
+                # A retained default profile does not have customer relationship tokens.
+                $config.Monergy.AccessIntegration=@{ Enabled='true'; CustomerRelationships='true';
+                    AccessManagementUrl='http://127.0.0.1:5088/'; CustomerIdentityUrl='http://127.0.0.1:5101/';
+                    CustomerIdentityToken=$state.tokens.context; CustomerContextToken=$state.tokens.customerContext; MembershipToken=$state.tokens.membership }
                 $config.Monergy.ApplicationCase=@{ ConsentUrl='http://127.0.0.1:5110/'; ConsentToken=$state.tokens.consent }
                 $connections=@{}
                 foreach ($db in $state.databases | Where-Object service -eq 'application-case') {
