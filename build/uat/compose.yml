@@ -61,6 +61,7 @@ services:
       workspace: { condition: service_started }
   tenant-provisioning-owner:
     <<: *runtime
+    profiles: [onboarding]
     network_mode: service:workspace
     working_dir: /app/tenant-provisioning-owner
     command: [Monergy.TenantProvisioningOwner.dll, --urls, 'http://127.0.0.1:5121']
