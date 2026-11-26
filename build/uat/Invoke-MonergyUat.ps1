@@ -851,6 +851,26 @@ if ($Action -in @('Prepare','Start')) {
 if ($Action -eq 'Prepare') { Write-Host "Local profile prepared. Credentials: -Action Credentials -Tenant T001 -Actor A900"; return }
 if ($Action -eq 'Stop') { Compose @('down','--remove-orphans'); Write-Host 'Stopped. Tenant databases and credentials retained.'; return }
 if ($Action -eq 'Status') { Compose @('ps','--all'); if ($null -ne $state.PSObject.Properties['assistant']) { Write-Host 'Knowledge Runtime is optional infrastructure, separate from the 14-service business topology. Review its container health independently.' }; return }
+if ($Action -eq 'Welcome' -and $Actor -eq 'A950') {
+    # Password activation only needs the platform endpoint; never wait on
+    # unrelated service readiness or enter the 14-service health polling loop.
+    $platformUrl = "http://platform.localhost:$($state.port)"
+    $request = @{ email='a950.platform@example.test' } | ConvertTo-Json -Compress
+    $headers = @{ Host="platform.localhost:$($state.port)"; 'X-Monergy-Platform-Tester'=[string]$state.platformAuthority.token }
+    try {
+        $welcome = Invoke-RestMethod "http://127.0.0.1:$($state.port)/platform-api/local/v1/credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
+    } catch {
+        throw 'Platform welcome endpoint unavailable or rejected activation. No credentials were changed by the launcher.'
+    }
+    if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/platform\?ticket=[0-9a-f]{64}$') {
+        throw 'The Platform credential owner did not return a valid protected welcome path.'
+    }
+    $target = $platformUrl + $welcome.welcomePath
+    if ($windows) { Start-Process $target }
+    else { & xdg-open $target | Out-Null }
+    Write-Host 'Opened the single-use Platform Administrator welcome page. The tester authorization and activation ticket were not printed.'
+    return
+}
 if ($Action -eq 'Start') {
     $os = & docker info --format '{{.OSType}}'
     if ($LASTEXITCODE -ne 0 -or $os -ne 'linux') { throw 'Start Docker Desktop with Linux containers, then retry.' }
@@ -1188,19 +1208,6 @@ if ($onboarding) { Write-Host "Show the Property Valuer key: ./build/uat/Invoke-
 if ($onboarding) { Write-Host "Show the Legal Advisor key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A800" }
 if ($onboarding) { Write-Host "Show the Operations Support key: ./build/uat/Invoke-MonergyUat.ps1 -Action Credentials -Profile $Profile -Tenant T001 -Actor A850" }
 if ($Action -eq 'Welcome') {
-    if ($Actor -eq 'A950') {
-        $request = @{ email='a950.platform@example.test' } | ConvertTo-Json -Compress
-        $headers = @{ Host="platform.localhost:$($state.port)"; 'X-Monergy-Platform-Tester'=[string]$state.platformAuthority.token }
-        $welcome = Invoke-RestMethod "http://127.0.0.1:$($state.port)/platform-api/local/v1/credentials/tester/welcome-link" -Method Post -ContentType 'application/json' -Headers $headers -Body $request -TimeoutSec 15
-        if ($welcome.welcomePath -isnot [string] -or $welcome.welcomePath -notmatch '^/platform\?ticket=[0-9a-f]{64}$') {
-            throw 'The Platform credential owner did not return a valid protected welcome path.'
-        }
-        $target = $platformUrl + $welcome.welcomePath
-        if ($windows) { Start-Process $target }
-        else { & xdg-open $target | Out-Null }
-        Write-Host 'Opened the single-use Platform Administrator welcome page. The tester authorization and activation ticket were not printed.'
-        return
-    }
     foreach ($name in @('personaTesterAccess','personaTesterChallenge')) {
         if ($null -eq $state.tokens.PSObject.Properties[$name] -or [string]::IsNullOrWhiteSpace([string]$state.tokens.$name)) {
             throw 'This profile does not contain protected tester activation credentials.'
