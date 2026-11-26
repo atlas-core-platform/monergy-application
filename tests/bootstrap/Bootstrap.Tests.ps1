@@ -38,6 +38,33 @@ if (-not $embeddedAccessRequestSource.Contains('INSERT INTO am.access_request_pe
 }
 Write-Output "LOCAL-UAT AM runtime provenance privilege contract passed: SELECT/INSERT allowed; UPDATE/DELETE/TRUNCATE denied; $($flowWriteTables.Count) flow tables covered by the transactional probe."
 
+# Runtime probes must use existing retained tenant FK references rather than
+# assuming the newest default access pack has been installed.
+foreach ($reference in @(
+    'SELECT role_id FROM am.roles ORDER BY role_id LIMIT 1;',
+    'JOIN am.permission_capabilities pc ON pc.permission_id=p.permission_id',
+    'VALUES (@actor,@email,''Active'',@role);',
+    'VALUES (@actor,@permission,clock_timestamp(),''A900'',@request);',
+    'VALUES (@request,@actor,@permission,@permissionCode,@capability,@scope);',
+    'AND permission_id=@permission',
+    'AND capability_id=@capability AND scope=@scope);',
+    'LOCAL_AM_RUNTIME_PROBE_ROLE_UNAVAILABLE',
+    'LOCAL_AM_RUNTIME_PROBE_PERMISSION_UNAVAILABLE',
+    'await transaction.RollbackAsync()'
+)) {
+    if (-not $bootstrapSource.Contains($reference)) {
+        throw "LOCAL-UAT runtime probe is not bound to preserved tenant reference data: $reference"
+    }
+}
+foreach ($stale in @(
+    "VALUES (@actor,@email,'Active','default-role-financial-advisor');",
+    "VALUES (@actor,'default-permission-profile-read',clock_timestamp(),'A900',@request);"
+)) {
+    if ($bootstrapSource.Contains($stale)) { throw 'LOCAL-UAT runtime probe still hardcodes default pack FK identities.' }
+}
+Write-Output 'LOCAL-UAT retained AM access pack compatibility probe contract passed.'
+
+
 $expectedSessionGrant = 'GRANT INSERT(session_hash,actor_id,subject_version,device_class,client_family),UPDATE(revoked) ON customer_identity.trusted_sessions TO {runtime};'
 if (-not $bootstrapSource.Contains($expectedSessionGrant)) {
     throw 'LOCAL-UAT does not grant the Customer & Identity runtime the bounded session client-evidence INSERT columns.'
