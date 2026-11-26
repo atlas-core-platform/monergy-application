@@ -10,7 +10,8 @@ $parseErrors=$null; $parseTokens=$null
 $null=[System.Management.Automation.Language.Parser]::ParseFile($scriptPath,[ref]$parseTokens,[ref]$parseErrors)
 if ($parseErrors.Count) { throw 'Parser errors' }
 function docker { $global:LASTEXITCODE=0; if ($args[0] -eq 'info') { 'linux' } }
-function Invoke-WebRequest { [pscustomobject]@{StatusCode=200} }
+$global:readyRequests=0
+function Invoke-WebRequest { $global:readyRequests++; [pscustomobject]@{StatusCode=200} }
 $global:fixtureMembers=@{ T001=@('A900'); T002=@('A900') }
 $global:memberWrites=@()
 $global:tenantHostHeaders=@()
@@ -114,7 +115,9 @@ if ($identityTester.Monergy.GovernedProviders.Url -ne 'http://127.0.0.1:4173/' -
     -not $governedProviderUrl.IsLoopback) {
     throw 'Governed provider clients must use the shared runtime loopback listener, not a browser entry hostname.'
 }
+$readyBeforePlatformWelcome=$global:readyRequests
 & $scriptPath -Action Welcome -Profile onboarding -Actor A950
+if ($global:readyRequests -ne $readyBeforePlatformWelcome) { throw 'Platform welcome unexpectedly entered global readiness polling.' }
 & $scriptPath -Action Welcome -Profile onboarding -Tenant T001 -Actor A300
 if ('platform.localhost:4183' -notin $global:welcomeHostHeaders -or
     't001.localhost:4183' -notin $global:welcomeHostHeaders -or
