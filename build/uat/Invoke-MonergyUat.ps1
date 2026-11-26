@@ -71,6 +71,21 @@ function Assert-ProfileReadable {
         finally { if ($null -ne $stream) { $stream.Dispose() } }
     }
 }
+function Repair-EmptyLegacyProvisioningPath {
+    # Docker may have created an absent JSON bind source as a directory.
+    # Only repair this exact plain, empty directory; never follow links.
+    if ($Action -notin @('Prepare','Start')) { return }
+    $path = Join-Path $folder 'tenant-provisioning.json'
+    if (-not (Test-Path -LiteralPath $path)) { return }
+    $item = Get-Item -LiteralPath $path -Force
+    if (-not $item.PSIsContainer) { return }
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+        @(Get-ChildItem -LiteralPath $path -Force -ErrorAction Stop).Count -ne 0) {
+        throw 'tenant-provisioning.json is a non-empty directory or filesystem link. Its contents were preserved; inspect before restarting.'
+    }
+    Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+    Write-Host 'Repaired empty legacy tenant-provisioning.json directory without changing retained credentials.'
+}
 function Protect-Files {
     if ($windows) {
         # Use SID-based explicit ACLs on each file. Do not recursively remove inherited
@@ -111,7 +126,7 @@ function Compose([string[]]$Arguments) {
     if ($null -ne $state.PSObject.Properties['assistant'] -and $state.assistant.enabled) { $composeArgs += @('-f',(Join-Path $PSScriptRoot 'compose.assistant.yml')) }
     if ($null -ne $state.PSObject.Properties['assistant'] -and $state.assistant.enabled -and
         $null -ne $state.assistant.PSObject.Properties['publishedResolutionsSha256']) { $composeArgs += @('-f',(Join-Path $PSScriptRoot 'compose.assistant-resolutions.yml')) }
-    if ($onboarding) { $composeArgs += @('--profile','document-security') }
+    if ($onboarding) { $composeArgs += @('--profile','document-security','--profile','onboarding') }
     Invoke-UatDocker ($composeArgs + $Arguments)
 }
 function Connection($database, $scope) {
@@ -125,7 +140,7 @@ if ($Action -eq 'RepairPermissions') {
     return
 }
 # Restore access before reading an existing profile; never replace an unreadable key file.
-if ($Action -in @('Prepare','Start') -and (Test-Path -LiteralPath $folder -PathType Container)) { Protect-Files }
+if ($Action -in @('Prepare','Start') -and (Test-Path -LiteralPath $folder -PathType Container)) { Repair-EmptyLegacyProvisioningPath; Protect-Files }
 if (-not (Test-Path $profileFile)) {
     if ($Action -notin @('Prepare','Start')) { throw 'No local UAT profile. Run Prepare or Start first.' }
     if (Test-Path $folder) { throw 'Incomplete profile directory exists. Recover its matching credentials before proceeding; do not overwrite a retained database profile.' }
@@ -814,6 +829,9 @@ if ($Action -in @('Prepare','Start')) {
             }
         } }
         Save-Json 'tenant-provisioning.json' $owner
+    } else {
+        # Compose validates declared file secrets even for disabled service profiles.
+        Save-Json 'tenant-provisioning.json' @{ Monergy=@{ ExecutionZone='LOCAL'; TenantProvisioning=@{ Enabled='false' } } }
     }
     $runtimeUid = if ($windows) { '1654' } else { (& id -u).Trim() }
     $path = $folder.Replace('\','/')
